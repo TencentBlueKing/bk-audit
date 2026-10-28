@@ -70,7 +70,7 @@ class TestRiskAccessFetch:
             return pages.get(kwargs.get("page", 1), {"count": 3, "results": []})
 
         with mock.patch(
-            "services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list_as_platform", side_effect=fake_list
         ) as fake_fetch:
             item = find_risk_access_item("159")
         assert item and item["token"] == "t-target"
@@ -85,7 +85,9 @@ class TestRiskAccessFetch:
                 return {"count": 1, "results": [{"id": 1, "token": "t1"}]}
             return {"count": 1, "results": [{"id": 159, "token": "t-test"}]}
 
-        with mock.patch("services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list):
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list_as_platform", side_effect=fake_list
+        ):
             item = find_risk_access_item("159")
         assert item and item["token"] == "t-test"
 
@@ -105,7 +107,7 @@ class TestRiskAccessFetch:
         assert calls == [1]
 
     def test_fetch_cache_by_is_formal(self):
-        """下拉展示走缓存（按 is_formal 维度）：二次调用不再打接口"""
+        """下拉展示走缓存（按 is_formal + 身份维度）：同身份二次调用不再打接口"""
         from django.core.cache import cache
 
         from services.web.risk.bksec.service import fetch_risk_access_items

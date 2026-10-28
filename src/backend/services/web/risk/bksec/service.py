@@ -28,6 +28,7 @@ from rest_framework import serializers
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.sops.constants import SOPSTaskStatus
+from core.models import get_request_username
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
     BKSEC_CACHE_TIMEOUT,
@@ -62,7 +63,14 @@ def find_preset_pa() -> Optional[ProcessApplication]:
         return None
 
 
-def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> List[dict]:
+def _risk_access_cache_identity(as_platform: bool) -> str:
+    """缓存身份维度：平台同步固定 platform；前端按请求用户隔离，防止跨身份缓存污染"""
+    if as_platform:
+        return "platform"
+    return get_request_username() or "anonymous"
+
+
+def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True, as_platform: bool = False) -> List[dict]:
     """
     拉取风险类型列表（循环翻页取全量）
 
@@ -72,19 +80,25 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> 
 
     翻页固定带 ordering=created_at：接口默认无序，翻页期间数据增删会让 offset 错位（漏取/重复）。
 
-    use_cache=True 时按 is_formal 维度缓存 BKSEC_CACHE_TIMEOUT 秒（下拉等只读展示，
-    容忍短暂陈旧）；token 等凭证查找须传 use_cache=False 保证新鲜，避免轮换后写旧值。
+    as_platform：认证形态——True 走平台身份（RiskAccessListAsPlatform，同步 config 取 token），
+    False 走用户身份（RiskAccessList，前端下拉随请求者凭证，网关按用户数据域出数据）。
+    缓存按 is_formal + 身份维度隔离（两种身份数据域可能不同，混用会互相污染）。
+    use_cache=True 时缓存 BKSEC_CACHE_TIMEOUT 秒（下拉等只读展示，容忍短暂陈旧）；
+    token 等凭证查找须传 use_cache=False 保证新鲜，避免轮换后写旧值。
     达翻页上限视为结果不完整，不写缓存，避免把截断结果固化 BKSEC_CACHE_TIMEOUT 秒。
     """
-    cache_key = "{}:{}".format(BKSEC_RISK_TYPES_CACHE_KEY, is_formal or "true")
+    cache_key = "{}:{}:{}".format(
+        BKSEC_RISK_TYPES_CACHE_KEY, _risk_access_cache_identity(as_platform), is_formal or "true"
+    )
     if use_cache:
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
+    fetcher = api.bk_sec.risk_access_list_as_platform if as_platform else api.bk_sec.risk_access_list
     items: List[dict] = []
     for page in range(1, BKSEC_RISK_ACCESS_MAX_PAGES + 1):
         result = (
-            api.bk_sec.risk_access_list(
+            fetcher(
                 project_id=settings.BKSEC_PROJECT_ID or "",
                 is_formal=is_formal or "true",
                 ordering=BKSEC_RISK_ACCESS_ORDERING,
@@ -117,12 +131,14 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> 
     return items
 
 
-def find_risk_access_item(risk_type_id: str, use_cache: bool = False) -> Optional[dict]:
+def find_risk_access_item(risk_type_id: str, use_cache: bool = False, as_platform: bool = True) -> Optional[dict]:
     """
     按 risk_type_id 查找风险类型（取 token 用）
+
+    默认平台身份（同步插件 Config 取 token 的专用路径，不受操作者数据域影响）。
     """
     for is_formal in ("true", "false"):
-        for item in fetch_risk_access_items(is_formal=is_formal, use_cache=use_cache):
+        for item in fetch_risk_access_items(is_formal=is_formal, use_cache=use_cache, as_platform=as_platform):
             if str(item.get("id")) == str(risk_type_id):
                 return item
     return None

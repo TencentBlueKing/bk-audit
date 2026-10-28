@@ -61,11 +61,16 @@ class BKSec(BkApiResource, abc.ABC):
 
 
 class RiskAccessList(BKSec):
-    """查询风险类型列表（内嵌 risk_access_fields 字段 schema）"""
+    """查询风险类型列表（内嵌 risk_access_fields 字段 schema，用户身份）
+
+    前端下拉走本类：随请求者凭证（bk_token/bk_username）调用，网关按用户数据域出数据。
+    后台同步 config 取 token 须平台身份，走 RiskAccessListAsPlatform；两类仅认证形态不同。
+    """
 
     name = "查询风险类型列表"
     method = "GET"
     action = "/api/v1/risk/risk_access/"
+    platform_authorization = False
 
     def _mock_request(self, validated_request_data):
         data = _load_mock_data()
@@ -85,3 +90,14 @@ class RiskAccessList(BKSec):
             results = [r for r in results if keyword in (r.get("name") or "").lower()]
 
         return {"count": len(results), "results": results}
+
+
+class RiskAccessListAsPlatform(RiskAccessList):
+    """查询风险类型列表（平台身份）
+
+    同步插件 Config 取 token 专用：随平台凭证调用，不受操作者数据域影响，
+    保证 token 可见性稳定（与谁触发保存/测试无关）。接口/参数/mock 复用 RiskAccessList。
+    """
+
+    name = "查询风险类型列表（平台身份）"
+    platform_authorization = True

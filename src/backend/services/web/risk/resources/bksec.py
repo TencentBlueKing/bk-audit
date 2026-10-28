@@ -89,9 +89,12 @@ class ListBkSecRiskTypes(BkSecResourceMeta):
             return []
         if not settings.BKSEC_PROJECT_ID:
             raise serializers.ValidationError(gettext_lazy("未配置 BKSEC 项目（BKAPP_BKSEC_PROJECT_ID），无法查询风险类型"))
-        # 全量翻页（带缓存）后本地模糊过滤：缓存键只按 is_formal 维度，
+        # 全量翻页（带缓存）后本地模糊过滤：缓存键按 is_formal + 身份维度，
         # 名称过滤须在本地做，否则不同关键字互相污染缓存
-        items = fetch_risk_access_items(is_formal=validated_request_data.get("is_formal") or "true")
+        # 用户身份（as_platform=False）：随请求者凭证调用，网关按用户数据域出数据
+        items = fetch_risk_access_items(
+            is_formal=validated_request_data.get("is_formal") or "true", as_platform=False
+        )
         keyword = (validated_request_data.get("name__icontains") or "").strip().lower()
         if keyword:
             items = [item for item in items if keyword in (item.get("name") or "").lower()]
