@@ -82,7 +82,7 @@ export const buildVariableGroups = (options: {
     .filter(item => item?.field_name && item.prefix !== 'ai' && !String(item.field_name).startsWith('ai.'))
     .map((item) => {
       const token = item.prefix ? `${item.prefix}["${item.field_name}"]` : String(item.field_name);
-      const insertText = item.prefix ? `{{ ${token} }}` : `{{${item.field_name}}}`;
+      const insertText = `{{ ${token} }}`;
       return {
         token,
         label: item.display_name || String(item.field_name),
@@ -102,7 +102,7 @@ export const buildVariableGroups = (options: {
           token,
           label: name.replace(/^ai\./, ''),
           sample: sampleOf(sample, token),
-          insertText: `{{${token}}}`,
+          insertText: `{{ ${token} }}`,
         };
       });
     if (aiItems.length) {
