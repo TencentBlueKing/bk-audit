@@ -43,6 +43,7 @@ BKSEC_PRESET_PA_NAME = "【内置】BKSEC安全工单发单"
 
 BKSEC_CONFIG_DATA = {
     "enabled": True,
+    "project_id": "17",
     "risk_type_id": "cloud-account-no-mfa",
     "risk_type_name": "云安全-云账号未启用MFA",
     "field_mappings": [
@@ -70,7 +71,7 @@ class TestRiskAccessFetch:
             return pages.get(kwargs.get("page", 1), {"count": 3, "results": []})
 
         with mock.patch(
-            "services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list_as_platform", side_effect=fake_list
         ) as fake_fetch:
             item = find_risk_access_item("159")
         assert item and item["token"] == "t-target"
@@ -85,7 +86,9 @@ class TestRiskAccessFetch:
                 return {"count": 1, "results": [{"id": 1, "token": "t1"}]}
             return {"count": 1, "results": [{"id": 159, "token": "t-test"}]}
 
-        with mock.patch("services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list):
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list_as_platform", side_effect=fake_list
+        ):
             item = find_risk_access_item("159")
         assert item and item["token"] == "t-test"
 
@@ -105,7 +108,7 @@ class TestRiskAccessFetch:
         assert calls == [1]
 
     def test_fetch_cache_by_is_formal(self):
-        """下拉展示走缓存（按 is_formal 维度）：二次调用不再打接口"""
+        """下拉展示走缓存（按 is_formal + 身份维度）：同身份二次调用不再打接口"""
         from django.core.cache import cache
 
         from services.web.risk.bksec.service import fetch_risk_access_items
@@ -120,6 +123,97 @@ class TestRiskAccessFetch:
         assert first == second
         assert fake_fetch.call_count == 1
         cache.clear()
+
+    def test_platform_result_never_cached(self):
+        """平台身份结果含 token：一律不落缓存（key 恒为 platform，写入即对全站可见）"""
+        from django.core.cache import cache
+
+        from services.web.risk.bksec.constants import BKSEC_RISK_TYPES_CACHE_KEY
+        from services.web.risk.bksec.service import fetch_risk_access_items
+
+        cache.clear()
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list_as_platform",
+            mock.Mock(return_value={"count": 1, "results": [{"id": 159, "token": "t-secret"}]}),
+        ):
+            fetch_risk_access_items(project_id="17", is_formal="true", use_cache=True, as_platform=True)
+        assert cache.get("{}:platform:17:true".format(BKSEC_RISK_TYPES_CACHE_KEY)) is None
+        cache.clear()
+
+    def test_cache_isolated_by_project(self):
+        """多项目：缓存按项目隔离，项目 A 的结果不得被项目 B 读到"""
+        from django.core.cache import cache
+
+        from services.web.risk.bksec.service import fetch_risk_access_items
+
+        cache.clear()
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list",
+            side_effect=lambda **kwargs: {
+                "count": 1,
+                "results": [{"id": 1, "name": "P{}".format(kwargs.get("project_id"))}],
+            },
+        ):
+            assert fetch_risk_access_items(project_id="17", use_cache=True)[0]["name"] == "P17"
+            assert fetch_risk_access_items(project_id="18", use_cache=True)[0]["name"] == "P18"
+            assert fetch_risk_access_items(project_id="17", use_cache=True)[0]["name"] == "P17"
+        cache.clear()
+
+
+class TestBkSecPluginConfigAuth:
+    """写路径授权：下拉（用户身份）过滤不等于授权，越权「项目/风险类型」不得借平台身份取 token"""
+
+    # 平台身份数据域更宽：能看到用户看不到的项目 18、类型 159
+    PLATFORM_ITEMS = {
+        "17": [{"id": 1, "token": "t-visible"}, {"id": 159, "token": "t-secret"}],
+        "18": [{"id": 2, "token": "t-other"}],
+    }
+    # 用户身份：项目 17 只看得到类型 1；项目 18 无权限（空）
+    USER_ITEMS = {"17": [{"id": 1, "token": "t-visible"}], "18": []}
+
+    def _sync(self, project_id, risk_type_id, user_items=None):
+        from bk_resource import api
+        from django.core.cache import cache
+
+        from services.web.risk.bksec.rules import sync_plugin_config
+
+        cache.clear()
+        strategy = mock.Mock(strategy_id=1)
+        config = BkSecConfig.model_validate(
+            {**BKSEC_CONFIG_DATA, "project_id": project_id, "risk_type_id": risk_type_id}
+        )
+
+        def fake_fetch(project_id="", is_formal="true", use_cache=True, as_platform=False):
+            source = self.PLATFORM_ITEMS if as_platform else (user_items or self.USER_ITEMS)
+            return [dict(item, is_formal=True) for item in source.get(str(project_id), [])]
+
+        with mock.patch("services.web.risk.bksec.rules.BKSEC_PLUGIN_CONFIG_API_URL", "http://plugin"), mock.patch(
+            "services.web.risk.bksec.service.fetch_risk_access_items", side_effect=fake_fetch
+        ), mock.patch.object(api.bk_sec_send_plugin, "config_upsert", return_value={"result": True}) as upsert:
+            result = sync_plugin_config(strategy, config)
+        cache.clear()
+        return result, upsert
+
+    def test_forbidden_risk_type_blocked(self):
+        """用户不可见的 risk_type_id：即便平台身份取得到 token，也禁止同步到插件"""
+        (success, message), upsert = self._sync("17", "159")
+        assert success is False
+        assert "无权" in message
+        assert upsert.call_count == 0
+
+    def test_forbidden_project_blocked(self):
+        """用户无权限的项目：项目 18 用户在下拉里根本看不到，直传不得放行"""
+        (success, message), upsert = self._sync("18", "2")
+        assert success is False
+        assert "无权" in message
+        assert upsert.call_count == 0
+
+    def test_visible_risk_type_allowed(self):
+        """用户可见的 (项目, 风险类型) 正常同步，写入的是该类型自身的 token"""
+        (success, _), upsert = self._sync("17", "1")
+        assert success is True
+        assert upsert.call_count == 1
+        assert upsert.call_args.kwargs["token"] == "t-visible"
 
 
 class TestBkSecConfig:

@@ -266,12 +266,35 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
         _report_fail(BkSecConfigSyncFailReason.API_URL_MISSING, message)
         return (False, message)
 
+    # 可见性校验（用户身份）：下拉用用户身份（网关按数据域过滤），取 token 用平台身份（不受数据域影响），
+    # 不校验则可绕过前端直传越权 risk_type_id，借平台身份拿到 token 并写入插件 Config
+    try:
+        from services.web.risk.bksec.service import is_risk_type_visible
+
+        if not is_risk_type_visible(config.risk_type_id, project_id=config.project_id):
+            message = "当前用户无权使用 risk_type_id=%s 的风险类型" % config.risk_type_id
+            logger.warning(
+                "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
+                message,
+                strategy.strategy_id,
+                config.risk_type_id,
+            )
+            _report_fail(BkSecConfigSyncFailReason.RISK_TYPE_FORBIDDEN, message)
+            return (False, message)
+    except Exception as err:  # NOCC:broad-except(校验异常须阻断，避免 fail-open 放行越权配置)
+        message = "风险类型可见性校验失败：%s" % err
+        logger.warning(
+            "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s", message, strategy.strategy_id, config.risk_type_id
+        )
+        _report_fail(BkSecConfigSyncFailReason.RISK_TYPE_CHECK_FAILED, message)
+        return (False, message)
+
     # 获取 token（risk_access 列表翻页查找：单页取会截断漏匹配；is_formal=true 优先、false 兜底）
     try:
         from services.web.risk.bksec.service import find_risk_access_item
 
         # 凭证查找不走缓存（use_cache=False），避免 token 轮换后向插件写入旧值
-        item = find_risk_access_item(config.risk_type_id)
+        item = find_risk_access_item(config.risk_type_id, project_id=config.project_id)
         token = (item or {}).get("token", "")
         if not token:
             message = "risk_access 列表接口未返回 risk_type_id=%s 的 token" % config.risk_type_id

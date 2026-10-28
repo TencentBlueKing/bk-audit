@@ -120,6 +120,7 @@ class BkSecConfigSerializer(serializers.Serializer):
     """BKSEC 安全工单配置（空串合法；启用时的必填约束由 validate_for_submit 把关）"""
 
     enabled = serializers.BooleanField(required=False, default=False)
+    project_id = serializers.CharField(required=False, allow_blank=True, default="")
     risk_type_id = serializers.CharField(required=False, allow_blank=True, default="")
     risk_type_name = serializers.CharField(required=False, allow_blank=True, default="")
     target = serializers.CharField(required=False, allow_blank=True, default="")

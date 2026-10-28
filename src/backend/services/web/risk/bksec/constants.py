@@ -85,6 +85,8 @@ class BkSecConfigSyncFailReason(TextChoices):
     """BKSEC 插件配置同步失败原因（BkSecConfigSyncFailedEvent 的 fail_reason 维度）"""
 
     API_URL_MISSING = "api_url_missing", gettext_lazy("插件配置地址未配置")
+    RISK_TYPE_FORBIDDEN = "risk_type_forbidden", gettext_lazy("当前用户无权使用该风险类型")
+    RISK_TYPE_CHECK_FAILED = "risk_type_check_failed", gettext_lazy("风险类型可见性校验失败")
     TOKEN_MISSING = "token_missing", gettext_lazy("risk_access 未返回对应 token")
     TOKEN_FETCH_FAILED = "token_fetch_failed", gettext_lazy("获取 token 失败")
     UPSERT_REJECTED = "upsert_rejected", gettext_lazy("插件拒绝写入 Config")
