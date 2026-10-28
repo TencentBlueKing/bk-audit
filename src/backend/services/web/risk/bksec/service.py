@@ -84,9 +84,13 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True, as_
     False 走用户身份（RiskAccessList，前端下拉随请求者凭证，网关按用户数据域出数据）。
     缓存按 is_formal + 身份维度隔离（两种身份数据域可能不同，混用会互相污染）。
     use_cache=True 时缓存 BKSEC_CACHE_TIMEOUT 秒（下拉等只读展示，容忍短暂陈旧）；
-    token 等凭证查找须传 use_cache=False 保证新鲜，避免轮换后写旧值。
     达翻页上限视为结果不完整，不写缓存，避免把截断结果固化 BKSEC_CACHE_TIMEOUT 秒。
+
+    平台身份（as_platform=True）结果含 token 凭证，一律不落缓存：其缓存 key 恒为 platform，
+    任一调用写入即对全站可见，等于把全量 token 明文存进 redis；且 token 轮换后缓存会写旧值。
     """
+    # 凭证不落缓存（结构性保证：不依赖调用方自觉传 use_cache=False）
+    use_cache = use_cache and not as_platform
     cache_key = "{}:{}:{}".format(
         BKSEC_RISK_TYPES_CACHE_KEY, _risk_access_cache_identity(as_platform), is_formal or "true"
     )
@@ -136,12 +140,30 @@ def find_risk_access_item(risk_type_id: str, use_cache: bool = False, as_platfor
     按 risk_type_id 查找风险类型（取 token 用）
 
     默认平台身份（同步插件 Config 取 token 的专用路径，不受操作者数据域影响）。
+    平台身份结果不落缓存（见 fetch_risk_access_items），保证 token 轮换后写入插件的是新值。
     """
     for is_formal in ("true", "false"):
         for item in fetch_risk_access_items(is_formal=is_formal, use_cache=use_cache, as_platform=as_platform):
             if str(item.get("id")) == str(risk_type_id):
                 return item
     return None
+
+
+def is_risk_type_visible(risk_type_id: str, as_platform: bool = False) -> bool:
+    """
+    校验 risk_type_id 是否在指定身份可见的风险类型范围内（默认用户身份）
+
+    下拉（用户身份）的过滤只是「看不见」，而取 token 走平台身份不受数据域影响：
+    若不在写路径显式校验，调用方可绕过前端直传任意 risk_type_id，借平台身份拿到越权 token
+    并写入插件 Config。故保存/测试等写路径须先过本校验。
+
+    无用户上下文（后台任务）时用户身份请求会被框架降级为平台身份，等价于不裁剪，不会误阻断。
+    """
+    for is_formal in ("true", "false"):
+        for item in fetch_risk_access_items(is_formal=is_formal, as_platform=as_platform):
+            if str(item.get("id")) == str(risk_type_id):
+                return True
+    return False
 
 
 def ensure_bksec_enabled() -> None:

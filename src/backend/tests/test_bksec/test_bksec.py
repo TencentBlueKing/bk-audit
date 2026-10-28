@@ -123,6 +123,65 @@ class TestRiskAccessFetch:
         assert fake_fetch.call_count == 1
         cache.clear()
 
+    def test_platform_result_never_cached(self):
+        """平台身份结果含 token：一律不落缓存（key 恒为 platform，写入即对全站可见）"""
+        from django.core.cache import cache
+
+        from services.web.risk.bksec.constants import BKSEC_RISK_TYPES_CACHE_KEY
+        from services.web.risk.bksec.service import fetch_risk_access_items
+
+        cache.clear()
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list_as_platform",
+            mock.Mock(return_value={"count": 1, "results": [{"id": 159, "token": "t-secret"}]}),
+        ):
+            fetch_risk_access_items(is_formal="true", use_cache=True, as_platform=True)
+        assert cache.get("{}:platform:true".format(BKSEC_RISK_TYPES_CACHE_KEY)) is None
+        cache.clear()
+
+
+class TestBkSecPluginConfigAuth:
+    """写路径授权：下拉（用户身份）过滤不等于授权，越权 risk_type_id 不得借平台身份取 token"""
+
+    # 平台身份数据域更宽：159 是用户看不到的类型
+    PLATFORM_ITEMS = [{"id": 159, "name": "云账号未启用MFA", "token": "t-secret", "is_formal": True}]
+    USER_ITEMS = [{"id": 1, "name": "可见类型", "token": "t-visible", "is_formal": True}]
+
+    def _sync(self, risk_type_id, user_items):
+        from bk_resource import api
+        from django.core.cache import cache
+
+        from services.web.risk.bksec.rules import sync_plugin_config
+
+        cache.clear()
+        strategy = mock.Mock(strategy_id=1)
+        config = BkSecConfig.model_validate({**BKSEC_CONFIG_DATA, "risk_type_id": risk_type_id})
+
+        def fake_fetch(is_formal="true", use_cache=True, as_platform=False):
+            # 平台身份数据域是用户身份的超集（用户可见 + 用户不可见）
+            return list(user_items) + list(self.PLATFORM_ITEMS) if as_platform else list(user_items)
+
+        with mock.patch("services.web.risk.bksec.rules.BKSEC_PLUGIN_CONFIG_API_URL", "http://plugin"), mock.patch(
+            "services.web.risk.bksec.service.fetch_risk_access_items", side_effect=fake_fetch
+        ), mock.patch.object(api.bk_sec_send_plugin, "config_upsert", return_value={"result": True}) as upsert:
+            result = sync_plugin_config(strategy, config)
+        cache.clear()
+        return result, upsert
+
+    def test_forbidden_risk_type_blocked(self):
+        """用户不可见的 risk_type_id：即便平台身份取得到 token，也禁止同步到插件"""
+        (success, message), upsert = self._sync("159", self.USER_ITEMS)
+        assert success is False
+        assert "无权" in message
+        assert upsert.call_count == 0
+
+    def test_visible_risk_type_allowed(self):
+        """用户可见的 risk_type_id 正常同步，写入的是该类型自身的 token"""
+        (success, _), upsert = self._sync("1", self.USER_ITEMS)
+        assert success is True
+        assert upsert.call_count == 1
+        assert upsert.call_args.kwargs["token"] == "t-visible"
+
 
 class TestBkSecConfig:
     def test_parse_and_dedupe(self):

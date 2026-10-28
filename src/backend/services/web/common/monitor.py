@@ -147,6 +147,8 @@ class BkSecConfigSyncFailedEvent(Event):
         - test_send: 测试发送时的同步
     - fail_reason: 失败原因
         - api_url_missing: 插件配置地址未配置（BKSEC_PLUGIN_CONFIG_API_URL 为空）
+        - risk_type_forbidden: 该 risk_type_id 不在当前用户可见范围内（越权，阻断）
+        - risk_type_check_failed: 调用 risk_access 列表做可见性校验时异常
         - token_missing: risk_access 列表未返回该 risk_type_id 的 token
         - token_fetch_failed: 调用 risk_access 列表接口异常
         - upsert_rejected: 插件返回 result=false，拒绝写入 Config
