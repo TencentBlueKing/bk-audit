@@ -60,12 +60,13 @@
             :class="{ 'is-error': typeError }"
             :filter-option="false"
             filterable
-            :loading="typeLoading"
             :no-data-text="t('暂无匹配的风险类型')"
             :no-match-text="t('暂无匹配的风险类型')"
             :placeholder="t('请选择风险类型')"
+            :popover-options="riskTypePopoverOptions"
             :remote-method="searchRiskTypes"
-            @change="handleTypeChange">
+            @change="handleTypeChange"
+            @toggle="handleTypeMenuToggle">
             <bk-option-group
               v-for="project in displayProjects"
               :key="project.id"
@@ -81,7 +82,8 @@
               class="bksec-kept-option">
               <bk-option
                 :id="keptRiskType.id"
-                :name="keptRiskType.label" />
+                :name="keptRiskType.label"
+                :ref="markKeptOption" />
             </div>
           </bk-select>
           <div
@@ -388,14 +390,89 @@
     ));
   });
 
+  const riskTypePopoverOptions = { extCls: 'bksec-risk-type-popover' };
   let latestSearchDom: string | null = null;
+  let riskTypeComposing = false;
+  let enterSearchValue = '';
+  let enterDuringComposition = false;
+  let enterToken = 0;
 
-  const searchInput = () => document.querySelector('.bk-select-popover .bk-select-search-input') as HTMLInputElement | null;
+  const riskTypeSearchInput = (target: EventTarget | null): HTMLInputElement | null => {
+    const input = target as HTMLInputElement | null;
+    if (!input?.classList?.contains('bk-select-search-input')) return null;
+    if (!input.closest('.bksec-risk-type-popover')) return null;
+    return input;
+  };
+
+  const markKeptOption = (option: { visible?: boolean } | null) => {
+    if (option) option.visible = false;
+  };
 
   const rememberSearchInput = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    if (!target?.classList?.contains('bk-select-search-input')) return;
-    latestSearchDom = target.value;
+    if (riskTypeComposing) return;
+    const input = riskTypeSearchInput(event.target);
+    if (!input) return;
+    latestSearchDom = input.value;
+  };
+
+  const markRiskTypeCompositionStart = (event: Event) => {
+    if (!riskTypeSearchInput(event.target)) return;
+    riskTypeComposing = true;
+  };
+
+  const markRiskTypeCompositionEnd = (event: CompositionEvent) => {
+    const input = riskTypeSearchInput(event.target);
+    if (!input) return;
+    riskTypeComposing = false;
+    if (enterToken) enterDuringComposition = true;
+    latestSearchDom = input.value;
+  };
+
+  const handleTypeMenuToggle = (open: boolean) => {
+    if (!open) {
+      latestSearchDom = null;
+      enterToken = 0;
+      enterDuringComposition = false;
+    }
+  };
+
+  const rememberEnterSearchValue = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.code !== 'NumpadEnter') return;
+    const input = riskTypeSearchInput(event.target);
+    if (!input) return;
+    if (!enterToken) enterSearchValue = input.value;
+    enterToken += 1;
+    if (event.isComposing || event.keyCode === 229 || riskTypeComposing) {
+      enterDuringComposition = true;
+    }
+  };
+
+  const selectHighlightedRiskType = () => {
+    const menu = document.querySelector('.bksec-risk-type-popover');
+    if (!menu || typeLoading.value) return;
+    const input = menu.querySelector('.bk-select-search-input') as HTMLInputElement | null;
+    if (!input || input.value.trim() !== searchKeyword.value) return;
+    const hovered = menu.querySelector('.bk-option-group .bk-select-option.is-hover');
+    const fallback = menu.querySelector('.bk-option-group .bk-select-option');
+    const option = (hovered || fallback) as HTMLElement | null;
+    option?.click();
+  };
+
+  const confirmRiskTypeByEnter = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.code !== 'NumpadEnter') return;
+    const input = riskTypeSearchInput(event.target);
+    if (!input) return;
+    const token = enterToken;
+    const valueAtKeyup = input.value;
+    window.setTimeout(() => {
+      const confirmedComposition = enterDuringComposition;
+      if (token !== enterToken) return;
+      enterToken = 0;
+      enterDuringComposition = false;
+      if (confirmedComposition || riskTypeComposing) return;
+      if (input.value !== enterSearchValue || input.value !== valueAtKeyup) return;
+      selectHighlightedRiskType();
+    }, 30);
   };
 
   const applyRiskType = (id: string | null) => {
@@ -646,18 +723,26 @@
   };
 
   onUpdated(() => {
-    if (latestSearchDom === null) return;
-    const input = searchInput();
+    if (riskTypeComposing || latestSearchDom === null) return;
+    const input = document.querySelector('.bksec-risk-type-popover .bk-select-search-input') as HTMLInputElement | null;
     if (!input || input.value === latestSearchDom) return;
     input.value = latestSearchDom;
   });
 
   onBeforeUnmount(() => {
     document.removeEventListener('input', rememberSearchInput, true);
+    document.removeEventListener('keydown', rememberEnterSearchValue);
+    document.removeEventListener('keyup', confirmRiskTypeByEnter);
+    document.removeEventListener('compositionstart', markRiskTypeCompositionStart, true);
+    document.removeEventListener('compositionend', markRiskTypeCompositionEnd, true);
   });
 
   onMounted(async () => {
     document.addEventListener('input', rememberSearchInput, true);
+    document.addEventListener('keydown', rememberEnterSearchValue);
+    document.addEventListener('keyup', confirmRiskTypeByEnter);
+    document.addEventListener('compositionstart', markRiskTypeCompositionStart, true);
+    document.addEventListener('compositionend', markRiskTypeCompositionEnd, true);
     if (!isStrategyEditRoute(route.name)) return;
     sampleRisks.value = await BksecManageService.fetchEditPreviewRisks(strategyId.value);
   });
@@ -916,5 +1001,29 @@
   line-height: 20px;
   white-space: normal;
   word-break: break-all;
+}
+
+.bksec-risk-type-popover .bk-select-content-wrapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.bksec-risk-type-popover .bk-select-search-wrapper {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.bksec-risk-type-popover .bk-select-content,
+.bksec-risk-type-popover .bk-select-empty {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.bksec-risk-type-popover .bk-select-empty {
+  z-index: 2;
+  height: auto;
+  min-height: 56px;
+  background: var(--audit-neutral-bg-04);
+  align-self: stretch;
 }
 </style>
