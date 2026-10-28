@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('risk', '0065_alter_risk_longtext_charset_utf8mb4'),
+        ('risk', '0067_ticketnode_duration'),
     ]
 
     operations = [
