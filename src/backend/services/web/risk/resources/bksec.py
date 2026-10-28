@@ -347,6 +347,10 @@ def _extract_risk_access_fields(item: dict) -> list:
         {"key": "target", "name": "风险资产信息", "required": True, "type": "string"},
         {"key": "submitter", "name": "提单人", "required": False, "type": "string"},
     ]
+
+    排序：必填字段前置（配置页先填必填），必填组内按 BKSEC_REQUIRED_FIELD_KEYS 声明顺序
+    （target → target_type → operator，三个独立入参的业务语义顺序）；
+    非必填组内保持接口返回顺序，避免不同风险类型的可选字段顺序无谓跳动。
     """
     if not isinstance(item, dict):
         return []
@@ -367,6 +371,9 @@ def _extract_risk_access_fields(item: dict) -> list:
                     "type": str(f.get("type") or f.get("storage_type") or "").strip().lower(),
                 }
             )
+    # 稳定排序：必填组 (0, 白名单次序) 在前，非必填组 (1, 0) 在后且保持接口原序
+    required_order = {key: index for index, key in enumerate(BKSEC_REQUIRED_FIELD_KEYS)}
+    fields.sort(key=lambda f: (0, required_order[f["key"]]) if f["required"] else (1, 0))
     return fields
 
 
