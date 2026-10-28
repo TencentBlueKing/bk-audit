@@ -139,7 +139,6 @@ class HitsFormatter:
             for so in self.sensitive_objs
             if not getattr(so, "_has_permission", False) and self._check_sensitive_condition(so)
         ]
-        # 原始 log 是结构化字段的完整文本副本；命中任一无权规则时都必须整体遮罩。
         for so in matched_sensitive_objs:
             # 逐个字段进行替换或移除
             for field in so.fields:
@@ -147,8 +146,14 @@ class HitsFormatter:
                 default_value = field.get("default_value", SENSITIVE_REPLACE_VALUE)
                 args = (self.hit, field_path, default_value)
                 self.hit = drop_dict_item_by_path(*args) if so.is_private else modify_dict_by_path(*args)
-        # 没有所有权限时，需要隐藏原始日志
-        if matched_sensitive_objs:
+        # 用户快照由关联数据生成，其私密规则只删除快照字段，不连带遮罩上游原文。
+        # 混合规则及其他无权规则继续保留原有的整段遮罩行为。
+        if any(
+            not so.is_private
+            or not so.fields
+            or any(field["field_name"].split(".")[0] != SNAPSHOT_USER_INFO.field_name for field in so.fields)
+            for so in matched_sensitive_objs
+        ):
             self.hit["log"] = SENSITIVE_REPLACE_VALUE
 
     def _check_sensitive_condition(self, sensitive_obj: SensitiveObject) -> bool:
