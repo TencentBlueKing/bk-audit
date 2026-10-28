@@ -23,7 +23,7 @@ import traceback
 from typing import Dict, Optional, Type
 
 import requests
-from bk_resource import api, resource
+from bk_resource import resource
 from bk_resource.exceptions import APIRequestError
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
@@ -41,6 +41,9 @@ from apps.notice.handlers import ErrorMsgHandler
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.lock import lock
 from core.monitor import Metric
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import query as bkbase_query
+from services.web.bkbase import source as bkbase_source
 from services.web.common.monitor import (
     AssetSyncAnomalyEvent,
     AssetSyncCheckAnomalyEvent,
@@ -304,11 +307,14 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
 
     if collector_plugin_id:
         plugins = CollectorPlugin.objects.filter(collector_plugin_id=collector_plugin_id)
+        for plugin in plugins:
+            bkbase_clean.reset_plugin_operation(plugin)
     else:
         # 仅为日志/事件采集插件创建入库
-        plugins = CollectorPlugin.objects.filter(
-            plugin_scene__in=[PluginSceneChoices.EVENT.value, PluginSceneChoices.COLLECTOR.value],
-            bkbase_table_id__isnull=True,
+        plugins = bkbase_clean.pending_plugins(
+            CollectorPlugin.objects.filter(
+                plugin_scene__in=[PluginSceneChoices.EVENT.value, PluginSceneChoices.COLLECTOR.value],
+            )
         )
     # 创建或更新
     handler_map = {
@@ -390,7 +396,7 @@ def check_join_data():
 
         try:
             # 尝试发送请求获取存储中的 count 数据
-            bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+            bulk_resp = bkbase_query.query_sync_bulk(bulk_req_params)
             doris_count_resp, hdfs_count_resp = bulk_resp
             doris_storage_count = doris_count_resp.get("list", [{}])[0].get("count", 0)
             hdfs_storage_count = hdfs_count_resp.get("list", [{}])[0].get("count", 0)
@@ -729,3 +735,11 @@ def report_asset_sync_count():
         except Exception as err:
             logger.exception("[AssetSyncReport] count anomaly %s/%s err=%s", snap.system_id, snap.resource_type_id, err)
     logger.info("[AssetSyncReport] count anomaly events reported")
+
+
+@periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:poll_bkbase_v4_clean_operations")
+def poll_bkbase_v4_clean_operations():
+    """V4清洗/删源每次只做一次观测，避免请求线程等待。"""
+    bkbase_clean.poll_clean_operations()
+    bkbase_source.poll_source_operations()

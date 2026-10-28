@@ -16,9 +16,9 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api
 from django.conf import settings
 
+from services.web.bkbase import storage as bkbase_storage
 from services.web.databus.collector.snapshot.system.clean import PullCleanHandler
 from services.web.databus.storage.handler.redis import RedisHandler
 
@@ -50,4 +50,4 @@ class PullStorageHandler:
 
     def create_storage(self):
         print(f"[HttpPull] Params => {self.config}")
-        return api.bk_base.databus_storages_post(self.config)
+        return bkbase_storage.databus_storages_post(self.config)

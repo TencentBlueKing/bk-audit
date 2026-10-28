@@ -71,7 +71,7 @@ class TestRawLogRedactionIntegration(TestCase):
     def test_collector_resource_and_export_preserve_raw_log_and_remove_private_snapshot(self):
         with (
             mock.patch("services.web.query.resources.doris.GlobalMetaConfig.get", return_value=101),
-            mock.patch("services.web.query.resources.doris.api.bk_base.query_sync.bulk_request", self.query_response),
+            mock.patch("bk_resource.api.bk_base.query_sync.bulk_request", self.query_response),
         ):
             result = CollectorSearchAllResource().request(**self.query_params)
             self.assert_clean_rows(result["results"])
@@ -84,7 +84,7 @@ class TestRawLogRedactionIntegration(TestCase):
         with (
             mock.patch(f"{module}.CollectorPlugin.build_collector_rt", return_value=self.plugin.result_table_id),
             mock.patch(f"{module}.SearchLogPermission.get_scope_auth_systems", return_value=["example-system"]),
-            mock.patch(f"{module}.api.bk_base.query_sync.bulk_request", self.query_response),
+            mock.patch("bk_resource.api.bk_base.query_sync.bulk_request", self.query_response),
             mock.patch(f"{module}.resource.meta.system_list", return_value=[]),
         ):
             result = LogSearchService.search(

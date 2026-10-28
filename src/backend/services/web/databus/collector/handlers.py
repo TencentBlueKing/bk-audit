@@ -26,6 +26,7 @@ from django.utils import timezone
 from django.utils.timezone import get_default_timezone
 from rest_framework.settings import api_settings
 
+from services.web.bkbase import source as bkbase_source
 from services.web.databus.constants import SourcePlatformChoices
 from services.web.databus.models import CollectorConfig
 
@@ -99,7 +100,7 @@ class BkBaseTailLogHandler(TailLogHandler):
     """
 
     def load_tail_log(self):
-        self.tail_logs = api.bk_base.get_rawdata_tail(bk_data_id=self.collector.bk_data_id)
+        self.tail_logs = bkbase_source.get_rawdata_tail(bk_data_id=self.collector.bk_data_id)
 
     def parse_log_time(self):
         start_time = int(json.loads(self.tail_logs[0].get("value", "{}")).get("start_time"))

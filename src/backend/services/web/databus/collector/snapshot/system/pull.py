@@ -20,7 +20,6 @@ import datetime
 import json
 import uuid
 
-from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
@@ -28,6 +27,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from apps.permission.handlers.permission import FetchInstancePermission
+from services.web.bkbase import source as bkbase_source
 from services.web.databus.constants import (
     ACTION_DATA_NAME_FORMAT,
     RESOURCE_TYPE_DATA_NAME_FORMAT,
@@ -134,4 +134,4 @@ class HttpPullHandler:
 
     def create_data_id(self):
         params = self.build_params()
-        return self.raw_data_name, api.bk_base.create_deploy_plan(params)["raw_data_id"]
+        return self.raw_data_name, bkbase_source.create_deploy_plan(params)["raw_data_id"]

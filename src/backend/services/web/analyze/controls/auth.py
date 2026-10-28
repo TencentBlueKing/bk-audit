@@ -18,11 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
 
+from services.web.bkbase import permissions as bkbase_permissions
 from services.web.databus.models import CollectorPlugin, Snapshot
 
 
@@ -51,7 +51,7 @@ class BaseAuthHandler:
             "reason": self.auth_reason,
         }
         try:
-            resp = api.bk_base.auth_tickets(**params)
+            resp = bkbase_permissions.auth_tickets(**params)
             logger.info(
                 "[%sSuccess] RT => %s; Result => %s", self.__class__.__name__, self.build_result_table_id(), resp
             )

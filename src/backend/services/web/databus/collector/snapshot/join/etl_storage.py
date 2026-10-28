@@ -21,13 +21,15 @@ import json
 from functools import cached_property
 from typing import List
 
-from bk_resource import api, resource
+from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import storage as bkbase_storage
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     CLEAN_CONFIG_JSON_CONF_KEY,
@@ -66,13 +68,13 @@ class JoinDataEtlStorageHandler:
             # 更新清洗链路
             clean_config = self.clean_config.copy()
             clean_config["processing_id"] = self.snapshot.bkbase_processing_id
-            api.bk_base.databus_cleans_put(
+            bkbase_clean.databus_cleans_put(
                 clean_config,
             )
             restart_bkbase_clean(self.snapshot.bkbase_table_id, self.snapshot.bkbase_processing_id)
             return self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id
         else:
-            result = api.bk_base.databus_cleans_post(self.clean_config)
+            result = bkbase_clean.databus_cleans_post(self.clean_config)
             start_bkbase_clean(result["result_table_id"], result["processing_id"])
             processing_id = result["processing_id"]
             bkbase_table_id = result["result_table_id"]
@@ -84,9 +86,9 @@ class JoinDataEtlStorageHandler:
             # 更新入库
             storage_config = self.storage_config.copy()
             storage_config["result_table_id"] = self.snapshot.bkbase_table_id
-            api.bk_base.databus_storages_put(storage_config)
+            bkbase_storage.databus_storages_put(storage_config)
         else:
-            api.bk_base.databus_storages_post(self.storage_config)
+            bkbase_storage.databus_storages_post(self.storage_config)
 
     @property
     def storage_result_table_id(self):

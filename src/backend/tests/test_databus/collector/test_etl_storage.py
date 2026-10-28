@@ -265,9 +265,7 @@ def test_create_clean_update_calls_put_and_restart():
     )
 
     with (
-        _mock.patch(
-            "services.web.databus.collector.snapshot.join.etl_storage.api.bk_base.databus_cleans_put"
-        ) as mock_put,
+        _mock.patch("bk_resource.api.bk_base.databus_cleans_put") as mock_put,
         _mock.patch("services.web.databus.collector.snapshot.join.etl_storage.restart_bkbase_clean") as mock_restart,
     ):
         processing_id, table_id = etl_handler.create_clean(update=True)
@@ -293,7 +291,7 @@ def test_create_clean_create_calls_post_and_start():
 
     with (
         _mock.patch(
-            "services.web.databus.collector.snapshot.join.etl_storage.api.bk_base.databus_cleans_post",
+            "bk_resource.api.bk_base.databus_cleans_post",
             return_value={"processing_id": "proc_new", "result_table_id": "table_new"},
         ) as mock_post,
         _mock.patch("services.web.databus.collector.snapshot.join.etl_storage.start_bkbase_clean") as mock_start,

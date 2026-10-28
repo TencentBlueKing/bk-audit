@@ -16,10 +16,10 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api
 from django.conf import settings
 
 from core.models import get_request_username
+from services.web.bkbase import storage as bkbase_storage
 from services.web.databus.constants import DEFAULT_REDIS_TAGS
 from services.web.databus.models import RedisConfig
 
@@ -52,7 +52,7 @@ class RedisHandler:
 
         # 更新
         if self.redis_config:
-            api.bk_base.update_resource_set(**params)
+            bkbase_storage.update_resource_set(**params)
             self.redis_config.redis_name = data["redis_name"]
             self.redis_config.admin = params["admin"]
             self.redis_config.connection_info = params["connection_info"]
@@ -60,7 +60,7 @@ class RedisHandler:
             return self.redis_config
 
         # 创建
-        api.bk_base.create_resource_set(**params)
+        bkbase_storage.create_resource_set(**params)
         redis_config = RedisConfig.objects.create(
             namespace=data["namespace"],
             redis_name_en=params["resource_set_id"],

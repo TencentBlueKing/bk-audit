@@ -18,11 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import json
 
-from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from core.models import get_request_username
+from services.web.bkbase import clean as bkbase_clean
 from services.web.databus.utils import start_bkbase_clean
 
 
@@ -276,6 +276,6 @@ class PullCleanHandler:
 
     def create_clean(self):
         print(f"[HttpPull] Params => {self.config}")
-        resp = api.bk_base.databus_cleans_post(self.config)
+        resp = bkbase_clean.databus_cleans_post(self.config)
         start_bkbase_clean(resp["result_table_id"], resp["processing_id"], get_request_username())
         return resp
