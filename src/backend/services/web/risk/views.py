@@ -495,7 +495,6 @@ class BkSecViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.list_bk_sec_projects, endpoint="projects"),
-        ResourceRoute("GET", resource.risk.list_bk_sec_risk_types, endpoint="risk_types"),
     ]
 
 

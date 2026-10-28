@@ -216,6 +216,110 @@ class TestBkSecPluginConfigAuth:
         assert upsert.call_args.kwargs["token"] == "t-visible"
 
 
+class TestBkSecProjectsAggregate:
+    """项目 + 风险类型聚合接口（一次返回两级）"""
+
+    @pytest.fixture(autouse=True)
+    def _enable_bksec(self):
+        """resources 侧在函数内 import FeatureHandler，需 mock 源模块"""
+        with mock.patch(
+            "apps.feature.handlers.FeatureHandler",
+            return_value=mock.Mock(check=mock.Mock(return_value=True)),
+        ):
+            yield
+
+    def _call(self, projects, fetcher):
+        from bk_resource import resource
+
+        with mock.patch(
+            "services.web.risk.resources.bksec.api.bk_sec.project_choices", return_value=projects
+        ), mock.patch("services.web.risk.resources.bksec.fetch_risk_access_items", side_effect=fetcher):
+            return resource.risk.list_bk_sec_projects.perform_request({})
+
+    def test_projects_carry_their_risk_types(self):
+        """一次返回两级：每个项目下挂各自项目的风险类型"""
+        projects = [{"id": 17, "name": "应用运维安全"}, {"id": 18, "name": "其它项目"}]
+
+        def fetcher(project_id="", is_formal="true", use_cache=True, as_platform=False):
+            if project_id == "17":
+                return [{"id": 159, "name": "云账号未启用MFA", "is_formal": True, "risk_access_fields": []}]
+            return [{"id": 2, "name": "其它类型", "is_formal": True, "risk_access_fields": []}]
+
+        result = self._call(projects, fetcher)
+        assert [p["id"] for p in result] == ["17", "18"]
+        assert result[0]["name"] == "应用运维安全"
+        assert result[0]["risk_types"][0]["risk_type_id"] == "159"
+        assert result[1]["risk_types"][0]["risk_type_name"] == "其它类型"
+
+    def test_single_project_failure_degrades(self):
+        """单个项目拉取失败：该项目 risk_types 为空，其他项目照常返回"""
+        projects = [{"id": 17, "name": "应用运维安全"}, {"id": 18, "name": "其它项目"}]
+
+        def fetcher(project_id="", is_formal="true", use_cache=True, as_platform=False):
+            if project_id == "17":
+                raise Exception("boom")
+            return [{"id": 2, "name": "其它类型", "is_formal": True, "risk_access_fields": []}]
+
+        result = self._call(projects, fetcher)
+        assert result[0]["risk_types"] == []
+        assert result[1]["risk_types"][0]["risk_type_id"] == "2"
+
+    def test_keyword_filters_risk_types(self):
+        """名称搜索只过滤风险类型，不影响项目返回"""
+        projects = [{"id": 17, "name": "应用运维安全"}]
+        items = [
+            {"id": 1, "name": "云账号未启用MFA", "is_formal": True, "risk_access_fields": []},
+            {"id": 2, "name": "主机高危端口", "is_formal": True, "risk_access_fields": []},
+        ]
+
+        from bk_resource import resource
+
+        with mock.patch(
+            "services.web.risk.resources.bksec.api.bk_sec.project_choices", return_value=projects
+        ), mock.patch("services.web.risk.resources.bksec.fetch_risk_access_items", return_value=items):
+            result = resource.risk.list_bk_sec_projects.perform_request({"name__icontains": "MFA"})
+        assert len(result) == 1
+        assert [rt["risk_type_id"] for rt in result[0]["risk_types"]] == ["1"]
+
+
+class TestBkSecRiskTypeFields:
+    """风险类型字段 schema：必填前置排序"""
+
+    def test_required_fields_first(self):
+        """必填字段前置：target/target_type/operator 按声明顺序排最前，可选字段保持接口原序"""
+        from services.web.risk.resources.bksec import _normalize_risk_type
+
+        item = {
+            "id": 159,
+            "name": "云账号未启用MFA",
+            "is_formal": True,
+            "risk_access_fields": [
+                {"key": "submitter", "name": "提单人", "storage_type": "STRING"},
+                {"key": "operator", "name": "初始责任人", "storage_type": "STRING"},
+                {"key": "desc", "name": "描述", "storage_type": "STRING"},
+                {"key": "target_type", "name": "目标资产类型", "storage_type": "STRING"},
+                {"key": "target", "name": "风险资产信息", "storage_type": "STRING"},
+            ],
+        }
+        fields = _normalize_risk_type(item)["fields"]
+        assert [f["key"] for f in fields] == ["target", "target_type", "operator", "submitter", "desc"]
+        assert [f["required"] for f in fields] == [True, True, True, False, False]
+
+    def test_without_required_fields_keeps_original_order(self):
+        """无必填字段时不重排：可选字段保持接口返回顺序"""
+        from services.web.risk.resources.bksec import _normalize_risk_type
+
+        item = {
+            "id": 1,
+            "name": "普通类型",
+            "risk_access_fields": [
+                {"key": "submitter", "name": "提单人", "storage_type": "STRING"},
+                {"key": "desc", "name": "描述", "storage_type": "STRING"},
+            ],
+        }
+        assert [f["key"] for f in _normalize_risk_type(item)["fields"]] == ["submitter", "desc"]
+
+
 class TestBkSecConfig:
     def test_parse_and_dedupe(self):
         data = {

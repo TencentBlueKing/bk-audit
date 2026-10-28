@@ -47,9 +47,8 @@ from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
 from services.web.risk.serializers import (
     GetTaskStatusReqSerializer,
+    ListBkSecProjectsReqSerializer,
     ListBkSecProjectsResponseSerializer,
-    ListBkSecRiskTypesReqSerializer,
-    ListBkSecRiskTypesResponseSerializer,
     PreviewTicketReqSerializer,
     PreviewTicketResponseSerializer,
     SendTestTicketReqSerializer,
@@ -71,13 +70,18 @@ class TicketResourceMeta(AuditMixinResource):
 
 class ListBkSecProjects(BkSecResourceMeta):
     """
-    查询 BKSEC 项目列表（策略页项目下拉）
+    查询 BKSEC 项目及其风险类型（策略页下拉，一次返回两级）
 
-    用户身份实时拉取、不缓存：用户的项目权限会变化，缓存会让已失效的项目继续可选。
+    用户身份拉取有权限的项目，再逐项目取其风险类型后拼接，前端只调一次即可拿到完整下拉树。
+
+    串行而非并发：项目量很小（<=5），且 risk_access 有 10/s 的分布式限流（按类名共用一个桶），
+    并发并不能突破该上限，串行反而更可控。
+    单项目拉取失败只让该项目 risk_types 为空并记日志，不影响其他项目返回。
     """
 
-    name = gettext_lazy("查询BKSEC项目列表")
+    name = gettext_lazy("查询BKSEC项目及风险类型列表")
 
+    RequestSerializer = ListBkSecProjectsReqSerializer
     ResponseSerializer = ListBkSecProjectsResponseSerializer
     many_response_data = True
 
@@ -87,45 +91,37 @@ class ListBkSecProjects(BkSecResourceMeta):
 
         if not FeatureHandler(FeatureTypeChoices.BKSEC).check():
             return []
-        items = api.bk_sec.project_choices() or []
-        return [
-            {"id": str(item.get("id", "")), "name": item.get("name", "") or ""}
-            for item in items
-            if isinstance(item, dict)
-        ]
-
-
-class ListBkSecRiskTypes(BkSecResourceMeta):
-    """
-    查询 BKSEC 风险类型列表（策略页下拉）
-
-    按项目维度过滤（project_id 必传，risk_access 接口要求），默认只返回正式（is_formal）类型。
-    """
-
-    name = gettext_lazy("查询BKSEC风险类型列表")
-
-    RequestSerializer = ListBkSecRiskTypesReqSerializer
-    ResponseSerializer = ListBkSecRiskTypesResponseSerializer
-    many_response_data = True
-
-    def perform_request(self, validated_request_data):
-        from apps.feature.constants import FeatureTypeChoices
-        from apps.feature.handlers import FeatureHandler
-
-        if not FeatureHandler(FeatureTypeChoices.BKSEC).check():
-            return []
-        # 全量翻页（带缓存）后本地模糊过滤：缓存键按 项目 + is_formal + 身份维度，
-        # 名称过滤须在本地做，否则不同关键字互相污染缓存
-        # 用户身份（as_platform=False）：随请求者凭证调用，网关按用户数据域出数据
-        items = fetch_risk_access_items(
-            project_id=validated_request_data.get("project_id") or "",
-            is_formal=validated_request_data.get("is_formal") or "true",
-            as_platform=False,
-        )
+        # 项目列表用户身份实时拉取、不缓存：用户的项目权限会变化，缓存会让已失效的项目继续可选
+        projects = api.bk_sec.project_choices() or []
+        is_formal = validated_request_data.get("is_formal") or "true"
         keyword = (validated_request_data.get("name__icontains") or "").strip().lower()
-        if keyword:
-            items = [item for item in items if keyword in (item.get("name") or "").lower()]
-        return [_normalize_risk_type(item) for item in items if isinstance(item, dict)]
+        result = []
+        for project in projects:
+            if not isinstance(project, dict):
+                continue
+            project_id = str(project.get("id", ""))
+            try:
+                # 风险类型按 项目 + is_formal + 身份 维度缓存；用户身份调用，网关按数据域出数据
+                items = fetch_risk_access_items(project_id=project_id, is_formal=is_formal, as_platform=False)
+            except Exception as err:  # NOCC:broad-except(单项目失败降级为空，不影响其他项目)
+                logger.warning(
+                    "[BkSec] 项目 %s 风险类型拉取失败，该项目下拉为空: %s",
+                    project_id,
+                    err,
+                )
+                items = []
+            risk_types = [_normalize_risk_type(item) for item in items if isinstance(item, dict)]
+            # 名称过滤在本地做：缓存键不含关键字，否则不同关键字互相污染缓存
+            if keyword:
+                risk_types = [rt for rt in risk_types if keyword in (rt.get("risk_type_name") or "").lower()]
+            result.append(
+                {
+                    "id": project_id,
+                    "name": project.get("name", "") or "",
+                    "risk_types": risk_types,
+                }
+            )
+        return result
 
 
 class PreviewTicket(TicketResourceMeta):
@@ -373,7 +369,7 @@ def _extract_risk_access_fields(item: dict) -> list:
             )
     # 稳定排序：必填组 (0, 白名单次序) 在前，非必填组 (1, 0) 在后且保持接口原序
     required_order = {key: index for index, key in enumerate(BKSEC_REQUIRED_FIELD_KEYS)}
-    fields.sort(key=lambda f: (0, required_order[f["key"]]) if f["required"] else (1, 0))
+    fields.sort(key=lambda field: (0, required_order[field["key"]]) if field["required"] else (1, 0))
     return fields
 
 

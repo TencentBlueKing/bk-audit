@@ -831,19 +831,9 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
     )
 
 
-class ListBkSecProjectsResponseSerializer(serializers.Serializer):
-    """BKSEC 项目列表项"""
+class ListBkSecProjectsReqSerializer(serializers.Serializer):
+    """查询 BKSEC 项目及风险类型（策略页下拉，一次返回两级）"""
 
-    id = serializers.CharField(label=gettext_lazy("项目ID"))
-    name = serializers.CharField(label=gettext_lazy("项目名称"))
-
-
-class ListBkSecRiskTypesReqSerializer(serializers.Serializer):
-    """查询 BKSEC 风险类型列表（策略页下拉）"""
-
-    # 项目维度：risk_access 接口 project_id 必传，先选项目再选风险类型
-    # TODO: 前端适配完成后恢复 required=True；暂不传时回退 settings.BKSEC_PROJECT_ID
-    project_id = serializers.CharField(label=gettext_lazy("项目ID"), required=False, allow_blank=True, default="")
     name__icontains = serializers.CharField(label=gettext_lazy("名称模糊搜索"), required=False, allow_blank=True)
     is_formal = serializers.CharField(label=gettext_lazy("是否正式"), required=False, allow_blank=True)
 
@@ -939,7 +929,7 @@ class PAExecutionRecordDetailReqSerializer(serializers.Serializer):
 
 
 class ListBkSecRiskTypesResponseSerializer(serializers.Serializer):
-    """BKSEC 风险类型条目（与 ListBkSecRiskTypes 返回元素同形）"""
+    """BKSEC 风险类型条目（ListBkSecProjects.risk_types 的元素）"""
 
     risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"))
     risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
@@ -947,6 +937,14 @@ class ListBkSecRiskTypesResponseSerializer(serializers.Serializer):
     fields = serializers.JSONField(
         label=gettext_lazy("工单字段Schema"), help_text=gettext_lazy("[{key,name,required,type}]")
     )
+
+
+class ListBkSecProjectsResponseSerializer(serializers.Serializer):
+    """BKSEC 项目及其风险类型（ListBkSecProjects 返回元素）"""
+
+    id = serializers.CharField(label=gettext_lazy("项目ID"))
+    name = serializers.CharField(label=gettext_lazy("项目名称"), allow_blank=True)
+    risk_types = ListBkSecRiskTypesResponseSerializer(many=True, label=gettext_lazy("风险类型列表"))
 
 
 class PreviewTicketResponseSerializer(serializers.Serializer):
