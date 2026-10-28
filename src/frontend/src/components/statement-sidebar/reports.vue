@@ -28,7 +28,7 @@
           :popover-width="250"
           scene-permission="view_scene"
           system-permission="view_system"
-          width="264px"
+          width="100%"
           @change="(val: any) => handleSceneChange(val as SceneItem)" />
       </div>
 

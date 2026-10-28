@@ -20,13 +20,13 @@
                 placement: 'top-start'
               }"
               class="risk-rules-tip-icon"
-              type="info-fill" />
+              type="tishi" />
             <span class="risk-rules-tip-text">
               {{ t('当一条数据源数据同时命中多条规则时，将采用自上而下的优先级匹配，仅最先匹配到的规则生效。') }}
             </span>
           </div>
-          <!-- 操作栏 -->
-          <div class="risk-rules-actions">
+        </div>
+        <div class="risk-rules-actions">
             <bk-button
               @click="handleAddRule">
               <audit-icon
@@ -44,7 +44,6 @@
               {{ allCollapsed ? t('一键展开') : t('一键收起') }}
             </bk-button>
           </div>
-        </div>
 
         <!-- 规则列表 -->
         <vuedraggable
@@ -72,7 +71,7 @@
                 <audit-icon
                   class="rule-collapse-icon"
                   :class="{ 'is-collapsed': rule.collapsed }"
-                  type="angle-line-down" />
+                  type="angle-fill-down" />
 
                 <!-- 规则名称（可编辑） -->
                 <template v-if="rule.editingName">
@@ -123,8 +122,7 @@
               <!-- 规则卡片内容 -->
               <div
                 v-show="!rule.collapsed"
-                class="rule-item-content"
-                style="background: #fafbfd;">
+                class="rule-item-content">
                 <!-- 命中条件 -->
                 <div class="rule-section">
                   <div class="rule-section-label is-required">
@@ -156,7 +154,7 @@
                 </div>
 
                 <!-- 风险单标题 -->
-                <div class="rule-section">
+                <div class="rule-section is-field-narrow">
                   <div class="rule-section-label is-required">
                     {{ t('风险单标题') }}
                   </div>
@@ -184,7 +182,9 @@
                             v-model="rule.riskTitleInputValue"
                             class="title-input"
                             type="text"
-                            @click.stop
+                            @click.stop="(e) => rememberTitleCaret(index, e)"
+                            @keyup="(e) => rememberTitleCaret(index, e)"
+                            @input="(e) => rememberTitleCaret(index, e)"
                             @keydown="(e) => handleTitleKeyDown(e, index)">
                         </li>
                       </ul>
@@ -195,36 +195,39 @@
                       </p>
                     </div>
                     <bk-popover
-                      :component-event-delay="300"
-                      :is-show="rule.showVariablePanel"
-                      :offset="8"
+                      :arrow="false"
+                      ext-cls="bksec-var-popover"
                       placement="bottom-end"
                       theme="light"
-                      trigger="manual"
-                      width="520">
-                      <bk-button
+                      trigger="click"
+                      width="480"
+                      @after-hidden="setTitleVarOpen(index, false)"
+                      @after-show="setTitleVarOpen(index, true)">
+                      <button
                         class="reference-variable-btn"
-                        size="small"
-                        @click.stop="(e) => handleReferenceVariableClick(e, index)">
+                        :class="{ 'is-open': titleVarOpen[index] }"
+                        type="button"
+                        @click="() => activateRiskTitleEdit(index)">
                         <audit-icon
-                          style="margin-right: 4px;"
-                          type="insert" />
+                          class="reference-variable-icon"
+                          type="bianliang" />
                         {{ t('引用变量') }}
-                      </bk-button>
+                      </button>
                       <template #content>
-                        <variable-table
-                          :select="selectFields"
-                          :strategy-id="editData.strategy_id"
-                          @is-copy="() => handleVariableCopy(index)" />
+                        <variable-popover
+                          :groups="titleVariableGroups"
+                          @insert="(text) => insertTitleVariable(index, text)" />
                       </template>
                     </bk-popover>
                   </div>
                 </div>
 
                 <!-- 风险等级 -->
-                <div class="rule-section">
+                <div class="rule-section is-field-narrow">
                   <div class="rule-section-label is-required">
-                    {{ t('风险等级') }}
+                    <span class="rule-section-label-tip is-plain">
+                      {{ t('风险等级') }}
+                    </span>
                   </div>
                   <div class="rule-section-body">
                     <div class="risk-level-group">
@@ -240,42 +243,6 @@
                         @click="() => rule.risk_level = level.value">
                         {{ level.label }}
                       </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 风险危害 + 处理指引（两列） -->
-                <div class="rule-section rule-section-two-col">
-                  <div class="rule-section-col">
-                    <div class="rule-section-label">
-                      {{ t('风险危害') }}
-                    </div>
-                    <div class="rule-section-body">
-                      <bk-input
-                        v-model="rule.risk_hazard"
-                        class="rule-resize-textarea"
-                        :maxlength="2000"
-                        :placeholder="t('请输入')"
-                        resize
-                        :rows="3"
-                        show-word-limit
-                        type="textarea" />
-                    </div>
-                  </div>
-                  <div class="rule-section-col">
-                    <div class="rule-section-label">
-                      {{ t('处理指引') }}
-                    </div>
-                    <div class="rule-section-body">
-                      <bk-input
-                        v-model="rule.risk_guidance"
-                        class="rule-resize-textarea"
-                        :maxlength="2000"
-                        :placeholder="t('请输入')"
-                        resize
-                        :rows="3"
-                        show-word-limit
-                        type="textarea" />
                     </div>
                   </div>
                 </div>
@@ -308,6 +275,39 @@
                         :group-list="groupList"
                         :loading="isGroupLoading"
                         @refresh="refreshGroupList" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rule-section rule-section-two-col">
+                  <div class="rule-section-col">
+                    <div class="rule-section-label">
+                      {{ t('风险危害') }}
+                    </div>
+                    <div class="rule-section-body">
+                      <bk-input
+                        v-model="rule.risk_hazard"
+                        class="rule-text-count"
+                        :maxlength="100"
+                        :placeholder="t('请输入')"
+                        :rows="2"
+                        show-word-limit
+                        type="textarea" />
+                    </div>
+                  </div>
+                  <div class="rule-section-col">
+                    <div class="rule-section-label">
+                      {{ t('处理指引') }}
+                    </div>
+                    <div class="rule-section-body">
+                      <bk-input
+                        v-model="rule.risk_guidance"
+                        class="rule-text-count"
+                        :maxlength="100"
+                        :placeholder="t('请输入')"
+                        :rows="2"
+                        show-word-limit
+                        type="textarea" />
                     </div>
                   </div>
                 </div>
@@ -358,6 +358,7 @@
     onDeactivated,
     onUnmounted,
     provide,
+    reactive,
     ref,
     watch,
   } from 'vue';
@@ -368,8 +369,10 @@
 
   import IamManageService from '@service/iam-manage';
   import NoticeManageService from '@service/notice-group';
+  import StrategyManageService from '@service/strategy-manage';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
   import StrategyModel from '@model/strategy/strategy';
 
   import useMessage from '@/hooks/use-message';
@@ -381,8 +384,9 @@
 
   import Customize from '../step1/components/customize/index.vue';
   import ReferenceModel from '../step1/components/reference-model/index.vue';
-  import VariableTable from '../step2/components/variable-table.vue';
   import NoticeGroupSelect from '../step3/components/notice-group-select.vue';
+  import VariablePopover from '../step-bksec/variable-popover.vue';
+  import type { VariableGroup, VariableItem } from '../step-bksec/variable-groups';
 
   import {
     getStrategyRouteNames,
@@ -434,6 +438,10 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const titleVarOpen = reactive<Record<number, boolean>>({});
+  const setTitleVarOpen = (index: number, open: boolean) => {
+    titleVarOpen[index] = open;
+  };
 
   const router = useRouter();
   const route = useRoute();
@@ -503,6 +511,63 @@
   const parentFormData = computed(() => props.formData ?? {});
   const parentConfigs = computed(() => props.formData?.configs ?? {});
   const selectFields = computed(() => props.select ?? parentFormData.value.configs?.select ?? []);
+  const strategyIdForFields = computed(() => String(
+    props.editData?.strategy_id || props.formData?.strategy_id || '',
+  ));
+
+  const { data: strategyEvent, run: fetchTitleEventFields } = useRequest(StrategyManageService.fetchStrategyEvent, {
+    defaultValue: new StrategyFieldEvent(),
+    manual: false,
+  });
+
+  const toTitleVariableItem = (field: {
+    field_name?: string;
+    display_name?: string;
+    prefix?: string;
+    example?: string;
+  }): VariableItem | null => {
+    const fieldName = field.field_name || '';
+    if (!fieldName) return null;
+    const prefix = field.prefix || '';
+    const token = prefix ? `${prefix}["${fieldName}"]` : fieldName;
+    return {
+      token,
+      label: field.display_name || fieldName,
+      sample: field.example || '',
+      insertText: prefix ? `{{ ${token} }}` : `{{ ${fieldName} }}`,
+    };
+  };
+
+  const titleVariableGroups = computed<VariableGroup[]>(() => {
+    const configuredBasic = props.formData?.event_basic_field_configs || [];
+    const basicSource = configuredBasic.length
+      ? configuredBasic
+      : (strategyEvent.value?.event_basic_field_configs || []);
+    const basicItems = basicSource
+      .map((item: { field_name?: string; display_name?: string; prefix?: string; example?: string }) => (
+        toTitleVariableItem({ ...item, prefix: item.prefix || '' })
+      ))
+      .filter((item: VariableItem | null): item is VariableItem => !!item);
+    const eventItems = (selectFields.value || [])
+      .map((item: DatabaseTableFieldModel) => toTitleVariableItem({
+        field_name: item.display_name || item.raw_name,
+        display_name: item.display_name || item.raw_name,
+        prefix: 'event_data',
+      }))
+      .filter((item: VariableItem | null): item is VariableItem => !!item);
+    const groups: VariableGroup[] = [];
+    if (basicItems.length) {
+      groups.push({ key: 'risk', label: '基本信息', items: basicItems });
+    }
+    if (eventItems.length) {
+      groups.push({ key: 'event', label: '事件字段', items: eventItems });
+    }
+    return groups;
+  });
+
+  watch(strategyIdForFields, (id) => {
+    fetchTitleEventFields({ strategy_id: id });
+  }, { immediate: true });
 
   let ruleIdSeq = 1;
 
@@ -536,6 +601,7 @@
 
   const comRefs = ref<Array<any>>([]);
   const titleInputRefs = ref<Array<HTMLInputElement | null>>([]);
+  const titleCarets = ref<number[]>([]);
 
   const setComRef = (el: any, index: number) => {
     comRefs.value[index] = el;
@@ -632,6 +698,7 @@
     comRefs.value.splice(index + 1, 0, null);
     formRefs.value.splice(index + 1, 0, null);
     titleInputRefs.value.splice(index + 1, 0, null);
+    titleCarets.value.splice(index + 1, 0, 0);
   };
 
   const handleDeleteRule = (index: number) => {
@@ -642,6 +709,7 @@
     comRefs.value.splice(index, 1);
     formRefs.value.splice(index, 1);
     titleInputRefs.value.splice(index, 1);
+    titleCarets.value.splice(index, 1);
     return Promise.resolve();
   };
 
@@ -660,6 +728,7 @@
     comRefs.value = reorderRefArray(comRefs.value, oldIndex, newIndex);
     formRefs.value = reorderRefArray(formRefs.value, oldIndex, newIndex);
     titleInputRefs.value = reorderRefArray(titleInputRefs.value, oldIndex, newIndex);
+    titleCarets.value = reorderRefArray(titleCarets.value, oldIndex, newIndex);
   };
 
   const startEditName = (index: number) => {
@@ -702,12 +771,9 @@
     ruleItems.value.forEach((_, i) => {
       if (i === index) return;
       const current = ruleItems.value[i];
-      if (current.variableInputActive || current.showVariablePanel) {
-        if (!current.isVariableCopy) {
-          commitRiskTitleEdit(i);
-        }
+      if (current.variableInputActive) {
+        commitRiskTitleEdit(i);
       }
-      ruleItems.value[i].isVariableCopy = false;
     });
   };
 
@@ -730,61 +796,54 @@
       const input = titleInputRefs.value[index];
       input?.focus();
       input?.setSelectionRange(cursorPos, cursorPos);
+      titleCarets.value[index] = cursorPos;
       rule.clickLiIndex = -1;
     });
   };
 
-  /** 仅点击「引用变量」时打开/关闭弹窗 */
-  const handleReferenceVariableClick = (e: Event, index: number) => {
-    e.stopPropagation();
-    const rule = ruleItems.value[index];
-    closeOtherRiskTitleEditors(index);
-    if (!rule.variableInputActive) {
+  const rememberTitleCaret = (index: number, event: Event) => {
+    const input = event.target as HTMLInputElement;
+    titleCarets.value[index] = input.selectionStart ?? input.value.length;
+  };
+
+  const insertTitleVariable = (index: number, insertText: string) => {
+    const apply = () => {
+      const rule = ruleItems.value[index];
+      const current = rule.riskTitleInputValue || '';
+      const pos = titleCarets.value[index] ?? current.length;
+      rule.riskTitleInputValue = `${current.slice(0, pos)}${insertText}${current.slice(pos)}`;
+      const nextPos = pos + insertText.length;
+      titleCarets.value[index] = nextPos;
+      nextTick(() => {
+        const input = titleInputRefs.value[index];
+        input?.focus();
+        input?.setSelectionRange(nextPos, nextPos);
+      });
+    };
+    if (!ruleItems.value[index].variableInputActive) {
       activateRiskTitleEdit(index);
+      nextTick(apply);
+      return;
     }
-    rule.showVariablePanel = !rule.showVariablePanel;
+    apply();
   };
 
   const handleClickTitleLi = (ruleIndex: number, liIndex: number) => {
     ruleItems.value[ruleIndex].clickLiIndex = liIndex;
   };
 
-  const getClipboardContent = async (index: number) => {
-    const rule = ruleItems.value[index];
-    try {
-      const text = await navigator.clipboard.readText();
-      if (rule.riskTitleInputValue) {
-        rule.risk_title += rule.riskTitleInputValue;
-        rule.riskTitleInputValue = '';
-      } else {
-        rule.risk_title += text;
-      }
-    } catch (err) {
-      console.error('Failed to read clipboard contents: ', err);
-    }
-  };
-
   const handleTitleKeyDown = (e: KeyboardEvent, index: number) => {
     const rule = ruleItems.value[index];
     if (e.code === 'Enter') {
       e.preventDefault();
-      rule.showVariablePanel = false;
-      rule.isVariableCopy = false;
-      rule.variableInputActive = false;
-      titleInputRefs.value[index]?.blur();
-      getClipboardContent(index);
+      commitRiskTitleEdit(index);
       return;
     }
-    if (rule.showVariablePanel && rule.riskTitleInputValue) return;
     if (e.code === 'Backspace' && getDisplayRiskTitle(rule.risk_title).length) {
       const display = getDisplayRiskTitle(rule.risk_title);
       display.pop();
       rule.risk_title = display.map(item => item.value).join('');
     }
-  };
-
-  const handleVariableCopy = (index: number) => {
-    ruleItems.value[index].isVariableCopy = true;
   };
 
   const updateRuleFormData = (data: Record<string, any>, index: number) => {
@@ -1227,14 +1286,13 @@
     emits('saveDraft', buildStepParams());
   };
 
-  const handleDocumentClick = () => {
+  const handleDocumentClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.bksec-var-panel, .reference-variable-btn, .bksec-var-popover')) {
+      return;
+    }
     ruleItems.value.forEach((_, i) => {
-      const current = ruleItems.value[i];
-      if (!current.showVariablePanel && !current.variableInputActive) return;
-      if (current.isVariableCopy) {
-        ruleItems.value[i].isVariableCopy = false;
-        return;
-      }
+      if (!ruleItems.value[i].variableInputActive) return;
       commitRiskTitleEdit(i);
     });
   };
@@ -1263,25 +1321,27 @@
 
   /* 外层白色大卡片 */
   .risk-rules-card {
-    background: #fff;
-    border-radius: 2px;
-    box-shadow: 0 1px 2px 0 #00000029;
-    margin-bottom: 16px;
+    margin-bottom: var(--audit-space-16);
+    background: var(--audit-neutral-bg-04);
+    border-radius: var(--audit-radius-container);
+    box-shadow: var(--audit-shadow-card);
 
     .risk-rules-card-header {
-      padding: 16px 24px 0;
+      padding: 12px var(--audit-space-24) var(--audit-space-16);
+      border-bottom: 1px solid var(--audit-neutral-border-02);
     }
 
     .risk-rules-card-title-row {
       display: flex;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 0;
       gap: 6px;
 
       .risk-rules-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #313238;
+        font-size: var(--audit-font-size-base);
+        font-weight: var(--audit-font-weight-bold);
+        line-height: var(--audit-line-height-base);
+        color: var(--audit-neutral-text-01);
       }
 
       .risk-rules-tip-icon {
@@ -1299,7 +1359,8 @@
     .risk-rules-actions {
       display: flex;
       align-items: center;
-      margin-bottom: 16px;
+      padding: var(--audit-space-16) var(--audit-space-24) 0;
+      margin-bottom: var(--audit-space-16);
 
       .add-rule-icon {
         margin-right: 4px;
@@ -1322,6 +1383,7 @@
     .rule-list {
       display: flex;
       flex-direction: column;
+      align-items: flex-start;
       gap: 0;
       padding: 0 24px 24px;
     }
@@ -1333,10 +1395,15 @@
   }
 
   .rule-item-card {
-    margin-bottom: 8px;
-    background: #fff !important;
-    border-radius: 2px;
-    border: 1px solid #dcdee5;
+    align-self: flex-start;
+    box-sizing: border-box;
+    width: 1264px;
+    max-width: 100%;
+    margin-bottom: var(--audit-space-16);
+    overflow: hidden;
+    background: var(--audit-neutral-bg-04);
+    border: 1px solid var(--audit-neutral-border-02);
+    border-radius: var(--audit-radius-control);
 
     &:last-child {
       margin-bottom: 0;
@@ -1345,13 +1412,12 @@
     .rule-item-header {
       display: flex;
       align-items: center;
-      height: 48px;
-      padding: 0 16px;
+      height: 40px;
+      padding: 0 var(--audit-space-16) 0 var(--audit-space-8);
       cursor: pointer;
-      background: #f5f6fa;
-      border-radius: 2px 2px 0 0;
-      border-bottom: 1px solid #dcdee5;
-      gap: 8px;
+      background: var(--audit-neutral-bg-01);
+      border-radius: var(--audit-radius-control) var(--audit-radius-control) 0 0;
+      gap: var(--audit-space-8);
 
       .rule-drag-handle {
         font-size: 14px;
@@ -1365,8 +1431,8 @@
       }
 
       .rule-collapse-icon {
-        font-size: 14px;
-        color: #63656e;
+        font-size: 12px;
+        color: var(--audit-neutral-text-02);
         cursor: pointer;
         transition: transform 0.2s ease;
         flex-shrink: 0;
@@ -1387,9 +1453,10 @@
       .rule-name {
         min-width: 0;
         overflow: hidden;
-        font-size: 14px;
-        font-weight: 600;
-        color: #313238;
+        font-size: var(--audit-font-size-sm);
+        font-weight: var(--audit-font-weight-bold);
+        line-height: var(--audit-line-height-sm);
+        color: var(--audit-neutral-text-02);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1421,54 +1488,63 @@
       .rule-header-actions {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: var(--audit-space-16);
         margin-left: auto;
         flex-shrink: 0;
 
         .rule-action-icon {
           font-size: 16px;
-          color: #63656e;
+          color: var(--audit-neutral-text-02);
           cursor: pointer;
 
           &:hover {
-            color: #3a84ff;
+            color: var(--audit-brand-02);
           }
 
           &.rule-action-delete:hover {
-            color: #ea3636;
+            color: var(--audit-danger-02);
           }
         }
       }
     }
 
     .rule-item-content {
-      padding: 20px 24px 24px;
-      background: #fafbfd !important;
+      display: flex;
+      flex-direction: column;
+      gap: var(--audit-space-24);
+      padding: var(--audit-space-16);
+      background: var(--audit-neutral-bg-02);
       overflow: visible;
 
       .rule-section {
-        margin-bottom: 20px;
+        width: 100%;
+        margin-bottom: 0;
 
-        &:last-child {
-          margin-bottom: 0;
+        &.is-field-narrow {
+          width: 608px;
+          max-width: 100%;
         }
 
         .rule-section-label {
-          margin-bottom: 8px;
-          font-size: 12px;
-          color: #63656e;
+          margin-bottom: 6px;
+          font-size: var(--audit-font-size-sm);
+          line-height: var(--audit-line-height-sm);
+          color: var(--audit-neutral-text-02);
 
           &.is-required::before {
             display: inline-block;
             width: 8px;
-            color: #ea3636;
+            color: var(--audit-danger-02);
             text-align: center;
             content: '*';
           }
 
           .rule-section-label-tip {
-            cursor: pointer;
-            border-bottom: 1px dashed #979ba5;
+            border-bottom: 1px dashed var(--audit-neutral-text-03);
+
+            &:not(.is-plain) {
+              cursor: pointer;
+            }
           }
         }
 
@@ -1489,73 +1565,92 @@
 
       .rule-section-two-col {
         display: flex;
-        gap: 12px;
+        gap: var(--audit-space-16);
         align-items: flex-start;
+        width: 1232px;
+        max-width: 100%;
 
         .rule-section-col {
-          flex: 1;
+          flex: 1 1 608px;
+          width: 608px;
+          max-width: 608px;
           min-width: 0;
         }
 
-        /* 文档：resize=true 时可拖拽调高；覆盖可能被吃掉的样式 */
-        :deep(.rule-resize-textarea.bk-textarea) {
+        :deep(.rule-text-count.bk-textarea) {
           width: 100%;
-          min-height: 72px;
-          max-height: 360px;
-          overflow: auto !important;
-          resize: vertical !important;
+          height: 60px;
+          min-height: 60px;
+          max-height: 60px;
+          overflow: auto;
+          resize: none;
+        }
+
+        :deep(.rule-text-count .bk-input-word-limit),
+        :deep(.rule-text-count .input-maxlength) {
+          font-size: var(--audit-font-size-mini);
+          line-height: var(--audit-line-height-mini);
         }
       }
 
-      /* 风险等级 */
       .risk-level-group {
         display: flex;
-        gap: 0;
+        gap: var(--audit-space-8);
 
         .risk-level-btn {
-          height: 32px;
-          padding: 0 16px;
-          font-size: 12px;
-          color: #63656e;
+          box-sizing: border-box;
+          width: 48px;
+          height: 26px;
+          padding: 0;
+          font-size: var(--audit-font-size-sm);
+          line-height: 24px;
+          color: var(--audit-neutral-text-02);
           cursor: pointer;
-          background: #fff;
-          border: 1px solid #c4c6cc;
+          background: var(--audit-neutral-bg-04);
+          border: 1px solid var(--audit-neutral-text-04);
+          border-radius: var(--audit-radius-control);
           outline: none;
 
-          &:not(:first-child) {
-            margin-left: -1px;
-          }
-
-          &:first-child {
-            border-radius: 2px 0 0 2px;
-          }
-
-          &:last-child {
-            border-radius: 0 2px 2px 0;
-          }
-
-          &.is-active {
-            z-index: 1;
-          }
-
           &.level-high.is-active {
-            color: #fff;
-            background: #ea3636;
-            border-color: #ea3636;
+            color: var(--audit-neutral-bg-04);
+            background: var(--audit-danger-02);
+            border-color: var(--audit-danger-02);
           }
 
           &.level-middle.is-active {
-            color: #fff;
-            background: #ff9c01;
-            border-color: #ff9c01;
+            color: var(--audit-neutral-bg-04);
+            background: var(--audit-warn-02);
+            border-color: var(--audit-warn-02);
           }
 
           &.level-low.is-active {
-            color: #fff;
-            background: #979ba5;
-            border-color: #979ba5;
+            color: var(--audit-neutral-bg-04);
+            background: var(--audit-neutral-text-03);
+            border-color: var(--audit-neutral-text-03);
           }
         }
+      }
+
+      :deep(.add-rule-item) {
+        display: flex;
+        width: 100%;
+        height: 32px;
+        padding: 0 var(--audit-space-12);
+        font-size: var(--audit-font-size-sm);
+        line-height: var(--audit-line-height-sm);
+        color: var(--audit-brand-02);
+        cursor: pointer;
+        background: var(--audit-neutral-bg-03);
+        border: 1px dashed var(--audit-neutral-text-04);
+        border-radius: 0;
+        box-sizing: border-box;
+        align-items: center;
+        gap: var(--audit-space-4);
+      }
+
+      :deep(.add-rule-icon) {
+        margin: 0;
+        font-size: 16px;
       }
 
       /* 风险单标题输入 */
@@ -1568,7 +1663,7 @@
         min-height: 32px;
         padding: 0 8px;
         font-size: 12px;
-        color: #63656e;
+        color: var(--audit-neutral-text-02);
         cursor: pointer;
         background: #fff;
         border: 1px solid #c4c6cc;
@@ -1627,7 +1722,7 @@
               outline: none;
               font-size: 12px;
               line-height: 30px;
-              color: #313238;
+              color: var(--audit-neutral-text-02);
               background: transparent;
             }
           }
@@ -1655,17 +1750,36 @@
         }
 
         .reference-variable-btn {
-          height: auto;
-          min-height: 32px;
-          border-radius: 0 2px 2px 0;
+          display: inline-flex;
+          height: 32px;
+          padding: 0 6px;
+          font-size: var(--audit-font-size-sm);
+          line-height: var(--audit-line-height-sm);
+          color: var(--audit-brand-02);
+          cursor: pointer;
+          background: var(--audit-neutral-bg-04);
+          border: 1px solid var(--audit-neutral-text-04);
+          border-radius: 0 var(--audit-radius-control) var(--audit-radius-control) 0;
+          align-items: center;
+          gap: var(--audit-space-4);
           flex-shrink: 0;
+
+          &.is-open {
+            border-top-color: var(--audit-brand-02);
+            border-right-color: var(--audit-brand-02);
+            border-bottom-color: var(--audit-brand-02);
+          }
+        }
+
+        .reference-variable-icon {
+          font-size: var(--audit-font-size-lg);
+          color: var(--audit-brand-02);
         }
       }
     }
 
     &.is-collapsed .rule-item-header {
-      border-bottom: none;
-      border-radius: 2px;
+      border-radius: var(--audit-radius-control);
     }
   }
 
@@ -1678,5 +1792,11 @@
     border-radius: 2px;
     box-shadow: 0 1px 2px 0 #00000029;
   }
+}
+</style>
+<style lang="postcss">
+.bksec-var-popover.bk-pop2-content,
+.bksec-var-popover .bk-pop2-content {
+  padding: var(--audit-space-4) 0;
 }
 </style>

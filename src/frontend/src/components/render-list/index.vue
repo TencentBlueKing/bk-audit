@@ -18,7 +18,15 @@
   <div
     ref="rootRef"
     class="audit-render-list">
-    <bk-loading :loading="isLoading">
+    <table-skeleton
+      v-if="showSkeleton"
+      :columns="skeletonColumns"
+      :row-count="skeletonRowCount"
+      row-size="medium"
+      :style="skeletonBoxStyle" />
+    <bk-loading
+      v-show="!showSkeleton"
+      :loading="useSkeleton ? false : isLoading">
       <bk-table
         :key="tableRenderKey"
         ref="tableRef"
@@ -96,6 +104,7 @@
   import type { Settings } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import {
+    computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -116,6 +125,8 @@
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
+  import TableSkeleton from '@components/table-skeleton/index.vue';
+
   import { getSceneContextQuery, getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
@@ -131,7 +142,11 @@
     isNeedSceneParams?: boolean,
     // 是否需要场景ID
     isNeedSceneId?: boolean,
-    sceneIdKey?: string
+    sceneIdKey?: string,
+    /** 用表格骨架替代 bk-loading，默认关闭 */
+    useSkeleton?: boolean,
+    /** 骨架最短展示毫秒。请求快于淡入时避免停在透明帧，默认不额外等待 */
+    skeletonMinDuration?: number,
   }
 
   interface ISettings{
@@ -168,6 +183,8 @@
     isNeedSceneParams: false,
     isNeedSceneId: false,
     sceneIdKey: 'scope_id',
+    useSkeleton: false,
+    skeletonMinDuration: 0,
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -176,8 +193,10 @@
   const slot = useSlots();
   const tableRef = ref();
   const rootRef = ref();
-  // 切换场景重置排序时递增，强制表头按未排序态重新初始化
+  // 切换场景清排序，或列变少后重挂表格，让列宽按当前容器重新计算
   const tableRenderKey = ref(0);
+  const countCheckedColumns = (setting?: { checked?: string[] } | null) => setting?.checked?.length ?? 0;
+  const visibleColumnCount = ref(countCheckedColumns(props.settings as { checked?: string[] } | undefined));
   const { t } = useI18n();
   const pagination = reactive<IPagination>({
     count: 0,
@@ -195,6 +214,102 @@
   let isReady = false;
   let latestFetchSeq = 0;
   const isLoading = ref(false);
+  const showSkeleton = ref(props.useSkeleton);
+  let skeletonShownAt = props.useSkeleton ? Date.now() : 0;
+  let skeletonHideToken = 0;
+  // 与 bk-vision 一致：无数据时 3 行，有数据后记住上次条数
+  const lastSkeletonRowCount = ref(3);
+  const waitForPaint = () => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  const readColumnField = (column: { field?: string | (() => string) }) => {
+    if (typeof column.field === 'function') {
+      return column.field() || '';
+    }
+    return column.field || '';
+  };
+  const readColumnSize = (value: unknown) => {
+    const num = Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  };
+  const skeletonColumns = computed(() => {
+    const source = (props.columns || []) as Array<{
+      field?: string | (() => string);
+      width?: number | string;
+      minWidth?: number | string;
+    }>;
+    const checked = (props.settings as { checked?: string[] } | undefined)?.checked;
+    const checkedSet = checked?.length ? new Set(checked) : null;
+    const visible = source.filter((column) => {
+      const field = readColumnField(column);
+      if (!field) {
+        return true;
+      }
+      if (!checkedSet) {
+        return true;
+      }
+      return checkedSet.has(field);
+    });
+    const columns = visible.map((column) => {
+      const width = readColumnSize(column.width);
+      const minWidth = readColumnSize(column.minWidth);
+      if (width > 0) {
+        return { width, grow: false };
+      }
+      return { width: minWidth || 160, grow: true };
+    });
+    if (props.settings) {
+      columns.push({ width: 42, grow: false });
+    }
+    return columns.length ? columns : [{ width: 160, grow: true }];
+  });
+  const skeletonRowCount = computed(() => Math.max(lastSkeletonRowCount.value, 1));
+  const skeletonBoxStyle = computed(() => {
+    if (typeof tableHeight.value !== 'number') {
+      return {
+        flex: '1 1 auto',
+        height: '100%',
+        minHeight: '0',
+        overflow: 'hidden',
+      };
+    }
+    return {
+      height: `${tableHeight.value}px`,
+      overflow: 'hidden',
+    };
+  });
+  watch(isLoading, async (loading) => {
+    if (!props.useSkeleton) {
+      showSkeleton.value = false;
+      return;
+    }
+    if (loading) {
+      skeletonHideToken += 1;
+      if (!showSkeleton.value) {
+        skeletonShownAt = Date.now();
+      }
+      showSkeleton.value = true;
+      return;
+    }
+    if (!showSkeleton.value) {
+      return;
+    }
+    const token = skeletonHideToken;
+    const remain = Math.max(0, props.skeletonMinDuration - (Date.now() - skeletonShownAt));
+    if (remain > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, remain);
+      });
+    }
+    await nextTick();
+    await waitForPaint();
+    if (token !== skeletonHideToken || isLoading.value) {
+      return;
+    }
+    showSkeleton.value = false;
+  });
   // 新增：用户是否手动选择了分页大小的标志
   const isUserSelectedPageSize = ref(false);
   /** page 非法（NaN/≤0）时回退为 1，避免添加/编辑返回后出现 page=NaN */
@@ -270,6 +385,9 @@
 
   watch(listData, (listData) => {
     pagination.count = listData.total;
+    if (listData.results?.length) {
+      lastSkeletonRowCount.value = listData.results.length;
+    }
   });
 
   const fetchListData = () => {
@@ -373,7 +491,15 @@
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
+    const nextCount = countCheckedColumns(setting);
+    const shouldRemount = visibleColumnCount.value > 0 && nextCount < visibleColumnCount.value;
+    visibleColumnCount.value = nextCount;
     emits('onSettingChange', setting);
+    // 列变少时 bk-table 只改 col 宽度，滚动容器仍保持变少前的宽度，要滚一下才重排。
+    // 设置面板在抛出事件前已关闭，这里重挂表格，按当前容器宽度重新布局。
+    if (shouldRemount) {
+      tableRenderKey.value += 1;
+    }
   };
   // 清除表头排序箭头高亮（bk-table 内部 sortType 不会随 column.sort 变更自动重置）
   const clearSortActiveUI = () => {
@@ -721,6 +847,10 @@
 </script>
 
 <style lang="postcss" scoped>
+  .audit-render-list {
+    position: relative;
+  }
+
   .render-list {
     :deep(.new-row) {
       td {

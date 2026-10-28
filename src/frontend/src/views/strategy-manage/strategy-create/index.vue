@@ -15,20 +15,41 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <!-- 步进条 -->
-  <teleport
-    v-if="isHeaderSlotActive"
-    to="#teleport-nav-step">
-    <bk-steps
-      v-model:cur-step="currentStep"
-      class="strategy-upgrade-step"
-      :line-type="isEditMode ? 'solid' : 'dashed'"
-      :steps="steps" />
-  </teleport>
+  <div
+    class="strategy-step-bar"
+    :class="{ 'is-stuck': stepBarStuck }">
+    <template
+      v-for="(step, index) in steps"
+      :key="step.title">
+      <div class="strategy-step-item">
+        <span
+          class="strategy-step-index"
+          :class="{
+            'is-current': index + 1 === currentStep,
+            'is-done': index + 1 < currentStep,
+          }">
+          <audit-icon
+            v-if="index + 1 < currentStep"
+            type="check-line" />
+          <template v-else>{{ index + 1 }}</template>
+        </span>
+        <span class="strategy-step-title">{{ step.title }}</span>
+      </div>
+      <span
+        v-if="index < steps.length - 1"
+        class="strategy-step-line"
+        :class="{ 'is-done': index + 1 < currentStep }" />
+    </template>
+  </div>
 
-  <keep-alive>
+  <step-basic-info-loading
+    v-if="showInitialStepPlaceholder"
+    :status="detailStatus === 'failed' ? 'failed' : 'loading'"
+    @retry="loadStrategyDetail" />
+  <keep-alive v-if="showStepContent">
     <component
       :is="renderCom"
+      :key="currentStep"
       ref="comRef"
       :edit-data="editData"
       :form-data="formData"
@@ -36,6 +57,7 @@
       :select="fieldSelectOptions"
       :strategy-name="formData.strategy_name"
       :strategy-type="formData.strategy_type"
+      :submit-on-next="submitBksecOnReport"
       style="margin-bottom: 24px;"
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
@@ -85,6 +107,7 @@
   import _ from 'lodash';
   import {
     computed,
+    onBeforeUnmount,
     onMounted,
     provide,
     ref,
@@ -93,6 +116,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import BksecManageService from '@service/bksec-manage';
   import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
@@ -102,12 +126,13 @@
   import eventReport from './components/event-report/index.vue';
   import Preview from './components/preview/index.vue';
   import StepBasicInfo from './components/step-basic-info/index.vue';
+  import StepBasicInfoLoading from './components/step-basic-info/loading.vue';
+  import StepBksec from './components/step-bksec/index.vue';
   import StepRiskRules from './components/step-risk-rules/index.vue';
   import Step2 from './components/step2/index.vue';
   import Step3 from './components/step3/index.vue';
 
   import useMessage from '@/hooks/use-message';
-  import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
   import {
     buildStrategyCreatePayload,
@@ -158,6 +183,11 @@
     visibility?: Record<string, any>,
     scene_id?: string | number,
     hit_conditions_reset_seq?: number,
+    bksecEnabled: boolean,
+    bksecRiskTypeId: string | null,
+    bksecRiskTypeName?: string,
+    bksecFieldValues: Record<string, string>,
+    bksecFieldMeta?: Array<{ key: string; name: string; required: boolean }>,
   }
 
   const router = useRouter();
@@ -165,18 +195,23 @@
   const strategyRoutes = getStrategyRouteNames(route);
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
-  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   // 全局策略（平台）含第 5 步「风险分派规则」；审计策略（场景）仅 4 步
   const hasAssignStep = isPlatformStrategyRoute(route.name);
 
-  const comMap = {
+  const bksecFeatureEnabled = ref(!hasAssignStep);
+  const bksecFeatureLoaded = ref(hasAssignStep);
+  const showBksecStep = computed(() => !hasAssignStep && bksecFeatureEnabled.value);
+  const submitBksecOnReport = computed(() => (
+    !hasAssignStep && bksecFeatureLoaded.value && !bksecFeatureEnabled.value
+  ));
+  const comMap = computed(() => ({
     1: StepBasicInfo,
     2: StepRiskRules,
     3: Step2,
     4: eventReport,
-    5: Step3,
-  };
+    5: hasAssignStep ? Step3 : StepBksec,
+  }));
   const steps = computed(() => {
     const list = [
       { title: t('基础信息') },
@@ -184,17 +219,15 @@
       { title: t('单据展示') },
       { title: t('事件调查报告') },
     ];
-    if (hasAssignStep) {
-      list.push({ title: t('风险分派规则') });
-    }
+    if (hasAssignStep) list.push({ title: t('风险分派规则') });
+    else if (showBksecStep.value) list.push({ title: t('BKSEC安全工单') });
     return list;
   });
-  const maxStep = hasAssignStep ? 5 : 4;
-  const stepBarWidth = computed(() => (hasAssignStep ? '780px' : '620px'));
+  const maxStep = computed(() => steps.value.length);
   const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => {
     const n = Number(step);
     if ([1, 2, 3, 4, 5].includes(n)) {
-      const clamped = Math.min(n, maxStep) as 1 | 2 | 3 | 4 | 5;
+      const clamped = Math.min(n, maxStep.value) as 1 | 2 | 3 | 4 | 5;
       return clamped;
     }
     return 1;
@@ -203,9 +236,14 @@
   const initialStep = normalizeStep(route.query.step || 1);
   const targetStep = ref<1 | 2 | 3 | 4 | 5>(initialStep);
   const currentStep = ref<1 | 2 | 3 | 4 | 5>(1);
+  const stepBarStuck = ref(false);
+  let stepBarScroller: HTMLElement | null = null;
+  const syncStepBarStuck = () => {
+    stepBarStuck.value = !!stepBarScroller && stepBarScroller.scrollTop > 0;
+  };
   const comRef = ref();
 
-  const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
+  const renderCom = computed(() => comMap.value[currentStep.value as keyof typeof comMap.value]);
 
   // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
   // display_name 统一为「中文名(raw_name)」，与命中条件字段展示一致
@@ -219,6 +257,14 @@
   let isSwitchSuccess = false;
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const waitInitialDetail = isEditMode || isCloneMode;
+  const detailStatus = ref<'loading' | 'ready' | 'failed'>(
+    waitInitialDetail ? 'loading' : 'ready',
+  );
+  const showInitialStepPlaceholder = computed(() => (
+    currentStep.value === 1 && waitInitialDetail && detailStatus.value !== 'ready'
+  ));
+  const showStepContent = computed(() => !waitInitialDetail || detailStatus.value === 'ready');
   const isDraftStrategyEdit = computed(() => (
     isEditMode && isDraftStrategyStatus(formData.value.status)
   ));
@@ -268,84 +314,63 @@
     report_enabled: false,
     report_auto_render: false,
     report_config: {},
+    bksecEnabled: false,
+    bksecRiskTypeId: null,
+    bksecRiskTypeName: '',
+    bksecFieldValues: {},
+    bksecFieldMeta: [],
     binding_type: createBindingScope.binding_type,
     visibility: createBindingScope.isPlatform ? undefined : {},
     scene_id: createBindingScope.scene_id ?? undefined,
   });
   // 进入编辑时的初始表单快照（只在编辑态使用，用于还原）
   const initialFormData = ref<IFormData | null>(null);
-  // 编辑状态获取数据
   const {
-    run: fetchStrategyInfo,
-    loading: isEditDataLoading,
+    run: requestStrategyInfo,
   } = useRequest(StrategyManageService.fetchStrategyInfo, {
     defaultValue: new StrategyModel(),
-    // 编辑态：接口返回 tags 为 ID，这里统一转换为名称，保证表单和各步骤内部拿到的都是名称
-    onSuccess: async (data) => {
-      // // eslint-disable-next-line prefer-destructuring
-      editData.value = data;
-      editData.value.event_basic_field_configs = editData.value.event_basic_field_configs.map((item) => {
-        if (item.drill_config && !Array.isArray(item.drill_config)) {
+  });
+  const isEditDataLoading = computed(() => detailStatus.value === 'loading');
+  let detailRequestSeq = 0;
+
+  const normalizeDrillConfig = (items: Array<any> = []) => items.map((item) => {
+    if (item.drill_config && !Array.isArray(item.drill_config)) {
+      // eslint-disable-next-line no-param-reassign
+      item.drill_config = [item.drill_config];
+      item.drill_config.forEach((drill: Record<string, any>) => {
+        if (!drill.drill_name) {
           // eslint-disable-next-line no-param-reassign
-          item.drill_config = [item.drill_config];
-          item.drill_config.forEach((drill) => {
-            if (!drill.drill_name) {
-              // eslint-disable-next-line no-param-reassign
-              drill.drill_name = '';
-            }
-          });
+          drill.drill_name = '';
         }
-        return item;
       });
-      editData.value.event_data_field_configs = editData.value.event_data_field_configs.map((item) => {
-        if (item.drill_config && !Array.isArray(item.drill_config)) {
-          // eslint-disable-next-line no-param-reassign
-          item.drill_config = [item.drill_config];
-          item.drill_config.forEach((drill) => {
-            if (!drill.drill_name) {
-              // eslint-disable-next-line no-param-reassign
-              drill.drill_name = '';
-            }
-          });
-        }
-        return item;
+    }
+    return item;
+  });
+
+  const loadStrategyDetail = async () => {
+    const requestSeq = ++detailRequestSeq;
+    detailStatus.value = 'loading';
+    try {
+      const data = await requestStrategyInfo({
+        strategy_id: route.params.id,
       });
-      editData.value.event_evidence_field_configs = editData.value.event_evidence_field_configs.map((item) => {
-        if (item.drill_config && !Array.isArray(item.drill_config)) {
-          // eslint-disable-next-line no-param-reassign
-          item.drill_config = [item.drill_config];
-          item.drill_config.forEach((drill) => {
-            if (!drill.drill_name) {
-              // eslint-disable-next-line no-param-reassign
-              drill.drill_name = '';
-            }
-          });
-        }
-        return item;
-      });
-      editData.value.risk_meta_field_config = editData.value.risk_meta_field_config.map((item) => {
-        if (item.drill_config && !Array.isArray(item.drill_config)) {
-          // eslint-disable-next-line no-param-reassign
-          item.drill_config = [item.drill_config];
-          item.drill_config.forEach((drill) => {
-            if (!drill.drill_name) {
-              // eslint-disable-next-line no-param-reassign
-              drill.drill_name = '';
-            }
-          });
-        }
-        return item;
-      });
-      // 确保标签映射已加载后，再用接口返回的数据初始化表单（将 tags 从 ID 转为名称）
+      if (requestSeq !== detailRequestSeq) return;
+
+      data.event_basic_field_configs = normalizeDrillConfig(data.event_basic_field_configs);
+      data.event_data_field_configs = normalizeDrillConfig(data.event_data_field_configs);
+      data.event_evidence_field_configs = normalizeDrillConfig(data.event_evidence_field_configs);
+      data.risk_meta_field_config = normalizeDrillConfig(data.risk_meta_field_config);
+
+      // 接口 tags 为 ID；详情和标签映射都就绪后，再一次性提交给页面和子步骤。
       await ensureTagMapLoaded();
-      const d = editData.value as any;
+      if (requestSeq !== detailRequestSeq) return;
+
+      const d = data as any;
       const normalizedTags = (d.tags ?? []).map((item: string) => tagIdToNameMap.value[String(item)] ?? item);
       d.tags = normalizedTags;
       const protocolForm = parseStrategyDetailToForm(d);
-      // 编辑态：用接口返回的完整策略数据初始化 formData，保证任意步骤点「提交」时提交的是全量数据
-      formData.value = {
+      const nextFormData: IFormData = {
         strategy_name: d.strategy_name ?? '',
-        // 此处使用名称而非 ID
         tags: normalizedTags,
         description: d.description ?? '',
         control_id: d.control_id ?? '',
@@ -366,6 +391,11 @@
         report_enabled: d.report_enabled ?? false,
         report_auto_render: d.report_auto_render ?? false,
         report_config: _.cloneDeep(d.report_config ?? {}),
+        bksecEnabled: protocolForm.bksecEnabled ?? false,
+        bksecRiskTypeId: protocolForm.bksecRiskTypeId ?? null,
+        bksecRiskTypeName: protocolForm.bksecRiskTypeName ?? '',
+        bksecFieldValues: _.cloneDeep(protocolForm.bksecFieldValues ?? {}),
+        bksecFieldMeta: _.cloneDeep(protocolForm.bksecFieldMeta ?? []),
         rules: protocolForm.rules?.length
           ? _.cloneDeep(protocolForm.rules)
           : [{
@@ -383,16 +413,22 @@
         scene_id: protocolForm.scene_id ?? createBindingScope.scene_id ?? undefined,
       };
       if (d.strategy_id) {
-        formData.value.strategy_id = d.strategy_id;
+        nextFormData.strategy_id = d.strategy_id;
       }
-      // 进入编辑时记录一份接口返回的原始值快照（用于还原），其中 tags 已是名称
+
+      formData.value = nextFormData;
+      editData.value = data;
       if (isEditMode && !initialFormData.value) {
-        initialFormData.value = _.cloneDeep(formData.value);
+        initialFormData.value = _.cloneDeep(nextFormData);
       }
-      // 确保先在第 1 步挂载并完成表单初始化，再跳转到目标步骤
       currentStep.value = targetStep.value;
-    },
-  });
+      detailStatus.value = 'ready';
+    } catch {
+      if (requestSeq === detailRequestSeq) {
+        detailStatus.value = 'failed';
+      }
+    }
+  };
 
   // 保存中的 Dialog 显示状态，等接口请求结束后再关闭
   const showSaveDialog = ref(false);
@@ -923,6 +959,10 @@
 
     maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
+    if (step > steps.value.length) {
+      handleSubmit();
+      return;
+    }
     currentStep.value = normalizeStep(step);
   };
 
@@ -940,36 +980,105 @@
   };
 
   onMounted(() => {
+    stepBarScroller = document.querySelector('#auditNavigationContent .scroll-faker-content');
+    stepBarScroller?.addEventListener('scroll', syncStepBarStuck, { passive: true });
+    syncStepBarStuck();
+    if (!hasAssignStep) {
+      BksecManageService.fetchFeature()
+        .then((data) => {
+          bksecFeatureEnabled.value = !!data?.enabled;
+        })
+        .catch(() => {
+          bksecFeatureEnabled.value = false;
+        })
+        .finally(() => {
+          bksecFeatureLoaded.value = true;
+          if (!bksecFeatureEnabled.value && currentStep.value > steps.value.length) {
+            currentStep.value = normalizeStep(steps.value.length);
+          }
+        });
+    }
     if (isEditMode || isCloneMode) {
-      fetchStrategyInfo({
-        strategy_id: route.params.id,
-      });
-      // 编辑/克隆态预拉标签列表，用于提交前将 tags ID 转名称
-      ensureTagMapLoaded();
+      loadStrategyDetail();
     }
   });
 
-  watch(
-    () => route.fullPath,
-    () => {
-      refreshHeaderSlot();
-    },
-  );
+  onBeforeUnmount(() => {
+    stepBarScroller?.removeEventListener('scroll', syncStepBarStuck);
+    detailRequestSeq += 1;
+  });
 
 </script>
 <style scoped>
-.strategy-upgrade-step {
-  width: v-bind(stepBarWidth);
-  margin: 0 auto;
-  transform: translateX(-86px);
+.strategy-step-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  max-width: none;
+  margin: -20px -8px var(--audit-space-8) -24px;
+  padding: 20px 24px var(--audit-space-8);
+  background: #f5f6fa;
+  align-items: center;
+  justify-content: center;
+  gap: var(--audit-space-16);
 
-  :deep(.bk-step ) {
-    display: flex;
-
-    .bk-step-content {
-      display: flex;
-    }
+  &.is-stuck {
+    margin-right: -24px;
+    box-shadow: var(--audit-shadow-card-hover);
   }
+}
+
+.strategy-step-item {
+  display: flex;
+  align-items: center;
+  gap: var(--audit-space-8);
+  flex: none;
+}
+
+.strategy-step-index {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-02);
+  background: var(--audit-neutral-border-02);
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.strategy-step-index.is-current {
+  color: var(--audit-neutral-bg-04);
+  background: var(--audit-brand-02);
+}
+
+.strategy-step-index.is-done {
+  color: var(--audit-brand-02);
+  background: var(--audit-brand-06);
+  font-size: var(--audit-font-size-lg);
+}
+
+.strategy-step-title {
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-02);
+  white-space: nowrap;
+}
+
+.strategy-step-line {
+  width: 130px;
+  height: 1px;
+  background: var(--audit-neutral-border-01);
+  flex: none;
+}
+
+.strategy-step-line.is-done {
+  background: var(--audit-brand-02);
 }
 
 .save-dialog-body {

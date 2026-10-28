@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import type { BksecFieldMeta } from '@model/bksec/config';
+import { readBksecFormState } from '@model/bksec/config';
 import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
 import StrategyFieldEvent from '../strategy/strategy-field-event';
@@ -117,6 +119,11 @@ export default class Strategy {
   binding_type?: string;
   visibility?: Record<string, any>;
   scene_id?: string | number;
+  bksecEnabled: boolean;
+  bksecRiskTypeId: string | null;
+  bksecRiskTypeName: string;
+  bksecFieldValues: Record<string, string>;
+  bksecFieldMeta: BksecFieldMeta[];
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -162,6 +169,12 @@ export default class Strategy {
     this.binding_type = payload.binding_type;
     this.visibility = payload.visibility;
     this.scene_id = payload.scene_id;
+    const bksec = readBksecFormState(payload as Record<string, any>);
+    this.bksecEnabled = bksec.bksecEnabled;
+    this.bksecRiskTypeId = bksec.bksecRiskTypeId;
+    this.bksecRiskTypeName = bksec.bksecRiskTypeName;
+    this.bksecFieldValues = bksec.bksecFieldValues;
+    this.bksecFieldMeta = bksec.bksecFieldMeta;
   }
   get isDraft() {
     return this.status === 'draft';

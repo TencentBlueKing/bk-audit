@@ -15,15 +15,17 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="event-table">
+  <div
+    class="event-table"
+    :class="{ 'is-model': strategyType !== 'rule' }"
+    :style="{ '--group-col': locale === 'en-US' ? '140px' : '80px' }">
     <!-- 表头 -->
     <div class="head">
       <div
         v-for="(item, index) in columns"
         :key="index"
         class="header-cell"
-        :class="getHeaderClass(item.key)"
-        :style="{minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px'}">
+        :class="getHeaderClass(item.key)">
         <span
           v-bk-tooltips="{
             disabled: !item.tips,
@@ -35,6 +37,31 @@
       </div>
     </div>
 
+    <div
+      v-if="showFieldSkeleton"
+      class="table-section is-skeleton"
+      data-testid="event-field-skeleton">
+      <div class="group-cell">
+        <audit-skeleton
+          height="16"
+          width="48" />
+      </div>
+      <div class="rows-container">
+        <div
+          v-for="row in skeletonRows"
+          :key="row"
+          class="skeleton-row">
+          <div
+            v-for="(column, columnIndex) in skeletonColumns"
+            :key="columnIndex"
+            class="cell">
+            <audit-skeleton
+              height="16"
+              :width="column" />
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- 表格内容 -->
     <template
       v-for="(item, key) in tableData"
@@ -44,9 +71,7 @@
       <div
         v-else
         class="table-section">
-        <div
-          class="group-cell"
-          :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
+        <div class="group-cell">
           <span>{{ groupMap[key] }}</span>
         </div>
         <div class="rows-container">
@@ -324,13 +349,24 @@
     }
   };
 
+  const skeletonRows = [1, 2, 3, 4, 5, 6];
+  const skeletonColumnWidths = [72, 96, 36, 36, 36, 88, 72, 72, 64];
+  const skeletonColumns = computed(() => {
+    const count = Math.max(columns.value.length - 1, 1);
+    return skeletonColumnWidths.slice(0, count);
+  });
+  const hasVisibleEventRows = computed(() => Object.entries(tableData.value).some(([key, rows]) => {
+    if (props.strategyType === 'rule' && key === 'event_evidence_field_configs') return false;
+    return Array.isArray(rows) && rows.length > 0;
+  }));
+
   const process = () => {
     // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
   };
 
-  useRequest(StrategyManageService.fetchStrategyEvent, {
+  const { loading: fieldsLoading } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
     defaultParams: {
       strategy_id: props.strategyId,
@@ -391,6 +427,8 @@
     },
   });
 
+  const showFieldSkeleton = computed(() => fieldsLoading.value && !hasVisibleEventRows.value);
+
   onActivated(() => {
     process();
   });
@@ -415,83 +453,92 @@
 
 <style lang="postcss" scoped>
 .event-table {
+  --group-col: 80px;
+  --table-min: 1260px;
+  --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(168px, 1.5fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
+
+  &.is-model {
+    --table-min: 1092px;
+    --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
+  }
+
   @mixin cell-base {
     display: flex;
     padding: 0 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;
+    box-sizing: border-box;
+    min-width: 0;
   }
 
   display: flex;
   margin-bottom: 10px;
+  overflow-x: auto;
   color: #63656e;
   border-top: 1px solid #dcdee5;
   border-left: 1px solid #dcdee5;
   flex-direction: column;
 
   .head {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--group-col) var(--event-row-cols);
+    width: 100%;
+    min-width: var(--table-min);
     height: 42px;
     background-color: #f5f7fa;
 
     .header-cell {
       @include cell-base;
 
+      overflow: hidden;
       background-color: #f5f7fa;
       font-weight: 500;
       color: #313238;
 
-      &:first-child {
-        width: 80px;
-        min-width: 80px;
-        flex-shrink: 0;
-      }
-
-      &.field-name {
-        width: 200px;
-      }
-
-      &.display-name {
-        width: 200px;
-      }
-
-      &.is-priority {
-        width: 120px;
-      }
-
-      &.map-config {
-        width: 230px;
-      }
-
-      &.drill-config {
-        width: 230px;
-      }
-
-      &:last-child {
-        flex: 1;
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     }
   }
 
+  .skeleton-row {
+    display: grid;
+    grid-template-columns: var(--event-row-cols);
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    background: #fff;
+
+    .cell {
+      @include cell-base;
+
+      background: #fff;
+    }
+  }
+
   .table-section {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--group-col) minmax(0, 1fr);
+    width: 100%;
+    min-width: var(--table-min);
     min-height: 42px;
 
     .group-cell {
       @include cell-base;
 
-      display: flex;
-      width: 80px;
-      min-width: 80px;
-      flex-shrink: 0;
       background-color: #fafbfd;
-      align-items: center;
       justify-content: center;
     }
 
     .rows-container {
-      width: calc(100% - 80px);
+      min-width: 0;
+
+      :deep(> *) {
+        width: 100%;
+      }
     }
   }
 }

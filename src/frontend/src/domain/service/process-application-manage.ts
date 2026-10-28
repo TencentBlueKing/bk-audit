@@ -16,6 +16,8 @@
 */
 import ApplicationManageModel from '@model/application/application';
 import type ApplicationCreateManageModel from '@model/application/application-create';
+import ExecutionDetail from '@model/application/execution-detail';
+import ExecutionRecord from '@model/application/execution-record';
 
 import ProcessApplicationManageSource from '../source/process-application-manage';
 
@@ -50,8 +52,9 @@ export default {
   /**
    * @desc 获取处理套餐列表(下拉列表)
    */
-  fetchApplicationsAll(params:{
+  fetchApplicationsAll(params: {
     scene_id?: string
+    has_execution_records?: boolean
   }) {
     return ProcessApplicationManageSource.getApplicationsAll(params)
       .then(({ data }) => data);
@@ -92,6 +95,42 @@ export default {
   }) {
     return ProcessApplicationManageSource.getRuleList(params)
       .then(({ data }) => data);
+  },
+  /**
+     * @desc 处理套餐执行记录
+     * fetchRisks 是套餐命中风险，与执行记录不是同一资源。
+     */
+  fetchExecutionRecords(params: {
+    page?: number,
+    page_size?: number,
+    keyword?: string,
+    task_id?: string,
+    task_name?: string,
+    application_id?: string,
+    application_name?: string,
+    risk_id?: string,
+    trigger_type?: string,
+    status?: string,
+    executor?: string,
+    sort?: string | string[],
+    scene_id?: string,
+  }) {
+    return ProcessApplicationManageSource.getExecutionRecords(params)
+      .then(({ data }) => ({
+        ...data,
+        results: (data.results || []).map((item: ConstructorParameters<typeof ExecutionRecord>[0]) => new ExecutionRecord(item)),
+      }));
+  },
+  fetchExecutionDetail(params: { task_id: string }) {
+    return ProcessApplicationManageSource.getExecutionDetail(params)
+      .then(({ data }) => (data ? new ExecutionDetail(data) : data));
+  },
+  retryExecution(params: { task_id: string; risk_id: string; reason?: string }) {
+    return ProcessApplicationManageSource.retryExecution({
+      node_id: params.task_id,
+      risk_id: params.risk_id,
+      reason: params.reason,
+    }).then(({ data }) => data);
   },
   /**
      * @desc 启停处理套餐

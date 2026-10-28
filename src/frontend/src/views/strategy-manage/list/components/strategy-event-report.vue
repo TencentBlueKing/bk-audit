@@ -26,36 +26,39 @@
     <div
       v-else
       class="strategy-event-report">
-      <render-info-block class="strategy-event-block">
-        <render-info-item :label="t('事件调查报告状态')">
-          {{ strategyData.report_enabled ? t('已开启') : t('已关闭') }}
-        </render-info-item>
-        <render-info-item
-          :label="t('自动生成报告')"
-          style="padding-top: 10px;">
-          {{ strategyData.report_auto_render ? t('已开启') : t('已关闭') }}
-        </render-info-item>
-        <render-info-item
-          :label="t('更新人')"
-          style="padding-top: 10px;">
-          {{ strategyData.updated_by || '--' }}
-        </render-info-item>
-        <render-info-item
-          :label="t('更新时间')"
-          style="padding-top: 10px;">
-          {{ strategyData.updated_at || '--' }}
-        </render-info-item>
-      </render-info-block>
-
-
-      <div class="strategy-event-report-content">
-        <ai-editor
-          ref="aiEditorRef"
-          disabled
-          :event-data="eventData"
-          :event-info-data="eventInfoData"
-          :risk-lisks="riskLisks" />
-      </div>
+      <section class="report-section">
+        <h4 class="report-section-title">
+          {{ t('基本信息') }}
+        </h4>
+        <div class="report-fields">
+          <render-info-item :label="t('事件调查报告')">
+            <span class="report-status-tag">{{ t('已启用') }}</span>
+          </render-info-item>
+          <render-info-item :label="t('自动生成报告')">
+            {{ strategyData.report_auto_render ? t('已开启') : t('已关闭') }}
+          </render-info-item>
+          <render-info-item :label="t('更新人')">
+            {{ strategyData.updated_by || '--' }}
+          </render-info-item>
+          <render-info-item :label="t('更新时间')">
+            {{ strategyData.updated_at || '--' }}
+          </render-info-item>
+        </div>
+      </section>
+      <div class="report-divider" />
+      <section class="report-section">
+        <h4 class="report-section-title">
+          {{ t('报告内容') }}
+        </h4>
+        <div class="strategy-event-report-content">
+          <ai-editor
+            ref="aiEditorRef"
+            disabled
+            :event-data="eventData"
+            :event-info-data="eventInfoData"
+            :risk-lisks="riskLisks" />
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -68,7 +71,6 @@
 
   import AiEditor from '../../strategy-create/components/event-report/ai-editor/index.vue';
 
-  import RenderInfoBlock from './render-info-block.vue';
   import RenderInfoItem from './render-info-item.vue';
 
   interface Props {
@@ -118,12 +120,6 @@
 </script>
 
 <style scoped lang="postcss">
-.strategy-event-block {
-  :deep(.info-label) {
-    min-width: 110px;
-  }
-}
-
 .strategy-event-report-wrapper {
   display: flex;
   width: 100%;
@@ -133,7 +129,64 @@
 
 .strategy-event-report {
   width: 100%;
-  padding: 16px 24px;
+}
+
+.report-section-title {
+  margin: 0 0 var(--audit-space-12);
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-bold);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-01);
+}
+
+.report-fields {
+  padding-left: var(--audit-space-32);
+}
+
+.report-fields :deep(.render-info-item) {
+  display: flex;
+  gap: var(--audit-space-8);
+  align-items: flex-start;
+  min-height: 32px;
+  padding: 6px 0;
+  font-size: var(--audit-font-size-sm);
+  font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-sm);
+}
+
+.report-fields :deep(.info-label) {
+  flex: 0 0 84px;
+  width: 84px;
+  min-width: 84px;
+  padding: 0;
+  color: var(--audit-neutral-text-02);
+  text-align: right;
+}
+
+.report-fields :deep(.info-value) {
+  padding-left: 0;
+  overflow: visible;
+  color: var(--audit-neutral-text-01);
+  text-overflow: unset;
+}
+
+.report-status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--audit-space-8);
+  font-size: var(--audit-font-size-sm);
+  line-height: var(--audit-line-height-sm);
+  color: var(--audit-success-01);
+  background: var(--audit-success-06);
+  border-radius: var(--audit-radius-control);
+}
+
+.report-divider {
+  height: 0;
+  margin: var(--audit-space-24) 0;
+  border: none;
+  border-top: 1px solid var(--audit-neutral-border-01);
 }
 
 .strategy-event-report-title {
@@ -145,11 +198,11 @@
 
 .strategy-event-report-content {
   width: 100%;
-  min-height: 400px;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+  min-height: 405px;
+  overflow: hidden;
+  background: var(--audit-neutral-bg-03);
+  border: none;
+  border-radius: var(--audit-radius-control);
 }
 
 .strategy-event-report-body {
@@ -176,16 +229,16 @@
 }
 
 /* 编辑器宽度设置 */
-.strategy-event-report-content :deep(.rich-text-editor-container) {
+.strategy-event-report-content :deep(.rich-text-editor-container),
+.strategy-event-report-content :deep(.editor-wrapper),
+.strategy-event-report-content :deep(.quill-editor),
+.strategy-event-report-content :deep(.ql-container.ql-snow),
+.strategy-event-report-content :deep(.ql-editor) {
   width: 100%;
-}
-
-.strategy-event-report-content :deep(.editor-wrapper) {
-  width: 100%;
-}
-
-.strategy-event-report-content :deep(.quill-editor) {
-  width: 100%;
+  min-height: 405px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 /* 移除禁用遮罩层的背景颜色 */

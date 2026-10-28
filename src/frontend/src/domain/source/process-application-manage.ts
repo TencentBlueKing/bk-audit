@@ -16,6 +16,12 @@
 */
 import type ApplicationManageModel from '@model/application/application';
 import type ApplicationCreateManageModel from '@model/application/application-create';
+import {
+  mapExecutionDetail,
+  mapExecutionList,
+  toExecutionListQuery,
+  type ExecutionListQuery,
+} from '@model/application/execution-protocol';
 
 import Request, {
   type IRequestPayload,
@@ -49,8 +55,9 @@ class ProcessApplicationManage extends ModuleBase {
     });
   }
   // 获取处理套餐下拉列表
-  getApplicationsAll(params:{
+  getApplicationsAll(params: {
     scene_id?: string
+    has_execution_records?: boolean
   }) {
     const sceneParams = getSceneSystemParams();
     return Request.get<Array<{
@@ -101,6 +108,32 @@ class ProcessApplicationManage extends ModuleBase {
     return Request.get(`${this.module}/${params.id}/rules/`, {
       params,
       payload,
+    });
+  }
+
+  // 执行记录。getRisks 是套餐命中风险，不能复用。
+  getExecutionRecords(params: ExecutionListQuery) {
+    return Request.get(`${this.module}/execution_records/`, {
+      params: toExecutionListQuery(params),
+    }).then(response => ({
+      data: mapExecutionList(response.data),
+    }));
+  }
+
+  getExecutionDetail(params: { task_id: string }) {
+    return Request.get(`${this.module}/execution_record_detail/`, {
+      params: { id: params.task_id },
+    }).then(response => ({
+      data: mapExecutionDetail(response.data),
+    }));
+  }
+
+  retryExecution(params: { node_id: string; risk_id: string; reason?: string }) {
+    return Request.post(`/api/v1/risks/${params.risk_id}/retry_auto_process/`, {
+      params: {
+        node_id: params.node_id,
+        risk_id: params.risk_id,
+      },
     });
   }
 

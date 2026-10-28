@@ -14,7 +14,7 @@
         </div>
         <div class="rule-item-content">
           <div class="rule-field-row">
-            <span class="rule-field-label">{{ t('命中条件') }}:</span>
+            <span class="rule-field-label">{{ t('命中条件') }}：</span>
             <div class="rule-field-value">
               <rule-condition-display
                 :aggregate-list="aggregateList"
@@ -23,11 +23,11 @@
             </div>
           </div>
           <div class="rule-field-row">
-            <span class="rule-field-label">{{ t('风险单标题') }}:</span>
+            <span class="rule-field-label">{{ t('风险单标题') }}：</span>
             <span class="rule-field-value">{{ rule.risk_title || '--' }}</span>
           </div>
           <div class="rule-field-row">
-            <span class="rule-field-label">{{ t('命中等级') }}:</span>
+            <span class="rule-field-label">{{ t('命中等级') }}：</span>
             <span class="rule-field-value">
               <span
                 v-if="rule.risk_level && riskLevelMap[rule.risk_level]"
@@ -39,16 +39,20 @@
             </span>
           </div>
           <div class="rule-field-row">
-            <span class="rule-field-label">{{ t('风险危害') }}:</span>
-            <span class="rule-field-value multiline-text">{{ rule.risk_hazard || '--' }}</span>
+            <span class="rule-field-label">{{ t('风险危害') }}：</span>
+            <span class="rule-field-value is-pre-line">
+              <span class="pre-line-text">{{ rule.risk_hazard || '--' }}</span>
+            </span>
           </div>
           <div class="rule-field-row">
-            <span class="rule-field-label">{{ t('处理指引') }}:</span>
-            <span class="rule-field-value multiline-text">{{ rule.risk_guidance || '--' }}</span>
+            <span class="rule-field-label">{{ t('处理指引') }}：</span>
+            <span class="rule-field-value is-pre-line">
+              <span class="pre-line-text">{{ rule.risk_guidance || '--' }}</span>
+            </span>
           </div>
           <template v-if="showRuleNoticeGroups">
             <div class="rule-field-row">
-              <span class="rule-field-label">{{ t('风险单处理人') }}:</span>
+              <span class="rule-field-label">{{ t('风险单处理人') }}：</span>
               <div class="rule-field-value notice-group-tags">
                 <template v-if="rule.processorTags.length">
                   <bk-tag
@@ -66,7 +70,7 @@
               </div>
             </div>
             <div class="rule-field-row">
-              <span class="rule-field-label">{{ t('关注人') }}:</span>
+              <span class="rule-field-label">{{ t('关注人') }}：</span>
               <div class="rule-field-value notice-group-tags">
                 <template v-if="rule.followerTags.length">
                   <bk-tag
@@ -246,15 +250,14 @@
 </script>
 <style scoped lang="postcss">
 .risk-discovery-rules {
-  padding-top: 24px;
-  background: #fff;
+  background: var(--audit-neutral-bg-04);
 
   .rule-item-card {
-    margin-bottom: 12px;
+    margin-bottom: var(--audit-space-16);
     overflow: hidden;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    background: var(--audit-neutral-bg-02);
+    border: 1px solid var(--audit-neutral-border-02);
+    border-radius: var(--audit-radius-control);
 
     &:last-child {
       margin-bottom: 0;
@@ -264,28 +267,31 @@
   .rule-item-header {
     display: flex;
     align-items: center;
-    height: 40px;
-    padding: 0 16px;
-    background: #f0f1f5;
-    border-bottom: 1px solid #dcdee5;
+    height: 32px;
+    padding: 0 var(--audit-space-16);
+    background: var(--audit-neutral-bg-01);
   }
 
   .rule-name {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 22px;
-    color: #313238;
+    font-size: var(--audit-font-size-sm);
+    font-weight: var(--audit-font-weight-bold);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-02);
   }
 
   .rule-item-content {
-    padding: 16px 24px 20px;
-    background: #fff;
+    padding: var(--audit-space-16);
+    background: var(--audit-neutral-bg-02);
   }
 
   .rule-field-row {
     display: flex;
-    margin-bottom: 16px;
-    line-height: 22px;
+    gap: var(--audit-space-8);
+    align-items: flex-start;
+    min-height: 32px;
+    padding: 6px 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
 
     &:last-child {
       margin-bottom: 0;
@@ -293,22 +299,35 @@
   }
 
   .rule-field-label {
-    flex: 0 0 100px;
-    min-width: 100px;
-    color: #979ba5;
+    flex: 0 0 84px;
+    width: 84px;
+    min-width: 84px;
+    overflow: visible;
+    color: var(--audit-neutral-text-02);
     text-align: right;
+    white-space: nowrap;
   }
 
   .rule-field-value {
-    flex: 1;
-    padding-left: 14px;
-    color: #63656e;
-    word-break: break-all;
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--audit-neutral-text-01);
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
 
-    &.multiline-text {
-      white-space: pre-line;
-      word-break: break-word;
+    &.is-pre-line {
+      flex: 1 1 0%;
+      width: 0;
+      overflow: hidden;
     }
+  }
+
+  .pre-line-text {
+    display: block;
+    white-space: pre-line;
+    word-break: normal;
+    overflow-wrap: break-word;
   }
 
   .notice-group-tags {
@@ -331,14 +350,14 @@
   }
 
   .risk-level-tag {
-    display: inline-block;
-    min-width: 24px;
-    padding: 2px 8px;
-    font-size: 12px;
-    line-height: 18px;
-    color: #fff;
-    text-align: center;
-    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 var(--audit-space-8);
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-bg-04);
+    border-radius: var(--audit-radius-control);
   }
 
   .risk-discovery-rules-empty {

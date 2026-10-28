@@ -227,7 +227,7 @@
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
-    eventItemKey: keyof StrategyFieldEvent;
+    eventItemKey: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs' | 'risk_meta_field_config';
     fieldKey: keyof StrategyFieldEvent['event_basic_field_configs'][0];
     selectOptions: Array<DatabaseTableFieldModel>;
     strategyName: string;
@@ -434,16 +434,50 @@
 .field-cell {
   display: flex;
   width: 100%;
+  min-width: 0;
   height: 100%;
   align-items: center;
 
-  :deep(.bk-input) {
-    height: 40px;
-    border: none;
+  &:has(.description-input) {
+    align-items: stretch;
   }
 
-  .description-input {
-    border: none;
+  :deep(.bk-select),
+  :deep(.field-input) {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  :deep(.bk-input.description-input) {
+    display: flex;
+    flex: 1 1 auto;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+
+  :deep(.bk-input.description-input .bk-input--text) {
+    height: 100%;
+    background-color: transparent;
+  }
+
+  :deep(.bk-input.description-input:hover:not(.is-disabled)) {
+    background-color: #fff;
+    border-color: #c4c6cc;
+    box-shadow: none;
+  }
+
+  :deep(.bk-input.description-input.is-focused:not(.is-readonly)) {
+    background-color: #fff;
+    border-color: #3a84ff;
+    box-shadow: none;
   }
 
   .field-cell-div {
@@ -452,7 +486,7 @@
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 12px;
     line-height: 33px;
     cursor: pointer;
 

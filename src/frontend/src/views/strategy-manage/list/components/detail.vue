@@ -47,11 +47,14 @@
 <script setup lang="ts">
   import {
     computed,
+    onMounted,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
+
+  import BksecManageService from '@service/bksec-manage';
 
   import type StrategyModel from '@model/strategy/strategy';
 
@@ -59,6 +62,7 @@
   import RiskDiscoveryRules from './risk-discovery-rules.vue';
   import RiskDisplay from './risk-display.vue';
   import RiskOther from './risk-other.vue';
+  import BksecTicket from './bksec-ticket.vue';
   import StrategyEventReport from './strategy-event-report.vue';
 
   import { isPlatformStrategyRoute } from '../../utils/strategy-routes';
@@ -82,9 +86,11 @@
     riskDiscoveryRules: RiskDiscoveryRules,
     riskDisplay: RiskDisplay,
     eventReport: StrategyEventReport,
+    bksecTicket: BksecTicket,
     riskOther: RiskOther,
   };
 
+  const bksecFeatureEnabled = ref(!isPlatformStrategyRoute(route.name));
   const panels = computed(() => {
     const list = [
       { name: 'riskDetection', label: t('基础信息') },
@@ -92,12 +98,26 @@
       { name: 'riskDisplay', label: t('单据展示') },
       { name: 'eventReport', label: t('事件调查报告') },
     ];
+    if (!isPlatformStrategyRoute(route.name) && bksecFeatureEnabled.value) {
+      list.push({ name: 'bksecTicket', label: t('BKSEC安全工单') });
+    }
     if (isPlatformStrategyRoute(route.name)) {
       list.push({ name: 'riskOther', label: t('风险分派规则') });
     }
     return list;
   });
   const active = ref<keyof typeof comMap>('riskDetection');
+
+  onMounted(() => {
+    if (isPlatformStrategyRoute(route.name)) return;
+    BksecManageService.fetchFeature()
+      .then((data) => {
+        bksecFeatureEnabled.value = !!data?.enabled;
+      })
+      .catch(() => {
+        bksecFeatureEnabled.value = false;
+      });
+  });
 
   watch(
     () => props.data?.strategy_id,
@@ -118,7 +138,9 @@
 <style scoped lang="postcss">
 .strategy-detail {
   height: 100%;
+  min-height: 0;
   padding-top: 24px;
+  overflow: hidden;
   background-color: #f5f7fa;
   box-sizing: border-box;
   display: flex;
@@ -127,7 +149,8 @@
   .strategy-detail-loading {
     display: flex;
     height: 100%;
-    min-height: 360px;
+    min-height: 0;
+    overflow: hidden;
     flex: 1;
     flex-direction: column;
   }
@@ -135,6 +158,8 @@
   :deep(.bk-loading-wrapper) {
     display: flex;
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
     flex: 1;
     flex-direction: column;
   }
@@ -143,6 +168,7 @@
     display: flex;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
     flex-direction: column;
 
     .bk-tab-header {
@@ -154,20 +180,52 @@
     .bk-tab-content {
       flex: 1;
       min-height: 0;
-      padding: 0 24px 0;
+      padding: 24px 40px 24px;
       overflow-y: auto;
       background: #fff;
       box-sizing: border-box;
     }
 
-    :deep(.bk-tab-panel) {
+    .bk-tab-panel {
       height: auto;
-      min-height: 0;
+      min-height: 100%;
     }
   }
 
   .strategy-detail-body {
     overflow: visible;
+  }
+
+  :deep(.render-info-block) {
+    margin: 0;
+  }
+
+  :deep(.render-info-item) {
+    display: flex;
+    gap: var(--audit-space-8);
+    align-items: flex-start;
+    min-height: 32px;
+    padding: 6px 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+  }
+
+  :deep(.info-label) {
+    flex: 0 0 84px;
+    width: 84px;
+    min-width: 84px;
+    overflow: visible;
+    color: var(--audit-neutral-text-02);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  :deep(.info-value) {
+    padding-left: 0;
+    overflow: visible;
+    color: var(--audit-neutral-text-01);
+    text-overflow: unset;
+    word-break: break-all;
   }
 }
 </style>
