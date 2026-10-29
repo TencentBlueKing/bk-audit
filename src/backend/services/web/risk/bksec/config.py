@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from typing import List
 
+from django.conf import settings
 from django.utils.translation import gettext
 from drf_pydantic import BaseModel
 from pydantic import Field, field_validator, model_validator
@@ -74,6 +75,19 @@ class BkSecConfig(BaseModel):
         return list(deduped.values())
 
     @model_validator(mode="after")
+    def _fallback_project_id(self):
+        """项目 ID 兜底：未传 project_id 时回退全局 BKSEC_PROJECT_ID
+
+        多项目改造的过渡兼容：改造前前端只提交 risk_type_id，直接强校验会阻断
+        策略创建 / 更新 / 测试发送等全部入口。回退后仍能取到 token
+        （fetch_risk_access_items 对空 project_id 同样回退），代价是退化为单项目。
+        TODO: 前端适配完成后移除本兜底，恢复 project_id 强校验。
+        """
+        if not self.project_id:
+            self.project_id = str(getattr(settings, "BKSEC_PROJECT_ID", "") or "")
+        return self
+
+    @model_validator(mode="after")
     def _sync_sops_params(self):
         # target/target_type/operator 三个独立字段作为 SOPS 独立入参模板
         # 前端支持全部从field_mappings传入
@@ -95,6 +109,8 @@ class BkSecConfig(BaseModel):
         """
         正式提交校验：
            1. 启用时项目、风险类型必选（两者共同定位 risk_access 记录，缺一无法取 token）
+              project_id 缺值时已由 _fallback_project_id 回退全局配置，故此处仅在
+              「未传且未配置 BKAPP_BKSEC_PROJECT_ID」时才拦截
            2. 必填字段非空(operator/target/target_type)
 
         草稿保存不调用本方法（允许配置不完整）。
@@ -102,7 +118,7 @@ class BkSecConfig(BaseModel):
         if not self.enabled:
             return
         if not self.project_id:
-            raise ValueError(gettext("启用 BKSEC 安全工单时必须选择项目"))
+            raise ValueError(gettext("启用 BKSEC 安全工单时必须选择项目（未传 project_id 且未配置 BKAPP_BKSEC_PROJECT_ID）"))
         if not self.risk_type_id:
             raise ValueError(gettext("启用 BKSEC 安全工单时必须选择风险类型"))
         for key in BKSEC_REQUIRED_FIELD_KEYS:

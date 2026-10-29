@@ -329,6 +329,23 @@ class TestBkSecConfig:
         config = BkSecConfig.model_validate(data)
         assert len(config.field_mappings) == 4
 
+    def test_project_id_fallback_to_global(self, settings):
+        """前端未传 project_id：回退全局配置，不阻断保存（改造期过渡兼容）"""
+        settings.BKSEC_PROJECT_ID = "17"
+        data = {k: v for k, v in BKSEC_CONFIG_DATA.items() if k != "project_id"}
+        config = BkSecConfig.model_validate(data)
+        assert config.project_id == "17"
+        config.validate_for_submit()
+
+    def test_project_id_fallback_missing_still_blocks(self, settings):
+        """既未传 project_id 又未配置全局项目：仍然拦截"""
+        settings.BKSEC_PROJECT_ID = None
+        data = {k: v for k, v in BKSEC_CONFIG_DATA.items() if k != "project_id"}
+        config = BkSecConfig.model_validate(data)
+        assert config.project_id == ""
+        with pytest.raises(ValueError):
+            config.validate_for_submit()
+
     def test_validate_for_submit_missing_type(self):
         config = BkSecConfig.model_validate({**BKSEC_CONFIG_DATA, "risk_type_id": ""})
         with pytest.raises(ValueError):
