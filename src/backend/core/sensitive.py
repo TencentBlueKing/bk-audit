@@ -79,18 +79,7 @@ _sensitive_values: Set[str] = set()
 
 
 def register_sensitive(*values: Any) -> None:
-    """登记敏感值，两套口径：
-
-    - **顶层字符串**：无条件登记。调用方显式传入的都是语义明确的敏感值
-      （信封、私钥、解密后明文、整段 JSON 凭据），不再套用最小长度限制。
-    - **配置结构（dict / list）**：只登记**键名命中 SENSITIVE_KEY_PATTERNS 的值**
-      （含嵌套，命中键名后其子树一律登记，短密码同样覆盖）。
-      这样 host / IP 之类的非敏感值不会被登记，异常堆栈里仍能看清排障信息。
-
-    取舍：密码若放在键名不敏感的字段（如 {"connection_url": "redis://u:p@host"}）
-    不会被登记。该场景靠「不在日志/堆栈里打印整个配置对象」兜底，
-    见 SENSITIVE_VAR_PATTERNS 对 *_config / raw 的抑制。
-    """
+    """登记敏感值"""
     for value in values:
         if isinstance(value, str):
             if value:  # 空串不得登记：scrub 会把 "***" 插进每个字符之间，毁掉所有异常文本
@@ -137,11 +126,7 @@ def scrub(text: Any, extra_values: Optional[Iterable[Any]] = None) -> str:
 
 
 def redact_secrets(value: Any, _depth: int = 0) -> Any:
-    """按「键名 + 已登记值」双重口径脱敏，供日志/print 输出配置类数据前使用。
-
-    - 键名命中 `SENSITIVE_KEY_PATTERNS`（password/token/auth/...）时，值整体替换为占位符；
-    - 其余字符串再走一遍 `scrub()`，把已登记的明文（信封、私钥、解密后凭据）替换掉。
-    """
+    """按「键名 + 已登记值」双重口径脱敏，供日志/print 输出配置类数据前使用。"""
     if _depth > _MAX_REDACT_DEPTH:
         return REDACTED
     if isinstance(value, dict):
@@ -198,13 +183,7 @@ def _format_exc_tuple(exc_tuple, style: str, extra_paths: Iterable[str]) -> str:
 
 
 def install_redacted_excepthook(style: str = "plaintext", extra_paths: Optional[Iterable[str]] = None) -> bool:
-    """安装脱敏版 excepthook，替代 `stackprinter.set_excepthook()`。
-
-    保留 stackprinter 的详细堆栈，但：
-    - 命中 `SENSITIVE_VAR_PATTERNS` 的变量不打印内容；
-    - KMS 相关源文件的帧不展开局部变量；
-    - 输出前统一 `scrub()`，把已登记的明文替换成占位符。
-    """
+    """安装脱敏版 excepthook，替代 stackprinter.set_excepthook()"""
     extra_paths = tuple(extra_paths or ())
 
     def _write(exc_tuple) -> None:
