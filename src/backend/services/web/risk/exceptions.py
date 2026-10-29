@@ -77,3 +77,11 @@ class BulkSelectionOverLimit(RiskException):
     MESSAGE = gettext_lazy("所选风险数量超过上限，请缩小范围")
     STATUS_CODE = 400
     ERROR_CODE = "006"
+
+
+class RiskConfirmPermissionDenied(RiskException):
+    """确认风险只允许确认人或平台管理员，不引导申请平台管理权限。"""
+
+    MESSAGE = gettext_lazy("当前用户不是确认人或平台管理员")
+    STATUS_CODE = 403
+    ERROR_CODE = "007"

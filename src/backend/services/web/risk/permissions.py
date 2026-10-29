@@ -25,6 +25,7 @@ from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.handlers.service import PermissionService
 from core.exceptions import PermissionException
+from services.web.risk.exceptions import RiskConfirmPermissionDenied
 from services.web.risk.models import Risk, TicketPermission, UserType
 from services.web.strategy_v2.models import Strategy
 
@@ -111,6 +112,30 @@ class BatchRiskTicketPermission(IAMPermission):
         # 校验IAM权限
         self.resources = [risk_objs[0] for risk_objs in ResourceEnum.RISK.batch_create_instance(no_permission_risk_ids)]
         return super().has_permission(request, view)
+
+
+class RiskConfirmPermission(IAMPermission):
+    """确认人，或平台管理员，可确认。传入 get_risk_ids 时按批量校验。"""
+
+    def __init__(self, get_risk_ids: Callable = None):
+        super().__init__(actions=[ActionEnum.MANAGE_PLATFORM])
+        self.get_risk_ids = get_risk_ids
+
+    def has_permission(self, request, view):
+        if self._is_confirmer(request, view) or PermissionService().is_allowed(ActionEnum.MANAGE_PLATFORM):
+            return True
+        raise RiskConfirmPermissionDenied()
+
+    def _is_confirmer(self, request, view) -> bool:
+        username = request.user.username
+        if self.get_risk_ids:
+            risks = Risk.objects.filter(risk_id__in=self.get_risk_ids()).only("confirmer")
+            return bool(risks) and all(risk.confirmer and username in risk.confirmer for risk in risks)
+        risk_id = view.kwargs.get("pk") or request.data.get("risk_id") or request.query_params.get("risk_id") or ""
+        if not risk_id:
+            return False
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        return bool(risk.confirmer and username in risk.confirmer)
 
 
 class GenerateStrategyRiskPermission:
