@@ -43,12 +43,14 @@ KMS_ENV_INJECTION_KEY = "BKAPP_KMS_ENV_INJECTION"
 # 白名单外追加允许的键（逗号分隔），用于灰度期临时放行新凭据
 KMS_EXTRA_SECRET_KEYS_KEY = "BKAPP_KMS_EXTRA_SECRET_KEYS"
 
-# 允许由凭证包覆盖的环境变量（仅密钥/凭据类）
+# 允许由凭证包覆盖的环境变量
 KMS_ALLOWED_SECRET_KEYS = frozenset(
     {
         "APP_TOKEN",
         "BKAPP_AI_AGENT_SECRET_KEY",
+        "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY",
         "BKAPP_AI_AUDIT_REPORT_SECRET_KEY",
+        "BKAPP_AI_USER_INTENT_SECRET_KEY",
         "BKAPP_ALERT_ACCESS_TOKEN",
         "BKAPP_BKBASE_DATA_TOKEN",
         "BKAPP_FETCH_USER_INFO_TOKEN",
@@ -57,10 +59,17 @@ KMS_ALLOWED_SECRET_KEYS = frozenset(
         "BKAPP_INIT_KAFKA_CONFIG",
         "BKAPP_INIT_REDIS_CONFIG",
         "BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN",
+        "BKAPP_OTEL_BK_DATA_TOKEN",
+        "BKAPP_OTEL_LOG_BK_DATA_TOKEN",
         "BKAPP_PLATFORM_AUTH_ACCESS_TOKEN",
         "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME",
+        "BKPAAS_APP_ID",
         "BKPAAS_APP_SECRET",
+        "BKREPO_PASSWORD",
         "MYSQL_PASSWORD",
+        "MYSQL_USER",
+        "RABBITMQ_PASSWORD",
+        "RABBITMQ_USER",
         "REDIS_PASSWORD",
     }
 )
@@ -86,13 +95,6 @@ KMS_BASE_REQUIRED_SECRETS = ("BKPAAS_APP_SECRET",)
 DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME = "admin"
 
 # 功能开关 -> (开关未显式配置时是否视为开启, 额外必填的「凭据组」)
-# 凭据组元素为 (键, 运行期默认值)：组内任意一个键的「最终生效值」非空即视为满足。
-# 最终生效值 = KMS 凭证包 -> 宿主环境变量 -> 运行期默认值，即按运行期真实的 fallback 链判断：
-# - 平台鉴权：bk_resource 的 add_platform_auth_params() 只在 token 与 username **同时为空**时才报错；
-#   宿主已配 username、或 settings 默认 admin 都算有效凭据，不能因为 KMS 包里没有就拒绝，
-#   仅为启用 KMS 不应强制把原本可用的非敏感用户名搬进凭证包。
-# - AI 能力：AIAgentBase._get_first_setting() 的取值链为 AI_AGENT -> AI_AUDIT_REPORT -> settings.SECRET_KEY，
-#   最后一级由必填的 BKPAAS_APP_SECRET 提供，两把 override 密钥属于可选增强，不是启动必需项。
 # 一次性的初始化配置（BKAPP_INIT_*）保持可选，避免误杀合法部署。
 KMS_FEATURE_REQUIRED_SECRETS = {
     "BKAPP_PLATFORM_AUTH_ENABLED": (
@@ -131,11 +133,7 @@ def _is_env_injection_enabled() -> bool:
 
 
 def _read_envelope() -> str:
-    """读取 Base64 编码的 KMS 信封。
-
-    只支持文件方式（路径由 BKAPP_KMS_ENVELOPE_PATH 指定，运维以 Secret 挂载）：
-    信封明文同样不落环境变量，避免破坏「明文不落盘 / 不落 env」的合规口径。
-    """
+    """读取 Base64 编码的 KMS 信封。"""
     path = os.getenv(KMS_ENVELOPE_PATH_KEY)
     if not path:
         raise ImproperlyConfigured("KMS 已开启但未配置信封文件路径 %s" % KMS_ENVELOPE_PATH_KEY)
@@ -172,13 +170,7 @@ def _is_switch_on(switch: str, default_on: bool) -> bool:
 
 
 def _effective_credential(key: str, default: Optional[str], validated: dict) -> str:
-    """凭据的最终生效值：KMS 凭证包 -> 宿主环境变量 -> 运行期默认值。
-
-    - `default is None` 表示该凭据**必须由凭证包提供**，不回退宿主环境变量与默认值：
-      否则宿主里残留的旧明文会让校验通过，KMS 开了却仍在使用旧明文（静默降级）。
-    - 只看凭证包则会把「宿主已配置 / settings 有默认」的合法部署误判为缺凭据，
-      因此可回退的凭据才走后续两级。
-    """
+    """凭据的最终生效值：KMS 凭证包 -> 宿主环境变量 -> 运行期默认值。"""
     # KMS 凭证包优先；包内显式给空串等同于显式置空，不再继续回退
     if key in validated:
         return str(validated[key]).strip()
@@ -234,7 +226,7 @@ def validate_secrets(raw: dict) -> dict:
         if key in KMS_FORBIDDEN_SECRET_KEYS:
             raise ImproperlyConfigured("KMS 凭证包不允许覆盖控制项环境变量: %s" % key)
         if key not in allowed_keys:
-            raise ImproperlyConfigured("KMS 凭证包包含不允许覆盖的环境变量: %s（仅允许密钥类环境变量）" % key)
+            raise ImproperlyConfigured("KMS 凭证包包含不在允许覆盖清单内的环境变量: %s" % key)
         if value is None or not isinstance(value, KMS_ALLOWED_VALUE_TYPES):
             raise ImproperlyConfigured("KMS 凭证包中 %s 的值类型不被允许（仅允许字符串/数字/布尔）" % key)
         validated[key] = str(value)

@@ -289,7 +289,35 @@ class TestKmsSecretsSchema(KmsTestCaseMixin, unittest.TestCase):
         """既不在禁写列表、也不在白名单的键：走真正的白名单校验分支。"""
         with self.assertRaises(ImproperlyConfigured) as ctx:
             validate_secrets({"BKPAAS_APP_SECRET": "app-secret-0001", "SOME_RANDOM_KEY": "any-value"})
-        self.assertIn("仅允许密钥类", str(ctx.exception))
+        self.assertIn("不在允许覆盖清单内", str(ctx.exception))
+
+    def test_credential_record_items_all_allowed(self):
+        """
+        BKAPP_INIT_*_CONFIG 按「整串 JSON 原样下发」，集群名等字段不需单独成键。
+        """
+        doc_items = (
+            "BKPAAS_APP_ID",
+            "BKPAAS_APP_SECRET",
+            "MYSQL_USER",
+            "MYSQL_PASSWORD",
+            "RABBITMQ_USER",
+            "RABBITMQ_PASSWORD",
+            "REDIS_PASSWORD",
+            "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME",
+            "BKAPP_PLATFORM_AUTH_ACCESS_TOKEN",
+            "BKAPP_BKBASE_DATA_TOKEN",
+            "BKAPP_OTEL_BK_DATA_TOKEN",
+            "BKAPP_OTEL_LOG_BK_DATA_TOKEN",
+            "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY",
+            "BKAPP_AI_USER_INTENT_SECRET_KEY",
+            "BKAPP_ALERT_ACCESS_TOKEN",
+            "BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN",
+            "BKREPO_PASSWORD",
+        )
+        for key in doc_items:
+            with self.subTest(key=key):
+                validated = validate_secrets({"BKPAAS_APP_SECRET": "app-secret-0001", key: "value-0001"})
+                self.assertEqual(validated[key], "value-0001")
 
     def test_extract_secrets_non_dict_rejected(self):
         with self.assertRaises(ImproperlyConfigured):
