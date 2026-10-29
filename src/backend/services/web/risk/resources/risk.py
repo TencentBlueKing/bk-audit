@@ -322,7 +322,7 @@ class RetrieveRiskStrategyInfo(RiskMeta):
         strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
         if strategy is None:
             return {}
-        # 按风险归属场景过滤不可见的下钻工具（展示态与执行鉴权同口径）
+        # 按风险归属场景标注下钻工具可见性 is_visible/tool_name/tool_type（展示态与执行鉴权同口径）
         serializer = RetrieveRiskStrategyInfoResponseSerializer(strategy, context={"risk_scene_id": risk.scene_id})
         return serializer.data
 

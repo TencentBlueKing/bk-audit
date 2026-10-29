@@ -14,7 +14,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Any
+from typing import Any, Sequence
 
 from django.utils.translation.trans_null import gettext_lazy
 
@@ -300,3 +300,32 @@ class InputVariableDataSourceNotConfiguredError(ToolException):
     def __init__(self, raw_name: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(raw_name=raw_name)
         super().__init__(*args, **kwargs)
+
+
+class ToolUsedByStrategyError(ToolException):
+    """工具被策略字段下钻引用，不允许停用或删除的异常基类
+
+    只返回结构化数据（data.strategy_names），提示语由前端按需拼装，后端不产出成品文案。
+    """
+
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("工具被策略引用")
+
+    def __init__(self, strategy_names: Sequence[str] | None = None, *args, **kwargs):
+        strategy_names = [name for name in (strategy_names or []) if name]
+        kwargs.setdefault("data", {"strategy_names": strategy_names})
+        super().__init__(*args, **kwargs)
+
+
+class ToolUsedByStrategyCannotDisable(ToolUsedByStrategyError):
+    """工具被策略字段下钻引用，无法停用"""
+
+    MESSAGE = gettext_lazy("工具被策略引用，无法停用")
+    ERROR_CODE = "025"
+
+
+class ToolUsedByStrategyCannotDelete(ToolUsedByStrategyError):
+    """工具被策略字段下钻引用，无法删除"""
+
+    MESSAGE = gettext_lazy("工具被策略引用，无法删除")
+    ERROR_CODE = "026"
