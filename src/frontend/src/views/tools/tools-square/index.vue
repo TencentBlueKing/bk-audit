@@ -96,6 +96,7 @@
             class="content-card-wrapper">
             <content-card
               ref="ContentCardRef"
+              :accessible-scene-ids="accessibleSceneIds"
               :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
               :is-cross-system="scopeParams.scope_type === 'cross_system'"
               :my-created="tagId === '-4'"
@@ -111,6 +112,7 @@
           <tool-info-panel
             v-show="hasOpenedTools"
             ref="toolInfoPanelRef"
+            :accessible-scene-ids="accessibleSceneIds"
             :active-uid="activeToolUid"
             :scene-name-map="sceneNameMap"
             :scope-params="scopeParams"
@@ -180,16 +182,25 @@
 
   // 场景ID → 场景名称映射
   const sceneNameMap = ref<Record<number, string>>({});
+  const accessibleSceneIds = ref<number[] | null>(null);
   const {
     run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
-    onSuccess: (data: Array<{ scene_id: number; name: string }>) => {
+    onSuccess: (data: Array<{
+      scene_id: number;
+      name: string;
+      status: 'enabled' | 'disabled';
+      permission: Record<string, boolean>;
+    }>) => {
       const map: Record<number, string> = {};
       data.forEach((item) => {
         map[item.scene_id] = item.name;
       });
       sceneNameMap.value = map;
+      accessibleSceneIds.value = data
+        .filter(item => item.status === 'enabled' && item.permission?.view_scene === true)
+        .map(item => item.scene_id);
     },
   });
   // 系统ID → 系统名称映射

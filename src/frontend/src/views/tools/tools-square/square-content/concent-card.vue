@@ -365,6 +365,7 @@
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { groupToolsByScene } from '@/views/tools/tools-square/utils/tool-scene-groups';
 
 
   interface Exposes {
@@ -399,6 +400,7 @@
     isCrossSystem: boolean,
     sceneNameMap: Record<number, string>,
     systemNameMap: Record<string, string>,
+    accessibleSceneIds: number[] | null,
   }
 
 
@@ -559,38 +561,16 @@
 
   const isGroupedMode = computed(() => props.isCrossScene || props.isCrossSystem);
 
-  const buildSceneGroups = (tools: ToolInfo[]): ToolGroup[] => {
-    const groupMap = new Map<string, ToolInfo[]>();
-    const sceneOrder: string[] = [];
-    tools.forEach((tool) => {
-      const sceneIds = tool.visibility?.scene_ids || [];
-      if (sceneIds.length === 0) {
-        if (!groupMap.has('0')) {
-          groupMap.set('0', []);
-          sceneOrder.push('0');
-        }
-        groupMap.get('0')!.push(tool);
-      } else {
-        sceneIds.forEach((sid: number) => {
-          const key = String(sid);
-          if (!groupMap.has(key)) {
-            groupMap.set(key, []);
-            sceneOrder.push(key);
-          }
-          groupMap.get(key)!.push(tool);
-        });
-      }
-    });
-    return sceneOrder.map((key) => {
-      const sid = Number(key);
+  const buildSceneGroups = (tools: ToolInfo[]): ToolGroup[] => groupToolsByScene(tools, props.accessibleSceneIds)
+    .map(({ groupKey, tools: groupTools }) => {
+      const sid = Number(groupKey);
       return {
-        groupKey: key,
+        groupKey,
         groupId: sid,
         groupName: sid === 0 ? t('未分类') : (props.sceneNameMap[sid] || `场景 ${sid}`),
-        tools: groupMap.get(key) || [],
+        tools: groupTools,
       };
-    }).sort((a, b) => Number(b.groupKey) - Number(a.groupKey));
-  };
+    });
 
   const buildSystemGroups = (tools: ToolInfo[]): ToolGroup[] => {
     const groupMap = new Map<string, ToolInfo[]>();
