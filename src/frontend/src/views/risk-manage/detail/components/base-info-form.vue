@@ -206,7 +206,7 @@
                     <div
                       v-for="config in getFieldDrill(fieldItem)"
                       :key="config.tool?.uid">
-                      {{ config.drill_name || getToolNameAndType(config.tool?.uid).name }}
+                      {{ config.drill_name || config.tool_name || getToolNameAndType(config.tool?.uid).name }}
                       <bk-button
                         class="ml8"
                         text
@@ -344,7 +344,6 @@
     event_end_time: props.data.event_end_time,
   }));
 
-  const isAllToolsLoaded = ref(false);
   const {
     data: allToolsData,
     run: fetchAllTools,
@@ -354,14 +353,9 @@
       scope_type: 'scene',
       scope_id: props.data.scene_id,
     },
-    onSuccess: () => {
-      isAllToolsLoaded.value = true;
-    },
   });
 
   const { resolveAvailableDrillConfig } = useDrillToolAvailability({
-    sceneTools: allToolsData,
-    isSceneToolsLoaded: isAllToolsLoaded,
     getSceneId: () => props.data.scene_id,
   });
 
@@ -626,7 +620,6 @@
     });
     fetchSceneAll();
     if (!props.isAddRisk) {
-      isAllToolsLoaded.value = false;
       fetchAllTools({
         scope_id: sceneId,
         scope_type: 'scene',
