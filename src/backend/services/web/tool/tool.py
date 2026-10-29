@@ -1,6 +1,7 @@
 import datetime
 import time
-from typing import List, Type
+from collections import defaultdict
+from typing import Dict, Iterable, List, Set, Type
 
 import redis
 from bk_resource import resource
@@ -8,6 +9,8 @@ from django.conf import settings
 from django.db import models, transaction
 
 from core.utils.data import unique_id
+from services.web.strategy_v2.constants import StrategyStatusChoices
+from services.web.strategy_v2.models import Strategy, StrategyTool
 from services.web.tool.constants import (
     BkVisionConfig,
     DataSearchConfigTypeEnum,
@@ -109,6 +112,68 @@ def sync_resource_tags(
         # 批量创建关联
         objs = [relation_model(**{relation_resource_field: resource_uid, "tag_id": t["tag_id"]}) for t in tags]
         relation_model.objects.bulk_create(objs)
+
+
+def get_blocking_strategy_names(tool_uid: str) -> List[str]:
+    """
+    获取引用该工具且会阻塞停用/删除的策略名列表，返回空列表表示允许操作
+
+    任意策略（全局或场景）引用该工具均会阻塞；草稿与已删除的策略不计入
+    """
+
+    strategy_ids = set(
+        StrategyTool.objects.filter(tool_uid=str(tool_uid), strategy__is_deleted=False)
+        .exclude(strategy__status=StrategyStatusChoices.DRAFT.value)
+        .values_list("strategy_id", flat=True)
+    )
+    if not strategy_ids:
+        return []
+    return [
+        strategy_name
+        for _, strategy_name in Strategy.objects.filter(strategy_id__in=strategy_ids, is_deleted=False)
+        .order_by("strategy_id")
+        .values_list("strategy_id", "strategy_name")
+    ]
+
+
+def attach_strategy_refs(tools: Iterable[Tool]) -> None:
+    """
+    批量回填工具的策略引用信息，供列表与详情接口输出
+
+    回填属性：
+    - strategy_refs：阻塞停用/删除的策略列表 [{"strategy_id": int, "strategy_name": str}]
+    - can_disable：是否允许停用
+    - can_delete：是否允许删除
+    """
+
+    tool_list = list(tools)
+    if not tool_list:
+        return
+    tool_uids = [str(tool.uid) for tool in tool_list]
+    tool_strategy_ids: Dict[str, Set[int]] = defaultdict(set)
+    for tool_uid, strategy_id in (
+        StrategyTool.objects.filter(tool_uid__in=tool_uids, strategy__is_deleted=False)
+        .exclude(strategy__status=StrategyStatusChoices.DRAFT.value)
+        .values_list("tool_uid", "strategy_id")
+        .distinct()
+    ):
+        tool_strategy_ids[str(tool_uid)].add(strategy_id)
+    all_strategy_ids = {strategy_id for ids in tool_strategy_ids.values() for strategy_id in ids}
+    name_map: Dict[int, str] = {}
+    if all_strategy_ids:
+        name_map = dict(
+            Strategy.objects.filter(strategy_id__in=all_strategy_ids, is_deleted=False).values_list(
+                "strategy_id", "strategy_name"
+            )
+        )
+    for tool in tool_list:
+        refs = [
+            {"strategy_id": sid, "strategy_name": name_map.get(sid, "")}
+            for sid in sorted(tool_strategy_ids.get(str(tool.uid), set()))
+        ]
+        setattr(tool, "strategy_refs", refs)
+        setattr(tool, "can_disable", not refs)
+        setattr(tool, "can_delete", not refs)
 
 
 class RecentToolUsageManager:
