@@ -5,11 +5,20 @@ from unittest import mock
 
 from bk_resource import resource
 
+from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission
 from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
-from services.web.risk.exceptions import AutoProcessParamsError, BulkSelectionOverLimit
+from services.web.risk.exceptions import (
+    AutoProcessParamsError,
+    BulkSelectionOverLimit,
+    RiskConfirmPermissionDenied,
+)
 from services.web.risk.models import ProcessApplication, Risk
-from services.web.risk.permissions import BatchRiskTicketPermission
+from services.web.risk.permissions import (
+    BatchRiskTicketPermission,
+    RiskConfirmPermission,
+    RiskTicketPermission,
+)
 from services.web.risk.resources.risk import (
     _build_batch_actions_preview,
     _load_bulk_selection,
@@ -563,6 +572,72 @@ class TestBatchPermissionNormalization(BaseTestCase):
             self.assertFalse(perm.has_permission(request, view))
 
 
+class TestRiskConfirmPermission(BaseTestCase):
+    """确认风险只允许确认人或平台管理员，不沿用处理人权限。"""
+
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            strategy_id=106,
+            strategy_name="确认权限策略",
+            strategy_type="model",
+            namespace=self.namespace,
+            status="running",
+        )
+
+    def _mk(self, idx, confirmer):
+        return Risk.objects.create(
+            risk_id=f"confirm_perm_{idx}",
+            strategy=self.strategy,
+            status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
+            scene_id=1,
+            event_time="2024-01-01T00:00:00Z",
+            raw_event_id=f"ce_{idx}",
+            current_operator=["processor"],
+            confirmer=confirmer,
+        )
+
+    def test_confirmer_passes_without_platform_admin(self):
+        risk = self._mk(1, ["confirmer"])
+        request = SimpleNamespace(user=SimpleNamespace(username="confirmer"), data={}, query_params={})
+        view = SimpleNamespace(kwargs={"pk": risk.risk_id})
+        perm = RiskConfirmPermission()
+        with mock.patch.object(IAMPermission, "has_permission", return_value=False) as iam:
+            self.assertTrue(perm.has_permission(request, view))
+            iam.assert_not_called()
+
+    def test_processor_is_not_enough(self):
+        risk = self._mk(2, ["confirmer"])
+        request = SimpleNamespace(user=SimpleNamespace(username="processor"), data={}, query_params={})
+        view = SimpleNamespace(kwargs={"pk": risk.risk_id})
+        perm = RiskConfirmPermission()
+        with mock.patch("services.web.risk.permissions.PermissionService.is_allowed", return_value=False):
+            with self.assertRaises(RiskConfirmPermissionDenied) as raised:
+                perm.has_permission(request, view)
+        self.assertEqual(str(raised.exception.message), "当前用户不是确认人或平台管理员")
+
+    def test_batch_requires_confirmer_on_every_risk(self):
+        owned = self._mk(3, ["confirmer"])
+        other = self._mk(4, ["someone_else"])
+        request = SimpleNamespace(user=SimpleNamespace(username="confirmer"), data={})
+        view = mock.MagicMock()
+        perm = RiskConfirmPermission(get_risk_ids=lambda: [owned.risk_id, other.risk_id])
+        with mock.patch("services.web.risk.permissions.PermissionService.is_allowed", return_value=False):
+            with self.assertRaises(RiskConfirmPermissionDenied):
+                perm.has_permission(request, view)
+
+    def test_batch_confirmer_of_all_passes(self):
+        first = self._mk(5, ["confirmer"])
+        second = self._mk(6, ["confirmer", "other"])
+        request = SimpleNamespace(user=SimpleNamespace(username="confirmer"), data={})
+        view = mock.MagicMock()
+        perm = RiskConfirmPermission(get_risk_ids=lambda: [first.risk_id, second.risk_id])
+        with mock.patch.object(IAMPermission, "has_permission", return_value=False) as iam:
+            self.assertTrue(perm.has_permission(request, view))
+            iam.assert_not_called()
+
+
 class TestBatchActionsPermissions(BaseTestCase):
     """预览接口的 action 名为 batch_actions/preview，权限分支必须与之对齐。"""
 
@@ -578,6 +653,31 @@ class TestBatchActionsPermissions(BaseTestCase):
         view = RisksViewSet()
         view.action = "batch_actions_preview"
         self.assertEqual(view.get_permissions(), [])
+
+    def test_confirm_actions_use_confirm_permission(self):
+        for action in ("confirm", "confirm_as_misreport"):
+            view = RisksViewSet()
+            view.action = action
+            perms = view.get_permissions()
+            self.assertEqual(len(perms), 1)
+            self.assertIsInstance(perms[0], RiskConfirmPermission)
+            self.assertEqual(perms[0].actions, [ActionEnum.MANAGE_PLATFORM])
+
+    def test_batch_confirm_actions_use_confirm_permission(self):
+        for action in ("batch_confirm", "batch_confirm_as_misreport"):
+            view = RisksViewSet()
+            view.action = action
+            perms = view.get_permissions()
+            self.assertEqual(len(perms), 1)
+            self.assertIsInstance(perms[0], RiskConfirmPermission)
+            self.assertEqual(perms[0].actions, [ActionEnum.MANAGE_PLATFORM])
+
+    def test_process_actions_stay_on_ticket_permission(self):
+        view = RisksViewSet()
+        view.action = "close"
+        self.assertIsInstance(view.get_permissions()[0], RiskTicketPermission)
+        view.action = "bulk_close"
+        self.assertIsInstance(view.get_permissions()[0], BatchRiskTicketPermission)
 
 
 class TestAutoProcessParamValidation(BaseTestCase):
