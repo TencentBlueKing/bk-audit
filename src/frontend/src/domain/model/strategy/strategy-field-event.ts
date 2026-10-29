@@ -38,6 +38,8 @@ type EventItem = {
       version: number;
     };
     drill_name: string;
+    tool_name?: string;
+    is_visible?: boolean;
     config: Array<{
       source_field: string;
       target_value_type: string;
