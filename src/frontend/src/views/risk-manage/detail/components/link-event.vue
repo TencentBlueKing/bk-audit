@@ -229,7 +229,7 @@
                               <div
                                 v-for="config in drillMap.get(basicItem.field_name).drill_config"
                                 :key="config.tool.uid">
-                                {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                                {{ config.drill_name || config.tool_name || getToolNameAndType(config.tool.uid).name }}
                                 <bk-button
                                   class="ml8"
                                   text
@@ -371,7 +371,7 @@
                               <div
                                 v-for="config in drillMap.get(key).drill_config"
                                 :key="config.tool.uid">
-                                {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                                {{ config.drill_name || config.tool_name || getToolNameAndType(config.tool.uid).name }}
                                 <bk-button
                                   class="ml8"
                                   text
@@ -513,6 +513,8 @@
         target_field_type: string;
       }>;
       drill_name?: string;
+      tool_name?: string;
+      is_visible?: boolean;
     }>;
     enum_mappings: {
       collection_id: string;
@@ -771,7 +773,7 @@
   const handleCopyDrillTitles = (fieldName: string) => {
     const drillItem = drillMap.value.get(fieldName);
     const titles = (drillItem?.drill_config || [])
-      .map((config: any) => config.drill_name || getToolNameAndType(config.tool.uid).name)
+      .map((config: any) => config.drill_name || config.tool_name || getToolNameAndType(config.tool.uid).name)
       .filter((name: string) => !!name);
     if (!titles.length) {
       return;
@@ -821,7 +823,6 @@
   };
 
   // 获取所有工具
-  const isAllToolsLoaded = ref(false);
   const {
     data: allToolsData,
     run: fetchAllTools,
@@ -831,14 +832,9 @@
       scope_type: 'scene',
       scope_id: props.data.scene_id,
     },
-    onSuccess: () => {
-      isAllToolsLoaded.value = true;
-    },
   });
 
   const { resolveAvailableDrillConfig } = useDrillToolAvailability({
-    sceneTools: allToolsData,
-    isSceneToolsLoaded: isAllToolsLoaded,
     getSceneId: () => props.data.scene_id,
   });
 
@@ -1249,7 +1245,6 @@
     if (!sceneId || sceneId === oldSceneId) {
       return;
     }
-    isAllToolsLoaded.value = false;
     fetchAllTools({
       scope_id: sceneId,
       scope_type: 'scene',

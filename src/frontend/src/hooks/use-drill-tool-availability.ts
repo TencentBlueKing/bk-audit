@@ -15,25 +15,23 @@
   to the current version of the project delivered to anyone in the future.
 */
 import { Button, InfoBox } from 'bkui-vue';
-import { h, type Ref } from 'vue';
+import { h } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import RootManageService from '@service/root-manage';
 import SceneManageService from '@service/scene-manage';
-import ToolManageService from '@service/tool-manage';
 
 interface DrillToolConfig {
   tool: {
     uid: string;
   };
   drill_name?: string;
+  tool_name?: string;
+  /** 工具是否对当前风险所属场景可见，由风险策略详情接口返回 */
+  is_visible?: boolean;
 }
 
 interface Options {
-  /** 当前风险所属场景可见的工具（场景工具 + 对该场景可见的全局工具） */
-  sceneTools: Ref<Array<{ uid: string }>>;
-  /** 场景可见工具是否已加载完成，未加载完成时不拦截 */
-  isSceneToolsLoaded: Ref<boolean>;
   getSceneId: () => number | string;
 }
 
@@ -44,12 +42,9 @@ interface Options {
 export default function useDrillToolAvailability(options: Options) {
   const { t } = useI18n();
 
-  const isToolAvailable = (uid: string) => options.sceneTools.value
-    .some(item => String(item.uid) === String(uid));
+  const isToolAvailable = (config: DrillToolConfig) => config.is_visible !== false;
 
-  const getToolName = (config: DrillToolConfig) => ToolManageService.fetchToolsDetail({ uid: config.tool.uid })
-    .then(detail => detail?.name || config.drill_name || config.tool.uid)
-    .catch(() => config.drill_name || config.tool.uid);
+  const getToolName = (config: DrillToolConfig) => config.tool_name || config.drill_name || config.tool.uid;
 
   const getSceneName = () => {
     const sceneId = String(options.getSceneId() ?? '');
@@ -59,8 +54,7 @@ export default function useDrillToolAvailability(options: Options) {
   };
 
   const showUnavailableTip = async (configs: DrillToolConfig[]) => {
-    const [toolNames, platformAdmins, sceneName] = await Promise.all([
-      Promise.all(configs.map(getToolName)),
+    const [platformAdmins, sceneName] = await Promise.all([
       RootManageService.config()
         .then(config => config.platform_admin_users || [])
         .catch(() => [] as string[]),
@@ -70,7 +64,7 @@ export default function useDrillToolAvailability(options: Options) {
       type: 'warning',
       title: t('暂时无法使用'),
       subTitle: t('全局工具{tools}未对当前场景「{scene}」开放，暂时无法使用。如需使用，请联系平台管理员「{admins}」将「{scene}」加入该工具的可见范围', {
-        tools: toolNames.map(name => `「${name}」`).join('、'),
+        tools: configs.map(config => `「${getToolName(config)}」`).join('、'),
         scene: sceneName,
         admins: platformAdmins.join(','),
       }),
@@ -89,17 +83,14 @@ export default function useDrillToolAvailability(options: Options) {
    * 指定打开的工具不可用或没有可用工具时，弹出提示并返回 null
    */
   const resolveAvailableDrillConfig = <T extends DrillToolConfig>(drillConfig: T[], activeUid?: string): T[] | null => {
-    if (!options.isSceneToolsLoaded.value) {
-      return drillConfig;
-    }
-    const unavailableConfigs = drillConfig.filter(config => !isToolAvailable(config.tool.uid));
+    const unavailableConfigs = drillConfig.filter(config => !isToolAvailable(config));
     if (!unavailableConfigs.length) {
       return drillConfig;
     }
     const activeConfig = activeUid
       ? unavailableConfigs.find(config => String(config.tool.uid) === String(activeUid))
       : undefined;
-    const availableConfigs = drillConfig.filter(config => isToolAvailable(config.tool.uid));
+    const availableConfigs = drillConfig.filter(isToolAvailable);
     if (activeConfig || !availableConfigs.length) {
       showUnavailableTip(activeConfig ? [activeConfig] : unavailableConfigs);
       return null;
