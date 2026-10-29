@@ -71,6 +71,7 @@ from services.web.strategy_v2.serializers import (
     EventFieldSerializer,
     merge_select_field_type,
 )
+from services.web.tool.constants import DrillConfig
 
 
 def get_strategy_scene_id(strategy_id: int | None) -> int | None:
@@ -1523,25 +1524,52 @@ class RetrieveRiskStrategyInfoAPIGWRequestSerializer(serializers.Serializer):
     lite_mode = serializers.BooleanField(required=False, default=True)
 
 
+class DrillConfigVisibilitySerializer(DrillConfig.drf_serializer):
+    """Web 口径下钻配置：在基础配置之上附加场景可见性与工具基础信息
+
+    这些字段需显式声明，否则 ResponseSerializer 二次序列化时会因缺少字段声明而被丢弃。
+    """
+
+    is_visible = serializers.BooleanField(required=False, allow_null=True, default=False, label=gettext_lazy("场景是否可见"))
+    tool_name = serializers.CharField(required=False, allow_null=True, label=gettext_lazy("工具名称"))
+    tool_type = serializers.CharField(required=False, allow_null=True, label=gettext_lazy("工具类型"))
+
+
+class EventFieldWithVisibilitySerializer(EventFieldSerializer):
+    """Web 口径事件字段：drill_config 条目携带可见性标注"""
+
+    drill_config = DrillConfigVisibilitySerializer(label=gettext_lazy("下钻配置"), many=True, default=list, allow_null=True)
+
+
 class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
+    # web 口径：保留策略配置的全部下钻工具并标注 is_visible/tool_name/tool_type；
+    # APIGW/MCP 口径置 False：剔除场景不可见工具的 drill 条目，不输出附加键
+    keep_invisible_drill_tools = True
+
     scene_id = serializers.SerializerMethodField()
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"))
     strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"))
     event_basic_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
+        label=gettext_lazy("Event Basic Field Configs"),
+        child=EventFieldWithVisibilitySerializer(),
+        required=False,
+        allow_empty=True,
     )
     event_data_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
+        label=gettext_lazy("Event Data Field Configs"),
+        child=EventFieldWithVisibilitySerializer(),
+        required=False,
+        allow_empty=True,
     )
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"),
-        child=EventFieldSerializer(),
+        child=EventFieldWithVisibilitySerializer(),
         required=False,
         allow_empty=True,
     )
     risk_meta_field_config = serializers.ListField(
         label=gettext_lazy("Risk Meta Field Config"),
-        child=EventFieldSerializer(),
+        child=EventFieldWithVisibilitySerializer(),
         required=False,
         allow_empty=True,
     )
@@ -1574,18 +1602,27 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
             # 兼容历史数据
             if config["field_name"] == EventMappingFields.RAW_EVENT_ID.field_name:
                 config["description"] = str(RAW_EVENT_ID_REMARK)
-        # 风险归属场景下不可见的下钻工具不展示
+        # 按风险归属场景标注/过滤下钻工具（展示态与执行鉴权同口径）：
+        # web 口径保留全部策略配置工具并标注 is_visible，APIGW/MCP 口径剔除不可见工具条目
         if "risk_scene_id" in self.context:
-            from services.web.scene.filters import filter_drill_tools_by_scene
+            from services.web.scene.filters import (
+                annotate_drill_tools_visibility_by_scene,
+                filter_drill_tools_by_scene,
+            )
 
             risk_scene_id = self.context.get("risk_scene_id")
+            process_drill_configs = (
+                annotate_drill_tools_visibility_by_scene
+                if self.keep_invisible_drill_tools
+                else filter_drill_tools_by_scene
+            )
             for field_key in (
                 "event_basic_field_configs",
                 "event_data_field_configs",
                 "event_evidence_field_configs",
                 "risk_meta_field_config",
             ):
-                data[field_key] = filter_drill_tools_by_scene(data.get(field_key) or [], risk_scene_id)
+                data[field_key] = process_drill_configs(data.get(field_key) or [], risk_scene_id)
         return data
 
 
@@ -1594,6 +1631,9 @@ class EventFieldAPIGWSerializer(EventFieldSerializer):
 
 
 class RetrieveRiskStrategyInfoAPIGWResponseSerializer(RetrieveRiskStrategyInfoResponseSerializer):
+    # APIGW/MCP 口径：剔除场景不可见工具的 drill 条目，不输出附加键
+    keep_invisible_drill_tools = False
+
     event_basic_field_configs = serializers.ListField(
         label=gettext_lazy("Event Basic Field Configs"),
         child=EventFieldAPIGWSerializer(),

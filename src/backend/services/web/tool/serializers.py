@@ -289,9 +289,19 @@ class SceneScopeToolPublishRequestSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, label=gettext_lazy("上架状态"))
 
 
+class ToolStrategyRefSerializer(serializers.Serializer):
+    """引用工具且会阻塞停用/删除的策略"""
+
+    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
+    strategy_name = serializers.CharField(label=gettext_lazy("策略名称"))
+
+
 class ToolListAllResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
+    strategy_refs = ToolStrategyRefSerializer(many=True, required=False, default=list, label=gettext_lazy("引用策略"))
+    can_disable = serializers.BooleanField(required=False, default=True, label=gettext_lazy("是否可停用"))
+    can_delete = serializers.BooleanField(required=False, default=True, label=gettext_lazy("是否可删除"))
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
     binding_type = serializers.ChoiceField(
         choices=BindingType.choices,
@@ -316,6 +326,9 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
             "status",
             "tags",
             "strategies",
+            "strategy_refs",
+            "can_disable",
+            "can_delete",
             "favorite",
             "binding_type",
         ]
@@ -358,6 +371,9 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
+    strategy_refs = ToolStrategyRefSerializer(many=True, required=False, default=list, label=gettext_lazy("引用策略"))
+    can_disable = serializers.BooleanField(required=False, default=True, label=gettext_lazy("是否可停用"))
+    can_delete = serializers.BooleanField(required=False, default=True, label=gettext_lazy("是否可删除"))
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
     visibility = ToolVisibilitySerializer(required=False, label=gettext_lazy("可见范围"))
     binding_type = serializers.ChoiceField(
@@ -385,6 +401,9 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "tags",
             "permission",
             "strategies",
+            "strategy_refs",
+            "can_disable",
+            "can_delete",
             "is_bkvision",
             "favorite",
             "status",
@@ -395,6 +414,9 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
 
 class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
+    strategy_refs = ToolStrategyRefSerializer(many=True, required=False, default=list, label=gettext_lazy("引用策略"))
+    can_disable = serializers.BooleanField(required=False, default=True, label=gettext_lazy("是否可停用"))
+    can_delete = serializers.BooleanField(required=False, default=True, label=gettext_lazy("是否可删除"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
     data_search_config_type = serializers.SerializerMethodField()
@@ -429,6 +451,9 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
             "updated_by",
             "updated_at",
             "strategies",
+            "strategy_refs",
+            "can_disable",
+            "can_delete",
             "config",
             "tags",
             "data_search_config_type",
