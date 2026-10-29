@@ -112,9 +112,16 @@ const parseUrlValueByFieldCategory = (
   urlValue: string,
   fieldCategory?: string,
 ): unknown => {
-  if (fieldCategory === 'person_select') {
+  if (fieldCategory === 'person_select' || fieldCategory === 'multiselect') {
     return urlValue.split(',').map(item => item.trim())
       .filter(Boolean);
+  }
+  // 后端对隐藏参数默认值做严格比较，数字参数需还原为 number，否则 "11" 与 11 不相等
+  if (fieldCategory === 'number_input') {
+    const trimmed = urlValue.trim();
+    if (trimmed === '') return urlValue;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : urlValue;
   }
   // time_range_select / time-ranger：URL 里通常是 `a,b` 两段表达式，需要解析成数组给日期选择器
   if (fieldCategory === 'time_range_select' || fieldCategory === 'time-ranger') {

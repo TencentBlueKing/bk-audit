@@ -65,6 +65,7 @@
         <!-- 新增工具按钮 -->
         <add-tool-popover
           v-if="toolList.length > 0"
+          :accessible-scene-ids="props.accessibleSceneIds"
           :scene-name-map="props.sceneNameMap"
           :scope-params="props.scopeParams"
           :system-name-map="props.systemNameMap"
@@ -250,6 +251,8 @@
     sceneNameMap?: Record<number, string>;
     // eslint-disable-next-line vue/no-unused-properties
     systemNameMap?: Record<string, string>;
+    // eslint-disable-next-line vue/no-unused-properties
+    accessibleSceneIds?: number[] | null;
   }
 
   const props = defineProps<Props>();
