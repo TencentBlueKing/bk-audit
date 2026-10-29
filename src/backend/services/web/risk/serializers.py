@@ -71,6 +71,7 @@ from services.web.strategy_v2.serializers import (
     EventFieldSerializer,
     merge_select_field_type,
 )
+from services.web.tool.constants import DrillConfig
 
 
 def get_strategy_scene_id(strategy_id: int | None) -> int | None:
@@ -1303,6 +1304,23 @@ class RetrieveRiskStrategyInfoAPIGWRequestSerializer(serializers.Serializer):
     lite_mode = serializers.BooleanField(required=False, default=True)
 
 
+class DrillConfigVisibilitySerializer(DrillConfig.drf_serializer):
+    """Web 口径下钻配置：在基础配置之上附加场景可见性与工具基础信息
+
+    这些字段需显式声明，否则 ResponseSerializer 二次序列化时会因缺少字段声明而被丢弃。
+    """
+
+    is_visible = serializers.BooleanField(required=False, allow_null=True, default=False, label=gettext_lazy("场景是否可见"))
+    tool_name = serializers.CharField(required=False, allow_null=True, label=gettext_lazy("工具名称"))
+    tool_type = serializers.CharField(required=False, allow_null=True, label=gettext_lazy("工具类型"))
+
+
+class EventFieldWithVisibilitySerializer(EventFieldSerializer):
+    """Web 口径事件字段：drill_config 条目携带可见性标注"""
+
+    drill_config = DrillConfigVisibilitySerializer(label=gettext_lazy("下钻配置"), many=True, default=list, allow_null=True)
+
+
 class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
     # web 口径：保留策略配置的全部下钻工具并标注 is_visible/tool_name/tool_type；
     # APIGW/MCP 口径置 False：剔除场景不可见工具的 drill 条目，不输出附加键
@@ -1312,20 +1330,26 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"))
     strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"))
     event_basic_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
+        label=gettext_lazy("Event Basic Field Configs"),
+        child=EventFieldWithVisibilitySerializer(),
+        required=False,
+        allow_empty=True,
     )
     event_data_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
+        label=gettext_lazy("Event Data Field Configs"),
+        child=EventFieldWithVisibilitySerializer(),
+        required=False,
+        allow_empty=True,
     )
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"),
-        child=EventFieldSerializer(),
+        child=EventFieldWithVisibilitySerializer(),
         required=False,
         allow_empty=True,
     )
     risk_meta_field_config = serializers.ListField(
         label=gettext_lazy("Risk Meta Field Config"),
-        child=EventFieldSerializer(),
+        child=EventFieldWithVisibilitySerializer(),
         required=False,
         allow_empty=True,
     )
