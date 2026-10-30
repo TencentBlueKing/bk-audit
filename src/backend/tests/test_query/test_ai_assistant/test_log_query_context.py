@@ -25,6 +25,7 @@ class TestLogQueryContextService(AIAssistantTestCase):
         super().setUp()
         systems = self.enterContext(mock.patch(f"{CONTEXT_MODULE}.System.objects.filter"))
         systems.return_value.exists.return_value = True
+        systems.return_value.values_list.return_value = [self.target_system_id]
 
     def _permission_exception(self):
         return PermissionException(action_name="view_system", permission={}, apply_url="")

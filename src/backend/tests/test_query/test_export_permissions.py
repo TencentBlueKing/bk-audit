@@ -12,8 +12,8 @@ from unittest.mock import patch
 from bk_resource.exceptions import ValidateException
 from django.test import TestCase
 
-from apps.meta.constants import ConfigLevelChoices
-from apps.meta.models import GlobalMetaConfig
+from apps.meta.constants import ConfigLevelChoices, SystemAuditStatusEnum
+from apps.meta.models import GlobalMetaConfig, System
 from services.web.common.scope_permission import ScopePermission
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
@@ -32,6 +32,18 @@ class TestLogExportPermissions(TestCase):
     """预检、保存的查询及后台分页均只能命中创建时授权的系统。"""
 
     def setUp(self):
+        System.objects.create(
+            namespace="example",
+            system_id="allowed-system",
+            instance_id="allowed-system",
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
+        System.objects.create(
+            namespace="example",
+            system_id="other-system",
+            instance_id="other-system",
+            audit_status=SystemAuditStatusEnum.PENDING,
+        )
         plugin = CollectorPlugin.objects.create(
             namespace="example",
             collector_plugin_id=991,
@@ -146,6 +158,37 @@ class TestLogExportPermissions(TestCase):
         )
         self.assertEqual(DataFetcher.fetch_patch_logs(task.query_params, 1, 10), [])
 
+    def test_search_and_export_exclude_authorized_pending_system(self):
+        self.policy.return_value = ["allowed-system", "other-system"]
+        searched = CollectorSearchResource().request(**deepcopy(self.params))
+        task = self._create()
+        self.assertEqual(searched["total"], 2)
+        self.assertEqual(task.total, 2)
+        self.assertEqual(task.query_params["conditions"], [self._system_condition("allowed-system")])
+        self.assertEqual(
+            [row["log"] for row in DataFetcher.fetch_patch_logs(task.query_params, 1, 10)],
+            ["allowed-one", "allowed-two"],
+        )
+
+    def test_pending_ai_target_is_denied_before_task_or_query(self):
+        self.policy.return_value = ["other-system"]
+        condition = SearchCondition(
+            scope_type="system",
+            scope_id="other-system",
+            start_time=self.params["start_time"],
+            end_time=self.params["end_time"],
+        )
+        with self.assertRaises(AIPermissionDeniedError):
+            FullExportService.create_task(
+                condition=condition,
+                namespace="example",
+                export_config={"field_scope": "all"},
+                task_name="synthetic-pending-export",
+                username="export-user",
+            )
+        self.assertEqual(self.queries, [])
+        self.assertEqual(LogExportTask.objects.count(), 0)
+
     def test_missing_scope_is_rejected_before_query_or_task_creation(self):
         self.params.pop("scope_type")
         self.params.pop("scope_id")
@@ -175,6 +218,7 @@ class TestLogExportPermissions(TestCase):
     def test_pagination_preserves_created_scope_without_adding_time_conditions_to_task(self):
         task = self._create()
         self.policy.return_value = ["other-system"]
+        System.objects.filter(system_id="allowed-system").update(audit_status=SystemAuditStatusEnum.PENDING)
         self.assertEqual([row["log"] for row in DataFetcher.fetch_patch_logs(task.query_params, 1, 1)], ["allowed-one"])
         self.assertEqual([row["log"] for row in DataFetcher.fetch_patch_logs(task.query_params, 2, 1)], ["allowed-two"])
         self.assertEqual(DataFetcher.fetch_patch_logs(task.query_params, 3, 1), [])
