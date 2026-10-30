@@ -1465,6 +1465,7 @@ export const buildStrategyCreatePayload = (
   }
 
   delete next.bksecEnabled;
+  delete next.bksecProjectId;
   delete next.bksecRiskTypeId;
   delete next.bksecRiskTypeName;
   delete next.bksecFieldValues;

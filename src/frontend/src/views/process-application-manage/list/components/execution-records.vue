@@ -25,13 +25,13 @@
       class="execution-records"
       data-testid="execution-records-panel">
       <bk-search-select
-        ref="searchRef"
         v-model="searchKey"
         class="execution-search"
         clearable
         :data="searchData"
         :defaut-using-item="{ inputHtml: t('请选择') }"
-        :placeholder="t('搜索 任务名称、任务ID、套餐名称（ID）、风险ID、状态、执行人')"
+        :get-menu-list="getMenuList"
+        :placeholder="t('搜索 任务ID、任务名称、套餐名称（ID）、风险ID、状态、执行人')"
         unique-select
         @update:model-value="search" />
       <tdesign-list
@@ -67,6 +67,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import ProcessApplicationManageService from '@service/process-application-manage';
 
   import type ExecutionDetailModel from '@model/application/execution-detail';
@@ -74,6 +75,7 @@
   import type ExecutionRecord from '@model/application/execution-record';
 
   import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
 
   import ExecutionDetail from './execution-detail.vue';
   import { openRiskDetail, openSopsTask } from './execution-links';
@@ -113,11 +115,7 @@
   const now = useNow(() => props.isShow);
   const listRef = ref();
   const panelRef = ref<HTMLElement | null>(null);
-  const searchRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null);
   const tableMaxHeight = ref(360);
-  let layoutObserver: ResizeObserver | undefined;
-  let layoutRetry = 0;
-  const watchedLayoutNodes = new WeakSet<Element>();
   const searchKey = ref<SearchKey[]>([]);
   const packageOptions = ref<Array<{ id: string | number; name: string }>>([]);
   const packageFilterList = computed(() => packageOptions.value.map(item => ({
@@ -175,17 +173,31 @@
     showRetry.value = true;
   };
 
-  const searchData = computed(() => [
-    { id: 'task_name', name: t('任务名称') },
+  interface SearchField {
+    id: string;
+    name: string;
+    placeholder?: string;
+    multiple?: boolean;
+    async?: boolean;
+    children?: Array<{ id: string; name: string }>;
+  }
+
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: Array<{ username: string; display_name: string }> },
+    manual: true,
+  });
+
+  const buildSearchData = (): SearchField[] => [
     { id: 'task_id', name: t('任务ID') },
+    { id: 'task_name', name: t('任务名称') },
     {
       id: 'application_name',
       name: t('套餐名称（ID）'),
       multiple: true,
-      children: packageOptions.value.map(item => ({
-        id: String(item.id),
-        name: `${item.name}(${item.id})`,
-      })),
+      children: [],
     },
     { id: 'risk_id', name: t('风险ID') },
     {
@@ -208,8 +220,46 @@
         { id: 'running', name: t('执行中') },
       ],
     },
-    { id: 'executor', name: t('执行人') },
-  ]);
+    {
+      id: 'executor',
+      name: t('执行人'),
+      placeholder: t('请输入执行人'),
+      async: true,
+      children: [],
+    },
+  ];
+  const searchData = ref<SearchField[]>(buildSearchData());
+
+  watch(packageOptions, (list) => {
+    const field = searchData.value.find(item => item.id === 'application_name');
+    if (!field) return;
+    field.children = list.map(item => ({
+      id: String(item.id),
+      name: `${item.name}(${item.id})`,
+    }));
+  }, { immediate: true });
+
+  const getMenuList = async (item: SearchField | undefined, keyword: string) => {
+    if (!item) return searchData.value;
+    const searchItem = searchData.value.find(entry => entry.id === item.id);
+    if (!searchItem) return [];
+    if (item.id === 'executor') {
+      if (keyword) {
+        const userList = await fetchUserList({
+          fuzzy_lookups: keyword,
+          page: 1,
+          page_size: 30,
+        });
+        searchItem.children = (userList?.results || []).map(user => ({
+          id: user.username,
+          name: `${user.username}(${user.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return searchItem.children || [];
+  };
 
   const fieldValue = (id: string) => {
     const item = searchKey.value.find(key => key.id === id);
@@ -374,10 +424,20 @@
 
   const columns = computed(() => [
     {
+      title: () => t('任务ID'),
+      colKey: 'task_id',
+      width: 100,
+      minWidth: 100,
+      ellipsis: true,
+      cell: (_h: unknown, { row }: { row: ExecutionRecord }) => (
+        <OverflowText text={row.task_id} tipKey={`id-${row.task_id}`} />
+      ),
+    },
+    {
       title: () => t('任务名称'),
       colKey: 'task_name',
-      width: 281,
-      minWidth: 281,
+      width: 200,
+      minWidth: 160,
       ellipsis: true,
       cell: (_h: unknown, { row }: { row: ExecutionRecord }) => (
         <span class="copy-cell is-follow">
@@ -432,15 +492,27 @@
       width: 183,
       minWidth: 183,
       ellipsis: true,
-      className: 'risk-id-cell',
       cell: (_h: unknown, { row }: { row: ExecutionRecord }) => (
         row.risk_id
-          ? <OverflowText
-              text={row.risk_id}
-              tipKey={`risk-${row.task_id}`}
-              textClass="task-link cell-ellipsis"
-              link
-              onPick={() => openRiskDetail(router, row.risk_id, props.sceneId)} />
+          ? (
+            <span class="copy-cell is-follow">
+              <OverflowText
+                text={row.risk_id}
+                tipKey={`risk-${row.task_id}`}
+                textClass="cell-ellipsis copy-text" />
+              <button
+                class="jump-btn"
+                data-testid="execution-risk-jump"
+                type="button"
+                v-bk-tooltips={{ content: t('打开风险详情'), delay: 80 }}
+                onClick={(event: Event) => {
+                  event.stopPropagation();
+                  openRiskDetail(router, row.risk_id, props.sceneId);
+                }}>
+                <audit-icon type="jump-link" />
+              </button>
+            </span>
+          )
           : '--'
       ),
     },
@@ -582,52 +654,28 @@
     searchKey.value = [];
   };
 
-  const syncTableMaxHeight = () => {
-    const panel = panelRef.value;
-    if (!panel) return;
-    const searchTarget = searchRef.value;
-    const searchEl = (searchTarget instanceof HTMLElement ? searchTarget : searchTarget?.$el)
-      || panel.querySelector('.execution-search');
-    if (!searchEl) return;
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.width < 1 || panelRect.height < 1) return;
-    const tableRoot = panel.querySelector('.execution-table');
-    if (tableRoot && layoutObserver && !watchedLayoutNodes.has(tableRoot)) {
-      watchedLayoutNodes.add(tableRoot);
-      layoutObserver.observe(tableRoot);
-    }
-    const tableEl = panel.querySelector('.t-table__content');
-    const tableTop = tableEl?.getBoundingClientRect().top ?? 0;
-    if (!tableEl || tableTop < panelRect.top) {
-      if (layoutRetry < 40) {
-        layoutRetry += 1;
-        window.setTimeout(syncTableMaxHeight, 50);
-      }
-      return;
-    }
-    layoutRetry = 0;
-    const paddingBottom = Number.parseFloat(getComputedStyle(panel).paddingBottom) || 0;
-    const paginationEl = panel.querySelector('.tdesign-list-pagination');
-    const paginationHeight = paginationEl?.getBoundingClientRect().height || 56;
-    const paginationMargin = paginationEl
-      ? (Number.parseFloat(getComputedStyle(paginationEl).marginTop) || 0)
-      : 16;
-    const available = panelRect.bottom - tableTop - paginationHeight - paginationMargin - paddingBottom;
-    if (available > 0 && Math.abs(available - tableMaxHeight.value) > 1) {
-      tableMaxHeight.value = Math.floor(available);
-    }
-    panel.style.setProperty('--execution-table-height', `${tableMaxHeight.value}px`);
-  };
+  // 侧滑头部 52，面板上下 padding 24，搜索 32，搜索与表格间距 16，分页含上边距 72
+  const SIDESLIDER_HEADER = 52;
+  const PANEL_PADDING = 24;
+  const SEARCH_HEIGHT = 32;
+  const SEARCH_GAP = 16;
+  const PAGINATION_BLOCK = 72;
 
-  const watchPanelLayout = () => {
-    layoutObserver?.disconnect();
-    layoutObserver = undefined;
-    const panel = panelRef.value;
-    if (!panel) return;
-    layoutObserver = new ResizeObserver(() => syncTableMaxHeight());
-    layoutObserver.observe(panel);
-    const table = panel.querySelector('.execution-table');
-    if (table) layoutObserver.observe(table);
+  const calcTableMaxHeight = () => Math.max(
+    160,
+    window.innerHeight
+      - SIDESLIDER_HEADER
+      - PANEL_PADDING * 2
+      - SEARCH_HEIGHT
+      - SEARCH_GAP
+      - PAGINATION_BLOCK,
+  );
+
+  const syncTableMaxHeight = () => {
+    if (!props.isShow) return;
+    const height = calcTableMaxHeight();
+    tableMaxHeight.value = height;
+    panelRef.value?.style.setProperty('--execution-table-height', `${height}px`);
   };
 
   const loadPackageOptions = () => {
@@ -659,34 +707,23 @@
     if (!visible) return;
     loadPackageOptions();
     applyEntryFilter();
-    nextTick(() => {
-      watchPanelLayout();
-      syncTableMaxHeight();
-      listRef.value?.fetchData({ page: 1 }, { resetSearch: true });
-    });
-  });
-
-  watch(panelRef, () => {
-    watchPanelLayout();
     syncTableMaxHeight();
-  });
+  }, { immediate: true });
 
   onMounted(() => {
     window.addEventListener('resize', syncTableMaxHeight);
   });
 
   onBeforeUnmount(() => {
-    layoutObserver?.disconnect();
     window.removeEventListener('resize', syncTableMaxHeight);
   });
 </script>
 <style lang="postcss" scoped>
 .execution-records {
   display: flex;
-  flex: none;
+  flex: 1;
   flex-direction: column;
   height: calc(100vh - 52px);
-  max-height: calc(100vh - 52px);
   min-height: 0;
   padding: var(--audit-space-24);
   overflow: hidden;
@@ -809,14 +846,6 @@
 
 :deep(.copy-cell.is-follow .copy-text) {
   flex: 0 1 auto;
-}
-
-:deep(.risk-id-cell .task-link) {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 :deep(.duration-cell) {

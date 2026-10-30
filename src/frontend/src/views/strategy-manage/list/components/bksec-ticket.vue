@@ -25,31 +25,60 @@
       {{ t('当前策略未启用BKSEC安全工单') }}
     </bk-exception>
     <template v-else>
-      <div class="bksec-detail-list">
-        <div class="bksec-detail-row">
-          <span class="bksec-detail-label">
-            <span
-              v-bk-tooltips="labelTip('risk-type', t('风险类型'))"
-              class="bksec-detail-label-text"
-              @mouseenter="syncLabelOverflow($event, 'risk-type')">{{ t('风险类型') }}：</span>
-          </span>
-          <span class="bksec-detail-value is-type">
-            <span class="bksec-detail-value-text">{{ riskTypeLabel }}</span>
-          </span>
+      <div class="bksec-detail-section">
+        <div class="bksec-detail-title">
+          {{ t('基本信息') }}
         </div>
-        <div
-          v-for="field in fields"
-          :key="field.id"
-          class="bksec-detail-row">
-          <span class="bksec-detail-label">
-            <span
-              v-bk-tooltips="labelTip(field.id, fieldName(field))"
-              class="bksec-detail-label-text"
-              @mouseenter="syncLabelOverflow($event, field.id)">{{ fieldName(field) }}：</span>
-          </span>
-          <span class="bksec-detail-value">
-            <span class="bksec-detail-value-text">{{ displayValue(field.id) }}</span>
-          </span>
+        <div class="bksec-detail-list">
+          <div class="bksec-detail-row is-status">
+            <span class="bksec-detail-label">
+              <span
+                v-bk-tooltips="labelTip('status', t('风险状态'))"
+                class="bksec-detail-label-text"
+                @mouseenter="syncLabelOverflow($event, 'status')">{{ t('风险状态') }}：</span>
+            </span>
+            <span class="bksec-detail-value">
+              <bk-tag
+                class="bksec-status-tag"
+                size="small"
+                theme="success">
+                {{ t('已启用') }}
+              </bk-tag>
+            </span>
+          </div>
+          <div class="bksec-detail-row">
+            <span class="bksec-detail-label">
+              <span
+                v-bk-tooltips="labelTip('risk-type', t('风险类型'))"
+                class="bksec-detail-label-text"
+                @mouseenter="syncLabelOverflow($event, 'risk-type')">{{ t('风险类型') }}：</span>
+            </span>
+            <span class="bksec-detail-value is-type">
+              <span class="bksec-detail-value-text">{{ riskTypeLabel }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="bksec-detail-divider" />
+      <div class="bksec-detail-section">
+        <div class="bksec-detail-title">
+          {{ t('工单信息') }}
+        </div>
+        <div class="bksec-detail-list">
+          <div
+            v-for="field in fields"
+            :key="field.id"
+            class="bksec-detail-row">
+            <span class="bksec-detail-label">
+              <span
+                v-bk-tooltips="labelTip(field.id, fieldName(field))"
+                class="bksec-detail-label-text"
+                @mouseenter="syncLabelOverflow($event, field.id)">{{ fieldName(field) }}：</span>
+            </span>
+            <span class="bksec-detail-value">
+              <span class="bksec-detail-value-text">{{ displayValue(field.id) }}</span>
+            </span>
+          </div>
         </div>
       </div>
     </template>
@@ -84,10 +113,11 @@
 
   const fieldName = (field: BksecRiskTypeField) => field.name || field.id;
 
-  const displayValue = (fieldId: string) => {
-    const value = fieldValues.value[fieldId];
-    return value === undefined || value === null || value === '' ? '--' : value;
-  };
+  const displayText = (value: unknown) => (
+    value === undefined || value === null || value === '' ? '--' : String(value)
+  );
+
+  const displayValue = (fieldId: string) => displayText(fieldValues.value[fieldId]);
 
   const labelOverflowed = reactive<Record<string, boolean>>({});
   const syncLabelOverflow = (event: MouseEvent, key: string) => {
@@ -134,6 +164,19 @@
   margin-top: var(--audit-space-24);
 }
 
+.bksec-detail-title {
+  margin-bottom: var(--audit-space-12);
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-bold);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-01);
+}
+
+.bksec-detail-divider {
+  margin: var(--audit-space-24) 0;
+  border-top: 1px solid var(--audit-neutral-border-01);
+}
+
 .bksec-detail-list {
   display: flex;
   flex-direction: column;
@@ -146,6 +189,7 @@
   display: flex;
   align-items: flex-start;
   box-sizing: border-box;
+  min-width: 0;
   min-height: 32px;
   padding: 6px 0;
   gap: var(--audit-space-8);
@@ -163,14 +207,15 @@
   align-items: flex-start;
   justify-content: flex-end;
   width: 124px;
-  min-width: 124px;
+  min-width: 0;
   max-width: 124px;
   overflow: hidden;
 }
 
 .bksec-detail-label-text {
   display: block;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   font-size: var(--audit-font-size-sm);
   line-height: 20px;
@@ -203,5 +248,20 @@
 
 .bksec-detail-value.is-type {
   color: var(--audit-neutral-text-02);
+}
+
+.bksec-detail-row.is-status {
+  align-items: center;
+}
+
+.bksec-detail-row.is-status .bksec-detail-label,
+.bksec-detail-row.is-status .bksec-detail-value {
+  align-items: center;
+}
+
+.bksec-detail-row.is-status :deep(.bksec-status-tag.bk-tag) {
+  display: inline-flex;
+  margin: 0;
+  vertical-align: middle;
 }
 </style>

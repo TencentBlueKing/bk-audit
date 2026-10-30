@@ -120,6 +120,7 @@ export default class Strategy {
   visibility?: Record<string, any>;
   scene_id?: string | number;
   bksecEnabled: boolean;
+  bksecProjectId: string | null;
   bksecRiskTypeId: string | null;
   bksecRiskTypeName: string;
   bksecFieldValues: Record<string, string>;
@@ -171,6 +172,7 @@ export default class Strategy {
     this.scene_id = payload.scene_id;
     const bksec = readBksecFormState(payload as Record<string, any>);
     this.bksecEnabled = bksec.bksecEnabled;
+    this.bksecProjectId = bksec.bksecProjectId;
     this.bksecRiskTypeId = bksec.bksecRiskTypeId;
     this.bksecRiskTypeName = bksec.bksecRiskTypeName;
     this.bksecFieldValues = bksec.bksecFieldValues;

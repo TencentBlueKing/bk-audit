@@ -506,6 +506,7 @@
     tempVisibleColumnKeys.value = keys;
   };
   const isUnload = ref(true);
+  const pageSizeLocked = ref(false);
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
   const slot = useSlots();
@@ -1396,6 +1397,7 @@
 
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
+    pageSizeLocked.value = true;
     if (props.enableCrossPageSelect) {
       preservePageSelectionForPageSizeChange();
       isPageLimitChanging = true;
@@ -1493,6 +1495,11 @@
     calcTableHeight();
   });
 
+  watch(isLoading, (loading, wasLoading) => {
+    if (loading || !wasLoading || typeof props.tableMaxHeight !== 'number') return;
+    nextTick(() => calcTableHeight());
+  });
+
   // 销毁组件时去除监听，防止多次绑定触发
   onBeforeUnmount(() => {
     saveTableFilterState();
@@ -1522,7 +1529,32 @@
     } else {
       return 0;
     }
+    if (typeof height === 'number') {
+      const root = rootRef.value as HTMLElement | undefined;
+      const header = root?.querySelector('.t-table thead tr') as HTMLElement | null;
+      const row = root?.querySelector('.t-table tbody tr:not(.t-table__empty-row)') as HTMLElement | null;
+      const headerHeight = header ? Math.round(header.getBoundingClientRect().height) : 42;
+      const rawRow = row ? row.getBoundingClientRect().height : 0;
+      const rowHeight = rawRow >= 24 && rawRow <= 64 ? Math.round(rawRow) : 42;
+      return Math.max(1, Math.floor((pixelHeight - (headerHeight > 0 ? headerHeight : 42)) / rowHeight));
+    }
     return Math.max(0, Math.floor((pixelHeight - TABLE_HEADER_HEIGHT - TABLE_PADDING) / TABLE_ROW_HEIGHT) - 1);
+  };
+
+  const applyAutoPageSize = (rowNum: number) => {
+    if (rowNum < 1 || pageSizeLocked.value) return;
+    if (!pagination.limitList.includes(rowNum)) {
+      pagination.limitList = [...pagination.limitList, rowNum].sort((a, b) => a - b);
+    }
+    if (pagination.limit === rowNum) return;
+    const shouldFetch = !isUnload.value;
+    pagination.limit = rowNum;
+    if (!shouldFetch) return;
+    pagination.current = 1;
+    isLoading.value = true;
+    nextTick(() => {
+      fetchListData();
+    });
   };
 
   // 计算表格尺寸信息
@@ -1574,8 +1606,9 @@
           rowNum,
         ]);
         pagination.limitList = Array.from(pageLimit).sort((a, b) => a - b);
-        // 首次加载时，自动将每页条数设置为根据表格高度计算出的行数
-        if (isUnload.value) {
+        if (typeof props.tableMaxHeight === 'number') {
+          applyAutoPageSize(rowNum);
+        } else if (isUnload.value) {
           pagination.limit = rowNum;
         }
       }
