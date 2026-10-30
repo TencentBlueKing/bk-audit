@@ -43,21 +43,32 @@
         <bk-alert
           class="misreport-alert"
           theme="warning"
-          :title="t('标记误报后，风险单会自动关闭，请谨慎确认是否为误报？')" />
+          :title="misreportAlertTitle" />
         <bk-form-item
           class="is-required"
           :label="t('误报说明')"
-          property="description"
+          property="misreport_description"
           required>
           <rich-editor
             ref="misreportRichEditor"
-            v-model:content="formData.description"
+            v-model:content="formData.misreport_description"
             class="await-deal-rich-editor"
-            :default="formData.description"
+            :default="formData.misreport_description"
             fullscreen-scope="parent"
             :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
+        <bk-checkbox
+          v-model="withWhitelist"
+          class="whitelist-together">
+          {{ t(roleText.text.value.together) }}
+        </bk-checkbox>
+        <risk-whitelist-form
+          v-if="withWhitelist"
+          ref="whitelistFormRef"
+          embedded
+          :initial-scope="initialScope"
+          show-apply-hint />
       </template>
       <bk-form-item
         class="submit-actions-form-item"
@@ -79,6 +90,7 @@
         </bk-button>
       </bk-form-item>
     </audit-form>
+    <whitelist-confirm-dialog ref="confirmRef" />
   </div>
 </template>
 
@@ -92,16 +104,22 @@
     type Ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { onBeforeRouteLeave } from 'vue-router';
+  import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
+  import RiskWhitelistService from '@service/risk-whitelist';
 
   import type RiskManageModel from '@model/risk/risk';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
 
   import RichEditor from '@components/editor/index.vue';
+  import RiskWhitelistForm from '@components/risk-whitelist-form/index.vue';
+  import WhitelistConfirmDialog from '@components/whitelist-confirm-dialog/index.vue';
+
+  import { buildScopeFromRisk } from '@views/risk-manage/whitelist';
 
   interface Props {
     riskId: string | number,
@@ -125,13 +143,27 @@
   const dockCollapse = inject<(() => void) | null>('dockCollapse', null);
   const isDockEditorBoosted = computed(() => dockBoostState?.isEditorBoosted.value ?? false);
   const { t } = useI18n();
-  const { messageSuccess } = useMessage();
+  const route = useRoute();
+  const { messageSuccess, messageError } = useMessage();
+  const roleText = useWhitelistRoleText();
 
   const formRef = ref();
+  const whitelistFormRef = ref<InstanceType<typeof RiskWhitelistForm>>();
+  const confirmRef = ref<InstanceType<typeof WhitelistConfirmDialog>>();
+  const withWhitelist = ref(false);
+  const initialScope = computed(() => buildScopeFromRisk({
+    strategy_id: props.detailData.strategy_id,
+    strategy_name: (props.detailData as RiskManageModel & { strategy_name?: string }).strategy_name,
+    raw_event_id: props.detailData.raw_event_id,
+  }));
   const formData = ref({
-    confirm_result: 'confirm',
+    confirm_result: route.query.handleMethod === 'misreport' ? 'misreport' : 'confirm',
     description: '',
+    misreport_description: '',
   });
+  const misreportAlertTitle = computed(() => (
+    `${t('标记误报后，风险单将自动关闭。若需避免后续同类风险再次命中，')}${t(roleText.text.value.misreportAlertTail)}`
+  ));
 
   const isRichTextNotEmpty = (html: string) => {
     if (!html) return false;
@@ -146,12 +178,12 @@
       message: t('请选择确认结果'),
     }],
     description: [{
-      validator: (value: string) => {
-        if (formData.value.confirm_result !== 'misreport') {
-          return true;
-        }
-        return isRichTextNotEmpty(value);
-      },
+      validator: () => true,
+      trigger: 'change',
+      message: '',
+    }],
+    misreport_description: [{
+      validator: (value: string) => isRichTextNotEmpty(value),
       trigger: 'change',
       message: t('说明不能为空'),
     }],
@@ -181,9 +213,27 @@
     },
   });
 
-  const isSubmitting = computed(() => confirmLoading.value || misreportLoading.value);
+  const {
+    run: applyWhitelist,
+    loading: applyLoading,
+  } = useRequest(RiskWhitelistService.applyFromRisk, {
+    defaultValue: null,
+    onSuccess: () => {
+      window.changeConfirm = false;
+      messageSuccess(t(roleText.text.value.misreportSuccess));
+      emits('update');
+    },
+  });
 
-  const hasSubstantialInput = () => isRichTextNotEmpty(formData.value.description);
+  const isSubmitting = computed(() => confirmLoading.value || misreportLoading.value || applyLoading.value);
+
+  const hasSubstantialInput = () => {
+    if (formData.value.confirm_result === 'misreport') {
+      return isRichTextNotEmpty(formData.value.misreport_description || '')
+        || (withWhitelist.value && (whitelistFormRef.value?.isDirty() ?? false));
+    }
+    return isRichTextNotEmpty(formData.value.description);
+  };
 
   const clearLeaveConfirmIfEmpty = () => {
     if (!hasSubstantialInput()) {
@@ -199,15 +249,40 @@
     formData.value = {
       confirm_result: 'confirm',
       description: '',
+      misreport_description: '',
     };
+    withWhitelist.value = false;
   };
 
   const handleSubmit = async () => {
     await formRef.value?.validate?.();
     if (formData.value.confirm_result === 'misreport') {
+      if (withWhitelist.value) {
+        if (!whitelistFormRef.value?.validate()) {
+          messageError(t('请完整填写加白信息'));
+          return;
+        }
+        const payload = whitelistFormRef.value.getPayload();
+        const confirmed = await confirmRef.value?.open({
+          scope: payload.match_scope,
+          whitelistType: payload.whitelist_type,
+          validityMode: payload.validity_mode,
+          customDays: payload.custom_days,
+          source: 'risk',
+        });
+        if (!confirmed) return;
+        await applyWhitelist({
+          risk_id: props.riskId,
+          ...payload,
+          with_misreport: true,
+          misreport_description: formData.value.misreport_description || '',
+          source: 'confirm',
+        });
+        return;
+      }
       await submitConfirmAsMisreport({
         risk_id: props.riskId,
-        description: formData.value.description,
+        description: formData.value.misreport_description || '',
       });
       return;
     }
@@ -291,6 +366,12 @@
   margin-bottom: 0 !important;
 }
 
+.whitelist-together {
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+.whitelist-apply-hint,
 .misreport-alert {
   margin-bottom: 16px;
 }

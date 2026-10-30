@@ -70,7 +70,7 @@ export default {
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskStatusCommon,
-    filterList: ['new'],
+    filterList: ['new', 'whitelist_approving'],
   },
   current_operator: {
     label: '当前处理人',

@@ -19,7 +19,7 @@
     v-bind="filteredAttrs"
     :before-close="resolvedBeforeClose"
     :is-show="isShow"
-    :title="t($attrs.title as string)"
+    :title="sliderTitle"
     @update:is-show="handleUpdateShow">
     <template
       v-if="showHeaderSlot"
@@ -117,6 +117,11 @@
 
   const getModelProvier = useModelProvider();
   const $attrs = useAttrs();
+  const sliderTitle = computed(() => {
+    const title = $attrs.title;
+    if (typeof title !== 'string' || !title) return '';
+    return t(title);
+  });
 
   const beforeCloseCallback = () => changeConfirm();
   const resolvedBeforeClose = () => {

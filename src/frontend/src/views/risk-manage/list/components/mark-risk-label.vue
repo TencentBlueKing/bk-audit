@@ -30,6 +30,32 @@
       {{ isMisreport ? t('解除误报') : t('标记误报') }}
     </bk-button>
   </div>
+  <div v-else-if="useHandleForm">
+    <bk-button
+      v-if="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
+      style="font-size: 12px;"
+      text
+      theme="primary"
+      @click="openHandle">
+      <audit-icon
+        style="margin-right: 6px;"
+        type="biaojiwubao" />
+      {{ t('标记误报') }}
+    </bk-button>
+    <auth-button
+      v-else
+      action-id="process_risk"
+      :permission="false"
+      :resource="data.risk_id"
+      style="font-size: 12px;"
+      text
+      theme="primary">
+      <audit-icon
+        style="margin-right: 6px;"
+        type="biaojiwubao" />
+      {{ t('标记误报') }}
+    </auth-button>
+  </div>
   <audit-popconfirm
     v-else
     ref="popRef"
@@ -124,6 +150,7 @@
   import {
     useI18n,
   } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
 
@@ -142,13 +169,16 @@
     data: RiskManageModel,
     disabled?: boolean,
     disabledTip?: string,
+    detailRouteName?: string,
   }
   const props = withDefaults(defineProps<Props>(), {
     disabled: false,
     disabledTip: '',
+    detailRouteName: '',
   });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const router = useRouter();
   const { messageSuccess } = useMessage();
   const isForce = ref(true);
   const rules = {
@@ -178,6 +208,24 @@
       ? t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
       : t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。');
   });
+  // 处理表单存在的状态走详情页；其余状态保留原弹窗，避免跳过去无处可标
+  const useHandleForm = computed(() => (
+    !props.disabled
+    && !isMisreport.value
+    && ['await_deal', 'processing', 'closed'].includes(props.data.status)
+  ));
+  const openHandle = () => {
+    router.push({
+      name: props.detailRouteName,
+      params: {
+        riskId: props.data.risk_id,
+      },
+      query: {
+        tab: 'handleRisk',
+        handleMethod: 'misreport',
+      },
+    });
+  };
   // 标记误报的tip
   const markMisreportTipMap = {
     closed: t('策略方案可能采集误报数据作为优化依据，请谨慎确认是否为误报？'),

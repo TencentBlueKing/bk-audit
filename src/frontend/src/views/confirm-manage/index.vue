@@ -144,6 +144,7 @@
           {t('确认')}
         </auth-button>
         <MarkRiskLabel
+          detailRouteName="confirmManageDetail"
           onUpdate={() => fetchList()}
           userInfo={userInfo.value}
           data={row} />

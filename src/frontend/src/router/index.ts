@@ -40,6 +40,7 @@ import PlatformManage from '@views/platform-manage/routes'; // 平台管理
 import ApplicationManage from '@views/process-application-manage/routes'; // 处理套餐
 import ProcessedManage from '@views/processed-manage/routes'; // 处理历史
 import RiskManage from '@views/risk-manage/routes'; // 所有风险
+import RiskWhitelist from '@views/risk-whitelist/routes'; // 风险白名单
 import RuleManage from '@views/rule-manage/routes'; // 处理规则
 import SceneResources from '@views/scene-config/routes'; // 场景配置
 import SceneRiskManage from '@views/scene-risk-manage/routes'; // 场景风险
@@ -73,12 +74,12 @@ interface AccessRule {
 /** 角色 -> 访问限制规则表（按优先级排列） */
 const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
   risk_handler: [
-    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'landingPage', excludeName: 'landingPage' },
+    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group', '/risk-whitelist'], redirect: 'landingPage', excludeName: 'landingPage' },
     { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
     { paths: ['/analysis-manage', '/statement-manage', '/tools', '/platform'], redirect: '404' },
   ],
   scene_user: [
-    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
+    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group', '/risk-whitelist'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
     { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
     { paths: ['/platform'], redirect: '404' },
   ],
@@ -87,7 +88,7 @@ const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
     { paths: ['/platform'], redirect: '404' },
   ],
   system_admin: [
-    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
+    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group', '/risk-whitelist'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
     { paths: ['/statement-manage', '/tools', '/platform'], redirect: '404' },
   ],
 };
@@ -235,6 +236,7 @@ export default (config: ConfigModel) => {
         LinkDataManage,
         EventManage,
         NoticeGroup,
+        RiskWhitelist,
         RiskManage,
         ProcessedManage,
         HandleManage,

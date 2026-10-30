@@ -30,6 +30,8 @@
     :event-fields="visibleEventFields"
     :risk-fields="riskFields"
     :risk-ids="riskIds"
+    :strategy-id="availability.strategyId"
+    :strategy-unique="availability.strategyUnique"
     @success="handleSuccess" />
 </template>
 

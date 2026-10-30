@@ -86,6 +86,7 @@
     computed,
     nextTick,
     onMounted,
+    provide,
     ref,
     watch,
     withDefaults,
@@ -93,6 +94,7 @@
   import {
     useI18n,
   } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import AccountManageService from '@service/account-manage';
   import ItsmManageService from '@service/itsm-manage';
@@ -109,7 +111,10 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
+  import { isWhitelistApproving } from '@views/risk-manage/whitelist';
+
   import AwaitDeal from './components/await-deal.vue';
+  import WhitelistApply from './components/whitelist-apply.vue';
   import MarkMisreportBtn from './components/button/mark-misreport.vue';
   import ReopenBtn from './components/button/re-open.vue';
   import RiskContentBtn from './components/button/risk-content.vue';
@@ -160,7 +165,12 @@
   ));
 
   const { getSearchParams, removeSearchParam } = useUrlSearch();
+  const route = useRoute();
   const { t } = useI18n();
+  const requestedMethod = ref(String(route.query.handleMethod || ''));
+  provide('openHandleMethod', (method: string) => {
+    requestedMethod.value = `${method}:${Date.now()}`;
+  });
   const ticketHistory = ref([] as Record<string, any>[]);
 
   const rootRef = ref();
@@ -182,6 +192,10 @@
     MisReport: {
       name: t('标记误报'),
       icon: 'biaojiwubao',
+    },
+    WhitelistApply: {
+      name: t('加入白名单'),
+      icon: 'user',
     },
     ReOpenMisReport: {
       name: t('解除误报'),
@@ -251,6 +265,7 @@
     ConfirmAsMisReport: MisReport,
     TransOperator: CustomProcess,
     await_deal: AwaitDeal,
+    WhitelistApply,
     RiskExperience,
   };
   const processPackageIdToDetailMap = ref<Record<string, any>>({});
@@ -369,6 +384,11 @@
         showEditBtn: isOwnRiskExperience(item),
       };
     }
+    if (item?.action === 'await_deal') {
+      return {
+        requestedMethod: requestedMethod.value,
+      };
+    }
     return {};
   };
 
@@ -485,7 +505,18 @@
         }
       });
       // await_deal和processing的情况多渲染一个表单
-      if (data.status === 'await_deal' || data.status === 'processing') {
+      const latestWhitelist = [...data.ticket_history].reverse()
+        .find(item => item.action === 'WhitelistApply');
+      const whitelistStatus = latestWhitelist?.whitelist?.apply_status
+        || latestWhitelist?.whitelist?.status
+        || '';
+      const whitelistRejected = ['rejected', '已驳回'].includes(String(whitelistStatus));
+      if (!route.query.handleMethod && whitelistRejected && data.status === 'await_deal') {
+        requestedMethod.value = 'whitelist';
+      }
+      const showHandleForm = ['await_deal', 'processing'].includes(data.status)
+        || (data.status === 'closed' && data.risk_label === 'normal');
+      if (showHandleForm && !isWhitelistApproving(data.status)) {
         const item = Object.assign({}, data.ticket_history[data.ticket_history.length - 1]);
         item.action = 'await_deal'; // 使用await_deal组件来处理两种状态
         list.value.push({

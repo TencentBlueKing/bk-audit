@@ -101,10 +101,12 @@
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
       {
-        ['for_approve', 'auto_process'].includes(row.status)
+        ['for_approve', 'auto_process', 'whitelist_approving'].includes(row.status)
           ? (
             <bk-button
-              v-bk-tooltips={t('当前状态不支持人工处理')}
+              v-bk-tooltips={row.status === 'whitelist_approving'
+                ? t('加白审批中，无法同时手工处理')
+                : t('当前状态不支持人工处理')}
               text
               theme='primary'
               class='mr16 is-disabled'>
@@ -124,11 +126,25 @@
             </auth-button>
           )
       }
-      <MarkRiskLabel
-        onUpdate={() => fetchList()}
-        userInfo={userInfo.value}
-        data={row}
-        disabled={row.status === 'auto_process'} />
+      {
+        row.status === 'auto_process' || row.status === 'whitelist_approving'
+          ? <bk-button text theme='primary'
+            class="is-disabled"
+            v-bk-tooltips={{
+              content: row.status === 'whitelist_approving'
+                ? t('加白审批中，无法同时手工处理')
+                : row.risk_label === 'normal'
+                  ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+                  : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
+            }}>
+            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
+          </bk-button>
+          : <MarkRiskLabel
+            detailRouteName="processedManageDetail"
+            onUpdate={() => fetchList()}
+            userInfo={userInfo.value}
+            data={row} />
+      }
       <bk-dropdown
         style="margin-left: 8px">
         {{

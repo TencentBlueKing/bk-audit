@@ -27,6 +27,8 @@ import newSystemManageEn from '@views/new-system-manage/language/en.js';
 import newSystemManageZh from '@views/new-system-manage/language/zh.js';
 import noticeEn from '@views/notice-group/language/en.js';
 import noticeZh from '@views/notice-group/language/zh.js';
+import riskWhitelistEn from '@views/risk-whitelist/language/en.js';
+import riskWhitelistZh from '@views/risk-whitelist/language/zh.js';
 import platformEn from '@views/platform-manage/language/en.js';
 import platformZh from '@views/platform-manage/language/zh.js';
 import applicationEn from '@views/process-application-manage/language/en.js';
@@ -66,6 +68,7 @@ const i18n = createI18n({
       ...analysisZh.analysisManage,
       ...eventZh.eventManage,
       ...noticeZh.noticeManage,
+      ...riskWhitelistZh.riskWhitelist,
       ...storageZh.storageManage,
       ...strategyZh.strategyManage,
       ...systemZh.systemManage,
@@ -86,6 +89,7 @@ const i18n = createI18n({
       ...analysisEn.analysisManage,
       ...eventEn.eventManage,
       ...noticeEn.noticeManage,
+      ...riskWhitelistEn.riskWhitelist,
       ...storageEn.storageManage,
       ...platformEn.platformManage,
       ...strategyEn.strategyManage,

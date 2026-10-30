@@ -41,6 +41,7 @@ declare module 'vue' {
     KeepAliveRouteRenderer: typeof import('./src/components/keep-alive-router-view/keep-alive-route-renderer.vue')['default']
     KeepAliveRouterView: typeof import('./src/components/keep-alive-router-view/index.vue')['default']
     ListCheck: typeof import('./src/components/ip-selector/selector-box/components/list-check.vue')['default']
+    MatchScopeExpression: typeof import('./src/components/risk-whitelist/match-scope-expression.vue')['default']
     MultipleLineClamp: typeof import('./src/components/multiple-line-clamp/index.vue')['default']
     NoticeGroup: typeof import('./src/components/skeleton-loading/components/notice-group.vue')['default']
     Option: typeof import('./src/components/auth/option.vue')['default']
@@ -62,6 +63,7 @@ declare module 'vue' {
     Reports: typeof import('./src/components/statement-sidebar/reports.vue')['default']
     RichEditor: typeof import('./src/components/rich-editor/index.vue')['default']
     RiskExportButton: typeof import('./src/components/risk-export-button/index.vue')['default']
+    RiskWhitelistForm: typeof import('./src/components/risk-whitelist-form/index.vue')['default']
     RouterBack: typeof import('./src/components/router-back/index.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
@@ -101,5 +103,6 @@ declare module 'vue' {
     ViewNode: typeof import('./src/components/ip-selector/selector-box/components/preview-result/view-node.vue')['default']
     ViewServiceTemplate: typeof import('./src/components/ip-selector/selector-box/components/preview-result/view-service-template.vue')['default']
     ViewSetTemplate: typeof import('./src/components/ip-selector/selector-box/components/preview-result/view-set-template.vue')['default']
+    WhitelistConfirmDialog: typeof import('./src/components/whitelist-confirm-dialog/index.vue')['default']
   }
 }

@@ -651,7 +651,7 @@
   // 新开标签页跳转到场景风险列表页（带活跃状态筛选）
   const handleGoRisk = () => {
     // 活跃状态：录入中、待处理、处理中、自动处理审批中、套餐处理中
-    const activeStatuses = ['new', 'await_deal', 'processing', 'for_approve', 'auto_process'];
+    const activeStatuses = ['new', 'await_deal', 'processing', 'for_approve', 'auto_process', 'whitelist_approving'];
     const routeData = router.resolve({
       name: 'sceneRiskManageList',
       query: {

@@ -38,7 +38,7 @@
         :default-expanded="shouldExpandHandleDock">
         <confirm-risk-handle
           :key="`confirm-handle-${riskData.risk_id}`"
-          :data="riskData"
+          :data="detailData"
           :risk-id="riskData.risk_id"
           @update="handleUpdate" />
       </risk-handle-dock>
@@ -176,7 +176,7 @@
         startReportGeneratingPolling();
       } else {
         stopReportGeneratingPolling();
-        if (['for_approve', 'auto_process'].includes(data.status)) {
+        if (['for_approve', 'auto_process', 'whitelist_approving'].includes(data.status)) {
           startPolling();
         } else {
           clearTimeout(timeout);
