@@ -137,7 +137,7 @@ class TestComponentChain(AIAssistantTestCase):
         # ---------- F4b：全量导出（condition 原样重建 query_params） ----------
         with (
             mock.patch(f"{EXPORT_MODULE}.SearchLogPermission.has_system_search_permission", return_value=True),
-            mock.patch(f"{EXPORT_MODULE}.resource.query.create_collector_search_export_task") as mock_create,
+            mock.patch(f"{EXPORT_MODULE}.resource.query.create_ai_collector_search_export_task") as mock_create,
         ):
             FullExportService.create_task(
                 condition=condition,
