@@ -60,7 +60,7 @@
         <risk-handle
           v-else-if="!!riskData.risk_id"
           :key="`risk-handle-${riskData.risk_id}`"
-          :data="riskData"
+          :data="detailData"
           embedded
           :event-data-list="eventDataList"
           :risk-id="riskData.risk_id"
@@ -161,6 +161,7 @@
     processing: t('人工处理'),
     for_approve: t('执行处理套餐'),
     auto_process: t('执行处理套餐'),
+    whitelist_approving: t('加白审批中'),
     closed: t('风险单关闭'),
     new: t('风险单产生'),
     stand_by: t('风险创建中'),
@@ -221,7 +222,7 @@
       } else {
         stopReportGeneratingPolling();
         // 原有的状态轮询逻辑
-        if (['for_approve', 'auto_process'].includes(data.status)) {
+        if (['for_approve', 'auto_process', 'whitelist_approving'].includes(data.status)) {
           startPolling();
         } else {
           clearTimeout(timeout);

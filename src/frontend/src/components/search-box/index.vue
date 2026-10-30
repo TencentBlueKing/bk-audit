@@ -26,12 +26,17 @@
         @model-value-watch="handleUpdateModelValue"
         @submit="handleSubmit">
         <template #button>
-          <bk-button
+          <span
             v-if="isReassignment"
-            class="mr8"
-            @click="handleBatch">
-            {{ t('批量转单') }}
-          </bk-button>
+            v-bk-tooltips="{ content: reassignmentTooltip, disabled: !reassignmentDisabled || !reassignmentTooltip }"
+            class="reassignment-btn-wrapper mr8"
+            :class="{ 'is-reassignment-disabled': reassignmentDisabled }">
+            <bk-button
+              :disabled="reassignmentDisabled"
+              @click="handleBatch">
+              {{ t('批量转单') }}
+            </bk-button>
+          </span>
           <risk-export-button
             v-if="isExport"
             button-class="mr8"
@@ -188,6 +193,8 @@
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
     isReassignment?: boolean,
+    reassignmentDisabled?: boolean,
+    reassignmentTooltip?: string,
     isExport?: boolean,
     exportDisabled?: boolean,
     exportDisabledTooltip?: string,
@@ -209,6 +216,8 @@
 
   const props = withDefaults(defineProps<Props>(), {
     isReassignment: false,
+    reassignmentDisabled: false,
+    reassignmentTooltip: '',
     isExport: false,
     exportDisabled: false,
     exportDisabledTooltip: '',
@@ -704,6 +713,18 @@
     .item-value {
       display: flex;
       padding-top: 6px;
+    }
+  }
+}
+
+.reassignment-btn-wrapper {
+  display: inline-flex;
+
+  &.is-reassignment-disabled {
+    cursor: not-allowed;
+
+    .bk-button {
+      pointer-events: none;
     }
   }
 }

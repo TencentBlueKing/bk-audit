@@ -109,6 +109,13 @@
           <span class="side-child-dot" />
           {{ t('通知组') }}
         </audit-menu-item>
+        <audit-menu-item
+          :class="{ active: currentRoute === 'riskWhitelist' || currentRoute === 'riskWhitelistList' }"
+          index="riskWhitelist"
+          @click="handleMenuClick('riskWhitelist')">
+          <span class="side-child-dot" />
+          {{ t('风险白名单') }}
+        </audit-menu-item>
         <!-- <audit-menu-item
           :class="{ active: currentRoute === 'systemList' }"
           index="systemList"
@@ -225,7 +232,7 @@
 
   // 监听路由变化，自动展开对应分组
   watch(() => route.name, (newRouteName) => {
-    const auditConfigRoutes = ['strategyManage', 'linkDataManage', 'applicationManage', 'ruleManage', 'noticeGroup'];
+    const auditConfigRoutes = ['strategyManage', 'linkDataManage', 'applicationManage', 'ruleManage', 'noticeGroup', 'riskWhitelist', 'riskWhitelistList'];
     const sceneResourceRoutes = ['reportConfig', 'toolsManage'];
 
     if (auditConfigRoutes.includes(newRouteName as string) && !expandedGroups.value.includes('auditConfig')) {

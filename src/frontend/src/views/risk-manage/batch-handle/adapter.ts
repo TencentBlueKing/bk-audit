@@ -1,4 +1,5 @@
 import RiskManageService from '@service/risk-manage';
+import RiskWhitelistService from '@service/risk-whitelist';
 
 import type { BatchActionId, BatchPreview } from './evaluate';
 
@@ -26,7 +27,7 @@ export const fetchBatchPreview = (riskIds: string[]): Promise<BatchPreview> => (
 );
 
 const requestBatchProcess = (input: {
-  action: BatchActionId;
+  action: Exclude<BatchActionId, 'whitelist'>;
   riskIds: string[];
   description: string;
   operators?: string[];
@@ -35,7 +36,7 @@ const requestBatchProcess = (input: {
   autoCloseRisk?: boolean;
 }) => {
   const { action, riskIds, description } = input;
-  const requests: Record<BatchActionId, () => Promise<unknown>> = {
+  const requests: Record<Exclude<BatchActionId, 'whitelist'>, () => Promise<unknown>> = {
     close: () => RiskManageService.bulkCloseRisk({ risk_ids: riskIds, description }),
     // $OPERATOR / $OPERATOR_LEADER 等人员变量也按 user 传，由后端展开
     transfer: () => RiskManageService.batchTransRisk({
@@ -76,5 +77,21 @@ export const submitBatchConfirm = async (input: {
   const data = input.result === 'misreport'
     ? await RiskManageService.bulkMisreportRisk(params)
     : await RiskManageService.batchConfirmRisk(params);
+  return normalizeReceipt(input.riskIds, data);
+};
+
+export const submitBatchWhitelist = async (input: {
+  riskIds: string[];
+  payload: Record<string, any>;
+  withMisreport: boolean;
+  misreportDescription?: string;
+}): Promise<BatchReceipt> => {
+  const data = await RiskWhitelistService.applyFromRisk({
+    risk_ids: input.riskIds,
+    ...input.payload,
+    with_misreport: input.withMisreport,
+    misreport_description: input.misreportDescription || '',
+    source: 'risk',
+  });
   return normalizeReceipt(input.riskIds, data);
 };

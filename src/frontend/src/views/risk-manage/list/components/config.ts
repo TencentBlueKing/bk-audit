@@ -26,6 +26,7 @@ import { formatStrategyOptionLabel } from '@utils/format-strategy-name';
 const riskStatusOrder = [
   '待处理',
   '处理中',
+  '加白审批中',
   '已关单',
   '录入中',
   '自动处理审批中',

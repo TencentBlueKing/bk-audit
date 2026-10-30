@@ -15,7 +15,39 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <div v-if="showDirectButton">
+    <bk-button
+      v-if="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
+      v-bk-tooltips="{
+        content: t('加白审批中，无法同时手工处理'),
+        disabled: data.status !== 'whitelist_approving',
+      }"
+      :disabled="data.status === 'whitelist_approving'"
+      style="font-size: 12px;"
+      text
+      theme="primary"
+      @click="requestMisreport">
+      <audit-icon
+        style="margin-right: 6px;"
+        type="biaojiwubao" />
+      {{ t('标记误报') }}
+    </bk-button>
+    <auth-button
+      v-else
+      action-id="process_risk"
+      :permission="false"
+      :resource="data.risk_id"
+      style="font-size: 12px;"
+      text
+      theme="primary">
+      <audit-icon
+        style="margin-right: 6px;"
+        type="biaojiwubao" />
+      {{ t('标记误报') }}
+    </auth-button>
+  </div>
   <audit-popconfirm
+    v-else
     ref="popRef"
     :confirm-auto-hide="false"
     :confirm-handler="handleConfirm"
@@ -101,6 +133,7 @@
 <script setup lang='ts'>
   import {
     computed,
+    inject,
     ref,
     watch,
   } from 'vue';
@@ -129,6 +162,11 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const openHandleMethod = inject<((method: string) => void) | null>('openHandleMethod', null);
+  const requestMisreport = () => {
+    if (props.data.status === 'whitelist_approving' || !openHandleMethod) return;
+    openHandleMethod('misreport');
+  };
   const isForce = ref(true);
   const rules = {
     new_operators: [{
@@ -149,6 +187,16 @@
   const formData = ref<Record<string, any>>({});
 
   const isMisreport = computed(() => props.data.risk_label === 'misreport');
+  const showDirectButton = computed(() => (
+    !isMisreport.value
+    && (
+      props.data.status === 'whitelist_approving'
+      || (
+        typeof openHandleMethod === 'function'
+        && ['await_deal', 'processing'].includes(props.data.status)
+      )
+    )
+  ));
   const isShowOperators = computed(() => !(props.lastTicketHistory && props.lastTicketHistory.action === 'AutoProcess'));
   // 标记误报的tip
   const markMisreportTipMap = {

@@ -41,6 +41,11 @@ export const RISK_STATUS_TAG_MAP: Record<string, RiskStatusMapItem> = {
     icon: 'taocanchulizhong',
     color: '#0CA668',
   },
+  whitelist_approving: {
+    tag: 'info',
+    icon: 'loading',
+    color: 'var(--audit-brand-02)',
+  },
   processing: {
     tag: 'info',
     icon: 'loading',
@@ -84,6 +89,11 @@ export const RISK_STATUS_THEME_MAP: Record<string, RiskStatusThemeItem> = {
     icon: 'taocanchulizhong',
     color: '#0CA668',
   },
+  whitelist_approving: {
+    theme: 'info',
+    icon: 'loading',
+    color: 'var(--audit-brand-02)',
+  },
   processing: {
     theme: 'info',
     icon: 'loading',
@@ -108,6 +118,7 @@ const RISK_STATUS_ALIAS: Record<string, string> = {
 const RISK_STATUS_FALLBACK_NAME: Record<string, string> = {
   await_confirm: '待确认',
   pending_confirm: '待确认',
+  whitelist_approving: '加白审批中',
 };
 
 const PENDING_CONFIRM_STATUSES = new Set(['pending_confirm', 'await_confirm']);

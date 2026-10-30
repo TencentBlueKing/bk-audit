@@ -24,6 +24,8 @@
       :field-config="FieldConfig"
       is-export
       is-reassignment
+      :reassignment-disabled="batchTransferBlocked"
+      :reassignment-tooltip="t(REASON_APPROVING)"
       @batch="handleBatch"
       @change="handleSearchChange"
       @change-table-height="handleChangeTableHeight"
@@ -102,6 +104,7 @@
     onMounted,
     onUnmounted,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -128,10 +131,12 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { REASON_APPROVING } from '@views/risk-manage/batch-handle/evaluate';
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+  import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { isWhitelistApproving } from '@views/risk-manage/whitelist';
 
   import FieldConfig from './components/config';
 
@@ -156,10 +161,12 @@
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
       {
-        ['for_approve', 'auto_process'].includes(row.status)
+        ['for_approve', 'auto_process', 'whitelist_approving'].includes(row.status)
           ? (
             <bk-button
-              v-bk-tooltips={t('当前状态不支持人工处理')}
+              v-bk-tooltips={row.status === 'whitelist_approving'
+                ? t('加白审批中，无法同时手工处理')
+                : t('当前状态不支持人工处理')}
               text
               theme='primary'
               class='mr16 is-disabled'>
@@ -179,11 +186,25 @@
             </auth-button>
           )
       }
-      <MarkRiskLabel
-        onUpdate={() => fetchList()}
-        userInfo={userInfo.value}
-        data={row}
-        disabled={row.status === 'auto_process'} />
+      {
+        row.status === 'auto_process' || row.status === 'whitelist_approving'
+          ? <bk-button text theme='primary'
+            class="is-disabled"
+            v-bk-tooltips={{
+              content: row.status === 'whitelist_approving'
+                ? t('加白审批中，无法同时手工处理')
+                : row.risk_label === 'normal'
+                  ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+                  : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
+            }}>
+            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
+          </bk-button>
+          : <MarkRiskLabel
+            detailRouteName="handleManageDetail"
+            onUpdate={() => fetchList()}
+            userInfo={userInfo.value}
+            data={row} />
+      }
       <bk-dropdown
         style="margin-left: 8px">
         {{
@@ -259,6 +280,46 @@
   const handleSelectionChange = (meta: typeof selectionMeta.value) => {
     selectionMeta.value = meta;
   };
+
+  const rowStatusCache = new Map<string, string>();
+  const batchTransferBlocked = ref(false);
+
+  const refreshBatchTransferState = async () => {
+    const list = listRef.value;
+    const { count, isSelectAll } = selectionMeta.value;
+    if (!list || count <= 0) {
+      batchTransferBlocked.value = false;
+      return;
+    }
+    if (isSelectAll && count <= 500) {
+      const allRows = await list.resolveSelectAllRows?.({ maxCount: 500 }) || [];
+      rowStatusCache.clear();
+      allRows.forEach((row: { risk_id: string | number; status: string }) => {
+        rowStatusCache.set(String(row.risk_id), row.status);
+      });
+    } else {
+      const keys = new Set((list.getSelectedKeys?.() || []).map((key: string | number) => String(key)));
+      (list.getSelection?.() || []).forEach((row: { risk_id: string | number; status: string }) => {
+        if (keys.has(String(row.risk_id))) {
+          rowStatusCache.set(String(row.risk_id), row.status);
+        }
+      });
+      Array.from(rowStatusCache.keys()).forEach((id) => {
+        if (!keys.has(id)) {
+          rowStatusCache.delete(id);
+        }
+      });
+    }
+    const keys = (list.getSelectedKeys?.() || []).map((key: string | number) => String(key));
+    batchTransferBlocked.value = keys.some((id: string) => isWhitelistApproving(rowStatusCache.get(id)));
+  };
+
+  watch(
+    () => [selectionMeta.value.count, selectionMeta.value.mode, selectionMeta.value.isSelectAll],
+    () => {
+      nextTick(refreshBatchTransferState);
+    },
+  );
 
   const {
     isExportEnabled,
@@ -347,6 +408,10 @@
   };
   // 批量操作
   const handleBatch = async () => {
+    await refreshBatchTransferState();
+    if (batchTransferBlocked.value) {
+      return;
+    }
     const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
     if (!keys.length) {
       messageWarn(t('请选择要操作的数据'));

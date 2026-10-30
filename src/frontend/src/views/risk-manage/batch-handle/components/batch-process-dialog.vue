@@ -175,6 +175,37 @@
               :risk-fields="riskFields"
               support-variable />
           </bk-form-item>
+          <span
+            v-bk-tooltips="{
+              content: t('所选风险不属于同一审计策略，无法批量加白'),
+              disabled: availability.strategyUnique,
+            }"
+            class="whitelist-together-wrap"
+            :class="{ 'is-disabled': !availability.strategyUnique }">
+            <bk-checkbox
+              v-model="withWhitelist"
+              class="whitelist-together"
+              data-testid="batch-whitelist-together"
+              :disabled="!availability.strategyUnique">
+              {{ t(roleText.text.value.together) }}
+            </bk-checkbox>
+          </span>
+          <risk-whitelist-form
+            v-if="withWhitelist && availability.strategyUnique"
+            ref="whitelistFormRef"
+            data-testid="batch-whitelist-form"
+            embedded
+            :initial-scope="initialScope"
+            show-apply-hint />
+        </template>
+
+        <template v-else-if="formData.method === 'whitelist'">
+          <risk-whitelist-form
+            ref="whitelistFormRef"
+            data-testid="batch-whitelist-form"
+            embedded
+            :initial-scope="initialScope"
+            show-apply-hint />
         </template>
 
         <template v-else-if="formData.method === 'unmisreport'">
@@ -193,6 +224,7 @@
           </bk-form-item>
         </template>
       </bk-form>
+      <whitelist-confirm-dialog ref="confirmRef" />
       <div
         v-if="failures.length"
         class="batch-process-failures"
@@ -234,11 +266,16 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
 
   import ApplicationParameter from '@components/application-parameter/index.vue';
   import RichEditor from '@components/editor/index.vue';
+  import RiskWhitelistForm from '@components/risk-whitelist-form/index.vue';
+  import WhitelistConfirmDialog from '@components/whitelist-confirm-dialog/index.vue';
 
-  import { submitBatchProcess, type PackageParamValue } from '../adapter';
+  import { buildScopeFromRisk } from '@views/risk-manage/whitelist';
+
+  import { submitBatchProcess, submitBatchWhitelist, type PackageParamValue } from '../adapter';
   import { defaultBatchAction, type BatchActionId, type BatchAvailability } from '../evaluate';
 
   import {
@@ -291,6 +328,7 @@
     package: 'ProcessPackage',
     misreport: 'misreport',
     unmisreport: 'unmisreport',
+    whitelist: 'whitelist',
   };
 
   const ACTION_BY_METHOD: Record<string, BatchActionId> = {
@@ -299,14 +337,19 @@
     ProcessPackage: 'package',
     misreport: 'misreport',
     unmisreport: 'unmisreport',
+    whitelist: 'whitelist',
   };
 
   const { t } = useI18n();
   const { messageSuccess, messageError } = useMessage();
+  const roleText = useWhitelistRoleText();
   const isShow = ref(false);
   const isSubmitting = ref(false);
   const editorKey = ref(0);
   const formRef = ref();
+  const whitelistFormRef = ref<InstanceType<typeof RiskWhitelistForm>>();
+  const confirmRef = ref<InstanceType<typeof WhitelistConfirmDialog>>();
+  const withWhitelist = ref(false);
   const failures = ref<Array<{ risk_id: string; reason: string }>>([]);
   const hasProcessed = ref(false);
   const paramsDetailData = ref<Record<string, PackageParam>>({});
@@ -327,7 +370,7 @@
 
   const formData = ref(createForm());
 
-  const actionLabels: Record<BatchActionId, string> = {
+  const actionLabels: Record<Exclude<BatchActionId, 'whitelist'>, string> = {
     close: '人工关单',
     transfer: '转单',
     package: '处理套餐',
@@ -338,8 +381,14 @@
   const actionOptions = computed(() => props.availability.actions.map(action => ({
     ...action,
     method: METHOD_BY_ACTION[action.id],
-    label: t(actionLabels[action.id]),
+    label: action.id === 'whitelist' ? t(roleText.text.value.method) : t(actionLabels[action.id]),
   })));
+
+  const initialScope = computed(() => (
+    props.availability.strategyUnique
+      ? buildScopeFromRisk({ strategy_id: props.availability.strategyId })
+      : null
+  ));
 
   const dialogWidth = computed(() => (formData.value.method === 'ProcessPackage' ? 1080 : 960));
 
@@ -456,6 +505,7 @@
 
   const resetForm = () => {
     formData.value = createForm();
+    withWhitelist.value = false;
     paramsDetailData.value = {};
     failures.value = [];
     hasProcessed.value = false;
@@ -553,6 +603,53 @@
         return;
       }
     }
+    const useWhitelist = formData.value.method === 'whitelist'
+      || (formData.value.method === 'misreport' && withWhitelist.value);
+    if (useWhitelist) {
+      if (!whitelistFormRef.value?.validate()) {
+        messageError(t('请完整填写加白信息'));
+        return;
+      }
+      const payload = whitelistFormRef.value.getPayload();
+      const confirmed = await confirmRef.value?.open({
+        scope: payload.match_scope,
+        whitelistType: payload.whitelist_type,
+        validityMode: payload.validity_mode || 'permanent',
+        customDays: payload.custom_days,
+        source: 'risk',
+      });
+      if (!confirmed) {
+        return;
+      }
+      isSubmitting.value = true;
+      failures.value = [];
+      try {
+        const receipt = await submitBatchWhitelist({
+          riskIds: props.riskIds,
+          payload,
+          withMisreport: formData.value.method === 'misreport',
+          misreportDescription: formData.value.misreport_description,
+        });
+        if (receipt.failed.length) {
+          failures.value = receipt.failed;
+          hasProcessed.value = hasProcessed.value || receipt.success_count > 0;
+          return;
+        }
+        messageSuccess(t(formData.value.method === 'misreport'
+          ? roleText.text.value.misreportSuccess
+          : roleText.text.value.applySuccess));
+        isShow.value = false;
+        emit('success');
+      } catch {
+        // 请求层已提示错误，弹窗保持打开
+      } finally {
+        isSubmitting.value = false;
+      }
+      return;
+    }
+    if (action === 'whitelist') {
+      return;
+    }
     isSubmitting.value = true;
     failures.value = [];
     try {
@@ -599,6 +696,14 @@
 
   .misreport-alert {
     margin-bottom: 16px;
+  }
+
+  .whitelist-together {
+    margin-bottom: 12px;
+  }
+
+  .whitelist-together-wrap.is-disabled :deep(.bk-checkbox) {
+    pointer-events: none;
   }
 
   .risk-await-deal-wrap :deep(.bk-form),

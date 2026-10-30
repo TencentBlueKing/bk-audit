@@ -301,6 +301,8 @@
     useSkeleton?: boolean,
     /** 按视口计算最大高度和每页条数。侧滑等固定容器传 false，避免表头被撑出空白 */
     fitViewportHeight?: boolean,
+    /** 为 true 时不从 URL 读参数，也不把列表参数写回 URL */
+    disableUrlSync?: boolean,
   }
 
   interface Emits {
@@ -369,6 +371,7 @@
     tableFilterPersistKey: undefined,
     useSkeleton: false,
     fitViewportHeight: true,
+    disableUrlSync: false,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -946,7 +949,7 @@
           cancel();
           isLoading.value = true;
           run(params);
-          if (fetchSeq === latestFetchSeq) {
+          if (fetchSeq === latestFetchSeq && !props.disableUrlSync) {
             // 所属场景筛选不要写进场景选择器上下文（scene_id/scope_*）
             const urlParams = { ...params };
             delete urlParams.scene_id;
@@ -1125,6 +1128,9 @@
   };
 
   const restoreTableFiltersFromUrl = () => {
+    if (props.disableUrlSync) {
+      return;
+    }
     const urlParams = getSearchParams();
     const nextFilterValue = {
       ...getColumnsResetValue(tableColumns.value),
@@ -1290,6 +1296,10 @@
   };
   // 解析 URL 上面的分页信息
   const parseURL = () => {
+    if (props.disableUrlSync) {
+      isReady = false;
+      return;
+    }
     const {
       page,
       page_size: pageSize,
@@ -1636,10 +1646,12 @@
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>, options?: { resetSearch?: boolean }) {
       clearSelectionOnSearchScopeChange();
-      const { sort } = getSearchParams();
       const urlSortParams: Record<string, any> = {};
-      if (sort) {
-        urlSortParams.sort = [sort];
+      if (!props.disableUrlSync) {
+        const { sort } = getSearchParams();
+        if (sort) {
+          urlSortParams.sort = [sort];
+        }
       }
       mergeParamsMemo(params, urlSortParams, options);
       if (isReady) {

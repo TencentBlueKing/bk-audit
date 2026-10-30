@@ -91,7 +91,7 @@
         <bk-alert
           class="misreport-alert"
           theme="warning"
-          :title="t('标记误报后，风险单会自动关闭，请谨慎确认是否为误报？')" />
+          :title="misreportAlertTitle" />
         <bk-form-item
           class="is-required"
           :label="t('误报说明')"
@@ -106,6 +106,26 @@
             :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
+        <bk-checkbox
+          v-model="withWhitelist"
+          class="whitelist-together">
+          {{ t(roleText.text.value.together) }}
+        </bk-checkbox>
+        <risk-whitelist-form
+          v-if="withWhitelist"
+          ref="whitelistFormRef"
+          embedded
+          :initial-scope="initialScope"
+          show-apply-hint />
+      </template>
+
+      <!-- 加入白名单 / 申请加白 -->
+      <template v-else-if="formData.method === 'whitelist'">
+        <risk-whitelist-form
+          ref="whitelistFormRef"
+          embedded
+          :initial-scope="initialScope"
+          show-apply-hint />
       </template>
 
       <!-- 处理套餐 -->
@@ -196,6 +216,7 @@
         </bk-button>
       </bk-form-item>
     </audit-form>
+    <whitelist-confirm-dialog ref="confirmRef" />
   </div>
 </template>
 
@@ -217,15 +238,21 @@
   import MetaManageService from '@service/meta-manage';
   import ProcessApplicationManageService from '@service/process-application-manage';
   import RiskManageService from '@service/risk-manage';
+  import RiskWhitelistService from '@service/risk-whitelist';
   import SoapManageService from '@service/soap-manage';
 
   import type RiskManageModel from '@model/risk/risk';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
 
   import ApplicationParameter from '@components/application-parameter/index.vue';
   import RichEditor from '@components/editor/index.vue';
+  import RiskWhitelistForm from '@components/risk-whitelist-form/index.vue';
+  import WhitelistConfirmDialog from '@components/whitelist-confirm-dialog/index.vue';
+
+  import { buildScopeFromRisk } from '@views/risk-manage/whitelist';
 
   import {
     buildSubmitPaParams,
@@ -240,6 +267,7 @@
       username: string,
     },
     eventDataList: Record<string, any>[],
+    requestedMethod?: string,
   }
 
   interface Emits{
@@ -284,6 +312,19 @@
     dockEditorExpand(expanded);
   };
   const { t } = useI18n();
+  const { messageSuccess, messageError } = useMessage();
+  const roleText = useWhitelistRoleText();
+  const whitelistFormRef = ref<InstanceType<typeof RiskWhitelistForm>>();
+  const confirmRef = ref<InstanceType<typeof WhitelistConfirmDialog>>();
+  const withWhitelist = ref(false);
+  const initialScope = computed(() => buildScopeFromRisk({
+    strategy_id: props.detailData.strategy_id,
+    strategy_name: (props.detailData as RiskManageModel & { strategy_name?: string }).strategy_name,
+    raw_event_id: props.detailData.raw_event_id,
+  }));
+  const misreportAlertTitle = computed(() => (
+    `${t('标记误报后，风险单将自动关闭。若需避免后续同类风险再次命中，')}${t(roleText.text.value.misreportAlertTail)}`
+  ));
 
   const { data: memberVariableSource } = useRequest(MetaManageService.fetchVariableList, {
     defaultValue: [],
@@ -296,7 +337,6 @@
       name: `${item.value}(${item.label})`,
     })).filter(item => item.id);
   });
-  const { messageSuccess } = useMessage();
 
   // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）
   const isRichTextNotEmpty = (html: string) => {
@@ -347,19 +387,27 @@
       { id: 'transfer', name: '转单' },
       { id: 'ProcessPackage', name: '处理套餐' },
     ];
+    if (props.detailData.status === 'closed') {
+      return [{ id: 'misreport', name: '标记误报' }];
+    }
     if (props.detailData.risk_label !== 'misreport') {
       options.push({ id: 'misreport', name: '标记误报' });
     }
+    options.push({ id: 'whitelist', name: roleText.text.value.method });
     return options;
   });
 
+  const defaultHandleMethod = () => (
+    props.detailData.status === 'closed' ? 'misreport' : 'closeOrder'
+  );
+
   const formData = ref<Record<string, any>>({
-    method: 'closeOrder',
+    method: defaultHandleMethod(),
     risk_id: props.riskId,
   });
   const formRef = ref();
   const loading = computed(() => transLoading.value || autoProcessLoading.value
-    || closeLoading.value || misreportLoading.value || detailLoading.value);
+    || closeLoading.value || misreportLoading.value || detailLoading.value || applyLoading.value);
   const filterProcessApplicationList = computed(() => processApplicationList.value
     .filter(item => item.is_enabled));
 
@@ -439,7 +487,7 @@
 
   const resetForm = () => {
     paramsDetailData.value = {};
-    handleChangeMethod('closeOrder');
+    handleChangeMethod(defaultHandleMethod());
     formRef.value?.clearValidate?.();
   };
 
@@ -493,6 +541,18 @@
       handleSubmitSuccess(t('人工转单成功'));
     },
   });
+  const {
+    run: applyWhitelist,
+    loading: applyLoading,
+  } = useRequest(RiskWhitelistService.applyFromRisk, {
+    defaultValue: null,
+    onSuccess() {
+      const withMisreport = formData.value.method === 'misreport';
+      handleSubmitSuccess(withMisreport
+        ? t(roleText.text.value.misreportSuccess)
+        : t(roleText.text.value.applySuccess));
+    },
+  });
 
   const handleChangeMethod = (val: string | number | boolean) => {
     let params = {};
@@ -521,6 +581,11 @@
       params = {
         misreport_description: '',
       };
+      withWhitelist.value = false;
+      break;
+    case 'whitelist':
+      params = {};
+      withWhitelist.value = false;
       break;
     }
     formData.value = {
@@ -529,6 +594,30 @@
       risk_id: props.riskId,
     };
   };
+
+  const openWhitelistConfirm = async () => {
+    if (!whitelistFormRef.value?.validate()) {
+      messageError(t('请完整填写加白信息'));
+      return;
+    }
+    const payload = whitelistFormRef.value.getPayload();
+    const confirmed = await confirmRef.value?.open({
+      scope: payload.match_scope,
+      whitelistType: payload.whitelist_type,
+      validityMode: payload.validity_mode || 'permanent',
+      customDays: payload.custom_days,
+      source: 'risk',
+    });
+    if (!confirmed) return;
+    applyWhitelist({
+      risk_id: props.riskId,
+      ...payload,
+      with_misreport: formData.value.method === 'misreport',
+      misreport_description: formData.value.misreport_description || '',
+      source: 'risk',
+    });
+  };
+
   const handleSubmit = () => {
     if (detailLoading.value) {
       return;
@@ -550,11 +639,18 @@
         });
         break;
       case 'misreport':
+        if (withWhitelist.value) {
+          openWhitelistConfirm();
+          return;
+        }
         updateRiskLabel({
           risk_id: props.riskId,
           risk_label: 'misreport',
-          description: formData.value.misreport_description,
+          description: formData.value.misreport_description || '',
         });
+        break;
+      case 'whitelist':
+        openWhitelistConfirm();
         break;
       }
     });
@@ -572,7 +668,10 @@
     case 'ProcessPackage':
       return !!paId;
     case 'misreport':
-      return isRichTextNotEmpty(misreportDescription);
+      return isRichTextNotEmpty(misreportDescription)
+        || (withWhitelist.value && (whitelistFormRef.value?.isDirty() ?? false));
+    case 'whitelist':
+      return whitelistFormRef.value?.isDirty() ?? false;
     default:
       return false;
     }
@@ -614,6 +713,18 @@
     (description) => {
       clearFieldValidateIfValid('misreport_description', isRichTextNotEmpty(description));
     },
+  );
+
+  watch(
+    () => props.requestedMethod,
+    (method) => {
+      if (!method) return;
+      const nextMethod = method.startsWith('misreport') ? 'misreport' : method;
+      if (radioGroup.value.some(item => item.id === nextMethod)) {
+        handleChangeMethod(nextMethod);
+      }
+    },
+    { immediate: true },
   );
 
   watch(
@@ -709,8 +820,19 @@
   box-sizing: border-box;
 }
 
-.misreport-alert {
+.misreport-alert,
+.whitelist-apply-hint {
   margin-bottom: 16px;
+}
+
+.whitelist-together {
+  margin-bottom: 16px;
+  font-size: var(--audit-font-size-sm);
+  color: var(--audit-neutral-text-02);
+}
+
+.risk-await-deal-wrap :deep(.risk-whitelist-form.is-embedded) {
+  margin-bottom: var(--audit-space-24);
 }
 
 .pa-params-form-item {
@@ -843,6 +965,13 @@
 
 :deep(.bk-form-item.is-required .bk-form-label::after) {
   display: none;
+}
+
+.risk-await-deal-wrap :deep(.risk-whitelist-form .bk-form-item.is-required .bk-form-label::after) {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--audit-danger-02);
+  content: '*';
 }
 
 .label-name::after {
