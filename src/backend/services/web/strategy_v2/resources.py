@@ -2588,7 +2588,7 @@ class PreviewRiskReport(StrategyV2Base):
 
     根据传入的 report_config，使用指定风险单数据进行渲染预览。
     用于策略配置页面预览模板效果。
-    权限：通过 ViewSet 的 InstanceActionPermission 校验策略编辑权限。
+    权限：ViewSet 校验样本风险可见，且可编辑源策略或在其归属范围创建策略。
     """
 
     name = gettext_lazy("报告预览")
