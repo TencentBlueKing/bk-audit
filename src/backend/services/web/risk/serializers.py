@@ -38,6 +38,7 @@ from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     AnalyseReportStatus,
     AnalyseReportType,
+    BkSecPushStatus,
     EventBasicField,
     EventFilterOperator,
     EventMappingFields,
@@ -607,6 +608,14 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
         allow_null=True,
         help_text=gettext_lazy("是否已生成报告。有报告 → true，无报告 → false"),
     )
+    bksec_push_status = serializers.CharField(
+        label=gettext_lazy("BKSEC Push Status"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy(
+            "BKSEC 发单状态：not_pushed(未推送) / success(推送成功) / failed(推送失败)，" '多个逗号拼接如 "success,failed"。'
+        ),
+    )
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
@@ -633,6 +642,15 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
             event_field_name = normalized[len("event_data.") :].strip()
             if event_field_name and event_field_name not in filter_fields:
                 raise serializers.ValidationError(gettext("关联事件字段排序需在筛选条件中包含字段：%s") % event_field_name)
+
+    def validate_bksec_push_status(self, value: str) -> str:
+        """校验 BKSEC 发单状态取值，支持逗号分隔的多值。"""
+        if not value:
+            return value
+        invalid_values = [i for i in (v.strip() for v in value.split(",")) if i and i not in BkSecPushStatus.values]
+        if invalid_values:
+            raise serializers.ValidationError(gettext("BKSEC 发单状态取值非法 => %s") % ",".join(invalid_values))
+        return value
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
@@ -1091,6 +1109,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "report_enabled",
             "report_auto_render",
             "risk_level",
+            "bksec_push_status",
         ]
 
 
