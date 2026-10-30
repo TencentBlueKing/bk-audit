@@ -34,8 +34,8 @@ from tests.test_risk.test_tickets.constants import (
     APPROVE_TICKET_DETAIL,
     APPROVE_TICKET_STATUS,
     CUSTOM_AUTO_PROCESS_PARAMS,
-    SOPS_TEMPLATE_INFO,
     PA_INFO,
+    SOPS_TEMPLATE_INFO,
 )
 
 

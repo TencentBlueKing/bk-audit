@@ -205,6 +205,35 @@ class RiskLabelTest(TicketTest):
         mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
+        "services.web.risk.handlers.ticket.resource.itsm.get_service_detail",
+        mock.Mock(
+            return_value={
+                "fields": [
+                    {"key": k, "name": v.get("title", ""), "type": (v.get("type") or "STRING").upper()}
+                    for k, v in APPROVE_SERVICE_INFO["items"][0]["form_canvas_data"]["jsonschema"]["properties"].items()
+                ]
+            }
+        ),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.system_workflow_list",
+        mock.Mock(return_value={"results": []}),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_detail",
+        mock.Mock(
+            return_value={
+                "id": APPROVE_TICKET_DETAIL["id"],
+                "sn": APPROVE_TICKET_DETAIL["sn"],
+                "title": APPROVE_TICKET_STATUS["title"],
+                "status": "running",
+                "updated_at": APPROVE_TICKET_STATUS["update_at"],
+                "frontend_url": APPROVE_TICKET_STATUS["ticket_url"],
+                "approve_result": APPROVE_TICKET_STATUS["approve_result"],
+            }
+        ),
+    )
+    @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
@@ -215,6 +244,10 @@ class RiskLabelTest(TicketTest):
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
+        mock.Mock(return_value=SOPS_TEMPLATE_INFO),
     )
     def test_misreport_approve_v3(self):
         """

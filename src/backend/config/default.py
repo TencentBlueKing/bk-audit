@@ -214,7 +214,7 @@ BK_ITSM_V4_SYSTEM_TOKEN = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_TOKEN", os.getenv("
 # 部署级 ITSM 版本选择：一套代码下，未升级 ITSM V4 的部署环境保留 V3 接口契约
 # （服务列表/详情、新建单据、节点版本记录、初始化均读取该开关）。
 # 默认保留 V3：现有部署无需任何升级配置即沿用旧契约；
-# 仅明确设置 BKAPP_ENABLE_ITSM_V4=True 的目标环境才升级 ITSM4（单租户、国内/海外多租户均可显式启用）。
+# 默认升级 ITSM4（单租户、国内/海外多租户），仅明确要求不升级时，再通过环境变量配置
 BKAPP_ENABLE_ITSM_V4 = os.getenv("BKAPP_ENABLE_ITSM_V4", "False").strip().lower() in ("true", "1", "yes", "on")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
@@ -774,15 +774,6 @@ BKAPP_IEGSEC_HELPER = os.getenv("BKAPP_IEGSEC_HELPER", "")
 
 # 审计中心场景的iwiki链接
 BKAPP_SCENE_IWIKI_URL = os.getenv("BKAPP_SCENE_IWIKI_URL", "")
-
-# itsm_v4 初始化配置
-ITSM_SYSTEM_NAME = os.getenv("ITSM_SYSTEM_NAME", "审计风险审批流程")
-ITSM_SYSTEM_CODE = os.getenv("ITSM_SYSTEM_CODE", "bk-audit-itsm")
-ITSM_SYSTEM_DESC = os.getenv("ITSM_SYSTEM_DESC", "蓝鲸审计中心（bk-audit）风险处理审批接入系统")
-ITSM_WORKFLOW_PORTAL_ID = os.getenv("ITSM_WORKFLOW_PORTAL_ID", "DEFAULT")
-ITSM_WORKFLOW_APP_ID = os.getenv("ITSM_WORKFLOW_APP_ID", "core")
-ITSM_WORKFLOW_WORKING_MODE = os.getenv("ITSM_WORKFLOW_WORKING_MODE", "serial")  # 可选值：'serial', 'parallel', 'cooperate'
-ITSM_WORKFLOW_OPERATOR = os.getenv("ITSM_WORKFLOW_OPERATOR", "admin")
 
 """
 以下为框架代码 请勿修改
