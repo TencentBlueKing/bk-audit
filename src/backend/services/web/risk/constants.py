@@ -405,6 +405,22 @@ class TicketNodeStatus(TextChoices):
     FINISHED = "finished", gettext_lazy("已完成")
 
 
+class BkSecPushStatus(TextChoices):
+    """
+    BKSEC 推送状态（风险单维度，只记当前状态）
+
+    SUCCESS 由发单插件在 BKSEC 推单成功（响应 2xx）后主动上报置位；
+    FAILED 在套餐任务终态失败时置位（推单重试耗尽 → 节点失败 → 任务失败）。
+
+    SOPS 侧无法推断该状态：发单发生在长驻的「回调 / 轮询」节点内部，节点始终 RUNNING，
+    任务状态只能证明「套餐跑了」，不能证明「工单发了」。
+    """
+
+    NOT_PUSHED = "not_pushed", gettext_lazy("未推送")
+    SUCCESS = "success", gettext_lazy("推送成功")
+    FAILED = "failed", gettext_lazy("推送失败")
+
+
 # 执行记录 keyword 全量搜索：枚举字段「内部值 → 前端中文展示词」映射（展示词与 docs/bksec_frontend_api.md 5.1 一致）
 # 命中规则：keyword 等于内部值（大小写不敏感），或是展示词的子串（子串命中要求 keyword 长度 >= 2，防单字噪音）
 PA_TRIGGER_KEYWORD_LABELS = {

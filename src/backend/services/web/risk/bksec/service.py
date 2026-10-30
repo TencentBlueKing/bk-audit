@@ -40,6 +40,7 @@ from services.web.risk.bksec.constants import (
 )
 from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
 from services.web.risk.bksec.render import build_risk_data
+from services.web.risk.constants import BkSecPushStatus
 from services.web.risk.models import ProcessApplication, Risk, TicketNode
 from services.web.strategy_v2.models import Strategy
 
@@ -260,18 +261,24 @@ def prepare_test_constants(strategy: Strategy, config: BkSecConfig, risk: Risk, 
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
 
 
-def validate_bksec_test_target(risk: Risk) -> None:
+def has_bksec_ticket_sent(risk: Risk) -> bool:
     """
-    校验该风险单是否已成功发送过正式工单，已成功则拒绝测试发送
+    该风险单的 BKSEC 工单是否已推送成功（权威来源：风险单上的推送状态）
 
-    仅当正式派单已成功（SOPS 任务 FINISHED）时拒绝：插件的回调按风险单复用，
-    在其上发送测试工单会干扰正式回调或被静默拦截。
-    派单失败/被终止/已过期的单据未真正发出工单，允许测试，避免自动派单策略下无样例单可用。
+    插件在 BKSEC 推单返回 2xx 那一刻主动上报置为「推送成功」，这是唯一可信来源：
+    SOPS 侧只能证明「套餐跑了」，不能证明「工单发了」。
+    """
 
-    判定语义（保守拦截，避免与进行中的正式单干扰）：
-    - 终态 FINISHED → 拒绝；终态 FAILED/REVOKED/EXPIRED → 放行
-    - 非终态（CREATED/RUNNING/...）→ 回查 SOPS 实时状态后按 FINISHED 与否判定
-    - 状态不可判定（无 task_id / 回查异常）→ 保守按已发出（拒绝）
+    return risk.bksec_push_status == BkSecPushStatus.SUCCESS
+
+
+def _sops_dispatch_succeeded(risk: Risk) -> bool:
+    """
+    按 SOPS 任务状态保守判定正式派单是否已成功（插件未上报时的回退路径）
+
+    仅当插件未上报（未配置上报地址 / 旧版本插件）时生效：SOPS 只能证明「套餐跑了」，
+    不能证明「工单发了」，且回调/轮询节点长驻 RUNNING 会让该判定漏判（已发单被判为未发单），
+    故只能作为兜底。
     """
     node = (
         TicketNode.objects.filter(risk_id=risk.risk_id, action="AutoProcess", is_test=False)
@@ -279,27 +286,39 @@ def validate_bksec_test_target(risk: Risk) -> None:
         .first()
     )
     if node is None:
-        return
+        return False
     process_result = node.process_result or {}
     state = (process_result.get("status") or {}).get("state") or ""
-    succeeded = False
     if state not in SOPSTaskStatus.get_finished_status():
         task_id = (process_result.get("task") or {}).get("task_id")
         if not task_id:
-            succeeded = True  # 无从判定：保守按已发出拦截
-        else:
-            try:
-                status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-                succeeded = ((status or {}).get("state") or "") in SOPSTaskStatus.get_success_status()
-            except Exception as err:  # NOCC:broad-except(状态不可判定时保守拦截)
-                logger.warning(
-                    "[BkSec] get sops task status failed, risk_id=%s task_id=%s err=%s", risk.risk_id, task_id, err
-                )
-                succeeded = True  # 无从判定：保守按已发出拦截
-    else:
-        succeeded = state in SOPSTaskStatus.get_success_status()
-    if not succeeded:
-        return
-    raise serializers.ValidationError(
-        gettext_lazy("该风险单已有成功的正式派单记录：插件的回调按风险单复用，在其上发送测试工单会干扰正式回调或被静默拦截，请选择一张未成功发送过正式工单的风险单进行测试")
-    )
+            return True  # 无从判定：保守按已发出拦截
+        try:
+            status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+            return ((status or {}).get("state") or "") in SOPSTaskStatus.get_success_status()
+        except Exception as err:  # NOCC:broad-except(状态不可判定时保守拦截)
+            logger.warning(
+                "[BkSec] get sops task status failed, risk_id=%s task_id=%s err=%s", risk.risk_id, task_id, err
+            )
+            return True  # 无从判定：保守按已发出拦截
+    return state in SOPSTaskStatus.get_success_status()
+
+
+def validate_bksec_test_target(risk: Risk) -> None:
+    """
+    校验该风险单是否已成功发送过正式工单，已成功则拒绝测试发送
+
+    仅当正式派单已成功时拒绝：插件的回调按风险单复用，
+    在其上发送测试工单会干扰正式回调或被静默拦截。
+    派单失败/被终止/已过期的单据未真正发出工单，允许测试，避免自动派单策略下无样例单可用。
+
+    判定顺序：
+    1. 插件上报记录（权威）：插件在 BKSEC 推单 2xx 后主动上报，命中即已真实发单。
+       该判定同时修掉了长驻 RUNNING 任务被误判为「未发单」的问题——发单发生在
+       回调/轮询节点内部，节点始终 RUNNING，SOPS 永远不会 FINISHED。
+    2. SOPS 任务状态（回退）：插件未上报时沿用原保守判定，避免旧部署下守卫失效。
+    """
+    if has_bksec_ticket_sent(risk) or _sops_dispatch_succeeded(risk):
+        raise serializers.ValidationError(
+            gettext_lazy("该风险单已有成功的正式派单记录：插件的回调按风险单复用，在其上发送测试工单会干扰正式回调或被静默拦截，请选择一张未成功发送过正式工单的风险单进行测试")
+        )

@@ -71,7 +71,9 @@ def _build_rule_fields(strategy: Strategy, config: BkSecConfig, pa_id: int) -> d
         "scope": [{"field": "strategy_id", "operator": "=", "value": [strategy.strategy_id]}],
         "pa_id": pa_id,
         "pa_params": build_pa_params(config),
-        "auto_close_risk": False,
+        # BKSEC 派单闭环：工单办结（标准运维任务成功）即关闭风险单。
+        # 关单后新事件按聚合规则生成新风险单 → 新任务 → 首次发单，不再需要"工单办结后重新开单"。
+        "auto_close_risk": True,
     }
 
 

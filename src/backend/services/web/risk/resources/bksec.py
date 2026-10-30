@@ -43,7 +43,7 @@ from services.web.risk.bksec.service import (
     prepare_test_constants,
     validate_bksec_test_target,
 )
-from services.web.risk.constants import TicketNodeStatus
+from services.web.risk.constants import BkSecPushStatus, TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
 from services.web.risk.serializers import (
     GetTaskStatusReqSerializer,
@@ -51,6 +51,8 @@ from services.web.risk.serializers import (
     ListBkSecProjectsResponseSerializer,
     PreviewTicketReqSerializer,
     PreviewTicketResponseSerializer,
+    ReportBkSecTicketSentReqSerializer,
+    ReportBkSecTicketSentResponseSerializer,
     SendTestTicketReqSerializer,
     SendTestTicketResponseSerializer,
 )
@@ -322,6 +324,49 @@ class GetTaskStatus(TicketResourceMeta):
     def _build_failure_hint(self, task_id: str, status: dict) -> str:
         """失败提示：回源取失败节点错误文本（顺带回写逐节点 error_message），取不到回退通用提示"""
         return fill_failure_info(status, task_id=task_id, generic=self.GENERIC_HINT)
+
+
+class ReportBkSecTicketSent(BkSecResourceMeta):
+    """
+    上报 BKSEC 推送成功（发单插件在 BKSEC 推单返回 2xx 那一刻调用）
+
+    SOPS 侧拿不到「工单真正发出」这一事实：发单发生在长驻的「回调 / 轮询」节点内部，
+    这两个节点始终 RUNNING，任务级与节点级 finish_time 都不存在，
+    SOPS 只能证明「套餐跑了」，不能证明「工单发了」。故由插件在成功那一刻主动上报。
+
+    上报只是把风险单的推送状态置为「推送成功」：只记当前状态，不发单时刻、不留历史。
+    「推送失败」由套餐任务终态失败时置位，不由插件上报。
+    """
+
+    name = gettext_lazy("上报BKSEC推送成功")
+
+    RequestSerializer = ReportBkSecTicketSentReqSerializer
+    ResponseSerializer = ReportBkSecTicketSentResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        event_id = (validated_request_data.get("event_id") or "").strip() or None
+        trace_id = validated_request_data.get("trace_id") or ""
+        risk = Risk.objects.filter(risk_id=risk_id).first()
+        if risk is None:
+            # 风险单不存在（已清理或 risk_id 有误）时只告警，不影响插件发单主流程
+            logger.warning("[ReportBkSecTicketSent] risk not found, risk_id=%s trace_id=%s", risk_id, trace_id)
+            raise serializers.ValidationError(gettext_lazy("风险单不存在 => %s") % risk_id)
+        updated = risk.bksec_push_status != BkSecPushStatus.SUCCESS or (
+            event_id is not None and risk.bksec_push_event_id != event_id
+        )
+        if updated:
+            risk.bksec_push_status = BkSecPushStatus.SUCCESS
+            risk.bksec_push_event_id = event_id
+            risk.save(update_fields=["bksec_push_status", "bksec_push_event_id"])
+        logger.info(
+            "[ReportBkSecTicketSent] risk_id=%s trace_id=%s event_id=%s updated=%s",
+            risk_id,
+            trace_id,
+            event_id,
+            updated,
+        )
+        return {"risk_id": risk_id, "push_status": risk.bksec_push_status, "updated": updated}
 
 
 def _extract_risk_access_fields(item: dict) -> list:

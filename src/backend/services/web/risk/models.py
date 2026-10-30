@@ -47,6 +47,7 @@ from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     AnalyseReportStatus,
     AnalyseReportType,
+    BkSecPushStatus,
     EventMappingFields,
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
@@ -265,6 +266,21 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         null=True,
         blank=True,
         help_text=gettext_lazy("关注人通知组完整信息快照，包含组ID、名称、成员、通知方式、描述"),
+    )
+    bksec_push_status = models.CharField(
+        gettext_lazy("BKSEC Push Status"),
+        max_length=32,
+        choices=BkSecPushStatus.choices,
+        default=BkSecPushStatus.NOT_PUSHED,
+        db_index=True,
+        help_text=gettext_lazy("BKSEC 推送状态：未推送 / 推送成功 / 推送失败"),
+    )
+    bksec_push_event_id = models.CharField(
+        gettext_lazy("BKSEC Push Event ID"),
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("BKSEC 推送返回的事件 ID（WeSec 侧 event_id，非工单号），用于排查"),
     )
 
     def can_auto_generate_report(self) -> bool:

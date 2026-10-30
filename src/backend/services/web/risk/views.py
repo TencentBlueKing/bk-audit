@@ -107,6 +107,16 @@ class AnalyseReportAPIGWViewSet(APIGWViewSet):
     ]
 
 
+class BkSecTicketAPIGWViewSet(APIGWViewSet):
+    """
+    BKSEC Ticket APIGW - 供发单插件在 BKSEC 推单成功后回写发单结果，校验 app 信息
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.report_bk_sec_ticket_sent, endpoint="ticket_sent"),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks

@@ -60,7 +60,7 @@ from services.web.risk.utils import (
     iter_status_nodes,
 )
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
 from services.web.strategy_v2.models import Strategy
 
 # 终态结果：只有终态才输出 finish_time / duration。
@@ -92,8 +92,8 @@ class ListProcessApplications(ProcessApplicationMeta):
                 _q |= Q(**{key: item})
             q &= _q
         # 场景过滤
-        # 筛选数据（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回全部）
-        process_applications = SceneScopeFilter.filter_queryset(
+        # 筛选数据（CompositeScopeFilter 处理 scene_id 过滤：场景级绑定 + 平台级全局可见的并集）
+        process_applications = CompositeScopeFilter.filter_queryset(
             queryset=ProcessApplication.objects.filter(q),
             scene_id=scene_id,
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
@@ -123,7 +123,7 @@ class ListAllProcessApplications(ProcessApplicationMeta):
         scene_id = validated_request_data["scene_id"]
         has_execution_records = validated_request_data.get("has_execution_records")
         process_applications = ProcessApplication.objects.all()
-        process_applications = SceneScopeFilter.filter_queryset(
+        process_applications = CompositeScopeFilter.filter_queryset(
             queryset=process_applications,
             scene_id=scene_id,
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
@@ -415,7 +415,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             if pa_id:
                 pa_queryset = pa_queryset.filter(id=pa_id)
             if scene_id:
-                pa_queryset = SceneScopeFilter.filter_queryset(
+                pa_queryset = CompositeScopeFilter.filter_queryset(
                     queryset=pa_queryset,
                     scene_id=scene_id,
                     resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
