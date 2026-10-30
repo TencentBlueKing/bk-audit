@@ -51,8 +51,8 @@
           class="bksec-type"
           data-testid="bksec-risk-type">
           <div class="bksec-label">
+            <span>{{ t('风险类型') }}</span>
             <span class="is-required">*</span>
-            {{ t('风险类型') }}
           </div>
           <bk-select
             v-model="riskTypeId"
@@ -102,6 +102,7 @@
         <div
           v-if="fields.length"
           class="bksec-fields">
+            <div class="bksec-fields-divider" />
             <div class="bksec-fields-title">
               {{ t('工单字段') }}
             </div>
@@ -115,10 +116,10 @@
               class="bksec-field">
               <div class="bksec-field-head">
                 <div class="bksec-field-label">
+                  <span>{{ field.label }}</span>
                   <span
                     v-if="field.required"
                     class="is-required">*</span>
-                  <span>{{ field.label }}</span>
                   <audit-icon
                     v-if="field.id === 'target'"
                     v-bk-tooltips="t('填写资产标识信息，例如资产类型为 account 时，填写对应账号')"
@@ -237,6 +238,7 @@
     v-model:is-show="showPreview"
     :field-values="fieldValues"
     :fields="previewFields"
+    :project-id="projectId"
     :risk-type-id="riskTypeId"
     :risk-type-name="riskTypeName"
     :strategy-id="strategyId"
@@ -251,7 +253,6 @@
 
   import BksecManageService from '@service/bksec-manage';
 
-  import type BksecPreviewRisk from '@model/bksec/preview-risk';
   import type BksecProject from '@model/bksec/project';
   import type BksecRiskType from '@model/bksec/risk-type';
   import type BksecRiskTypeField from '@model/bksec/risk-type-field';
@@ -269,7 +270,7 @@
   import { buildVariableGroups } from './variable-groups';
 
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
-  import { getStrategyRouteNames, isStrategyEditRoute } from '../../../utils/strategy-routes';
+  import { getStrategyRouteNames } from '../../../utils/strategy-routes';
 
   interface Props {
     formData?: Record<string, any>;
@@ -305,6 +306,9 @@
   const riskTypeId = ref<string | null>(
     props.formData?.bksecRiskTypeId ? String(props.formData.bksecRiskTypeId) : null,
   );
+  const projectId = ref<string | null>(
+    props.formData?.bksecProjectId ? String(props.formData.bksecProjectId) : null,
+  );
   const riskTypeName = ref(props.formData?.bksecRiskTypeName || '');
   const fieldValues = ref<Record<string, string>>({ ...(props.formData?.bksecFieldValues || {}) });
   const fields = ref<BksecRiskTypeField[]>([]);
@@ -318,7 +322,6 @@
   const editingFields = ref<Record<string, boolean>>({});
   const fieldInputRefs = ref<Record<string, HTMLInputElement | null>>({});
   const fieldOverflowed = reactive<Record<string, boolean>>({});
-  const sampleRisks = ref<BksecPreviewRisk[]>([]);
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
   const searchKeyword = ref('');
@@ -349,7 +352,6 @@
     ],
     aiVariables: props.formData?.report_config?.ai_variables,
     strategyType: props.strategyType || props.formData?.strategy_type,
-    sample: sampleRisks.value[sampleRisks.value.length - 1]?.sample || {},
   }));
 
   const previewFields = computed(() => fields.value.map(field => ({
@@ -478,10 +480,12 @@
   const applyRiskType = (id: string | null) => {
     if (!id) {
       fields.value = [];
+      projectId.value = null;
       return;
     }
     const matched = findRiskType(id);
     if (!matched) return;
+    projectId.value = matched.project.id;
     riskTypeName.value = matched.type.name;
     fields.value = matched.type.fields;
     fieldValues.value = retainFieldValues(fieldValues.value, matched.type.fields);
@@ -503,6 +507,7 @@
 
   const buildParams = () => ({
     bksecEnabled: enabled.value,
+    bksecProjectId: projectId.value,
     bksecRiskTypeId: riskTypeId.value,
     bksecRiskTypeName: riskTypeName.value,
     bksecFieldValues: { ...fieldValues.value },
@@ -530,6 +535,7 @@
     riskTypeId.value = nextId;
     if (!nextId) {
       fields.value = [];
+      projectId.value = null;
       return;
     }
     applyRiskType(nextId);
@@ -537,6 +543,10 @@
 
   watch(projects, (list) => {
     if (!searchKeyword.value && list.length) projectCatalog.value = list;
+    if (riskTypeId.value && !projectId.value) {
+      const matched = findRiskType(riskTypeId.value);
+      if (matched) projectId.value = matched.project.id;
+    }
     // 搜索只刷新下拉。当前选中没变时，不重绘下面的工单字段。
     if (!riskTypeId.value || fields.value.length) return;
     applyRiskType(riskTypeId.value);
@@ -737,14 +747,12 @@
     document.removeEventListener('compositionend', markRiskTypeCompositionEnd, true);
   });
 
-  onMounted(async () => {
+  onMounted(() => {
     document.addEventListener('input', rememberSearchInput, true);
     document.addEventListener('keydown', rememberEnterSearchValue);
     document.addEventListener('keyup', confirmRiskTypeByEnter);
     document.addEventListener('compositionstart', markRiskTypeCompositionStart, true);
     document.addEventListener('compositionend', markRiskTypeCompositionEnd, true);
-    if (!isStrategyEditRoute(route.name)) return;
-    sampleRisks.value = await BksecManageService.fetchEditPreviewRisks(strategyId.value);
   });
 </script>
 <style lang="postcss" scoped>
@@ -872,8 +880,9 @@
   border-color: var(--audit-danger-02);
 }
 
-.bksec-fields {
-  margin-top: var(--audit-space-24);
+.bksec-fields-divider {
+  margin: var(--audit-space-24) 0;
+  border-top: 1px solid var(--audit-neutral-border-01);
 }
 
 .bksec-fields-title {
