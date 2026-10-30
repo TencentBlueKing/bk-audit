@@ -1217,6 +1217,15 @@ class ListStrategy(StrategyV2Base):
                     # 未开启: report_enabled=False
                     report_status_q |= Q(report_enabled=False)
             queryset = queryset.filter(report_status_q)
+        # bksec_enabled filter
+        bksec_enabled = validated_request_data.pop("bksec_enabled", None)
+        if bksec_enabled is not None:
+            if bksec_enabled:
+                queryset = queryset.filter(bksec_config__enabled=True)
+            else:
+                # 未配置（bksec_config 无 enabled 键）时 JSON_EXTRACT 为 NULL，
+                # 等值匹配与 exclude 都会漏掉这类策略，需显式补 isnull 分支
+                queryset = queryset.filter(Q(bksec_config__enabled=False) | Q(bksec_config__enabled__isnull=True))
 
         # 预加载策略标签，避免N+1查询
         queryset = queryset.prefetch_related(

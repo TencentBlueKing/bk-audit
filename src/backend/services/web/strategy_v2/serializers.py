@@ -1495,6 +1495,12 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         required=False,
         help_text="可选值: %s，多个用逗号分隔" % ", ".join(f"{value}({label})" for value, label in StrategyReportStatus.choices),
     )
+    bksec_enabled = serializers.BooleanField(
+        label=gettext_lazy("BKSEC 发单是否启用"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("按 BKSEC 安全工单发单开关筛选策略。true=已启用，false=未启用（含未配置）"),
+    )
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
@@ -1539,6 +1545,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
                 "binding_type",
                 "dispatch_scene_id",
                 "updated_by",
+                "bksec_enabled",
             ]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
