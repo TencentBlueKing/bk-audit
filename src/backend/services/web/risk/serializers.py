@@ -833,7 +833,12 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
     risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
     risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
     risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
-    params = serializers.JSONField(label=gettext_lazy("风险参数"), help_text=gettext_lazy("风险描述/证据/时间等"))
+    params = serializers.JSONField(
+        label=gettext_lazy("套餐入参"),
+        help_text=gettext_lazy(
+            "派单时渲染出的套餐入参快照 [{key, name, value}]：key 为 SOPS 常量 key，name 为模板显示名，" "value 为实际发出的值。快照上线前产生的历史记录返回空数组"
+        ),
+    )
     retry_count = serializers.IntegerField(label=gettext_lazy("重试次数"))
     retry_history = serializers.JSONField(
         label=gettext_lazy("重试记录"),

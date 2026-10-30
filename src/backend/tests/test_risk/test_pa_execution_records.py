@@ -50,8 +50,12 @@ def _create_node(
     start_time: str = "",
     finish_time: str = "",
     task_url: str = "",
+    pa_constants: list = None,
 ) -> TicketNode:
     process_result = {"task": {"task_id": task_id, "task_url": task_url}, "status": {"state": state}}
+    # 派单时渲染的入参快照（新链路写入；不传模拟快照上线前的历史节点）
+    if pa_constants is not None:
+        process_result["pa_constants"] = pa_constants
     # 执行时套餐快照（新链路写入；pa_id=None 模拟历史节点）
     if pa_id is not None:
         process_result.update({"pa_id": pa_id, "pa_name": pa_name})
@@ -443,12 +447,22 @@ class TestGetPAExecutionRecordDetail:
         assert resp["risk_title"] == "详情风险标题"
         assert resp["risk_status"] == (risk.status or "")
         assert resp["sops_task_url"] == "https://sops.example/1"
-        # 风险描述 / 风险证据来自 params（重试场景需展示）
-        assert resp["params"]["risk_description"] == RISK_INFO["event_content"]
-        assert resp["params"]["risk_evidence"] == RISK_INFO["event_evidence"]
+        # 历史节点无入参快照 → 空数组（不回渲染）
+        assert resp["params"] == []
         # 无重试记录
         assert resp["retry_count"] == 0
         assert resp["retry_history"] == []
+
+    def test_detail_params_from_dispatch_snapshot(self):
+        """params 取派单时渲染的套餐入参快照（带模板显示名），原样透传"""
+        risk = self._prepare()
+        pa_constants = [
+            {"key": "risk_id", "name": "风险ID", "value": "R-D"},
+            {"key": "operator", "name": "初始责任人", "value": ["frodomei"]},
+        ]
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1, pa_constants=pa_constants)
+        resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
+        assert resp["params"] == pa_constants
 
     def test_detail_retry_history_passthrough(self):
         """重试快照原样透传（全量节点，被重试节点带 retried 标记，不再有 time 字段）"""
@@ -700,7 +714,7 @@ class TestRetryAutoProcessRetryHistory:
         assert node.process_result["status"]["state"] == SOPSTaskStatus.REVOKED.value
 
     def test_detail_without_risk(self):
-        """Risk 不存在时 risk_id 仍有值，风险单字段为空串、params 为空"""
+        """Risk 不存在时 risk_id 仍有值，风险单字段为空串、params 为空数组"""
         ProcessApplication.objects.all().delete()
         RiskRule.objects.all().delete()
         Risk.objects.all().delete()
@@ -710,7 +724,7 @@ class TestRetryAutoProcessRetryHistory:
         assert resp["risk_id"] == "R-GONE"
         assert resp["risk_title"] == ""
         assert resp["risk_status"] == ""
-        assert resp["params"] == {}
+        assert resp["params"] == []
 
 
 class TestSopsTimeFormat:

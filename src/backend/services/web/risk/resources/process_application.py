@@ -21,10 +21,8 @@ import abc
 from django.db import transaction
 from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
-from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import OrderTypeChoices
@@ -61,7 +59,6 @@ from services.web.risk.utils import (
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
-from services.web.strategy_v2.models import Strategy
 
 # 终态结果：只有终态才输出 finish_time / duration。
 # 未结束任务的 SOPS 时间会退化取到旧节点值（任务级时间缺失 → 取子节点最早/最晚），
@@ -639,25 +636,10 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
         retried_node_ids = set(process_result.get("retried_node_ids") or [])
         attempts = extract_attempt_records(status_info, retried_node_ids=retried_node_ids)
 
-        # 参数信息（从 Risk 获取）
-        params = {}
-        if risk:
-            strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
-            params = {
-                "strategy_id": risk.strategy_id,
-                "strategy_name": getattr(strategy, "strategy_name", "") if strategy else "",
-                "risk_type": risk.event_type or [],
-                "risk_evidence": risk.event_evidence or [],
-                "risk_source": risk.event_source or "",
-                "risk_description": risk.event_content or "",
-                "risk_time": (
-                    timezone.localtime(risk.event_time).strftime(api_settings.DATETIME_FORMAT)
-                    if risk.event_time
-                    else ""
-                ),
-                "operator": risk.operator or [],
-                "raw_event_id": risk.raw_event_id or "",
-            }
+        # 参数信息：派单时渲染出的套餐入参快照（含模板显示名）。
+        # 历史节点（快照能力上线前产生）无该字段 → 返回空数组；
+        # 不按当前配置回渲染，避免展示值与当时实际发出的入参不一致。
+        params = process_result.get("pa_constants") or []
 
         return {
             # 基本信息
