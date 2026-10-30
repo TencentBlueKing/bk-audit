@@ -203,14 +203,17 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
+  import AccountManageService from '@service/account-manage';
   import BksecManageService from '@service/bksec-manage';
 
+  import AccountModel from '@model/account/account';
   import { buildBksecConfig } from '@model/bksec/config';
   import BksecTestTaskStatus, { decideTaskPoll } from '@model/bksec/task-status';
   import type BksecPreviewRisk from '@model/bksec/preview-risk';
   import type { BksecTicketPreviewRow } from '@model/bksec/ticket-preview';
 
   import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
 
   import { canSendTestTicket, shouldRequestRemotePreview } from './form-rules';
   import { buildLocalPreview, mapRemotePreview } from './local-preview';
@@ -219,6 +222,7 @@
 
   interface Props {
     isShow: boolean;
+    projectId?: string | null;
     riskTypeId: string | null;
     riskTypeName?: string;
     fieldValues: Record<string, string>;
@@ -236,6 +240,9 @@
   const route = useRoute();
   const { t } = useI18n();
   const { messageSuccess, messageError } = useMessage();
+  const { data: userInfo } = useRequest(AccountManageService.fetchUserInfo, {
+    defaultValue: new AccountModel(),
+  });
 
   const isShow = computed({
     get: () => props.isShow,
@@ -267,6 +274,10 @@
   const isDebugRisk = (item: BksecPreviewRisk) => item.source === 'debug' || !item.risk_id;
   const displayRisks = computed(() => riskList.value);
   const selectedRisk = computed(() => displayRisks.value.find(item => item.id === selectedId.value) || null);
+  const fillDefaultHandler = () => {
+    const username = userInfo.value?.username;
+    if (!testForm.value.handler && username) testForm.value.handler = username;
+  };
   const handlerName = computed(() => String(testForm.value.handler || '').trim());
   const canSendTest = computed(() => canSendTestTicket(selectedRisk.value?.risk_id));
   const sendDisabledTip = computed(() => t('请先选择一条风险单'));
@@ -375,6 +386,7 @@
         risk_id: riskId,
         bksec_config: buildBksecConfig({
           bksecEnabled: true,
+          bksecProjectId: props.projectId,
           bksecRiskTypeId: props.riskTypeId,
           bksecRiskTypeName: props.riskTypeName,
           bksecFieldValues: props.fieldValues || {},
@@ -515,9 +527,15 @@
   };
 
   watch(() => props.isShow, (visible) => {
-    if (visible) openPreview();
-    else stopPoll();
+    if (visible) {
+      fillDefaultHandler();
+      openPreview();
+    } else stopPoll();
   }, { immediate: true });
+
+  watch(() => userInfo.value?.username, () => {
+    if (props.isShow) fillDefaultHandler();
+  });
 
   onBeforeUnmount(() => {
     stopPoll();
@@ -535,7 +553,6 @@
       return;
     }
     if (sending.value) return;
-    testForm.value.handler = '';
     stopPoll();
     const generation = pollGeneration;
     sending.value = true;
@@ -545,6 +562,7 @@
         test_receivers: [handler],
         bksec_config: buildBksecConfig({
           bksecEnabled: true,
+          bksecProjectId: props.projectId,
           bksecRiskTypeId: props.riskTypeId,
           bksecRiskTypeName: props.riskTypeName,
           bksecFieldValues: props.fieldValues || {},

@@ -254,15 +254,24 @@
           <div class="desc-grid">
             <div class="desc-item">
               <span class="desc-label"><span>{{ t('风险ID') }}：</span></span>
-              <span class="desc-value">
+              <span
+                class="desc-value"
+                :class="{ 'is-jump': detail.risk_id }">
+                <span
+                  class="desc-value-text"
+                  v-bk-tooltips="lineTip('risk-id', detail.risk_id || '--')"
+                  @mouseenter="syncOverflow($event, 'risk-id')">
+                  {{ detail.risk_id || '--' }}
+                </span>
                 <button
                   v-if="detail.risk_id"
-                  class="text-link"
+                  class="jump-btn"
+                  data-testid="execution-detail-risk-jump"
                   type="button"
+                  v-bk-tooltips="{ content: t('打开风险详情'), delay: 80 }"
                   @click="openLinkedField">
-                  {{ detail.risk_id }}
+                  <audit-icon type="jump-link" />
                 </button>
-                <template v-else>--</template>
               </span>
             </div>
             <div class="desc-item">
@@ -1027,14 +1036,6 @@
   line-clamp: 3;
   word-break: break-all;
   overflow-wrap: anywhere;
-}
-
-.text-link {
-  padding: 0;
-  color: var(--audit-brand-02);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
 }
 
 .jump-btn {

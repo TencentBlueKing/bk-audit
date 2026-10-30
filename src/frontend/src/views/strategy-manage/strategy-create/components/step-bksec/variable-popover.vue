@@ -61,9 +61,6 @@
           <span class="bksec-var-label">{{ item.label }}</span>
           <span class="bksec-var-token">{{ item.insertText }}</span>
         </span>
-        <span
-          v-if="showSample"
-          class="bksec-var-sample">{{ item.sample || '-' }}</span>
         <span class="bksec-var-insert">{{ t('引用') }}</span>
       </button>
     </div>
@@ -96,7 +93,7 @@
   const activeKey = ref<VariableGroup['key']>('risk');
 
   const matchItem = (item: VariableGroup['items'][number], rule: RegExp) => (
-    rule.test(item.label) || rule.test(item.token) || rule.test(item.sample) || rule.test(item.insertText)
+    rule.test(item.label) || rule.test(item.token) || rule.test(item.insertText)
   );
 
   const filteredGroups = computed(() => {
@@ -116,7 +113,6 @@
     filteredGroups.value.find(group => group.key === activeKey.value) || filteredGroups.value[0]
   ));
   const activeItems = computed(() => activeGroup.value?.items || []);
-  const showSample = computed(() => activeItems.value.some(item => !!item.sample));
 
   watch(() => props.groups, (groups) => {
     if (!groups.some(group => group.key === activeKey.value)) {
@@ -249,32 +245,24 @@
   display: flex;
   min-width: 0;
   flex: 1;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--audit-space-8);
+  column-gap: var(--audit-space-8);
 }
 
 .bksec-var-label,
-.bksec-var-token,
-.bksec-var-sample {
-  overflow: hidden;
+.bksec-var-token {
   font-size: var(--audit-font-size-sm);
   line-height: var(--audit-line-height-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.bksec-var-label,
-.bksec-var-sample {
+.bksec-var-label {
   color: var(--audit-neutral-text-02);
 }
 
 .bksec-var-token {
   color: var(--audit-neutral-text-03);
-}
-
-.bksec-var-sample {
-  width: 140px;
-  flex: none;
 }
 
 .bksec-var-insert {

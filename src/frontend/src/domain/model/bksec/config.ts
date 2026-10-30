@@ -30,6 +30,7 @@ export interface BksecFieldMapping {
 
 export interface BksecConfigPayload {
   enabled: boolean;
+  project_id?: string;
   risk_type_id?: string;
   risk_type_name: string;
   field_mappings: BksecFieldMapping[];
@@ -37,6 +38,7 @@ export interface BksecConfigPayload {
 
 export interface BksecFormState {
   bksecEnabled: boolean;
+  bksecProjectId: string | null;
   bksecRiskTypeId: string | null;
   bksecRiskTypeName: string;
   bksecFieldValues: Record<string, string>;
@@ -45,6 +47,7 @@ export interface BksecFormState {
 
 const emptyForm = (): BksecFormState => ({
   bksecEnabled: false,
+  bksecProjectId: null,
   bksecRiskTypeId: null,
   bksecRiskTypeName: '',
   bksecFieldValues: {},
@@ -78,7 +81,9 @@ export const buildBksecConfig = (params: Record<string, any> = {}): BksecConfigP
     risk_type_name: params.bksecRiskTypeName || '',
     field_mappings: fieldMappings,
   };
+  const projectId = toId(params.bksecProjectId);
   const riskTypeId = toId(params.bksecRiskTypeId);
+  if (projectId) config.project_id = projectId;
   if (riskTypeId) config.risk_type_id = riskTypeId;
   return config;
 };
@@ -102,6 +107,7 @@ export const readBksecFormState = (detail: Record<string, any> = {}): BksecFormS
     });
     return {
       bksecEnabled: !!config.enabled,
+      bksecProjectId: toId(config.project_id),
       bksecRiskTypeId: toId(config.risk_type_id),
       bksecRiskTypeName: config.risk_type_name || '',
       bksecFieldValues: fieldValues,
@@ -120,6 +126,7 @@ export const readBksecFormState = (detail: Record<string, any> = {}): BksecFormS
   }
   return {
     bksecEnabled: !!(detail.bksecEnabled ?? detail.bksec_enabled),
+    bksecProjectId: toId(detail.bksecProjectId ?? detail.bksec_project_id),
     bksecRiskTypeId: toId(detail.bksecRiskTypeId ?? detail.bksec_risk_type_id),
     bksecRiskTypeName: detail.bksecRiskTypeName || '',
     bksecFieldValues: { ...(detail.bksecFieldValues ?? detail.bksec_field_values ?? {}) },
