@@ -15,7 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import copy
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -29,6 +31,8 @@ from core.sensitive import (
     sanitize_exception,
     strip_traceback,
 )
+
+logger = logging.getLogger(__name__)
 
 # 总开关：是否启用 KMS 信封解密注入
 KMS_ENABLED_KEY = "BKAPP_KMS_ENABLED"
@@ -209,6 +213,292 @@ def _extract_secrets(data) -> dict:
     return data
 
 
+# 凭据格式（分类 -> 实例 -> 字段 多层 JSON）-> 扁平「环境变量名 -> 明文」映射
+# 顶层分类键（小写）；与扁平 env 形式（全大写）互斥，用于识别信封形态。
+_DOCUMENT_CATEGORIES = frozenset(
+    {
+        "bkapp_id_secret",
+        "mysql",
+        "rabbitmq",
+        "redis",
+        "elasticsearch",
+        "doris",
+        "platform",
+        "bkbase",
+        "telemetry",
+        "ai",
+        "tokens",
+        "bkrepo",
+    }
+)
+
+# 初始化配置基底模板：仅在 Chart 未注入 BKAPP_INIT_*_CONFIG 时兜底（非敏感占位）
+# 正常路径是「合并」：Chart 提供域名/端口/集群名/保留策略等非敏感字段，凭据包只覆盖 auth 字段。
+# 用模板重建会把这些字段清空（domain_name 为空、port 为 0），初始化必然失败。
+_INIT_ES_TEMPLATE = [
+    {
+        "namespace": "default",
+        "cluster_name": "",
+        "bkbase_cluster_en_name": "",
+        "domain_name": "",
+        "source_type": "",
+        "port": "0",
+        "schema": "http",
+        "auth_info": {"username": "", "password": ""},
+        "enable_hot_warm": False,
+        "hot_attr_name": "",
+        "hot_attr_value": "",
+        "warm_attr_name": "",
+        "warm_attr_value": "",
+        "setup_config": {
+            "retention_days_max": 14,
+            "retention_days_default": 7,
+            "number_of_replicas_max": 1,
+            "number_of_replicas_default": 1,
+        },
+        "admin": [],
+        "description": "",
+    }
+]
+_INIT_REDIS_TEMPLATE = [
+    {
+        "namespace": "default",
+        "redis_name_en": "",
+        "redis_name": "",
+        "connection_info": {
+            "enable_sentinel": False,
+            "name_sentinel": "",
+            "host_sentinel": "",
+            "port_sentinel": 0,
+            "host": "",
+            "port": 0,
+            "password": "",
+        },
+        "version": "",
+    }
+]
+_INIT_DORIS_TEMPLATE = [
+    {
+        "cluster_name": "",
+        "auth_info": {"username": "", "password": ""},
+        # 必须为 True：SystemInitHandler._init_doris 对非预定义集群直接抛 ParamsNotValid
+        "pre_defined": True,
+        "pre_defined_extra_config": {},
+    }
+]
+
+
+def _is_document_shape(data) -> bool:
+    """识别信封是否为多层分类 JSON"""
+    return isinstance(data, dict) and bool(_DOCUMENT_CATEGORIES & set(data))
+
+
+def _dig(data, *path, default=None):
+    """按路径安全取值：任一中间层缺失即返回 default。"""
+    current = data
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
+
+
+def _deep_set(node, path, value) -> None:
+    """按路径写入嵌套 dict（路径尾端赋值）。"""
+    for key in path[:-1]:
+        node = node.setdefault(key, {})
+    node[path[-1]] = value
+
+
+# 初始化凭据字段 -> 配置元素内的嵌套路径
+_INIT_AUTH_FIELD_MAP = {"username": ("auth_info", "username"), "password": ("auth_info", "password")}
+_INIT_REDIS_FIELD_MAP = {"password": ("connection_info", "password")}
+# 初始化配置的默认实例键：对应 Chart 配置数组的第一个元素
+_INIT_DEFAULT_INSTANCE_KEY = "default"
+
+
+def _load_env_init_config(key: str) -> Optional[list]:
+    """读取 Chart 已注入的初始化配置（JSON 数组）。
+
+    None 表示未注入，按模板兜底；[] 表示已注入但不可用，此时不覆盖原值。
+    """
+    raw = os.getenv(key)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        logger.warning("[KMS] %s 不是合法 JSON，跳过凭据合并，保留原值", key)
+        return []
+    if not isinstance(data, list):
+        logger.warning("[KMS] %s 不是配置数组，跳过凭据合并，保留原值", key)
+        return []
+    return data
+
+
+def _parse_init_instance_key(instance_key: str):
+    """初始化凭据的实例键解析：default -> (0, None)；default__<cluster> -> (None, cluster)。"""
+    if instance_key == _INIT_DEFAULT_INSTANCE_KEY:
+        return 0, None
+    _, sep, cluster_name = instance_key.partition("__")
+    if sep and cluster_name:
+        return None, cluster_name
+    return 0, None
+
+
+def _instance_creds(raw: dict, category: str) -> dict:
+    """取某分类下的实例凭据：{实例键: {字段: 值}}，忽略空实例。"""
+    instances = raw.get(category) if isinstance(raw, dict) else None
+    if not isinstance(instances, dict):
+        return {}
+    return {key: value for key, value in instances.items() if isinstance(value, dict) and value}
+
+
+def _merge_init_config(instances: dict, template: list, field_map: dict, key: str) -> Optional[str]:
+    """把凭据字段合并进 Chart 提供的初始化配置，返回整串 JSON。
+
+    关键约束：只覆盖 auth 类字段，域名/端口/集群名/保留策略等非敏感字段必须原样保留；
+    否则初始化会拿着空地址去建集群。未匹配到配置元素的实例按模板追加。
+    """
+    configs = _load_env_init_config(key)
+    if configs is None:
+        logger.warning("[KMS] 未找到 %s，按内置模板兜底，非敏感字段需由部署侧确认", key)
+        # 兜底时按凭据里的实例逐个新建，避免留下一个没有域名的空白骨架元素
+        merged: list = []
+    elif not configs:
+        return None
+    else:
+        merged = copy.deepcopy(configs)
+
+    for instance_key, creds in instances.items():
+        index, cluster_name = _parse_init_instance_key(instance_key)
+        target = None
+        if cluster_name is not None:
+            target = next(
+                (item for item in merged if isinstance(item, dict) and item.get("cluster_name") == cluster_name), None
+            )
+        elif index < len(merged) and isinstance(merged[index], dict):
+            target = merged[index]
+        if target is None:
+            target = copy.deepcopy(template[0])
+            if cluster_name:
+                target["cluster_name"] = cluster_name
+            merged.append(target)
+        for src_field, dst_path in field_map.items():
+            value = creds.get(src_field)
+            if value in (None, ""):
+                continue
+            _deep_set(target, list(dst_path), value)
+    return json.dumps(merged, ensure_ascii=False)
+
+
+def _warn_unknown_categories(raw: dict) -> None:
+    """文档形态下未识别的分类键会被忽略，留一条不含任何键名的告警。
+
+    键名同样来自解密后的凭据声明，落日志会被判定为敏感信息明文输出
+    （CodeQL py/clear-text-logging-sensitive-data），因此只提示「存在」，不输出键名与值。
+    """
+    if not any(key not in _DOCUMENT_CATEGORIES for key in raw):
+        return
+    logger.warning("[KMS] 凭据声明中存在未识别的分类键，相关凭据已忽略；请对照录入模板核对分类名")
+
+
+def _transform_document_bundle(raw: dict) -> dict:
+    """集中补齐「多层 JSON -> 扁平 env」的转换，及其初始化配置的合成/合并。"""
+    _warn_unknown_categories(raw)
+    secrets: dict = {}
+
+    # --- 运行时业务凭据：分类.实例.字段 -> env 名 ---
+    bkapp = _dig(raw, "bkapp_id_secret", "default", default={}) or {}
+    if "app_code" in bkapp:
+        secrets["BKPAAS_APP_ID"] = bkapp["app_code"]
+    if "app_secret" in bkapp:
+        secrets["BKPAAS_APP_SECRET"] = bkapp["app_secret"]
+
+    mysql = _dig(raw, "mysql", "default", default={}) or {}
+    if "username" in mysql:
+        secrets["MYSQL_USER"] = mysql["username"]
+    if "password" in mysql:
+        secrets["MYSQL_PASSWORD"] = mysql["password"]
+
+    rabbitmq = _dig(raw, "rabbitmq", "default", default={}) or {}
+    if "username" in rabbitmq:
+        secrets["RABBITMQ_USER"] = rabbitmq["username"]
+    if "password" in rabbitmq:
+        secrets["RABBITMQ_PASSWORD"] = rabbitmq["password"]
+
+    # redis.default：应用缓存 Redis，对应 BK_REDIS 缓存连接。
+    redis_default = _dig(raw, "redis", "default", default={}) or {}
+    if "password" in redis_default:
+        secrets["REDIS_PASSWORD"] = redis_default["password"]
+
+    platform = _dig(raw, "platform", "default", default={}) or {}
+    if "username" in platform:
+        secrets["BKAPP_PLATFORM_AUTH_ACCESS_USERNAME"] = platform["username"]
+    if "access_token" in platform:
+        secrets["BKAPP_PLATFORM_AUTH_ACCESS_TOKEN"] = platform["access_token"]
+
+    bkbase = _dig(raw, "bkbase", "default", default={}) or {}
+    if "token" in bkbase:
+        secrets["BKAPP_BKBASE_DATA_TOKEN"] = bkbase["token"]
+
+    trace = _dig(raw, "telemetry", "trace", default={}) or {}
+    if "token" in trace:
+        secrets["BKAPP_OTEL_BK_DATA_TOKEN"] = trace["token"]
+    audit_log = _dig(raw, "telemetry", "audit_log", default={}) or {}
+    if "token" in audit_log:
+        secrets["BKAPP_OTEL_LOG_BK_DATA_TOKEN"] = audit_log["token"]
+
+    ai = _dig(raw, "ai", default={}) or {}
+    if isinstance(ai, dict):
+        if "audit_log_search" in ai and isinstance(ai["audit_log_search"], dict):
+            secrets["BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY"] = ai["audit_log_search"].get("secret_key", "")
+        if "user_intent" in ai and isinstance(ai["user_intent"], dict):
+            secrets["BKAPP_AI_USER_INTENT_SECRET_KEY"] = ai["user_intent"].get("secret_key", "")
+
+    tokens = _dig(raw, "tokens", default={}) or {}
+    if isinstance(tokens, dict):
+        if "alert" in tokens and isinstance(tokens["alert"], dict):
+            secrets["BKAPP_ALERT_ACCESS_TOKEN"] = tokens["alert"].get("token", "")
+        if "log_export_status" in tokens and isinstance(tokens["log_export_status"], dict):
+            secrets["BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN"] = tokens["log_export_status"].get("token", "")
+
+    bkrepo = _dig(raw, "bkrepo", "default", default={}) or {}
+    if "password" in bkrepo:
+        secrets["BKREPO_PASSWORD"] = bkrepo["password"]
+
+    # --- 初始化链路凭据：只覆盖 auth 字段，合并进 Chart 已注入的 *CONFIG ---
+    # 实例键：default -> 配置数组第一个元素；default__<cluster_name> -> 按 cluster_name 匹配
+    es_instances = _instance_creds(raw, "elasticsearch")
+    if es_instances:
+        es_config = _merge_init_config(es_instances, _INIT_ES_TEMPLATE, _INIT_AUTH_FIELD_MAP, "BKAPP_INIT_ES_CONFIG")
+        if es_config is not None:
+            secrets["BKAPP_INIT_ES_CONFIG"] = es_config
+
+    doris_instances = _instance_creds(raw, "doris")
+    if doris_instances:
+        doris_config = _merge_init_config(
+            doris_instances, _INIT_DORIS_TEMPLATE, _INIT_AUTH_FIELD_MAP, "BKAPP_INIT_DORIS_CONFIG"
+        )
+        if doris_config is not None:
+            secrets["BKAPP_INIT_DORIS_CONFIG"] = doris_config
+
+    # redis.init：初始化登记时使用的「存储」Redis，与上方 redis.default（应用缓存）
+    # 是两个独立实例、用途互斥，故从 redis.init 单独取密码，合并进 BKAPP_INIT_REDIS_CONFIG，绝不与应用缓存共用。
+    redis_init = _dig(raw, "redis", "init", default={}) or {}
+    if isinstance(redis_init, dict) and redis_init:
+        redis_config = _merge_init_config(
+            {_INIT_DEFAULT_INSTANCE_KEY: redis_init},
+            _INIT_REDIS_TEMPLATE,
+            _INIT_REDIS_FIELD_MAP,
+            "BKAPP_INIT_REDIS_CONFIG",
+        )
+        if redis_config is not None:
+            secrets["BKAPP_INIT_REDIS_CONFIG"] = redis_config
+
+    return secrets
+
+
 def validate_secrets(raw: dict) -> dict:
     """校验凭证包 schema：键白名单、值类型、按功能开关确定的必填项。
 
@@ -263,7 +553,11 @@ def load_kms_secrets() -> dict:
         envelope = None
         private_key = None
 
-    return _extract_secrets(data)
+    extracted = _extract_secrets(data)
+    # 凭据格式（多层分类 JSON）需转换为扁平 env 映射；扁平格式原样通过。
+    if _is_document_shape(extracted):
+        return _transform_document_bundle(extracted)
+    return extracted
 
 
 def _load_validated_secrets() -> dict:
