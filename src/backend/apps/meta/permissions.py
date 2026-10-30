@@ -21,7 +21,7 @@ from bk_resource import resource
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import BasePermission
 
-from apps.meta.constants import SystemSourceTypeEnum
+from apps.meta.constants import SystemAuditStatusEnum, SystemSourceTypeEnum
 from apps.meta.exceptions import SystemNotEditable
 from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
@@ -37,6 +37,16 @@ from services.web.common.constants import ScopeType
 
 
 class SearchLogPermission:
+    @classmethod
+    def _get_accessed_system_ids(cls, system_ids: set[str]) -> set[str]:
+        """收窄日志授权范围到已接入系统，不以实时上报健康状态作为检索门槛。"""
+        return set(
+            System.objects.filter(
+                system_id__in=system_ids,
+                audit_status=SystemAuditStatusEnum.ACCESSED,
+            ).values_list("system_id", flat=True)
+        )
+
     @classmethod
     def raise_system_view_permission_exception(cls, username: str | None = None) -> None:
         from apps.permission.handlers.service import PermissionService
@@ -70,6 +80,8 @@ class SearchLogPermission:
             return False
 
         target_system_id = str(system_id)
+        if not cls._get_accessed_system_ids({target_system_id}):
+            return False
         if target_system_id in cls._get_system_scope_system_ids(username):
             return True
         return target_system_id in cls._get_scene_scope_system_ids(username)
@@ -87,7 +99,7 @@ class SearchLogPermission:
 
         scoped_system_ids = cls._get_system_scope_system_ids(username) | cls._get_scene_scope_system_ids(username)
         systems = resource.meta.system_list_all(namespace=namespace)
-        system_ids = {str(system["id"]) for system in systems}
+        system_ids = cls._get_accessed_system_ids({str(system["id"]) for system in systems})
         authorized_systems = [system_id for system_id in scoped_system_ids if system_id in system_ids]
         return systems, authorized_systems
 
@@ -102,6 +114,7 @@ class SearchLogPermission:
 
         scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
         scoped_system_ids = {str(system_id) for system_id in ScopePermission(username).get_system_ids_for_scope(scope)}
+        scoped_system_ids = cls._get_accessed_system_ids(scoped_system_ids)
         if not scoped_system_ids:
             return [""]
         return list(scoped_system_ids)
