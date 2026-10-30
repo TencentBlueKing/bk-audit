@@ -22,6 +22,7 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from django.conf import settings
+from rest_framework import serializers
 
 from services.web.risk.bksec import sync_bksec_rule
 from services.web.risk.bksec.config import BkSecConfig
@@ -33,6 +34,10 @@ from services.web.risk.bksec.contract import (
     coerce_operator_constant,
 )
 from services.web.risk.bksec.render import build_render_context, render_value
+from services.web.risk.bksec.service import (
+    has_bksec_ticket_sent,
+    validate_bksec_test_target,
+)
 from services.web.risk.models import ProcessApplication, RiskRule
 from tests.test_risk.test_tickets.base import RiskContext
 from tests.test_risk.test_tickets.constants import RISK_INFO
@@ -538,7 +543,9 @@ class TestBkSecRules:
         rule = sync_bksec_rule(strategy)
         assert rule is not None and rule.is_enabled and rule.auto_strategy_id == strategy.strategy_id
         assert rule.scope == [{"field": "strategy_id", "operator": "=", "value": [strategy.strategy_id]}]
-        assert rule.auto_close_risk is False  # 评审定论：不自动关审计风险
+        # 闭环定论：工单办结（标准运维任务成功）即关闭审计风险，
+        # 之后新事件按聚合规则生成新风险单 → 新任务 → 首次发单，不再需要"工单办结后重新开单"
+        assert rule.auto_close_risk is True
         assert "${event_data}" in rule.pa_params and "${event_type}" in rule.pa_params
         # 保留优先级段：自动规则结构性最高（段基址 9000），手动规则恒低于段
         manual = RiskRule.objects.create(name="manual", scope=[], pa_id=rule.pa_id, version=1, priority_index=1)
@@ -831,3 +838,43 @@ class TestBkSecResources:
         assert json.loads(coerce_operator_constant("None")) == []
         # 已是数组串时保持数组语义
         assert json.loads(coerce_operator_constant('["alice"]')) == ["alice"]
+
+
+@pytest.mark.django_db
+class TestBkSecPushStatus:
+    """插件推送上报：风险单推送状态 + 测试发送守卫"""
+
+    def test_report_marks_risk_push_success(self):
+        """上报把风险单置为推送成功；重复上报幂等（状态不变、updated=False）"""
+        from services.web.risk.constants import BkSecPushStatus
+
+        with RiskContext() as risk:
+            assert risk.bksec_push_status == BkSecPushStatus.NOT_PUSHED
+            first = resource.risk.report_bk_sec_ticket_sent.perform_request(
+                {"risk_id": risk.risk_id, "event_id": "evt-1", "trace_id": "trace-1"}
+            )
+            assert first["push_status"] == BkSecPushStatus.SUCCESS
+            assert first["updated"] is True
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.SUCCESS
+            assert risk.bksec_push_event_id == "evt-1"
+            second = resource.risk.report_bk_sec_ticket_sent.perform_request(
+                {"risk_id": risk.risk_id, "event_id": "evt-1", "trace_id": "trace-1"}
+            )
+            assert second["updated"] is False
+            assert has_bksec_ticket_sent(risk) is True
+
+    def test_test_send_blocked_when_already_pushed(self):
+        """已推送成功的风险单不允许测试发送：回调/轮询节点长驻 RUNNING 不再被误判为「未发单」"""
+        from services.web.risk.constants import BkSecPushStatus
+
+        with RiskContext() as risk:
+            risk.bksec_push_status = BkSecPushStatus.SUCCESS
+            risk.save(update_fields=["bksec_push_status"])
+            with pytest.raises(serializers.ValidationError):
+                validate_bksec_test_target(risk)
+
+    def test_test_send_allowed_without_any_dispatch(self):
+        """未推送过的风险单允许测试发送"""
+        with RiskContext() as risk:
+            validate_bksec_test_target(risk)

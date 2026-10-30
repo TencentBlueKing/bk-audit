@@ -871,6 +871,34 @@ class GetTaskStatusReqSerializer(serializers.Serializer):
         return attrs
 
 
+class ReportBkSecTicketSentReqSerializer(serializers.Serializer):
+    """BKSEC 推送成功上报（发单插件在 BKSEC 推单返回 2xx 那一刻调用）"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=True)
+    event_id = serializers.CharField(
+        label=gettext_lazy("BKSEC事件ID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("WeSec 侧生成的事件 ID（非工单号），用于排查"),
+    )
+    trace_id = serializers.CharField(
+        label=gettext_lazy("发单TraceID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("仅用于日志排查"),
+    )
+
+
+class ReportBkSecTicketSentResponseSerializer(serializers.Serializer):
+    """BKSEC 推送成功上报结果"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    push_status = serializers.CharField(label=gettext_lazy("推送状态"))
+    updated = serializers.BooleanField(label=gettext_lazy("是否实际更新"), help_text=gettext_lazy("False 表示状态未变化（已是推送成功）"))
+
+
 class PAExecutionRecordListReqSerializer(serializers.Serializer):
     """处理套餐执行记录列表筛选参数"""
 

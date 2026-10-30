@@ -44,6 +44,7 @@ from services.web.risk.constants import (
     RISK_OPERATE_NOTICE_CONFIG_KEY,
     SECURITY_PERSON_KEY,
     ApproveTicketFields,
+    BkSecPushStatus,
     ItsmVersion,
     RiskDisplayStatus,
     RiskLabel,
@@ -363,21 +364,13 @@ class RiskFlowBaseHandler:
         记录流转历史
         """
 
-        self._create_history_node(process_result, self.build_history(process_result=process_result, *args, **kwargs))
-        create_params = {
-            "risk_id": self.risk.risk_id,
-            "operator": self.operator,
-            "current_operator": self.risk.current_operator,
-            "action": self.__class__.__name__,
-            "timestamp": datetime.datetime.now().timestamp(),
-            "time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
-            "process_result": process_result,
-            "extra": self.build_history(process_result=process_result, *args, **kwargs),
-        }
         # 记录本次流转使用的 ITSM 版本：已有工单后续按该版本查询/撤销
-        if self.itsm_version:
-            create_params["itsm_version"] = self.itsm_version
-        TicketNode.objects.create(**create_params)
+        extra_fields = {"itsm_version": self.itsm_version} if self.itsm_version else {}
+        self._create_history_node(
+            process_result,
+            self.build_history(process_result=process_result, *args, **kwargs),
+            **extra_fields,
+        )
         self.risk.save(update_fields=["last_operate_time"])
 
     def _create_history_node(self, process_result: dict, extra: dict, **fields) -> Optional[TicketNode]:
@@ -583,7 +576,37 @@ class CloseRisk(RiskFlowBaseHandler):
         return
 
     def process(self, description: str, *args, **kwargs) -> dict:
+        # 关单即终止：风险单不再跟进时撤销仍在执行的自动派单任务。
+        # BKSEC 一直不回拨时回调/轮询节点会长期挂起、任务永不结束，关单是唯一的兜底终止时机。
+        self._revoke_running_auto_process()
         return {}
+
+    def _revoke_running_auto_process(self) -> None:
+        """
+        撤销本风险单仍在执行的自动派单任务
+
+        复用强制终止能力：它内部先查 SOPS 任务状态，已结束的只回写节点状态、不会误撤销，
+        因此"任务成功后自动关单"这条路径走过来也只是顺带把节点状态同步为已结束。
+
+        撤销失败只记日志：关单不应被撤销失败阻断。
+        """
+
+        nodes = TicketNode.objects.filter(
+            risk_id=self.risk.risk_id,
+            action=AutoProcess.__name__,
+            status=TicketNodeStatus.RUNNING,
+            is_test=False,
+        )
+        for node in nodes:
+            try:
+                resource.risk.force_revoke_auto_process(risk_id=self.risk.risk_id, node_id=node.id)
+            except Exception as err:  # NOCC:broad-except(撤销失败不得阻断关单)
+                logger.exception(
+                    "[CloseRisk] revoke auto process failed, risk_id=%s node_id=%s err=%s",
+                    self.risk.risk_id,
+                    node.id,
+                    err,
+                )
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         self.risk.current_operator = []
@@ -994,16 +1017,26 @@ class AutoProcess(RiskFlowBaseHandler):
             self.risk.status = RiskStatus.AWAIT_PROCESS
         else:
             self.risk.status = RiskStatus.AUTO_PROCESS
-        self.risk.save(update_fields=["status"])
+        update_fields = ["status"]
+        # 任务失败即视为推送失败（推单重试耗尽会走到这里）；严格说任务失败也可能来自
+        # 校验/渲染等环节，绝大多数情况就是推单失败，先统一处理，后续可让插件上报细分原因
+        if "status" in process_result and process_result["status"]["state"] in SOPSTaskStatus.get_failed_status():
+            self.risk.bksec_push_status = BkSecPushStatus.FAILED
+            update_fields.append("bksec_push_status")
+        self.risk.save(update_fields=update_fields)
 
     def load_task_id(self) -> str:
         # 优先复用本风险单正在执行的套餐任务：last_history 会被人工处理/新建等节点顶掉，
         # 只看它会误判为"没有任务"从而重复建单（执行记录出现两条相同任务）
+        # is_test=False：测试单的执行记录同样记为 AutoProcess 且乐观写入执行中，
+        # 若不排除，发过测试单的风险单会被判定为"已有任务"→ 正式派单根本不建任务，
+        # 且其任务成功后触发自动关单 → 演变成"发个测试单就把风险关了"
         running_node = (
             TicketNode.objects.filter(
                 risk_id=self.risk.risk_id,
                 action=AutoProcess.__name__,
                 status=TicketNodeStatus.RUNNING,
+                is_test=False,
             )
             .order_by("-timestamp")
             .first()
