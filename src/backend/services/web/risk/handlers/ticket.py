@@ -934,6 +934,8 @@ class AutoProcess(RiskFlowBaseHandler):
 
             bksec_context = build_render_context(risk=self.risk)
         constants = {}
+        # 入参快照（key/name/value）：执行记录详情据此展示"当时真正发出去的套餐入参"
+        pa_constants = []
         missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
             # 只覆盖用户入参。节点输出和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
@@ -961,6 +963,7 @@ class AutoProcess(RiskFlowBaseHandler):
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
+            pa_constants.append({"key": c["key"], "name": c.get("name") or c["key"], "value": value})
         if missing_keys:
             raise AutoProcessParamsError(keys=",".join(missing_keys))
         params = {
@@ -980,6 +983,8 @@ class AutoProcess(RiskFlowBaseHandler):
             "pa_name": self.process_application.name,
             "task_name": params["name"],
             "trigger": trigger,
+            # 套餐入参快照：后续状态刷新是原地 update 合并，该键不会被冲掉
+            "pa_constants": pa_constants,
         }
         return self._attach_failure_hint(process_result, task_id=str(result.get("task_id") or ""))
 
