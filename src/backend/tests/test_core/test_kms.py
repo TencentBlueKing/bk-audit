@@ -35,6 +35,7 @@ from core.kms import (
     KMS_EXTRA_SECRET_KEYS_KEY,
     KMS_PRIVATE_KEY_ENV_KEY,
     _extract_secrets,
+    _transform_document_bundle,
     get_secret,
     get_secret_json,
     inject_kms_secrets,
@@ -289,7 +290,35 @@ class TestKmsSecretsSchema(KmsTestCaseMixin, unittest.TestCase):
         """既不在禁写列表、也不在白名单的键：走真正的白名单校验分支。"""
         with self.assertRaises(ImproperlyConfigured) as ctx:
             validate_secrets({"BKPAAS_APP_SECRET": "app-secret-0001", "SOME_RANDOM_KEY": "any-value"})
-        self.assertIn("仅允许密钥类", str(ctx.exception))
+        self.assertIn("不在允许覆盖清单内", str(ctx.exception))
+
+    def test_credential_record_items_all_allowed(self):
+        """
+        BKAPP_INIT_*_CONFIG 按「整串 JSON 原样下发」，集群名等字段不需单独成键。
+        """
+        doc_items = (
+            "BKPAAS_APP_ID",
+            "BKPAAS_APP_SECRET",
+            "MYSQL_USER",
+            "MYSQL_PASSWORD",
+            "RABBITMQ_USER",
+            "RABBITMQ_PASSWORD",
+            "REDIS_PASSWORD",
+            "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME",
+            "BKAPP_PLATFORM_AUTH_ACCESS_TOKEN",
+            "BKAPP_BKBASE_DATA_TOKEN",
+            "BKAPP_OTEL_BK_DATA_TOKEN",
+            "BKAPP_OTEL_LOG_BK_DATA_TOKEN",
+            "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY",
+            "BKAPP_AI_USER_INTENT_SECRET_KEY",
+            "BKAPP_ALERT_ACCESS_TOKEN",
+            "BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN",
+            "BKREPO_PASSWORD",
+        )
+        for key in doc_items:
+            with self.subTest(key=key):
+                validated = validate_secrets({"BKPAAS_APP_SECRET": "app-secret-0001", key: "value-0001"})
+                self.assertEqual(validated[key], "value-0001")
 
     def test_extract_secrets_non_dict_rejected(self):
         with self.assertRaises(ImproperlyConfigured):
@@ -502,3 +531,357 @@ class TestKmsSecretsSchema(KmsTestCaseMixin, unittest.TestCase):
             # 校验失败时不得修改任何配置（env 与取值层都保持原样）
             self.assertEqual(os.environ["REDIS_PASSWORD"], PRE_EXISTING_SECRET)
             self.assertEqual(get_secret("REDIS_PASSWORD"), PRE_EXISTING_SECRET)
+
+
+class TestDocumentBundleEndToEnd(KmsTestCaseMixin, unittest.TestCase):
+    """
+    验证 inject_kms_secrets 能把它拍平成扁平 env 并成功注入，且初始化消费者能解析出密码。
+    """
+
+    # 与 bk-audit 敏感凭据格式记录.md「凭据声明」同形的合成值（不含真实凭据）
+    DOCUMENT_BUNDLE = {
+        "bkapp_id_secret": {"default": {"app_code": "bk_audit", "app_secret": "doc-app-secret-0001"}},
+        "mysql": {"default": {"username": "doc-mysql-user", "password": "doc-mysql-pwd-0001"}},
+        "rabbitmq": {"default": {"username": "doc-mq-user", "password": "doc-mq-pwd-0001"}},
+        "redis": {
+            "default": {"password": "doc-redis-pwd-0001"},
+            "init": {"password": "doc-init-redis-pwd-0001"},
+        },
+        "elasticsearch": {"default": {"username": "doc-es-user", "password": "doc-es-pwd-0001"}},
+        "doris": {"default": {"username": "doc-doris-user", "password": "doc-doris-pwd-0001"}},
+        "platform": {"default": {"username": "doc-platform-user", "access_token": "doc-platform-token-0001"}},
+        "bkbase": {"default": {"token": "doc-bkbase-token-0001"}},
+        "telemetry": {
+            "trace": {"token": "doc-trace-token-0001"},
+            "audit_log": {"token": "doc-audit-log-token-0001"},
+        },
+        "ai": {
+            "audit_log_search": {"secret_key": "doc-ai-search-0001"},
+            "user_intent": {"secret_key": "doc-ai-intent-0001"},
+        },
+        "tokens": {
+            "alert": {"token": "doc-alert-token-0001"},
+            "log_export_status": {"token": "doc-log-export-token-0001"},
+        },
+        "bkrepo": {"default": {"password": "doc-bkrepo-pwd-0001"}},
+    }
+
+    # Chart 实际注入的初始化配置（非敏感字段齐全，密码位置留空），对应 _helpers.tpl 的 *_CONFIG
+    CHART_INIT_ENV = {
+        "BKAPP_INIT_ES_CONFIG": json.dumps(
+            [
+                {
+                    "namespace": "default",
+                    "cluster_name": "bkaudit-es",
+                    "bkbase_cluster_en_name": "bkaudit-es",
+                    "domain_name": "es.bkop.internal",
+                    "source_type": "other",
+                    "port": "9200",
+                    "schema": "http",
+                    "auth_info": {"username": "chart-user", "password": ""},
+                    "enable_hot_warm": False,
+                    "setup_config": {
+                        "retention_days_max": 30,
+                        "retention_days_default": 30,
+                        "number_of_replicas_max": 1,
+                        "number_of_replicas_default": 1,
+                    },
+                    "admin": ["admin"],
+                    "description": "审计中心存储集群",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        "BKAPP_INIT_DORIS_CONFIG": json.dumps(
+            [
+                {
+                    "cluster_name": "bkaudit-doris",
+                    "auth_info": {"username": "chart-doris-user", "password": ""},
+                    "pre_defined": True,
+                    "pre_defined_extra_config": {"cluster_id": "102"},
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        "BKAPP_INIT_REDIS_CONFIG": json.dumps(
+            [
+                {
+                    "namespace": "default",
+                    "redis_name_en": "bkaudit-redis",
+                    "redis_name": "审计中心存储",
+                    "connection_info": {
+                        "enable_sentinel": False,
+                        "host": "redis.bkop.internal",
+                        "port": 6379,
+                        "password": "",
+                    },
+                    "version": "6.2",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+    }
+
+    def _document_env(self):
+        return self._kms_env(
+            **{
+                KMS_ENABLED_KEY: "true",
+                "BKAPP_PLATFORM_AUTH_ENABLED": "false",
+                "BKAPP_FEATURE_AI_CAPABILITY": "off",
+            }
+        )
+
+    def test_document_shape_inject_succeeds(self):
+        """inject_kms_secrets 必须成功且拍平成扁平 env。"""
+        import types
+
+        bk_kms_shim = types.ModuleType("bk_kms")
+        bk_kms_shim.decrypt = lambda *, envelope, private_key: json.dumps(self.DOCUMENT_BUNDLE)
+        with mock.patch.dict(sys.modules, {"bk_kms": bk_kms_shim}):
+            with mock.patch.dict(os.environ, self._document_env()):
+                # 清理宿主可能预置的同名变量，避免污染断言；
+                # 断言必须留在 with 块内：patch.dict 退出时会把 os.environ 回滚到进入前状态
+                for key in (
+                    "BKPAAS_APP_ID",
+                    "BKPAAS_APP_SECRET",
+                    "MYSQL_USER",
+                    "MYSQL_PASSWORD",
+                    "RABBITMQ_USER",
+                    "RABBITMQ_PASSWORD",
+                    "REDIS_PASSWORD",
+                    "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME",
+                    "BKAPP_PLATFORM_AUTH_ACCESS_TOKEN",
+                    "BKAPP_BKBASE_DATA_TOKEN",
+                    "BKAPP_OTEL_BK_DATA_TOKEN",
+                    "BKAPP_OTEL_LOG_BK_DATA_TOKEN",
+                    "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY",
+                    "BKAPP_AI_USER_INTENT_SECRET_KEY",
+                    "BKAPP_ALERT_ACCESS_TOKEN",
+                    "BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN",
+                    "BKREPO_PASSWORD",
+                ):
+                    os.environ.pop(key, None)
+                inject_kms_secrets()  # 若契约未对齐会在此处抛「非法的环境变量名」并 fail-fast
+                # 运行时凭据：分类.实例.字段 -> 扁平 env 名
+                self.assertEqual(os.environ["BKPAAS_APP_ID"], "bk_audit")
+                self.assertEqual(os.environ["BKPAAS_APP_SECRET"], "doc-app-secret-0001")
+                self.assertEqual(os.environ["MYSQL_USER"], "doc-mysql-user")
+                self.assertEqual(os.environ["MYSQL_PASSWORD"], "doc-mysql-pwd-0001")
+                self.assertEqual(os.environ["RABBITMQ_USER"], "doc-mq-user")
+                self.assertEqual(os.environ["RABBITMQ_PASSWORD"], "doc-mq-pwd-0001")
+                self.assertEqual(os.environ["REDIS_PASSWORD"], "doc-redis-pwd-0001")
+                self.assertEqual(os.environ["BKAPP_PLATFORM_AUTH_ACCESS_USERNAME"], "doc-platform-user")
+                self.assertEqual(os.environ["BKAPP_PLATFORM_AUTH_ACCESS_TOKEN"], "doc-platform-token-0001")
+                self.assertEqual(os.environ["BKAPP_BKBASE_DATA_TOKEN"], "doc-bkbase-token-0001")
+                self.assertEqual(os.environ["BKAPP_OTEL_BK_DATA_TOKEN"], "doc-trace-token-0001")
+                self.assertEqual(os.environ["BKAPP_OTEL_LOG_BK_DATA_TOKEN"], "doc-audit-log-token-0001")
+                self.assertEqual(os.environ["BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY"], "doc-ai-search-0001")
+                self.assertEqual(os.environ["BKAPP_AI_USER_INTENT_SECRET_KEY"], "doc-ai-intent-0001")
+                self.assertEqual(os.environ["BKAPP_ALERT_ACCESS_TOKEN"], "doc-alert-token-0001")
+                self.assertEqual(os.environ["BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN"], "doc-log-export-token-0001")
+                self.assertEqual(os.environ["BKREPO_PASSWORD"], "doc-bkrepo-pwd-0001")
+
+    def test_document_shape_init_config_synthesized(self):
+        """初始化凭据（只给 username/password）合成完整 BKAPP_INIT_*_CONFIG，可被 init 消费者解析出密码。"""
+        import types
+
+        bk_kms_shim = types.ModuleType("bk_kms")
+        bk_kms_shim.decrypt = lambda *, envelope, private_key: json.dumps(self.DOCUMENT_BUNDLE)
+        with mock.patch.dict(sys.modules, {"bk_kms": bk_kms_shim}):
+            with mock.patch.dict(os.environ, self._document_env()):
+                for key in ("BKAPP_INIT_ES_CONFIG", "BKAPP_INIT_DORIS_CONFIG", "BKAPP_INIT_REDIS_CONFIG"):
+                    os.environ.pop(key, None)
+                inject_kms_secrets()
+                # 断言留在 with 块内：patch.dict 退出会回滚 os.environ；
+                # 这里走 get_secret_json -> _SECRETS_CACHE（模块级，不随 patch 回滚）
+                es_configs = get_secret_json("BKAPP_INIT_ES_CONFIG")
+                self.assertEqual(es_configs[0]["auth_info"]["username"], "doc-es-user")
+                self.assertEqual(es_configs[0]["auth_info"]["password"], "doc-es-pwd-0001")
+
+                doris_configs = get_secret_json("BKAPP_INIT_DORIS_CONFIG")
+                self.assertEqual(doris_configs[0]["auth_info"]["username"], "doc-doris-user")
+                self.assertEqual(doris_configs[0]["auth_info"]["password"], "doc-doris-pwd-0001")
+
+                redis_configs = get_secret_json("BKAPP_INIT_REDIS_CONFIG")
+                self.assertEqual(redis_configs[0]["connection_info"]["password"], "doc-init-redis-pwd-0001")
+
+    def test_init_config_merged_keeps_chart_fields(self):
+        """真实录入形态：Chart 提供结构（域名/端口/集群名/保留策略），KMS 只覆盖 auth 字段。
+
+        凭据合并不得把非敏感字段清空，否则初始化会拿着空地址去建集群。
+        """
+        import types
+
+        bk_kms_shim = types.ModuleType("bk_kms")
+        bk_kms_shim.decrypt = lambda *, envelope, private_key: json.dumps(self.DOCUMENT_BUNDLE)
+        with mock.patch.dict(sys.modules, {"bk_kms": bk_kms_shim}):
+            with mock.patch.dict(os.environ, {**self._document_env(), **self.CHART_INIT_ENV}):
+                inject_kms_secrets()
+
+                es = get_secret_json("BKAPP_INIT_ES_CONFIG")[0]
+                # 凭据被替换
+                self.assertEqual(es["auth_info"]["username"], "doc-es-user")
+                self.assertEqual(es["auth_info"]["password"], "doc-es-pwd-0001")
+                # Chart 的非敏感字段原样保留
+                self.assertEqual(es["domain_name"], "es.bkop.internal")
+                self.assertEqual(es["port"], "9200")
+                self.assertEqual(es["cluster_name"], "bkaudit-es")
+                self.assertEqual(es["admin"], ["admin"])
+                self.assertEqual(es["setup_config"]["retention_days_max"], 30)
+                self.assertEqual(es["description"], "审计中心存储集群")
+
+                doris = get_secret_json("BKAPP_INIT_DORIS_CONFIG")[0]
+                self.assertEqual(doris["auth_info"]["password"], "doc-doris-pwd-0001")
+                self.assertEqual(doris["cluster_name"], "bkaudit-doris")
+                self.assertTrue(doris["pre_defined"])
+                self.assertEqual(doris["pre_defined_extra_config"], {"cluster_id": "102"})
+
+                redis = get_secret_json("BKAPP_INIT_REDIS_CONFIG")[0]
+                self.assertEqual(redis["connection_info"]["password"], "doc-init-redis-pwd-0001")
+                self.assertEqual(redis["connection_info"]["host"], "redis.bkop.internal")
+                self.assertEqual(redis["connection_info"]["port"], 6379)
+                self.assertEqual(redis["redis_name"], "审计中心存储")
+
+    @mock.patch("services.web.entry.init.base.resource.databus.storage.storage_activate")
+    @mock.patch("services.web.entry.init.base.resource.databus.storage.create_storage", return_value=101)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=False)
+    def test_init_handler_consumes_merged_config(self, _mock_get, _mock_set, mock_create, _mock_activate):
+        """走一遍 init 消费者：合并后的配置必须能过 _init_es / _init_doris 的前置校验。"""
+        import types
+
+        from services.web.entry.init.base import SystemInitHandler
+
+        bk_kms_shim = types.ModuleType("bk_kms")
+        bk_kms_shim.decrypt = lambda *, envelope, private_key: json.dumps(self.DOCUMENT_BUNDLE)
+        with mock.patch.dict(sys.modules, {"bk_kms": bk_kms_shim}):
+            with mock.patch.dict(os.environ, {**self._document_env(), **self.CHART_INIT_ENV}):
+                inject_kms_secrets()
+
+                handler = SystemInitHandler()
+                # Doris 非预定义会直接抛 ParamsNotValid，这里必须不抛
+                handler.init_es()
+                handler.init_doris()
+
+        sent_es = mock_create.call_args_list[0][0][0]
+        self.assertEqual(sent_es["domain_name"], "es.bkop.internal")
+        self.assertEqual(sent_es["auth_info"]["password"], "doc-es-pwd-0001")
+
+        sent_doris = mock_create.call_args_list[1][0][0]
+        self.assertEqual(sent_doris["cluster_name"], "bkaudit-doris")
+        self.assertTrue(sent_doris["pre_defined"])
+        self.assertEqual(sent_doris["auth_info"]["password"], "doc-doris-pwd-0001")
+
+    def test_init_config_unparsable_env_not_overridden(self):
+        """Chart 配置存在但不可解析时，不做覆盖，交由下游暴露原始错误。"""
+        with mock.patch.dict(os.environ, {"BKAPP_INIT_ES_CONFIG": '[{"auth_info":'}):
+            flat = _transform_document_bundle({"elasticsearch": {"default": {"password": "PWD"}}})
+        self.assertNotIn("BKAPP_INIT_ES_CONFIG", flat)
+
+    def test_init_config_multi_instance_matched_by_cluster_name(self):
+        """多集群：default 对首个元素，default__<cluster_name> 按集群名匹配，互不串号。"""
+        env = {
+            "BKAPP_INIT_ES_CONFIG": json.dumps(
+                [
+                    {"cluster_name": "bk-audit-es-system", "domain_name": "es-system.internal", "auth_info": {}},
+                    {"cluster_name": "bk-audit-es-tencent", "domain_name": "es-tencent.internal", "auth_info": {}},
+                ]
+            )
+        }
+        with mock.patch.dict(os.environ, env):
+            flat = _transform_document_bundle(
+                {
+                    "elasticsearch": {
+                        "default": {"username": "u1", "password": "P1"},
+                        "default__bk-audit-es-tencent": {"username": "u2", "password": "P2"},
+                    }
+                }
+            )
+        configs = json.loads(flat["BKAPP_INIT_ES_CONFIG"])
+        self.assertEqual(len(configs), 2)
+        self.assertEqual(configs[0]["domain_name"], "es-system.internal")
+        self.assertEqual(configs[0]["auth_info"]["password"], "P1")
+        self.assertEqual(configs[1]["domain_name"], "es-tencent.internal")
+        self.assertEqual(configs[1]["auth_info"]["password"], "P2")
+
+    def test_transform_document_bundle_flatten_only(self):
+        """无初始化凭据时，仅扁平 env 映射，不合成 *CONFIG。"""
+        flat = _transform_document_bundle(
+            {
+                "bkapp_id_secret": {"default": {"app_code": "bk_audit", "app_secret": "s"}},
+                "mysql": {"default": {"username": "u", "password": "p"}},
+            }
+        )
+        self.assertEqual(flat["BKPAAS_APP_ID"], "bk_audit")
+        self.assertEqual(flat["MYSQL_PASSWORD"], "p")
+        self.assertNotIn("BKAPP_INIT_ES_CONFIG", flat)
+
+    def test_unknown_category_warning_does_not_log_keys(self):
+        """未识别分类键只提示「存在」，不得把键名或值写进日志（CodeQL 敏感信息明文落日志）。"""
+        with self.assertLogs("core.kms", level="WARNING") as ctx:
+            flat = _transform_document_bundle(
+                {
+                    "mysql": {"default": {"password": "MYSQL-PWD-0001"}},
+                    "unknownCategoryName": {"secret_key": "UNKNOWN-CAT-VALUE-0001"},
+                }
+            )
+        output = "\n".join(ctx.output)
+        self.assertIn("未识别的分类键", output)
+        self.assertNotIn("unknownCategoryName", output)
+        self.assertNotIn("UNKNOWN-CAT-VALUE-0001", output)
+        # 已知分类照常转换，未识别分类被忽略
+        self.assertEqual(flat["MYSQL_PASSWORD"], "MYSQL-PWD-0001")
+
+    def test_transform_document_bundle_empty_init_skipped(self):
+        """初始化字段为空的分类不合成 *CONFIG（避免写入空串/空结构）。"""
+        flat = _transform_document_bundle({"elasticsearch": {"default": {}}})
+        self.assertNotIn("BKAPP_INIT_ES_CONFIG", flat)
+
+    def test_init_config_fallback_matches_init_preconditions(self):
+        """Chart 未注入初始化配置时按模板兜底，且兜底结果必须满足 init 前置校验。
+
+        Doris 兜底若给 pre_defined=False，_init_doris 会直接抛 ParamsNotValid。
+        """
+        with mock.patch.dict(os.environ, {"BKAPP_INIT_DORIS_CONFIG": "", "BKAPP_INIT_ES_CONFIG": ""}):
+            flat = _transform_document_bundle(
+                {
+                    "doris": {"default": {"username": "u", "password": "P"}},
+                    "elasticsearch": {"default": {"password": "E"}},
+                }
+            )
+        doris = json.loads(flat["BKAPP_INIT_DORIS_CONFIG"])[0]
+        self.assertTrue(doris["pre_defined"])
+        self.assertEqual(doris["auth_info"]["password"], "P")
+        es = json.loads(flat["BKAPP_INIT_ES_CONFIG"])[0]
+        self.assertNotIn("", es["admin"])
+
+    def test_init_config_fallback_cluster_key_only(self):
+        """兜底路径下只给 default__<cluster> 时，不得额外留下没有集群名的空白元素。"""
+        with mock.patch.dict(os.environ, {"BKAPP_INIT_ES_CONFIG": ""}):
+            flat = _transform_document_bundle({"elasticsearch": {"default__bk-audit-es": {"password": "P"}}})
+        configs = json.loads(flat["BKAPP_INIT_ES_CONFIG"])
+        self.assertEqual(len(configs), 1)
+        self.assertEqual(configs[0]["cluster_name"], "bk-audit-es")
+        self.assertEqual(configs[0]["auth_info"]["password"], "P")
+
+    def test_redis_default_and_init_are_distinct_instances(self):
+        """redis.default（应用缓存）与 redis.init（初始化存储）是两个独立实例。
+
+        redis 的运行时凭据不与 Redis 初始化凭据自动共用，两者是独立用途。
+        转换层必须分别从两个键取密码，落到不同 env，且二者不可互相覆盖。
+        """
+        flat = _transform_document_bundle(
+            {
+                "redis": {
+                    "default": {"password": "CACHE-REDIS-PWD"},
+                    "init": {"password": "INIT-REDIS-PWD"},
+                }
+            }
+        )
+        # R04：应用缓存 Redis 密码 -> REDIS_PASSWORD
+        self.assertEqual(flat["REDIS_PASSWORD"], "CACHE-REDIS-PWD")
+        # D03：初始化存储 Redis 密码 -> 合成 BKAPP_INIT_REDIS_CONFIG
+        redis_configs = json.loads(flat["BKAPP_INIT_REDIS_CONFIG"])
+        self.assertEqual(redis_configs[0]["connection_info"]["password"], "INIT-REDIS-PWD")
+        # 二者互不包含、互不覆盖
+        self.assertNotEqual(flat["REDIS_PASSWORD"], redis_configs[0]["connection_info"]["password"])
