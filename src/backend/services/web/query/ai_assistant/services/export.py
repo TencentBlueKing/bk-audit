@@ -260,7 +260,7 @@ class FullExportService:
             "bind_system_info": True,
         }
         # ④ 复用现有创建链路：get_total 预检 → 上限校验 → ExportFieldLog → 落库 → Celery 派发
-        return resource.query.create_collector_search_export_task(
+        return resource.query.create_ai_collector_search_export_task(
             namespace=namespace,
             name=task_name,
             query_params=query_params,

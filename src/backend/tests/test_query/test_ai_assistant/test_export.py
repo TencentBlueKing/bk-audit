@@ -179,7 +179,7 @@ class TestPreviewExportService(AIAssistantTestCase):
         self.assertNotIn("extend_data/ticket_id", titles)
 
 
-@mock.patch(f"{EXPORT_MODULE}.resource.query.create_collector_search_export_task")
+@mock.patch(f"{EXPORT_MODULE}.resource.query.create_ai_collector_search_export_task")
 @mock.patch(f"{EXPORT_MODULE}.SearchLogPermission.has_system_search_permission")
 class TestFullExportService(AIAssistantTestCase):
     """全量导出：快照 condition 原样重建 → LogExportTask"""

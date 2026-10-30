@@ -587,6 +587,16 @@ class LogExportConfigSerializer(serializers.Serializer):
         return attrs
 
 
+class LogExportQueryReqSerializer(
+    CollectorSearchReqPermissionCheckMixIn,
+    CollectorSearchReqBaseSerializer,
+    QueryScopeQuerySerializer,
+):
+    """创建导出时注入授权系统；内部时间条件仍由后台取数入口添加。"""
+
+    pass
+
+
 class LogExportReqSerializer(serializers.Serializer):
     """
     日志导出请求序列化器
@@ -594,7 +604,7 @@ class LogExportReqSerializer(serializers.Serializer):
 
     namespace = serializers.CharField()
     name = serializers.CharField(label=gettext_lazy("任务名称"), max_length=64, default="", allow_blank=True)
-    query_params = CollectorSearchReqBaseSerializer(label=gettext_lazy("检索参数"))
+    query_params = LogExportQueryReqSerializer(label=gettext_lazy("检索参数"))
     export_config = LogExportConfigSerializer(label=gettext_lazy("导出参数"))
     search_params_url = serializers.CharField(label=gettext_lazy("查询参数URL"), default="", allow_blank=True)
 
@@ -602,6 +612,12 @@ class LogExportReqSerializer(serializers.Serializer):
         if isinstance(data, dict) and data.get("query_params"):
             data["query_params"]["namespace"] = data.get("namespace")
         return super().run_validation(data)
+
+
+class AILogExportReqSerializer(LogExportReqSerializer):
+    """供已复检目标系统权限的 AI 内部入口使用，不作为 HTTP 创建协议。"""
+
+    query_params = CollectorSearchReqBaseSerializer(label=gettext_lazy("检索参数"))
 
 
 class LogExportRespSerializer(serializers.ModelSerializer):

@@ -45,6 +45,7 @@ from services.web.query.exceptions import (
 from services.web.query.export.data_fetcher import DataFetcher
 from services.web.query.models import ExportFieldLog, LogExportTask, TaskDownloadRecord
 from services.web.query.serializers import (
+    AILogExportReqSerializer,
     CollectorSearchAllReqSerializer,
     CollectorSearchAllStatisticReqSerializer,
     CollectorSearchConfigRespSerializer,
@@ -306,6 +307,12 @@ class CreateCollectorSearchExportTask(SearchExportTaskBaseResource):
         )
         process_one_log_export_task.apply_async(kwargs={"task_id": task.id})
         return task
+
+
+class CreateAICollectorSearchExportTask(CreateCollectorSearchExportTask):
+    """复用任务创建流程；仅由已完成目标系统鉴权的 AI 服务调用，无 HTTP 路由。"""
+
+    RequestSerializer = AILogExportReqSerializer
 
 
 class ListCollectorSearchExportTask(SearchExportTaskBaseResource):
