@@ -25,7 +25,8 @@
       with-scene-selector
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
-      @parsing="handleParsing" />
+      @parsing="handleParsing"
+      @sync="handleSearchSync" />
     <div
       :key="fieldConfigKey"
       class="risk-manage-list">
@@ -67,6 +68,7 @@
         secondary-sort-field="-event_time"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @filter-change="handleTableFilterChange"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
         @selection-change="handleSelectionChange" />
@@ -369,6 +371,17 @@
     };
     listRef.value?.initTableHeight?.();
     fetchList(isClear);
+  };
+
+  const handleSearchSync = (value: Record<string, any>, exValue: Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue,
+    };
+  };
+
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    searchBoxRef.value?.syncTableFilterFields(filters);
   };
 
   // NL 解析状态变化时，给列表设置 loading
