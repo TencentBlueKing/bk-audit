@@ -25,6 +25,7 @@ from sqlglot import exp, parse_one
 
 from services.web.common.constants import ScopeType
 from services.web.risk.constants import (
+    BkSecPushStatus,
     EventFilterOperator,
     RiskDisplayStatus,
     RiskStatus,
@@ -1103,3 +1104,46 @@ class TestEventFilterBasicColumnMode(SimpleTestCase):
         components = components_builder.build(base_expression)
         matched_sql = components.matched_event.sql(dialect="mysql")
         self.assertIn("CAST(matched_event_src.strategy_id AS DOUBLE) > 100", matched_sql)
+
+
+class TestListRiskBkSecPushStatus(SimpleTestCase):
+    """风险列表：BKSEC 发单状态字段的响应输出与筛选"""
+
+    @staticmethod
+    def _scope_data(data: dict) -> dict:
+        return {"scope_type": ScopeType.CROSS_SCENE, **data}
+
+    def test_filter_single_value_is_split_into_list(self):
+        """单个取值按通用逻辑转为列表，供 __in 之外的 OR 匹配使用"""
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"bksec_push_status": "success"}))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["bksec_push_status"], ["success"])
+
+    def test_filter_multi_value_is_supported(self):
+        """多个取值逗号拼接"""
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"bksec_push_status": "success,failed"}))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["bksec_push_status"], ["success", "failed"])
+
+    def test_filter_invalid_value_is_rejected(self):
+        """非法取值直接报错，避免静默返回空列表"""
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"bksec_push_status": "sent"}))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("bksec_push_status", serializer.errors)
+
+    def test_filter_not_provided_is_valid(self):
+        """不传时不进入 validated_data"""
+        serializer = ListRiskRequestSerializer(data=self._scope_data({}))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("bksec_push_status", serializer.validated_data)
+
+    def test_response_contains_push_status(self):
+        """列表响应输出 bksec_push_status，默认值为 not_pushed"""
+        strategy = Strategy(strategy_id=1, namespace="test", strategy_name="测试策略")
+        strategy.prefetched_tags = []
+        risk = Risk(risk_id="risk_bksec", strategy=strategy, bksec_push_status=BkSecPushStatus.FAILED)
+        risk.event_content_short = ""
+        self.assertEqual(ListRiskResponseSerializer(instance=risk).data["bksec_push_status"], "failed")
+        default_risk = Risk(risk_id="risk_bksec_default", strategy=strategy)
+        default_risk.event_content_short = ""
+        self.assertEqual(ListRiskResponseSerializer(instance=default_risk).data["bksec_push_status"], "not_pushed")

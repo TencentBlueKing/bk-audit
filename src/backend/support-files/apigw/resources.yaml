@@ -2939,6 +2939,69 @@ paths:
           resourcePermissionRequired: true
         disabledStages: []
         descriptionEn:
+  /bksec/ticket_sent/:
+    post:
+      operationId: report_bk_sec_ticket_sent
+      description: >-
+        上报 BKSEC 推送成功。由发单插件在 BKSEC 推单接口返回 2xx 那一刻调用，仅正式单首次发单上报
+        （测试单、轮询更新工单、推送失败均不上报）。SOPS 侧无法判断该事实：发单发生在长驻的
+        回调/轮询节点内部，节点始终 RUNNING。审计侧据此把风险单标记为「推送成功」；
+        「推送失败」由套餐任务终态失败时置位。重复上报幂等。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - risk_id
+            properties:
+              risk_id:
+                type: string
+                description: 风险单 ID
+              event_id:
+                type: string
+                description: WeSec 事件 ID（非工单号），用于排查
+              trace_id:
+                type: string
+                description: 发单 TraceID，仅用于日志排查
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              risk_id:
+                type: string
+                description: 风险单 ID
+              push_status:
+                type: string
+                description: 推送状态（not_pushed / success / failed）
+              updated:
+                type: boolean
+                description: 是否实际更新（false 表示状态未变化）
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/bk_sec_ticket_apigw/ticket_sent/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: false
+        disabledStages: []
+        descriptionEn: >-
+          Report BKSEC push success. Called by the ticket plugin right after WeSec push_event returns 2xx.
+          Audit marks the risk as pushed; failure is set when the SOPS task fails.
   /backent_api:
     x-bk-apigateway-method-any:
       operationId: bk_audit_backent_api
