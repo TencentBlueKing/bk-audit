@@ -106,7 +106,7 @@ export const readBksecFormState = (detail: Record<string, any> = {}): BksecFormS
       });
     });
     return {
-      bksecEnabled: !!config.enabled,
+      bksecEnabled: !!(config.enabled ?? config.enable),
       bksecProjectId: toId(config.project_id),
       bksecRiskTypeId: toId(config.risk_type_id),
       bksecRiskTypeName: config.risk_type_name || '',

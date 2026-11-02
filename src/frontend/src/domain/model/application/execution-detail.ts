@@ -40,6 +40,7 @@ export interface ExecutionNode {
 }
 
 export interface ExecutionParam {
+  key: string;
   name: string;
   value: string;
 }

@@ -16,6 +16,7 @@
 */
 import {
   createBaseRiskColumns,
+  createBksecPushStatusColumn,
   createRiskIdColumn,
   type RiskColumnDeps,
   type RiskColumnTranslate,
@@ -28,6 +29,8 @@ export interface UseRiskColumnsOptions {
   overrides?: Record<string, Record<string, any>>;
   excludeColumns?: string[];
   appendColumns?: any[];
+  /** 仅待我确认、场景风险、所有风险展示 BKSEC 工单列 */
+  includeBksecColumn?: boolean;
 }
 
 /** 建立列配置对异步依赖的响应式追踪，避免策略/场景等元数据加载后表格不刷新 */
@@ -38,7 +41,7 @@ export const touchRiskColumnDeps = (deps: RiskColumnDeps) => {
   void deps.strategyTagMap.value;
 };
 export const useRiskColumns = (options: UseRiskColumnsOptions) => {
-  const { t, deps, detailRouteName, overrides, excludeColumns, appendColumns } = options;
+  const { t, deps, detailRouteName, overrides, excludeColumns, appendColumns, includeBksecColumn } = options;
   const baseColumns = createBaseRiskColumns(deps, t);
   const riskIdColumn = createRiskIdColumn(detailRouteName, t);
   const rowSelectCol = baseColumns.find((c: any) => c.colKey === 'row-select');
@@ -62,6 +65,16 @@ export const useRiskColumns = (options: UseRiskColumnsOptions) => {
       const key = col.colKey || col.type;
       return !excludeColumns.includes(key);
     });
+  }
+
+  if (includeBksecColumn) {
+    const reportIndex = columns.findIndex((col: any) => col.colKey === 'has_report');
+    const bksecColumn = createBksecPushStatusColumn(t);
+    if (reportIndex >= 0) {
+      columns.splice(reportIndex + 1, 0, bksecColumn);
+    } else {
+      columns.push(bksecColumn);
+    }
   }
 
   if (appendColumns?.length) {

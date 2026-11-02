@@ -257,3 +257,33 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
     },
   ];
 };
+
+const BKSEC_PUSH_STATUS_LABEL: Record<string, string> = {
+  success: '推送成功',
+  failed: '推送失败',
+  not_pushed: '未推送',
+};
+
+/** 风险列表 BKSEC 工单列。默认不进可见列，由各菜单自行插入。 */
+export const createBksecPushStatusColumn = (t: RiskColumnTranslate) => ({
+  title: t('BKSEC工单'),
+  colKey: 'bksec_push_status',
+  width: 160,
+  minWidth: 160,
+  filter: {
+    type: 'single',
+    showConfirmAndReset: true,
+    resetValue: undefined,
+    list: [
+      { label: t('未推送'), value: 'not_pushed' },
+      { label: t('推送成功'), value: 'success' },
+      { label: t('推送失败'), value: 'failed' },
+    ],
+  },
+  cell: (_h: any, { row }: { row: RiskManageModel }) => {
+    const text = BKSEC_PUSH_STATUS_LABEL[row.bksec_push_status];
+    if (!text) return '--';
+    const BkTag = resolveComponent('bk-tag');
+    return h(BkTag as any, null, () => t(text));
+  },
+});

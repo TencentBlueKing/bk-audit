@@ -113,6 +113,38 @@ const joinList = (value: unknown) => {
   return String(value);
 };
 
+/** 套餐参数值原样转成可展示文本。对象保留结构，数组逐项拼接。 */
+const formatParamValue = (value: unknown): string => {
+  if (value == null || value === '') return '';
+  if (Array.isArray(value)) {
+    return value.map(item => formatParamValue(item)).filter(item => item !== '').join(', ');
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
+  return String(value);
+};
+
+/** 详情接口的 params 为 { key, label/name, value } 列表，按返回顺序展示。 */
+export const mapExecutionParams = (raw: unknown) => {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return [];
+    const label = String(item.label ?? item.name ?? '').trim();
+    if (!label) return [];
+    const key = item.key == null || item.key === '' ? `${label}-${index}` : String(item.key);
+    return [{
+      key,
+      name: label,
+      value: formatParamValue(item.value),
+    }];
+  });
+};
+
 export const normalizeExecutionResult = (value: unknown): ExecutionStatus => {
   const text = String(value || '').toLowerCase();
   if (text === 'success' || text === 'finished') return 'success';
@@ -271,7 +303,9 @@ const mapCurrentRound = (item: Record<string, any>, rawAttempts: Record<string, 
 };
 
 export const mapExecutionDetail = (item: Record<string, any> = {}) => {
-  const params = item.params || {};
+  const rawParams = item.params;
+  const params = rawParams && !Array.isArray(rawParams) && typeof rawParams === 'object' ? rawParams : {};
+  const paramList = mapExecutionParams(rawParams);
   const rawAttempts = Array.isArray(item.attempts) ? item.attempts : [];
   const nodes = mapNodes(rawAttempts);
   const retryHistory = Array.isArray(item.retry_history) ? item.retry_history : [];
@@ -307,7 +341,7 @@ export const mapExecutionDetail = (item: Record<string, any> = {}) => {
     executor: item.operator || '',
     scene_id: '',
     is_test: !!item.is_test,
-    params: [],
+    params: paramList,
     nodes,
     attempts: rounds,
   };

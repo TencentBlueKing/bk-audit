@@ -99,14 +99,17 @@
           <h4>{{ t('套餐参数') }}</h4>
           <div class="desc-grid">
             <div
-              v-for="(label, index) in skeletonParamLabels"
-              :key="label"
+              v-for="row in skeletonParamRows"
+              :key="row"
               class="desc-item">
-              <span class="desc-label"><span>{{ label }}：</span></span>
+              <span class="desc-label">
+                <i
+                  class="skeleton-bar is-v48" />
+              </span>
               <span class="desc-value">
                 <i
                   class="skeleton-bar"
-                  :class="skeletonValueWidth(index + 2)" />
+                  :class="skeletonValueWidth(row)" />
               </span>
             </div>
           </div>
@@ -309,14 +312,20 @@
           <div class="desc-grid">
             <div
               v-for="item in paramRows"
-              :key="item.label"
+              :key="item.key"
               class="desc-item">
-              <span class="desc-label"><span>{{ item.label }}</span></span>
+              <span class="desc-label is-param">
+                <span
+                  v-bk-tooltips="lineTip(`param-label-${item.key}`, item.label)"
+                  @mouseenter="syncOverflow($event, `param-label-${item.key}`)">
+                  {{ item.label }}
+                </span>
+              </span>
               <span class="desc-value">
                 <span
                   class="desc-clamp"
-                  v-bk-tooltips="lineTip(`param-${item.label}`, item.value)"
-                  @mouseenter="syncOverflow($event, `param-${item.label}`)">
+                  v-bk-tooltips="lineTip(`param-${item.key}`, item.value)"
+                  @mouseenter="syncOverflow($event, `param-${item.key}`)">
                   {{ item.value }}
                 </span>
               </span>
@@ -452,16 +461,7 @@
     t('风险等级'),
     t('责任人'),
   ]);
-  const skeletonParamLabels = computed(() => [
-    t('责任人'),
-    t('原始事件ID'),
-    t('标签名称'),
-    t('风险类型'),
-    t('风险数据源'),
-    t('风险发现时间'),
-    t('风险证据'),
-    t('风险描述'),
-  ]);
+  const skeletonParamRows = [1, 2, 3, 4];
   const rounds = computed(() => (detail.value?.attempts || []).map((item, index) => ({
     ...item,
     label: t('第 {n} 次', { n: index + 1 }),
@@ -577,19 +577,11 @@
     ];
   });
 
-  const paramRows = computed(() => {
-    const current = detail.value;
-    return [
-      { label: `${t('责任人')}：`, value: text(current?.risk_owner) },
-      { label: `${t('原始事件ID')}：`, value: text(current?.raw_event_id) },
-      { label: `${t('标签名称')}：`, value: text(current?.strategy_name) },
-      { label: `${t('风险类型')}：`, value: text(current?.risk_type) },
-      { label: `${t('风险数据源')}：`, value: text(current?.risk_source) },
-      { label: `${t('风险发现时间')}：`, value: text(current?.risk_found_at) },
-      { label: `${t('风险证据')}：`, value: text(current?.risk_evidence) },
-      { label: `${t('风险描述')}：`, value: text(current?.risk_description) },
-    ];
-  });
+  const paramRows = computed(() => (detail.value?.params || []).map(item => ({
+    key: item.key || item.name,
+    label: item.name.endsWith('：') || item.name.endsWith(':') ? item.name : `${item.name}：`,
+    value: text(item.value),
+  })));
 
   const openLinkedField = () => {
     openRiskDetail(router, detail.value?.risk_id || props.riskId || '', props.sceneId);
@@ -1002,6 +994,28 @@
 
 .desc-label span {
   white-space: nowrap;
+}
+
+.desc-label.is-param {
+  flex-basis: 108px;
+  width: 108px;
+}
+
+.desc-label.is-param span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desc-label.is-param {
+  flex-basis: 108px;
+  width: 108px;
+}
+
+.desc-label.is-param span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .desc-value {

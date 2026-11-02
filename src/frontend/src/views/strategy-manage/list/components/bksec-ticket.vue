@@ -33,9 +33,9 @@
           <div class="bksec-detail-row is-status">
             <span class="bksec-detail-label">
               <span
-                v-bk-tooltips="labelTip('status', t('风险状态'))"
+                v-bk-tooltips="labelTip('status', t('状态'))"
                 class="bksec-detail-label-text"
-                @mouseenter="syncLabelOverflow($event, 'status')">{{ t('风险状态') }}：</span>
+                @mouseenter="syncLabelOverflow($event, 'status')">{{ t('状态') }}：</span>
             </span>
             <span class="bksec-detail-value">
               <bk-tag

@@ -226,6 +226,7 @@
     'risk_label',
     'event_content',
     'has_report',
+    'bksec_push_status',
     'scene_id',
   ];
   const riskFieldOrderMap = new Map(riskFieldOrder.map((field, index) => [field, index]));
