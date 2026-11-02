@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+from typing import Optional
 
 from django.db import transaction
 from django.db.models import Q
@@ -27,6 +28,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import RiskRuleInUse, ValidationError
 from core.utils.data import choices_to_dict
+from services.web.risk.bksec.constants import BKSEC_RULE_PRIORITY_BASE
 from services.web.risk.constants import RiskRuleOperator, RiskStatus
 from services.web.risk.models import Risk, RiskRule, RiskRuleAuditInstance
 from services.web.risk.serializers import (
@@ -45,6 +47,17 @@ from services.web.scene.models import ResourceBindingScene
 
 
 class RiskRuleMeta(AuditMixinResource, abc.ABC):
+    @staticmethod
+    def _reject_auto_rule_edit(rule: Optional[RiskRule]):
+        """
+        自动规则（策略 BKSEC 发单）守卫：字段映射/启停/优先级均由策略配置派生，
+        人工编辑会产生脏快照（直到下次策略保存才被 sync 覆盖），一律拒绝
+        """
+        if rule and rule.auto_strategy_id:
+            raise ValidationError(
+                gettext_lazy("规则[%s]为策略[%s]的自动发单规则，由策略 BKSEC 配置维护，请到策略页调整") % (rule.rule_id, rule.auto_strategy_id)
+            )
+
     tags = ["RiskRule"]
 
 
@@ -106,7 +119,11 @@ class CreateRiskRule(RiskRuleMeta):
         scene_id = validated_request_data.pop("scene_id", None)
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
         instance.rule_id = instance.id
-        instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
+        # 手动规则优先级只在保留段（BKSEC 自动规则段）之下取 max，确保自动规则结构性最高
+        below_band = (
+            RiskRule.objects.filter(priority_index__lt=BKSEC_RULE_PRIORITY_BASE).order_by("-priority_index").first()
+        )
+        instance.priority_index = (below_band.priority_index + 1) if below_band else 1
         instance.save(update_fields=["rule_id", "priority_index"])
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
         BindingMetadataHelper.create_resource_binding(
@@ -126,6 +143,7 @@ class UpdateRiskRule(RiskRuleMeta):
 
     def perform_request(self, validated_request_data):
         rule = RiskRule.get_rule_or_404(rule_id=validated_request_data["rule_id"])
+        self._reject_auto_rule_edit(rule)
         origin_data = RiskRuleInfoSerializer(rule).data
         instance = RiskRule.objects.create(
             **validated_request_data,
@@ -146,9 +164,10 @@ class DeleteRiskRule(RiskRuleMeta):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
+        instances = RiskRule.objects.filter(rule_id=validated_request_data["rule_id"]).order_by("-version")
+        self._reject_auto_rule_edit(instances.first())
         if Risk.objects.filter(rule_id=validated_request_data["rule_id"]).exclude(status=RiskStatus.CLOSED).exists():
             raise RiskRuleInUse()
-        instances = RiskRule.objects.filter(rule_id=validated_request_data["rule_id"]).order_by("-version")
         if not instances:
             return
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instances.first()))
@@ -184,6 +203,7 @@ class ToggleRiskRule(RiskRuleMeta):
 
     def perform_request(self, validated_request_data):
         rule = RiskRule.get_rule_or_404(rule_id=validated_request_data["rule_id"])
+        self._reject_auto_rule_edit(rule)
         origin_data = RiskRuleInfoSerializer(rule).data
         rule.is_enabled = validated_request_data["is_enabled"]
         rule.save(update_fields=["is_enabled"])
@@ -220,6 +240,9 @@ class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
         if invalid_rule_ids:
             raise ValidationError(gettext_lazy("规则[%s]不属于场景[%s]") % (",".join(sorted(invalid_rule_ids)), scene_id))
 
+        # 自动规则不参与批量调整（优先级保留段与启停均由策略派生）
+        for item in validated_request_data["config"]:
+            self._reject_auto_rule_edit(RiskRule.objects.filter(rule_id=item["rule_id"]).order_by("-version").first())
         self._update_rules(validated_request_data["config"])
 
     @transaction.atomic

@@ -60,6 +60,12 @@ WATERMARK_API_URL = get_endpoint(settings.DEVSECOPS_APIGW_NAME, APIProvider.APIG
 # BK SOps
 BK_SOPS_API_URL = settings.BK_SOPS_API_URL or get_endpoint(settings.BK_SOPS_APIGW_NAME, APIProvider.APIGW, stag="stage")
 
+# BK SEC 网关地址
+BKSEC_API_URL = settings.BKSEC_API_URL or get_endpoint(settings.BKSEC_APIGW_NAME, APIProvider.APIGW)
+
+# BK SEC 发单插件 Config 同步地址
+BKSEC_PLUGIN_CONFIG_API_URL = settings.BKSEC_PLUGIN_CONFIG_API_URL
+
 # BK ITSM
 BK_ITSM_API_URL = (
     get_endpoint(settings.BK_ITSM_APIGW_NAME, APIProvider.APIGW)
