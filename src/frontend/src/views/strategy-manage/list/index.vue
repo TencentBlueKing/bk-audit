@@ -867,6 +867,23 @@
     placeholder: t('请选择事件调查报告'),
   }));
 
+  const initBksecFilterList = [
+    {
+      text: t('已启用'),
+      value: 'true',
+    },
+    {
+      text: t('未启用'),
+      value: 'false',
+    },
+  ];
+
+  const buildBksecSearchChildren = (): SearchData[] => initBksecFilterList.map(item => ({
+    name: item.text,
+    id: item.value,
+    placeholder: t('请选择BKSEC工单'),
+  }));
+
   const buildTagSearchChildren = (): SearchData[] => strategyLabelList.value.map(item => ({
     name: item.tag_name,
     id: item.tag_id,
@@ -881,7 +898,7 @@
 
   /**
    * 搜索字段顺序对齐列表字段：
-   * 策略ID → 策略名称 → 配置方式 → 标签 → 状态 → 分派场景(全局) → 事件调查报告 → 最近更新人
+   * 策略ID → 策略名称 → 配置方式 → 标签 → 状态 → 分派场景(全局) → 事件调查报告 → BKSEC工单 → 最近更新人
    */
   const buildSearchData = (): SearchData[] => {
     const next: SearchData[] = [
@@ -921,6 +938,14 @@
         onlyRecommendChildren: true,
       },
       {
+        name: t('BKSEC工单'),
+        id: 'bksec_enabled',
+        multiple: true,
+        placeholder: t('请选择BKSEC工单'),
+        children: buildBksecSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+      {
         name: t('最近更新人'),
         id: 'updated_by',
         placeholder: t('请输入最近更新人'),
@@ -936,8 +961,8 @@
   // 审计策略（场景）不含分派场景；仅全局策略展示
   const searchPlaceholder = computed(() => (
     isPlatformList.value
-      ? t('策略ID、策略名称、配置方式、标签、状态、分派场景、事件调查报告、最近更新人')
-      : t('策略ID、策略名称、配置方式、标签、状态、事件调查报告、最近更新人')
+      ? t('策略ID、策略名称、配置方式、标签、状态、分派场景、事件调查报告、BKSEC工单、最近更新人')
+      : t('策略ID、策略名称、配置方式、标签、状态、事件调查报告、BKSEC工单、最近更新人')
   ));
 
   const {
@@ -1322,6 +1347,26 @@
         >{reportStatusText(data.report_status) }</bk-tag>,
     },
     {
+      label: () => t('BKSEC工单'),
+      field: () => 'bksec_enabled',
+      width: 120,
+      filter: {
+        list: initBksecFilterList,
+        filterScope: SortScope.CURRENT,
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+        filterFn: (checked: Array<string | boolean>, row: StrategyModel) => {
+          if (!checked?.length) return true;
+          const enabled = row.bksecEnabled ? 'true' : 'false';
+          return checked.map(String).includes(enabled);
+        },
+      },
+      render: ({ data }: { data: StrategyModel }) => (
+        <bk-tag>{data.bksecEnabled ? t('已启用') : t('未启用')}</bk-tag>
+      ),
+    },
+    {
       label: () => t('启停'),
       field: () => 'status',
       width: 90,
@@ -1679,13 +1724,29 @@
     showLineHeight: false,
   });
   const settings = computed(() => {
+    const fresh = initSettings();
     const jsonStr = localStorage.getItem('audit-strategy-manage-list-setting');
-    if (jsonStr) {
-      const jsonSetting = JSON.parse(jsonStr);
-      jsonSetting.showLineHeight = false;
-      return jsonSetting;
+    if (!jsonStr) {
+      return fresh;
     }
-    return initSettings();
+    try {
+      const jsonSetting = JSON.parse(jsonStr);
+      const savedFields = Array.isArray(jsonSetting.fields) ? jsonSetting.fields : [];
+      const fieldSet = new Set(savedFields.map((item: { field: string }) => item.field));
+      fresh.fields.forEach((field) => {
+        if (!fieldSet.has(field.field)) {
+          savedFields.push(field);
+        }
+      });
+      return {
+        ...jsonSetting,
+        fields: savedFields,
+        showLineHeight: false,
+      };
+    } catch (error) {
+      console.error(error);
+      return fresh;
+    }
   });
 
 
@@ -1898,6 +1959,7 @@
       tag: '',
       status: '',
       report_status: '',
+      bksec_enabled: '',
       dispatch_scene_id: '',
       updated_by: '',
     } as Record<string, any>;
@@ -1915,9 +1977,18 @@
         searchKey.value[index] = ({ id: 'strategy_name', name: t('策略名称'), values: [{ id: item.id, name: item.id }] });
       }
     });
-    // 对列表的filter重新赋值
+    // 对列表的filter重新赋值；BKSEC 工单与搜索条件保持同一组勾选
+    const bksecChecked = String(search.bksec_enabled || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(item => item === 'true' || item === 'false');
     tableColumn.value.forEach((column) => {
       if (column.filter && Array.isArray(column.filter.checked)) {
+        const field = column.field?.();
+        if (field === 'bksec_enabled') {
+          column.filter.checked.splice(0, column.filter.checked.length, ...bksecChecked);
+          return;
+        }
         // eslint-disable-next-line no-param-reassign
         column.filter.checked.length = 0;
       }
@@ -2120,6 +2191,24 @@
           }],
         });
       }
+    } else if (value && checkField === 'bksec_enabled') {
+      if (findObj) {
+        findObj.values = [{
+          id: value,
+          name: nameList.map(nameItem => initBksecFilterList
+            .find(cItem => cItem.value === nameItem)?.text || nameItem).join(','),
+        }];
+      } else {
+        searchKey.value.push({
+          id: 'bksec_enabled',
+          name: t('BKSEC工单'),
+          values: [{
+            id: value,
+            name: nameList.map(nameItem => initBksecFilterList
+              .find(cItem => cItem.value === nameItem)?.text || nameItem).join(','),
+          }],
+        });
+      }
     } else if (value && checkField === 'report_status') {
       if (findObj) {
         findObj.values = [{
@@ -2151,6 +2240,7 @@
       tag: '',
       status: '',
       report_status: '',
+      bksec_enabled: '',
       dispatch_scene_id: '',
       updated_by: '',
     } as Record<string, any>;
@@ -2332,6 +2422,7 @@
       || urlSearch.tag
       || urlSearch.status
       || urlSearch.report_status
+      || urlSearch.bksec_enabled
       || urlSearch.dispatch_scene_id
       || urlSearch.updated_by);
     if (hasUrlStrategyFilter && !hasListLoadedOnce.value) {
@@ -2866,5 +2957,6 @@
   flex: 1;
   flex-direction: column;
 }
+
 </style>
 
