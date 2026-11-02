@@ -84,7 +84,7 @@ def fetch_risk_access_items(
     翻页固定带 ordering=created_at：接口默认无序，翻页期间数据增删会让 offset 错位（漏取/重复）。
 
     project_id：项目维度（risk_access 必传），风险类型归属项目，须与 risk_type_id 联合定位；
-    留空时回退全局 BKSEC_PROJECT_ID（兼容存量未回填 project_id 的配置）。
+    由调用方（策略配置 / 预览 / 测试发送）显式传入，无全局兜底。
     as_platform：认证形态——True 走平台身份（RiskAccessListAsPlatform，同步 config 取 token），
     False 走用户身份（RiskAccessList，前端下拉随请求者凭证，网关按用户数据域出数据）。
     缓存按 项目 + is_formal + 身份维度隔离（项目/身份的数据域不同，混用会互相污染）。
@@ -99,7 +99,7 @@ def fetch_risk_access_items(
     cache_key = "{}:{}:{}:{}".format(
         BKSEC_RISK_TYPES_CACHE_KEY,
         _risk_access_cache_identity(as_platform),
-        project_id or settings.BKSEC_PROJECT_ID or "_",
+        project_id or "_",
         is_formal or "true",
     )
     if use_cache:
@@ -111,7 +111,7 @@ def fetch_risk_access_items(
     for page in range(1, BKSEC_RISK_ACCESS_MAX_PAGES + 1):
         result = (
             fetcher(
-                project_id=project_id or settings.BKSEC_PROJECT_ID or "",
+                project_id=project_id or "",
                 is_formal=is_formal or "true",
                 ordering=BKSEC_RISK_ACCESS_ORDERING,
                 page=page,

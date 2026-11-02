@@ -206,8 +206,6 @@ BK_SOPS_APIGW_NAME = os.getenv("BKAPP_BK_SOPS_APIGW_NAME", "bk-sops")
 BKSEC_API_URL = os.getenv("BKAPP_BKSEC_API_URL")
 BKSEC_APIGW_NAME = os.getenv("BKAPP_BKSEC_APIGW_NAME", "bksec")
 BKSEC_API_RATE_LIMIT = os.getenv("BKAPP_BKSEC_API_RATE_LIMIT", "10/s")
-# BKSEC 项目 ID（risk_access 接口必填的项目维度，策略页风险类型下拉按此过滤）
-BKSEC_PROJECT_ID = os.getenv("BKAPP_BKSEC_PROJECT_ID")
 # 预置 BKSEC 发单套餐指向的标准运维流程模板
 BKSEC_SOPS_TEMPLATE_ID = os.getenv("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
 # BKSEC 发单插件 Config 同步 API 地址

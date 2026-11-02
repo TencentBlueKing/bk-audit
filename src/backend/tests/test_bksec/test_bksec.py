@@ -31,7 +31,6 @@ from services.web.risk.bksec.contract import (
     build_event_payload,
     build_pa_params,
     build_plugin_constants,
-    coerce_operator_constant,
 )
 from services.web.risk.bksec.render import build_render_context, render_value
 from services.web.risk.bksec.service import (
@@ -334,17 +333,8 @@ class TestBkSecConfig:
         config = BkSecConfig.model_validate(data)
         assert len(config.field_mappings) == 4
 
-    def test_project_id_fallback_to_global(self, settings):
-        """前端未传 project_id：回退全局配置，不阻断保存（改造期过渡兼容）"""
-        settings.BKSEC_PROJECT_ID = "17"
-        data = {k: v for k, v in BKSEC_CONFIG_DATA.items() if k != "project_id"}
-        config = BkSecConfig.model_validate(data)
-        assert config.project_id == "17"
-        config.validate_for_submit()
-
-    def test_project_id_fallback_missing_still_blocks(self, settings):
-        """既未传 project_id 又未配置全局项目：仍然拦截"""
-        settings.BKSEC_PROJECT_ID = None
+    def test_project_id_missing_always_blocks(self):
+        """未传 project_id 直接拦截（多项目：无全局兜底）"""
         data = {k: v for k, v in BKSEC_CONFIG_DATA.items() if k != "project_id"}
         config = BkSecConfig.model_validate(data)
         assert config.project_id == ""
@@ -827,17 +817,6 @@ class TestBkSecResources:
         ):
             result = resource.risk.get_task_status.perform_request({"task_id": "1"})
         assert "failure_hint" not in result
-
-    def test_operator_constant_empty_value_renders_valid_json_array(self):
-        """断点1固化：无责任人且无安全接口人时，${operator} 仍为合法 JSON 数组串（插件 json.loads 不崩）"""
-        # 分号切分与 JSON 序列化由代码处理，配置页只需按语义写 {{ risk.operator }}
-        assert json.loads(coerce_operator_constant("")) == []
-        # 分号分隔的多人 → 数组
-        assert json.loads(coerce_operator_constant("alice;bob")) == ["alice", "bob"]
-        # 脏值 "None" 被剔除
-        assert json.loads(coerce_operator_constant("None")) == []
-        # 已是数组串时保持数组语义
-        assert json.loads(coerce_operator_constant('["alice"]')) == ["alice"]
 
 
 @pytest.mark.django_db
