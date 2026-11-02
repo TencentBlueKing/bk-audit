@@ -239,6 +239,7 @@
     t,
     deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
     detailRouteName: 'riskManageDetail',
+    includeBksecColumn: true,
     overrides: {
       // risk_id 列：stand_by 状态不可点击
       risk_id: {
@@ -684,6 +685,7 @@
       title: '',
       notice_users: '',
       has_report: '',
+      bksec_push_status: '',
       scene_id: '',
     };
     const dataParams: Record<string, any> = {

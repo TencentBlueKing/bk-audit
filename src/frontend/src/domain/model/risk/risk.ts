@@ -91,6 +91,7 @@ export default class Event {
   report_auto_render: boolean;
   report_generating: boolean;
   has_report: boolean;
+  bksec_push_status: string;
   report: {
     content: string;
     status: string;
@@ -126,6 +127,7 @@ export default class Event {
     this.report_enabled = payload.report_enabled;
     this.report_auto_render = payload.report_auto_render;
     this.has_report = payload.has_report;
+    this.bksec_push_status = payload.bksec_push_status || '';
     this.report = payload.report;
     this.rule_id = payload.rule_id;
     this.rule_version = payload.rule_version;

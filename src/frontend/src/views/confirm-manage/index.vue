@@ -161,6 +161,7 @@
       t,
       deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
       detailRouteName: 'confirmManageDetail',
+      includeBksecColumn: true,
       appendColumns: [actionColumn],
     });
     const eventFilters = searchModel.value?.event_filters;
@@ -307,6 +308,7 @@
       title: '',
       notice_users: '',
       has_report: '',
+      bksec_push_status: '',
     };
     const dataParams: Record<string, any> = {
       ...params,

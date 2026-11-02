@@ -200,7 +200,7 @@
                       placement="bottom-end"
                       theme="light"
                       trigger="click"
-                      width="480"
+                      width="350"
                       @after-hidden="setTitleVarOpen(index, false)"
                       @after-show="setTitleVarOpen(index, true)">
                       <button

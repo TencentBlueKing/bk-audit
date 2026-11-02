@@ -133,4 +133,24 @@ export default {
       },
     ]),
   },
+  bksec_push_status: {
+    label: 'BKSEC工单',
+    type: 'select',
+    required: false,
+    multiple: false,
+    service: () => Promise.resolve([
+      {
+        id: 'not_pushed',
+        name: '未推送',
+      },
+      {
+        id: 'success',
+        name: '推送成功',
+      },
+      {
+        id: 'failed',
+        name: '推送失败',
+      },
+    ]),
+  },
 } as Record<string, IFieldConfig>;

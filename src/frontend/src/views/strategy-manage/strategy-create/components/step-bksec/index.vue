@@ -132,7 +132,7 @@
                     placement="bottom-end"
                     theme="light"
                     trigger="click"
-                    width="480">
+                    width="350">
                     <button
                       class="bksec-var-trigger"
                       type="button"

@@ -124,7 +124,7 @@
 .bksec-var-panel {
   display: flex;
   flex-direction: column;
-  width: 480px;
+  width: 350px;
   max-height: 360px;
   overflow: hidden;
   background: var(--audit-neutral-bg-04);
