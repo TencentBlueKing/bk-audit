@@ -26,9 +26,42 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy
 from rest_framework.settings import api_settings
 
-from apps.sops.constants import SOPSTaskStatus
+from apps.sops.constants import SOPSConstantSourceType, SOPSTaskStatus
 
 logger = logging.getLogger("celery")
+
+
+def is_user_input_constant(constant: dict) -> bool:
+    """创建任务时需要覆盖的用户入参。
+
+    标准运维里 show 才是执行参数。custom 与从节点输入勾选出来的 component_inputs
+    都取创建任务时传入的值；component_outputs 绑定节点输出，隐藏变量保留模板绑定。
+    """
+
+    return (
+        constant.get("show_type") == "show" and constant.get("source_type") in SOPSConstantSourceType.user_input_types()
+    )
+
+
+def build_pa_constants(template_constants: dict, values: dict) -> List[dict]:
+    """
+    组装执行记录详情展示用的套餐入参快照 [{key, name, value}]
+
+    template_constants: get_template_info 返回的 pipeline_tree.constants（变量定义，用于取显示名并过滤非入参）
+    values: 实际下发给 SOPS 的 constants（渲染后的终值）
+
+    只保留真实发出的用户入参：模板里有定义但非用户入参（节点输出/隐藏变量）跳过；
+    模板定义取不到时（模板接口异常）不丢弃，显示名退化为 key，保证快照不为空。
+    """
+
+    known = {c.get("key"): c for c in (template_constants or {}).values() if isinstance(c, dict)}
+    snapshot: List[dict] = []
+    for key, value in (values or {}).items():
+        constant = known.get(key)
+        if constant and not is_user_input_constant(constant):
+            continue
+        snapshot.append({"key": key, "name": (constant or {}).get("name") or key, "value": value})
+    return snapshot
 
 
 def parse_sops_time(value) -> Optional[datetime.datetime]:

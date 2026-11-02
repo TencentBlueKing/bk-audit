@@ -36,7 +36,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
-from apps.sops.constants import SOPSConstantSourceType, SOPSTaskStatus
+from apps.sops.constants import SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import (
     DEFAULT_RISK_OPERATE_NOTICE_CONFIG,
@@ -60,24 +60,16 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.parser import RiskNoticeParser
-from services.web.risk.utils import calc_task_duration
+from services.web.risk.utils import (
+    build_pa_constants,
+    calc_task_duration,
+    is_user_input_constant,
+)
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
 # 流转历史去重窗口（秒）：窗口期内内容完全相同的重复写入视为同一次流转，不再重复落库
 HISTORY_DEDUP_WINDOW_SEC = 5
-
-
-def _is_user_input_constant(constant: dict) -> bool:
-    """创建任务时需要覆盖的用户入参。
-
-    标准运维里 show 才是执行参数。custom 与从节点输入勾选出来的 component_inputs
-    都取创建任务时传入的值；component_outputs 绑定节点输出，隐藏变量保留模板绑定。
-    """
-
-    return (
-        constant.get("show_type") == "show" and constant.get("source_type") in SOPSConstantSourceType.user_input_types()
-    )
 
 
 def _is_condition_hide(constant: dict) -> bool:
@@ -746,12 +738,10 @@ class AutoProcess(RiskFlowBaseHandler):
 
             bksec_context = build_render_context(risk=self.risk)
         constants = {}
-        # 入参快照（key/name/value）：执行记录详情据此展示"当时真正发出去的套餐入参"
-        pa_constants = []
         missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
             # 只覆盖用户入参。节点输出和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
-            if not _is_user_input_constant(c):
+            if not is_user_input_constant(c):
                 continue
             field = pa_params.get(c["key"])
             if not isinstance(field, dict):
@@ -775,9 +765,10 @@ class AutoProcess(RiskFlowBaseHandler):
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
-            pa_constants.append({"key": c["key"], "name": c.get("name") or c["key"], "value": value})
         if missing_keys:
             raise AutoProcessParamsError(keys=",".join(missing_keys))
+        # 入参快照（key/name/value）：执行记录详情据此展示"当时真正发出去的套餐入参"
+        pa_constants = build_pa_constants(template_info["pipeline_tree"]["constants"], constants)
         params = {
             "name": f"{self.process_application.name}_{int(datetime.datetime.now().timestamp() * 1000)}",
             "constants": constants,
