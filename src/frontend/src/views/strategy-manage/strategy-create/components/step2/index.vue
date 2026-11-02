@@ -163,9 +163,10 @@
   const handleNext = () => {
     eventRef.value.getValue().then(() => {
       emits('nextStep', 4, buildStepParams());
-    }).catch(() => {
-      nextTick(scrollToFirstEmptyField);
-    });
+    })
+      .catch(() => {
+        nextTick(scrollToFirstEmptyField);
+      });
   };
 
   const handleSaveDraft = () => {

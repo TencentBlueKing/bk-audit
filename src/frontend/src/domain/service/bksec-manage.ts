@@ -16,10 +16,9 @@
 */
 
 import type { BksecConfigPayload } from '@model/bksec/config';
-import type BksecRiskType from '@model/bksec/risk-type';
-
 import BksecPreviewRisk from '@model/bksec/preview-risk';
 import BksecProject from '@model/bksec/project';
+import type BksecRiskType from '@model/bksec/risk-type';
 import BksecTestTaskStatus from '@model/bksec/task-status';
 
 import BksecManageSource from '../source/bksec-manage';

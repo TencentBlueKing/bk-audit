@@ -118,7 +118,8 @@ export default {
     return ProcessApplicationManageSource.getExecutionRecords(params)
       .then(({ data }) => ({
         ...data,
-        results: (data.results || []).map((item: ConstructorParameters<typeof ExecutionRecord>[0]) => new ExecutionRecord(item)),
+        results: (data.results || [])
+          .map((item: ConstructorParameters<typeof ExecutionRecord>[0]) => new ExecutionRecord(item)),
       }));
   },
   fetchExecutionDetail(params: { task_id: string }) {

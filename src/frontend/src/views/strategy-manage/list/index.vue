@@ -1162,7 +1162,7 @@
               onClick={() => retryRequest(data.strategy_id)}>
               <audit-icon type="redo" />
             </button>
-          );
+        );
         return <span class="strategy-status">
           <audit-icon
             class="strategy-status-dot"

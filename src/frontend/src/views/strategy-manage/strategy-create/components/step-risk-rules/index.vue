@@ -27,23 +27,23 @@
           </div>
         </div>
         <div class="risk-rules-actions">
-            <bk-button
-              @click="handleAddRule">
-              <audit-icon
-                class="add-rule-icon"
-                type="add" />
-              {{ t('添加规则') }}
-            </bk-button>
-            <bk-button
-              class="ml8"
-              @click="handleToggleAllCollapse">
-              <img
-                alt=""
-                class="collapse-toggle-icon"
-                :src="allCollapsed ? expandIcon : collapseIcon">
-              {{ allCollapsed ? t('一键展开') : t('一键收起') }}
-            </bk-button>
-          </div>
+          <bk-button
+            @click="handleAddRule">
+            <audit-icon
+              class="add-rule-icon"
+              type="add" />
+            {{ t('添加规则') }}
+          </bk-button>
+          <bk-button
+            class="ml8"
+            @click="handleToggleAllCollapse">
+            <img
+              alt=""
+              class="collapse-toggle-icon"
+              :src="allCollapsed ? expandIcon : collapseIcon">
+            {{ allCollapsed ? t('一键展开') : t('一键收起') }}
+          </bk-button>
+        </div>
 
         <!-- 规则列表 -->
         <vuedraggable
@@ -183,9 +183,9 @@
                             class="title-input"
                             type="text"
                             @click.stop="(e) => rememberTitleCaret(index, e)"
-                            @keyup="(e) => rememberTitleCaret(index, e)"
                             @input="(e) => rememberTitleCaret(index, e)"
-                            @keydown="(e) => handleTitleKeyDown(e, index)">
+                            @keydown="(e) => handleTitleKeyDown(e, index)"
+                            @keyup="(e) => rememberTitleCaret(index, e)">
                         </li>
                       </ul>
                       <p
@@ -511,9 +511,7 @@
   const parentFormData = computed(() => props.formData ?? {});
   const parentConfigs = computed(() => props.formData?.configs ?? {});
   const selectFields = computed(() => props.select ?? parentFormData.value.configs?.select ?? []);
-  const strategyIdForFields = computed(() => String(
-    props.editData?.strategy_id || props.formData?.strategy_id || '',
-  ));
+  const strategyIdForFields = computed(() => String(props.editData?.strategy_id || props.formData?.strategy_id || ''));
 
   const { data: strategyEvent, run: fetchTitleEventFields } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),

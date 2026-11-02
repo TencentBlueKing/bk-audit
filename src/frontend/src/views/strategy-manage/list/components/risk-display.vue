@@ -13,10 +13,10 @@
           <div class="field-table">
             <div class="table-head risk-table-head">
               <div
-                v-for="(column, index) in riskColumns"
+                v-for="column in riskColumns"
                 :key="column.key"
                 class="header-cell"
-                :style="getColumnStyle(column, index, riskColumns.length)">
+                :style="getColumnStyle()">
                 <span
                   v-bk-tooltips="{
                     disabled: !column.tips,
@@ -82,8 +82,8 @@
                   <value-item
                     :all-tools-data="allToolsData"
                     :columns="eventDataColumns"
-                    lock-column-width
-                    :item="getEventGroupRows(groupKey)" />
+                    :item="getEventGroupRows(groupKey)"
+                    lock-column-width />
                 </div>
               </div>
             </template>
@@ -133,7 +133,7 @@
     flex: `0 0 ${groupColumnWidth.value}`,
   }));
 
-  const getColumnStyle = (_column?: TableColumn, _index?: number, _total?: number) => ({
+  const getColumnStyle = () => ({
     flex: '1 1 0',
     minWidth: '88px',
   });

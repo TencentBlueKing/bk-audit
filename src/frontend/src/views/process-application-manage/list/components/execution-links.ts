@@ -19,7 +19,7 @@ const riskDetailLocation = (riskId: string, sceneId?: string) => {
 
 export const openRiskDetail = (router: Router, riskId: string, sceneId?: string) => {
   if (!riskId) return;
-  const href = router.resolve(riskDetailLocation(riskId, sceneId)).href;
+  const { href } = router.resolve(riskDetailLocation(riskId, sceneId));
   window.open(href, '_blank');
 };
 

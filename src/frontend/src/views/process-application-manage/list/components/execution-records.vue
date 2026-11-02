@@ -40,11 +40,11 @@
         class="execution-table"
         :columns="columns"
         :data-source="dataSource"
-        :hide-filter-row-when-empty="true"
+        hide-filter-row-when-empty
         :persist-table-filters="false"
-        :table-max-height="tableMaxHeight"
         row-key="task_id"
         :search-params="linkedSearchParams"
+        :table-max-height="tableMaxHeight"
         use-skeleton
         @clear-search="handleClearFilter"
         @filter-change="handleTableFilterChange" />
@@ -186,7 +186,10 @@
     run: fetchUserList,
   } = useRequest(MetaManageService.fetchUserList, {
     defaultParams: { page: 1, page_size: 30 },
-    defaultValue: { count: 0, results: [] } as { count: number; results: Array<{ username: string; display_name: string }> },
+    defaultValue: { count: 0, results: [] } as {
+      count: number;
+      results: Array<{ username: string; display_name: string }>;
+    },
     manual: true,
   });
 
@@ -263,7 +266,8 @@
 
   const fieldValue = (id: string) => {
     const item = searchKey.value.find(key => key.id === id);
-    return (item?.values || []).map(value => value.id).filter(Boolean).join(',');
+    return (item?.values || []).map(value => value.id).filter(Boolean)
+      .join(',');
   };
 
   const keywordValue = () => {

@@ -60,7 +60,7 @@ export default function useDrillToolAvailability(options: Options) {
         .catch(() => [] as string[]),
       getSceneName(),
     ]);
-    const infoBox = InfoBox({
+    const infoBox: ReturnType<typeof InfoBox> = InfoBox({
       type: 'warning',
       title: t('暂时无法使用'),
       subTitle: t('全局工具{tools}未对当前场景「{scene}」开放，暂时无法使用。如需使用，请联系平台管理员「{admins}」将「{scene}」加入该工具的可见范围', {

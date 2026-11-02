@@ -39,9 +39,9 @@
             <template #trigger>
               <div class="bksec-risk-trigger">
                 <span
+                  v-bk-tooltips="labelTip('selected-risk', selectedRisk ? optionName(selectedRisk) : '')"
                   class="bksec-risk-text"
                   :class="{ 'is-placeholder': !selectedRisk }"
-                  v-bk-tooltips="labelTip('selected-risk', selectedRisk ? optionName(selectedRisk) : '')"
                   @mouseenter="syncLabelOverflow($event, 'selected-risk')">
                   {{ selectedRisk ? optionName(selectedRisk) : t('请选择一条风险单用于渲染预览') }}
                 </span>
@@ -62,8 +62,8 @@
               :name="optionName(item)">
               <div class="bksec-risk-option">
                 <span
-                  class="bksec-risk-option-text"
                   v-bk-tooltips="optionTip(item.id, optionName(item))"
+                  class="bksec-risk-option-text"
                   @mouseenter="syncLabelOverflow($event, `risk-option-${item.id}`)">
                   {{ optionName(item) }}
                 </span>
@@ -148,19 +148,19 @@
       <div
         v-else
         class="bksec-preview-scroll bksec-preview-body">
-          <div
-            v-for="group in previewGroups"
-            :key="group.key"
-            class="bksec-desc-group"
-            :class="{ 'is-extension': group.extension }">
+        <div
+          v-for="group in previewGroups"
+          :key="group.key"
+          class="bksec-desc-group"
+          :class="{ 'is-extension': group.extension }">
           <div
             v-for="row in group.rows"
             :key="row.key"
             class="bksec-desc-row">
             <span class="bksec-desc-label">
               <span
-                class="bksec-desc-label-text"
                 v-bk-tooltips="labelTip(row.key, row.label)"
+                class="bksec-desc-label-text"
                 @mouseenter="syncLabelOverflow($event, row.key)">{{ row.label }}：</span>
             </span>
             <span class="bksec-desc-value">
@@ -191,8 +191,8 @@
               </span>
             </span>
           </div>
-          </div>
         </div>
+      </div>
     </div>
   </audit-sideslider>
 </template>
@@ -228,7 +228,6 @@
     fieldValues: Record<string, string>;
     fields?: Array<{ id: string; name: string; required?: boolean }>;
     strategyId?: string | number;
-    strategyType?: string;
     strategyName?: string;
   }
   interface Emits {
@@ -371,7 +370,8 @@
   };
 
   const loadPreview = async () => {
-    const seq = ++previewSeq;
+    previewSeq += 1;
+    const seq = previewSeq;
     previewError.value = false;
     const riskId = selectedRisk.value?.risk_id || '';
     if (!shouldRequestRemotePreview(isCreateMode.value, riskId)) {
@@ -455,7 +455,8 @@
 
   let taskWatchSeq = 0;
   const watchRiskTask = async (riskId: string) => {
-    const seq = ++taskWatchSeq;
+    taskWatchSeq += 1;
+    const seq = taskWatchSeq;
     stopPoll();
     sending.value = false;
     const normalized = String(riskId || '').trim();
@@ -487,7 +488,8 @@
   };
 
   const openPreview = async () => {
-    const ticket = ++openSeq;
+    openSeq += 1;
+    const ticket = openSeq;
     stopPoll();
     sending.value = false;
     openedAt.value = dayjs().format('YYYY-MM-DD HH:mm:ss');

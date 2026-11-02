@@ -272,6 +272,7 @@ const asAxisList = (axis: unknown): Record<string, any>[] => {
   return isRecord(axis) ? [axis] : [];
 };
 
+/* eslint-disable no-param-reassign */
 /** 类目原文含 T 时，轴刻度只换展示，不改 data */
 const ensureIsoCategoryDisplay = (axis: unknown) => {
   asAxisList(axis).forEach((host) => {
@@ -338,6 +339,7 @@ const attachDataZoomLabels = (option: Record<string, any>) => {
     if (zoom.height == null || zoom.height === 'ph') zoom.height = null;
   });
 };
+/* eslint-enable no-param-reassign */
 
 const resolveAllowedFormatters = (option: Record<string, any>) => {
   const resolveHost = (candidate: unknown) => {

@@ -16,92 +16,92 @@
 -->
 <template>
   <div>
-  <smart-action
-    class="create-strategy-page"
-    :offset-target="getSmartActionOffsetTarget">
-    <div class="bksec-card">
-      <div class="bksec-title">
-        <button
-          class="bksec-collapse"
-          type="button"
-          @click="expanded = !expanded">
-          <audit-icon
-            class="bksec-collapse-icon"
-            :class="{ 'is-collapsed': !expanded }"
-            type="angle-line-down" />
-        </button>
-        <span class="bksec-title-text">{{ t('BKSEC安全工单') }}</span>
-        <bk-switcher
-          v-model="enabled"
-          data-testid="bksec-ticket-switch"
-          theme="primary"
-          @change="handleSwitcher" />
-        <div class="bksec-title-desc">
-          <audit-icon
-            class="bksec-info-icon"
-            type="tishi" />
-          <span>{{ t('启用后审计策略生成风险后，系统将调用处理套餐发送 BKSEC 安全工单') }}</span>
-        </div>
-      </div>
-      <div
-        v-if="enabled && expanded"
-        class="bksec-body">
-        <div
-          ref="typeFieldRef"
-          class="bksec-type"
-          data-testid="bksec-risk-type">
-          <div class="bksec-label">
-            <span>{{ t('风险类型') }}</span>
-            <span class="is-required">*</span>
+    <smart-action
+      class="create-strategy-page"
+      :offset-target="getSmartActionOffsetTarget">
+      <div class="bksec-card">
+        <div class="bksec-title">
+          <button
+            class="bksec-collapse"
+            type="button"
+            @click="expanded = !expanded">
+            <audit-icon
+              class="bksec-collapse-icon"
+              :class="{ 'is-collapsed': !expanded }"
+              type="angle-line-down" />
+          </button>
+          <span class="bksec-title-text">{{ t('BKSEC安全工单') }}</span>
+          <bk-switcher
+            v-model="enabled"
+            data-testid="bksec-ticket-switch"
+            theme="primary"
+            @change="handleSwitcher" />
+          <div class="bksec-title-desc">
+            <audit-icon
+              class="bksec-info-icon"
+              type="tishi" />
+            <span>{{ t('启用后审计策略生成风险后，系统将调用处理套餐发送 BKSEC 安全工单') }}</span>
           </div>
-          <bk-select
-            v-model="riskTypeId"
-            class="bksec-type-select"
-            :class="{ 'is-error': typeError }"
-            :filter-option="false"
-            filterable
-            :no-data-text="t('暂无匹配的风险类型')"
-            :no-match-text="t('暂无匹配的风险类型')"
-            :placeholder="t('请选择风险类型')"
-            :popover-options="riskTypePopoverOptions"
-            :remote-method="searchRiskTypes"
-            @change="handleTypeChange"
-            @toggle="handleTypeMenuToggle">
-            <bk-option-group
-              v-for="project in displayProjects"
-              :key="project.id"
-              :label="project.name">
-              <bk-option
-                v-for="item in project.riskTypes"
-                :id="item.id"
-                :key="`${project.id}-${item.id}`"
-                :name="item.label" />
-            </bk-option-group>
-            <div
-              v-if="keptRiskType && !selectedInList"
-              class="bksec-kept-option">
-              <bk-option
-                :id="keptRiskType.id"
-                :name="keptRiskType.label"
-                :ref="markKeptOption" />
+        </div>
+        <div
+          v-if="enabled && expanded"
+          class="bksec-body">
+          <div
+            ref="typeFieldRef"
+            class="bksec-type"
+            data-testid="bksec-risk-type">
+            <div class="bksec-label">
+              <span>{{ t('风险类型') }}</span>
+              <span class="is-required">*</span>
             </div>
-          </bk-select>
-          <div
-            v-if="typeError"
-            class="bksec-error"
-            data-testid="bksec-type-error">
-            {{ t('请选择风险类型') }}
+            <bk-select
+              v-model="riskTypeId"
+              class="bksec-type-select"
+              :class="{ 'is-error': typeError }"
+              :filter-option="false"
+              filterable
+              :no-data-text="t('暂无匹配的风险类型')"
+              :no-match-text="t('暂无匹配的风险类型')"
+              :placeholder="t('请选择风险类型')"
+              :popover-options="riskTypePopoverOptions"
+              :remote-method="searchRiskTypes"
+              @change="handleTypeChange"
+              @toggle="handleTypeMenuToggle">
+              <bk-option-group
+                v-for="project in displayProjects"
+                :key="project.id"
+                :label="project.name">
+                <bk-option
+                  v-for="item in project.riskTypes"
+                  :id="item.id"
+                  :key="`${project.id}-${item.id}`"
+                  :name="item.label" />
+              </bk-option-group>
+              <div
+                v-if="keptRiskType && !selectedInList"
+                class="bksec-kept-option">
+                <bk-option
+                  :id="keptRiskType.id"
+                  :ref="markKeptOption"
+                  :name="keptRiskType.label" />
+              </div>
+            </bk-select>
+            <div
+              v-if="typeError"
+              class="bksec-error"
+              data-testid="bksec-type-error">
+              {{ t('请选择风险类型') }}
+            </div>
+            <div
+              v-if="typeLoadError"
+              class="bksec-error"
+              data-testid="bksec-type-load-error">
+              {{ t('风险类型加载失败') }}
+            </div>
           </div>
           <div
-            v-if="typeLoadError"
-            class="bksec-error"
-            data-testid="bksec-type-load-error">
-            {{ t('风险类型加载失败') }}
-          </div>
-        </div>
-        <div
-          v-if="fields.length"
-          class="bksec-fields">
+            v-if="fields.length"
+            class="bksec-fields">
             <div class="bksec-fields-divider" />
             <div class="bksec-fields-title">
               {{ t('工单字段') }}
@@ -109,141 +109,140 @@
             <div
               class="bksec-field-grid"
               data-testid="bksec-field-grid">
-            <div
-              v-for="field in fields"
-              :key="field.id"
-              :ref="(el) => setFieldAnchorRef(field.id, el)"
-              class="bksec-field">
-              <div class="bksec-field-head">
-                <div class="bksec-field-label">
-                  <span>{{ field.label }}</span>
-                  <span
-                    v-if="field.required"
-                    class="is-required">*</span>
-                  <audit-icon
-                    v-if="field.id === 'target'"
-                    v-bk-tooltips="t('填写资产标识信息，例如资产类型为 account 时，填写对应账号')"
-                    class="bksec-info-icon"
-                    type="tishi" />
-                </div>
-                <bk-popover
-                  :arrow="false"
-                  ext-cls="bksec-var-popover"
-                  placement="bottom-end"
-                  theme="light"
-                  trigger="click"
-                  width="480">
-                  <button
-                    class="bksec-var-trigger"
-                    type="button"
-                    @click="activateFieldEdit(field.id)">
+              <div
+                v-for="field in fields"
+                :key="field.id"
+                :ref="(el) => setFieldAnchorRef(field.id, el)"
+                class="bksec-field">
+                <div class="bksec-field-head">
+                  <div class="bksec-field-label">
+                    <span>{{ field.label }}</span>
+                    <span
+                      v-if="field.required"
+                      class="is-required">*</span>
                     <audit-icon
-                      class="bksec-var-icon"
-                      type="bianliang" />
-                    {{ t('引用变量') }}
+                      v-if="field.id === 'target'"
+                      v-bk-tooltips="t('填写资产标识信息，例如资产类型为 account 时，填写对应账号')"
+                      class="bksec-info-icon"
+                      type="tishi" />
+                  </div>
+                  <bk-popover
+                    :arrow="false"
+                    ext-cls="bksec-var-popover"
+                    placement="bottom-end"
+                    theme="light"
+                    trigger="click"
+                    width="480">
+                    <button
+                      class="bksec-var-trigger"
+                      type="button"
+                      @click="activateFieldEdit(field.id)">
+                      <audit-icon
+                        class="bksec-var-icon"
+                        type="bianliang" />
+                      {{ t('引用变量') }}
+                    </button>
+                    <template #content>
+                      <variable-popover
+                        :groups="variableGroups"
+                        @insert="insertToken" />
+                    </template>
+                  </bk-popover>
+                </div>
+                <div
+                  class="bksec-input"
+                  :class="{ 'is-error': invalidFields.includes(field.id) }">
+                  <button
+                    v-if="!isFieldEditing(field.id)"
+                    v-bk-tooltips="fieldValueTip(field.id)"
+                    class="bksec-field-display"
+                    type="button"
+                    @click="activateFieldEdit(field.id, $event)"
+                    @mouseenter="syncFieldOverflow($event, field.id)">
+                    <template
+                      v-for="(item, index) in parseDynamicFieldValue(fieldValues[field.id] || '')"
+                      :key="`${index}-${item.value}`">
+                      <span :class="{ 'is-variable': item.isVariable }">{{ item.value }}</span>
+                    </template>
+                    <span
+                      v-if="!fieldValues[field.id]"
+                      class="bksec-field-placeholder">
+                      {{ t('请输入{name}', { name: field.label }) }}
+                    </span>
                   </button>
-                  <template #content>
-                    <variable-popover
-                      :groups="variableGroups"
-                      @insert="insertToken" />
-                  </template>
-                </bk-popover>
-              </div>
-              <div
-                class="bksec-input"
-                :class="{ 'is-error': invalidFields.includes(field.id) }">
-                <button
-                  v-if="!isFieldEditing(field.id)"
-                  v-bk-tooltips="fieldValueTip(field.id)"
-                  class="bksec-field-display"
-                  type="button"
-                  @click="activateFieldEdit(field.id, $event)"
-                  @mouseenter="syncFieldOverflow($event, field.id)">
-                  <template
-                    v-for="(item, index) in parseDynamicFieldValue(fieldValues[field.id] || '')"
-                    :key="`${index}-${item.value}`">
-                    <span :class="{ 'is-variable': item.isVariable }">{{ item.value }}</span>
-                  </template>
-                  <span
-                    v-if="!fieldValues[field.id]"
-                    class="bksec-field-placeholder">
-                    {{ t('请输入{name}', { name: field.label }) }}
-                  </span>
-                </button>
-                <input
-                  v-else
-                  :ref="(el) => setFieldInputRef(field.id, el)"
-                  class="bksec-native-input"
-                  :placeholder="t('请输入{name}', { name: field.label })"
-                  :value="fieldValues[field.id] || ''"
-                  @blur="finishFieldEdit(field.id, $event)"
-                  @click="rememberCaret(field.id, $event)"
-                  @keyup="rememberCaret(field.id, $event)"
-                  @input="updateField(field.id, $event)">
-              </div>
-              <div
-                v-if="invalidFields.includes(field.id)"
-                class="bksec-error">
-                {{ t('请填写') }}{{ field.label }}
+                  <input
+                    v-else
+                    :ref="(el) => setFieldInputRef(field.id, el)"
+                    class="bksec-native-input"
+                    :placeholder="t('请输入{name}', { name: field.label })"
+                    :value="fieldValues[field.id] || ''"
+                    @blur="finishFieldEdit(field.id, $event)"
+                    @click="rememberCaret(field.id, $event)"
+                    @input="updateField(field.id, $event)"
+                    @keyup="rememberCaret(field.id, $event)">
+                </div>
+                <div
+                  v-if="invalidFields.includes(field.id)"
+                  class="bksec-error">
+                  {{ t('请填写') }}{{ field.label }}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <template #action>
-      <div class="action-button">
-        <bk-button @click="handlePrevious">
-          {{ t('上一步') }}
-        </bk-button>
-        <bk-button
-          class="ml8"
-          data-testid="bksec-ticket-submit"
-          theme="primary"
-          @click="handleNext">
-          {{ primaryActionText }}
-        </bk-button>
-        <bk-button
-          v-if="showSaveDraftButton"
-          class="ml8"
-          data-testid="bksec-ticket-draft"
-          @click="handleSaveDraft">
-          {{ t('保存草稿') }}
-        </bk-button>
-        <bk-button
-          class="ml8"
-          @click="handleCancel">
-          {{ t('取消') }}
-        </bk-button>
-        <span
-          v-bk-tooltips="{
-            content: previewTip,
-            disabled: canPreview,
-          }">
+      <template #action>
+        <div class="action-button">
+          <bk-button @click="handlePrevious">
+            {{ t('上一步') }}
+          </bk-button>
           <bk-button
             class="ml8"
-            data-testid="bksec-ticket-preview"
-            :disabled="!canPreview"
-            @click="showPreview = true">
-            <audit-icon
-              style="margin-right: 4px;"
-              type="view" />
-            {{ t('工单预览') }}
+            data-testid="bksec-ticket-submit"
+            theme="primary"
+            @click="handleNext">
+            {{ primaryActionText }}
           </bk-button>
-        </span>
-      </div>
-    </template>
-  </smart-action>
-  <preview-sideslider
-    v-model:is-show="showPreview"
-    :field-values="fieldValues"
-    :fields="previewFields"
-    :project-id="projectId"
-    :risk-type-id="riskTypeId"
-    :risk-type-name="riskTypeName"
-    :strategy-id="strategyId"
-    :strategy-name="strategyName"
-    :strategy-type="strategyType" />
+          <bk-button
+            v-if="showSaveDraftButton"
+            class="ml8"
+            data-testid="bksec-ticket-draft"
+            @click="handleSaveDraft">
+            {{ t('保存草稿') }}
+          </bk-button>
+          <bk-button
+            class="ml8"
+            @click="handleCancel">
+            {{ t('取消') }}
+          </bk-button>
+          <span
+            v-bk-tooltips="{
+              content: previewTip,
+              disabled: canPreview,
+            }">
+            <bk-button
+              class="ml8"
+              data-testid="bksec-ticket-preview"
+              :disabled="!canPreview"
+              @click="showPreview = true">
+              <audit-icon
+                style="margin-right: 4px;"
+                type="view" />
+              {{ t('工单预览') }}
+            </bk-button>
+          </span>
+        </div>
+      </template>
+    </smart-action>
+    <preview-sideslider
+      v-model:is-show="showPreview"
+      :field-values="fieldValues"
+      :fields="previewFields"
+      :project-id="projectId"
+      :risk-type-id="riskTypeId"
+      :risk-type-name="riskTypeName"
+      :strategy-id="strategyId"
+      :strategy-name="strategyName" />
   </div>
 </template>
 <script setup lang="ts">
@@ -303,12 +302,10 @@
 
   const enabled = ref(!!props.formData?.bksecEnabled);
   const expanded = ref(true);
-  const riskTypeId = ref<string | null>(
-    props.formData?.bksecRiskTypeId ? String(props.formData.bksecRiskTypeId) : null,
-  );
-  const projectId = ref<string | null>(
-    props.formData?.bksecProjectId ? String(props.formData.bksecProjectId) : null,
-  );
+  const riskTypeId = ref<string | null>(props.formData?.bksecRiskTypeId
+    ? String(props.formData.bksecRiskTypeId)
+    : null);
+  const projectId = ref<string | null>(props.formData?.bksecProjectId ? String(props.formData.bksecProjectId) : null);
   const riskTypeName = ref(props.formData?.bksecRiskTypeName || '');
   const fieldValues = ref<Record<string, string>>({ ...(props.formData?.bksecFieldValues || {}) });
   const fields = ref<BksecRiskTypeField[]>([]);
@@ -407,6 +404,7 @@
   };
 
   const markKeptOption = (option: { visible?: boolean } | null) => {
+    // eslint-disable-next-line no-param-reassign
     if (option) option.visible = false;
   };
 

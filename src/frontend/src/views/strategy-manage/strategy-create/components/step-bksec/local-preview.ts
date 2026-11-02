@@ -58,7 +58,8 @@ const formatDate = (date: Date) => (
 
 export const renderLocalTemplate = (template?: string) => {
   if (!template || !String(template).trim()) return '--';
-  const rendered = String(template).replace(/\{\{\s*[^}]+\s*\}\}/g, '--').trim();
+  const rendered = String(template).replace(/\{\{\s*[^}]+\s*\}\}/g, '--')
+    .trim();
   return rendered || '--';
 };
 
@@ -132,7 +133,10 @@ export const mapRemotePreview = (input: RemotePreviewInput): BksecTicketPreviewR
     {
       key: 'risk_type',
       label: '风险类型',
-      value: typeLabel(input.riskTypeName || input.response?.risk_type_name, input.riskTypeId || input.response?.risk_type_id),
+      value: typeLabel(
+        input.riskTypeName || input.response?.risk_type_name,
+        input.riskTypeId || input.response?.risk_type_id,
+      ),
     },
     { key: 'notice_users', label: '关注人', value: dash(attribute.notice_users) },
     { key: 'event_time', label: '风险发现时间', value: dash(attribute.event_time) },

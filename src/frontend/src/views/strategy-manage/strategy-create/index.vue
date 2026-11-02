@@ -57,8 +57,8 @@
       :select="fieldSelectOptions"
       :strategy-name="formData.strategy_name"
       :strategy-type="formData.strategy_type"
-      :submit-on-next="submitBksecOnReport"
       style="margin-bottom: 24px;"
+      :submit-on-next="submitBksecOnReport"
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
@@ -263,9 +263,7 @@
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
   const waitInitialDetail = isEditMode || isCloneMode;
-  const detailStatus = ref<'loading' | 'ready' | 'failed'>(
-    waitInitialDetail ? 'loading' : 'ready',
-  );
+  const detailStatus = ref<'loading' | 'ready' | 'failed'>(waitInitialDetail ? 'loading' : 'ready');
   const showInitialStepPlaceholder = computed(() => (
     currentStep.value === 1 && waitInitialDetail && detailStatus.value !== 'ready'
   ));
@@ -354,7 +352,8 @@
   });
 
   const loadStrategyDetail = async () => {
-    const requestSeq = ++detailRequestSeq;
+    detailRequestSeq += 1;
+    const requestSeq = detailRequestSeq;
     detailStatus.value = 'loading';
     try {
       const data = await requestStrategyInfo({

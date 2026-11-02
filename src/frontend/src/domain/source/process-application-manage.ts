@@ -17,10 +17,10 @@
 import type ApplicationManageModel from '@model/application/application';
 import type ApplicationCreateManageModel from '@model/application/application-create';
 import {
+  type ExecutionListQuery,
   mapExecutionDetail,
   mapExecutionList,
   toExecutionListQuery,
-  type ExecutionListQuery,
 } from '@model/application/execution-protocol';
 
 import Request, {

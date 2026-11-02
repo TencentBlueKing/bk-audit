@@ -38,8 +38,8 @@
         class="retry-row">
         <span class="retry-label"><span>{{ item.label }}</span></span>
         <span
-          class="retry-value"
           v-bk-tooltips="lineTip(item.label, item.value)"
+          class="retry-value"
           @mouseenter="syncOverflow($event, item.label)">
           {{ item.value }}
         </span>
@@ -95,7 +95,7 @@
     extCls: 'execution-attempt-tip',
   });
   const rows = computed(() => {
-    const detail = props.detail;
+    const { detail } = props;
     const packageName = detail?.application_name
       ? `${detail.application_name}(${detail.application_id})`
       : '';
