@@ -1705,8 +1705,13 @@
     tags: 'tags',
     status: 'status',
   };
+  type StrategyColumnSettingField = {
+    label: string;
+    field: string;
+    disabled: boolean;
+  };
   const initSettings = () => ({
-    fields: tableColumn.value.reduce((res, item) => {
+    fields: tableColumn.value.reduce((res: StrategyColumnSettingField[], item) => {
       if (item.field) {
         res.push({
           label: item.label(),
@@ -1715,9 +1720,7 @@
         });
       }
       return res;
-    }, [] as Array<{
-      label: string, field: string, disabled: boolean,
-    }>),
+    }, [] as StrategyColumnSettingField[]),
     checked: isPlatformList.value
       ? ['strategy_id', 'strategy_name', 'dispatch_scenes', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status']
       : ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status'],
@@ -1733,7 +1736,7 @@
       const jsonSetting = JSON.parse(jsonStr);
       const savedFields = Array.isArray(jsonSetting.fields) ? jsonSetting.fields : [];
       const fieldSet = new Set(savedFields.map((item: { field: string }) => item.field));
-      fresh.fields.forEach((field) => {
+      fresh.fields.forEach((field: StrategyColumnSettingField) => {
         if (!fieldSet.has(field.field)) {
           savedFields.push(field);
         }
