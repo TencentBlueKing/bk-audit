@@ -56,7 +56,11 @@ from services.web.risk.serializers import (
     SendTestTicketReqSerializer,
     SendTestTicketResponseSerializer,
 )
-from services.web.risk.utils import calc_task_duration, fill_failure_info
+from services.web.risk.utils import (
+    build_pa_constants,
+    calc_task_duration,
+    fill_failure_info,
+)
 from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
@@ -195,6 +199,8 @@ class SendTestTicket(TicketResourceMeta):
         # 生成执行记录（is_test=True，与正式单结构一致；风险详情页过滤、处理套餐执行记录可见）
         task_name = "【测试】{}_{}".format(pa.name, int(datetime.datetime.now().timestamp() * 1000))
         status = api.bk_sops.get_task_status(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+        # 入参快照：与正式派单同口径，供执行记录详情展示（模板取不到时显示名退化为 key）
+        pa_constants = build_pa_constants(self._load_template_constants(pa.sops_template_id), constants)
         TicketNode.objects.create(
             risk_id=risk.risk_id,
             # 真实操作人：便于排查"谁发的测试单"（测试单身份由 is_test 区分，不再占用 operator）
@@ -212,6 +218,8 @@ class SendTestTicket(TicketResourceMeta):
                 "trigger": "test",
                 # 测试接收人：与 operator 互补，记录本次测试工单实际发给谁
                 "test_receivers": validated_request_data["test_receivers"],
+                # 套餐入参快照：状态刷新是原地 update 合并，该键不会被冲掉
+                "pa_constants": pa_constants,
                 "duration": None,  # 测试单创建时无耗时，状态更新时同步
             },
             duration=None,  # 测试单创建时无耗时，状态更新时同步
@@ -225,6 +233,17 @@ class SendTestTicket(TicketResourceMeta):
             risk.risk_id,
         )
         return {"task": result, "constants": constants}
+
+    @staticmethod
+    def _load_template_constants(template_id: int) -> dict:
+        """取模板变量定义（仅用于入参显示名）；拉取失败退化为空，快照显示名退化为 key"""
+
+        try:
+            template_info = api.bk_sops.get_template_info(template_id=template_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+        except Exception as err:  # NOCC:broad-except(显示名缺失不影响已发出的测试单落记录)
+            logger.warning("[SendTestTicket] get_template_info failed, template_id=%s err=%s", template_id, err)
+            return {}
+        return ((template_info or {}).get("pipeline_tree") or {}).get("constants") or {}
 
 
 class GetTaskStatus(TicketResourceMeta):

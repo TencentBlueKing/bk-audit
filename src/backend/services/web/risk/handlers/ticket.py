@@ -62,10 +62,16 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.parser import RiskNoticeParser
-from services.web.risk.utils import calc_task_duration
+from services.web.risk.utils import (
+    build_pa_constants,
+    calc_task_duration,
+    is_user_input_constant,
+)
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
+# 流转历史去重窗口（秒）：窗口期内内容完全相同的重复写入视为同一次流转，不再重复落库
+HISTORY_DEDUP_WINDOW_SEC = 5
 # 流转历史去重窗口（秒）：窗口期内内容完全相同的重复写入视为同一次流转，不再重复落库
 HISTORY_DEDUP_WINDOW_SEC = 5
 
@@ -158,6 +164,8 @@ class RiskFlowBaseHandler:
     name = gettext_lazy("默认流转")
     allowed_status = []
     enable_notice = True
+    # 是否允许重复写入流转历史：纯留痕类动作（如风险处理经验）需要保留每一次记录
+    allow_duplicate_history = False
     # 是否允许重复写入流转历史：纯留痕类动作（如风险处理经验）需要保留每一次记录
     allow_duplicate_history = False
 
@@ -939,7 +947,7 @@ class AutoProcess(RiskFlowBaseHandler):
         missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
             # 只覆盖用户入参。节点输出和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
-            if not _is_user_input_constant(c):
+            if not is_user_input_constant(c):
                 continue
             field = pa_params.get(c["key"])
             if not isinstance(field, dict):
@@ -966,6 +974,8 @@ class AutoProcess(RiskFlowBaseHandler):
             pa_constants.append({"key": c["key"], "name": c.get("name") or c["key"], "value": value})
         if missing_keys:
             raise AutoProcessParamsError(keys=",".join(missing_keys))
+        # 入参快照（key/name/value）：执行记录详情据此展示"当时真正发出去的套餐入参"
+        pa_constants = build_pa_constants(template_info["pipeline_tree"]["constants"], constants)
         params = {
             "name": f"{self.process_application.name}_{int(datetime.datetime.now().timestamp() * 1000)}",
             "constants": constants,
