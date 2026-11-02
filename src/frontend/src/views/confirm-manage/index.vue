@@ -23,7 +23,8 @@
       scope-type="cross_scene"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
-      @parsing="handleParsing" />
+      @parsing="handleParsing"
+      @sync="handleSearchSync" />
     <div
       class="risk-manage-list">
       <div class="add-button">
@@ -57,6 +58,7 @@
         secondary-sort-field="-event_time"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @filter-change="handleTableFilterChange"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
         @selection-change="handleSelectionChange" />
@@ -277,6 +279,17 @@
     if (!isParsing.value) {
       fetchList(isClear);
     }
+  };
+
+  const handleSearchSync = (value: Record<string, any>, exValue: Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue,
+    };
+  };
+
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    searchBoxRef.value?.syncTableFilterFields(filters);
   };
 
   const handleParsing = (parsing: boolean) => {

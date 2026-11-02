@@ -109,6 +109,7 @@
                   <span class="bksec-test-required">*</span>
                 </div>
                 <audit-user-selector-tenant
+                  :key="handlerSelectorKey"
                   v-model="testForm.handler"
                   :multiple="false"
                   :placeholder="t('请输入用户名')" />
@@ -242,6 +243,7 @@
   const { messageSuccess, messageError } = useMessage();
   const { data: userInfo } = useRequest(AccountManageService.fetchUserInfo, {
     defaultValue: new AccountModel(),
+    manual: true,
   });
 
   const isShow = computed({
@@ -268,6 +270,7 @@
   const openedAt = ref('');
   const sending = ref(false);
   const testForm = ref({ handler: '' });
+  const handlerSelectorKey = ref(0);
   let pollGeneration = 0;
 
   const isCreateMode = computed(() => !isStrategyEditRoute(route.name));
@@ -275,8 +278,11 @@
   const displayRisks = computed(() => riskList.value);
   const selectedRisk = computed(() => displayRisks.value.find(item => item.id === selectedId.value) || null);
   const fillDefaultHandler = () => {
-    const username = userInfo.value?.username;
-    if (!testForm.value.handler && username) testForm.value.handler = username;
+    const username = userInfo.value?.username?.trim();
+    if (!username || testForm.value.handler) return;
+    testForm.value.handler = username;
+    // 选择器只在已有值时做精确查询；空值挂载后不会补请求，这里重建一次让它按登录人去查
+    handlerSelectorKey.value += 1;
   };
   const handlerName = computed(() => String(testForm.value.handler || '').trim());
   const canSendTest = computed(() => canSendTestTicket(selectedRisk.value?.risk_id));

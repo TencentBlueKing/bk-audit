@@ -166,6 +166,7 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import { sortByBasicEventFieldOrder } from '@utils/assist';
+  import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
   import {
     applyDatetimeUrlParams,
     ensureDatetimeSynced,
@@ -184,6 +185,7 @@
     (e: 'export'): void;
     (e: 'batch'): void;
     (e: 'modelValueWatch', value: Record<string, any>): void;
+    (e: 'sync', value: Record<string, any>, otherValue?: any): void;
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
@@ -204,6 +206,7 @@
     ) => Promise<unknown>;
     initSelectedItems:(val: Array< Record<string, any>>) => void;
     getSelectedItemList: (val: Array< Record<string, any>>) => void;
+    syncTableFilterFields: (filters: Record<string, any>) => void;
   }
 
 
@@ -529,6 +532,15 @@
   const handleSubmit = (isClear = false) => {
     emit('change', getSearchParams(), eventFiltersParams.value, isClear);
   };
+  const syncTableFilterFields = (filters: Record<string, any>) => {
+    searchModel.value = applyTableFiltersToSearchModel(
+      searchModel.value,
+      filters,
+      props.fieldConfig,
+    );
+    syncSearchParamsToUrl();
+    emit('sync', getSearchParams(), eventFiltersParams.value);
+  };
   const handleClear = () => {
     searchModel.value = {
       datetime: [
@@ -633,6 +645,7 @@
     getSelectedItemList() {
       return selectedItemList.value;
     },
+    syncTableFilterFields,
   });
 
 </script>
