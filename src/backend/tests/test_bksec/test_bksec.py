@@ -37,13 +37,30 @@ from services.web.risk.bksec.service import (
     has_bksec_ticket_sent,
     validate_bksec_test_target,
 )
-from services.web.risk.models import ProcessApplication, RiskRule
+from services.web.risk.models import ProcessApplication, RiskRule, TicketNode
 from tests.test_risk.test_tickets.base import RiskContext
 from tests.test_risk.test_tickets.constants import RISK_INFO
 
 # 内置发单套餐的约定名称（仅测试 fixture 用）：生产由运维手动创建内置套餐，
 # 匹配靠 is_builtin=True + sops_template_id，与名称无关
 BKSEC_PRESET_PA_NAME = "【内置】BKSEC安全工单发单"
+
+# 预置发单套餐模板变量（入参显示名 + 用户入参标记）
+BKSEC_SOPS_TEMPLATE_INFO = {
+    "pipeline_tree": {
+        "constants": {
+            key: {"key": key, "name": name, "source_type": "custom", "show_type": "show"}
+            for key, name in [
+                ("${event_content}", "风险描述"),
+                ("${event_evidence}", "风险证据"),
+                ("${event_type}", "风险类型"),
+                ("${operator}", "初始责任人"),
+                ("${risk_type_extra}", "风险类型扩展字段"),
+                ("${target}", "风险资产信息"),
+            ]
+        }
+    }
+}
 
 BKSEC_CONFIG_DATA = {
     "enabled": True,
@@ -722,6 +739,9 @@ class TestBkSecResources:
             ) as start_task, mock.patch(
                 "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
                 mock.Mock(return_value={"state": "RUNNING"}),
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_template_info",
+                mock.Mock(return_value=BKSEC_SOPS_TEMPLATE_INFO),
             ):
                 result = resource.risk.send_test_ticket.perform_request(
                     {
@@ -745,6 +765,12 @@ class TestBkSecResources:
         assert risk.risk_id in constants["${target}"]
         # 测试任务名带【测试】前缀，便于 SOPS 侧区分
         assert create_task.call_args.kwargs["name"].startswith("【测试】")
+        # 入参快照落库：执行记录详情只读该键，缺失则套餐参数一栏为空
+        node = TicketNode.objects.filter(is_test=True, risk_id=risk.risk_id).order_by("-timestamp").first()
+        snapshot = {item["key"]: item for item in node.process_result["pa_constants"]}
+        assert snapshot["${event_content}"]["name"] == "风险描述"
+        assert snapshot["${event_type}"]["value"] == '["SuperPermission"]'
+        assert snapshot["${operator}"]["value"] == '["tester"]'
 
     def test_send_test_ticket_blocked_by_formal_dispatch(self, settings):
         """回调隔离守卫：风险存在正式派单历史时拒绝测试发送（防插件回调复用污染/静默拦截）"""
