@@ -24,8 +24,10 @@
       :scenes="nlSearchBoxScenes"
       with-scene-selector
       @change="handleSearchChange"
+      @change-table-height="handleChangeTableHeight"
       @model-value-watch="handleModelValueWatch"
-      @parsing="handleParsing" />
+      @parsing="handleParsing"
+      @sync="handleSearchSync" />
     <div
       :key="fieldConfigKey"
       class="risk-manage-list">
@@ -67,6 +69,7 @@
         secondary-sort-field="-event_time"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @filter-change="handleTableFilterChange"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
         @selection-change="handleSelectionChange" />
@@ -371,11 +374,26 @@
     fetchList(isClear);
   };
 
-  // NL 解析状态变化时，给列表设置 loading
   const handleParsing = (isParsing: boolean) => {
     if (listRef.value) {
       listRef.value.loading = isParsing;
     }
+  };
+
+  const handleSearchSync = (value: Record<string, any>, exValue: Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue,
+    };
+  };
+
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    searchBoxRef.value?.syncTableFilterFields(filters);
+  };
+  const handleChangeTableHeight = () => {
+    nextTick(() => {
+      listRef.value?.initTableHeight?.();
+    });
   };
 
   const handleClearSearch = () => {
