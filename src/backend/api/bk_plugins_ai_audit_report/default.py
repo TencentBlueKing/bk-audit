@@ -17,6 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 
+from client_throttler import Throttler, ThrottlerConfig
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_plugins_ai_agent.default import AIAgentBase
@@ -42,6 +44,16 @@ class ChatCompletion(BaseChatCompletion):
 
     module_name = "bk_plugins_ai_audit_report"
     name = gettext_lazy("智能体对话")
+
+    def perform_request(self, validated_request_data):
+        """全局限流后再请求单风险报告智能体，避免把插件库连接打满。"""
+        return Throttler(
+            config=ThrottlerConfig(
+                func=super().perform_request,
+                key=f"{self.__module__}.{self.__class__.__name__}",
+                rate=settings.AI_AUDIT_REPORT_RATE_LIMIT,
+            )
+        )(validated_request_data)
 
     def postprocess_agui_final_content(self, content: str) -> tuple[str, str]:
         """审计报告优先返回完整 assistant 正文中的 <final_answer>。"""

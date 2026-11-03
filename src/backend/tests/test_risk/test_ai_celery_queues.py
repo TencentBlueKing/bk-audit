@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """风险侧 AI Celery 队列隔离：标题共用，单/多风险分析独立，预览与编排留在 risk_report。"""
 
+import os
 from pathlib import Path
+from unittest import mock
 
 import yaml
 from django.conf import settings
@@ -14,6 +16,7 @@ from services.web.risk.tasks import (
     render_ai_variable,
     render_risk_report,
 )
+from services.web.settings import _rate_limit_or_default
 from tests.base import TestCase
 
 APP_DESC = Path(__file__).resolve().parents[2] / "app_desc.yaml"
@@ -31,6 +34,14 @@ class TestAICeleryQueueIsolation(TestCase):
     def test_single_risk_analyse_has_dedicated_queue(self):
         self.assertEqual(render_template.queue, RiskAICeleryQueue.SINGLE_ANALYSE)
         self.assertEqual(render_template.rate_limit, settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT)
+
+    def test_blank_rate_limit_keeps_its_own_default(self):
+        with mock.patch.dict(os.environ, {"BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT": "  "}, clear=False):
+            self.assertEqual(_rate_limit_or_default("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m"), "5/m")
+        with mock.patch.dict(os.environ, {"BKAPP_AI_AUDIT_REPORT_RATE_LIMIT": ""}, clear=False):
+            self.assertEqual(_rate_limit_or_default("BKAPP_AI_AUDIT_REPORT_RATE_LIMIT", "5/m"), "5/m")
+        with mock.patch.dict(os.environ, {"BKAPP_AI_AUDIT_REPORT_RATE_LIMIT": "8/m"}, clear=False):
+            self.assertEqual(_rate_limit_or_default("BKAPP_AI_AUDIT_REPORT_RATE_LIMIT", "5/m"), "8/m")
 
     def test_multi_risk_analyse_has_dedicated_queue(self):
         self.assertEqual(generate_analyse_report.queue, RiskAICeleryQueue.MULTI_ANALYSE)
