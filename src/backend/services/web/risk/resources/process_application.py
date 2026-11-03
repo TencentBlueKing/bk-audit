@@ -58,7 +58,12 @@ from services.web.risk.utils import (
     iter_status_nodes,
 )
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
+from services.web.scene.filters import (
+    BindingMetadataHelper,
+    CompositeScopeFilter,
+    SceneScopeFilter,
+)
+from services.web.scene.models import ResourceBindingScene
 
 # 终态结果：只有终态才输出 finish_time / duration。
 # 未结束任务的 SOPS 时间会退化取到旧节点值（任务级时间缺失 → 取子节点最早/最晚），
@@ -96,11 +101,16 @@ class ListProcessApplications(ProcessApplicationMeta):
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             pk_field="id",
         ).order_by("-is_enabled", order_field)
-        # 获取关联的规则
+        # 规则数只统计当前场景下的最新规则。全局套餐会被多个场景看到，不能把其它场景的规则算进来。
+        scene_rule_ids = ResourceBindingScene.objects.filter(
+            scene_id=scene_id,
+            scene__is_deleted=False,
+            binding__resource_type=ResourceVisibilityType.RISK_RULE,
+        ).values_list("binding__resource_id", flat=True)
         rule_map = {
             item["pa_id"]: item["count"]
             for item in RiskRule.load_latest_rules()
-            .filter(pa_id__in=process_applications.values("id"))
+            .filter(pa_id__in=process_applications.values("id"), rule_id__in=list(scene_rule_ids))
             .values("pa_id")
             .annotate(count=Count("pa_id"))
             .order_by()
@@ -251,6 +261,19 @@ class ListRuleByPA(ProcessApplicationMeta):
     many_response_data = True
     audit_action = ActionEnum.LIST_RULE
 
+    @staticmethod
+    def _pa_scene_id(pa_id) -> int | None:
+        """套餐自身的场景绑定。全局套餐没有场景关联，返回 None。"""
+        return (
+            ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
+                binding__resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+                binding__resource_id=str(pa_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
     def perform_request(self, validated_request_data):
         # 获取处理套餐实例
         pa = get_object_or_404(ProcessApplication, id=validated_request_data["id"])
@@ -259,7 +282,28 @@ class ListRuleByPA(ProcessApplicationMeta):
         order_field = (
             f"-{order_field}" if validated_request_data.get("order_type") == OrderTypeChoices.DESC else order_field
         )
-        return RiskRule.load_latest_rules().filter(pa_id=pa.id).order_by("-is_enabled", order_field)
+        rules = RiskRule.load_latest_rules().filter(pa_id=pa.id)
+        scene_id = self._pa_scene_id(pa.id)
+        if scene_id is None:
+            # 全局套餐：规则仍按场景归属，只返回当前场景下挂在该套餐上的规则
+            scene_id = validated_request_data.get("scene_id")
+            if scene_id in (None, ""):
+                raise serializers.ValidationError(gettext("全局套餐查询规则时必须指定 scene_id"))
+            visible = CompositeScopeFilter.filter_queryset(
+                queryset=ProcessApplication.objects.filter(id=pa.id),
+                scene_id=scene_id,
+                resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+                pk_field="id",
+            ).exists()
+            if not visible:
+                raise serializers.ValidationError(gettext("处理套餐[%s]在场景[%s]不可见") % (pa.id, scene_id))
+            rules = SceneScopeFilter.filter_queryset(
+                queryset=rules,
+                scene_id=scene_id,
+                resource_type=ResourceVisibilityType.RISK_RULE,
+                pk_field="rule_id",
+            )
+        return rules.order_by("-is_enabled", order_field)
 
 
 class ListPAExecutionRecords(ProcessApplicationMeta):
