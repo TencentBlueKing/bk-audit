@@ -29,6 +29,8 @@ from django.core.exceptions import ImproperlyConfigured
 
 from core import kms
 from core.kms import (
+    INIT_PASSWORD_ENCODING_FIELD,
+    INIT_PASSWORD_ENCODING_PLAINTEXT,
     KMS_ENABLED_KEY,
     KMS_ENV_INJECTION_KEY,
     KMS_ENVELOPE_PATH_KEY,
@@ -772,6 +774,15 @@ class TestDocumentBundleEndToEnd(KmsTestCaseMixin, unittest.TestCase):
         self.assertEqual(sent_doris["cluster_name"], "bkaudit-doris")
         self.assertTrue(sent_doris["pre_defined"])
         self.assertEqual(sent_doris["auth_info"]["password"], "doc-doris-pwd-0001")
+
+    def test_init_config_marks_kms_password_as_plaintext(self):
+        """结构化凭证包给出的是原始口令：合并结果必须带明文声明，初始化链路据此加密一次。"""
+        env = {"BKAPP_INIT_ES_CONFIG": json.dumps([{"cluster_name": "bkaudit-es", "auth_info": {}}])}
+        with mock.patch.dict(os.environ, env):
+            flat = _transform_document_bundle({"elasticsearch": {"default": {"password": "doc-es-pwd-0001"}}})
+        es = json.loads(flat["BKAPP_INIT_ES_CONFIG"])[0]
+        self.assertEqual(es["auth_info"]["password"], "doc-es-pwd-0001")
+        self.assertEqual(es["auth_info"][INIT_PASSWORD_ENCODING_FIELD], INIT_PASSWORD_ENCODING_PLAINTEXT)
 
     def test_init_config_unparsable_env_not_overridden(self):
         """Chart 配置存在但不可解析时，不做覆盖，交由下游暴露原始错误。"""
