@@ -35,6 +35,7 @@ from core.kms import (
     KMS_EXTRA_SECRET_KEYS_KEY,
     KMS_PRIVATE_KEY_ENV_KEY,
     _extract_secrets,
+    _parse_init_instance_key,
     _transform_document_bundle,
     get_secret,
     get_secret_json,
@@ -885,3 +886,47 @@ class TestDocumentBundleEndToEnd(KmsTestCaseMixin, unittest.TestCase):
         self.assertEqual(redis_configs[0]["connection_info"]["password"], "INIT-REDIS-PWD")
         # 二者互不包含、互不覆盖
         self.assertNotEqual(flat["REDIS_PASSWORD"], redis_configs[0]["connection_info"]["password"])
+
+    def test_parse_init_instance_key_rejects_unknown_shape(self):
+        """只有 default 与 default__<cluster_name> 两种写法合法，其余一律不认。"""
+        self.assertEqual(_parse_init_instance_key("default"), (0, None))
+        self.assertEqual(_parse_init_instance_key("default__bk-audit-es"), (None, "bk-audit-es"))
+        self.assertIsNone(_parse_init_instance_key("bk-audit-es"))
+        self.assertIsNone(_parse_init_instance_key("default__"))
+        self.assertIsNone(_parse_init_instance_key("__x"))
+
+    def test_init_instance_key_without_prefix_ignored(self):
+        """实例键漏写 default__ 前缀时不得回落到第 0 个元素：告警 + 保留 Chart 原值。"""
+        env = {
+            "BKAPP_INIT_ES_CONFIG": json.dumps(
+                [
+                    {"cluster_name": "bk-audit-es-system", "domain_name": "es-system.internal", "auth_info": {}},
+                    {"cluster_name": "bk-audit-es-tencent", "domain_name": "es-tencent.internal", "auth_info": {}},
+                ]
+            )
+        }
+        with mock.patch.dict(os.environ, env):
+            with self.assertLogs("core.kms", level="WARNING") as ctx:
+                flat = _transform_document_bundle(
+                    {"elasticsearch": {"bk-audit-es-tencent": {"username": "u", "password": "P-TENCENT"}}}
+                )
+        self.assertNotIn("BKAPP_INIT_ES_CONFIG", flat)
+        self.assertIn("实例键", "\n".join(ctx.output))
+
+    def test_ai_missing_field_keeps_host_value(self):
+        """ai 子块存在但缺 secret_key：不得当成显式置空，不得产生覆盖宿主的键。"""
+        with mock.patch.dict(os.environ, {"BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY": "chart-real-token"}):
+            flat = _transform_document_bundle({"ai": {"audit_log_search": {}}})
+        self.assertNotIn("BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY", flat)
+
+    def test_ai_explicit_empty_secret_key_kept(self):
+        """显式给空串仍是「显式置空」，合法用法不受影响。"""
+        flat = _transform_document_bundle({"ai": {"audit_log_search": {"secret_key": ""}}})
+        self.assertEqual(flat["BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY"], "")
+
+    def test_tokens_missing_field_keeps_host_value(self):
+        """tokens 下空子块不得产生空 token，宿主已注入的值必须保留。"""
+        with mock.patch.dict(os.environ, {"BKAPP_ALERT_ACCESS_TOKEN": "chart-alert-token"}):
+            flat = _transform_document_bundle({"tokens": {"alert": {}, "log_export_status": {}}})
+        self.assertNotIn("BKAPP_ALERT_ACCESS_TOKEN", flat)
+        self.assertNotIn("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", flat)

@@ -336,14 +336,16 @@ def _load_env_init_config(key: str) -> Optional[list]:
     return data
 
 
-def _parse_init_instance_key(instance_key: str):
+def _parse_init_instance_key(instance_key: str) -> Optional[tuple]:
     """初始化凭据的实例键解析：default -> (0, None)；default__<cluster> -> (None, cluster)。"""
     if instance_key == _INIT_DEFAULT_INSTANCE_KEY:
         return 0, None
-    _, sep, cluster_name = instance_key.partition("__")
-    if sep and cluster_name:
-        return None, cluster_name
-    return 0, None
+    prefix = "%s__" % _INIT_DEFAULT_INSTANCE_KEY
+    if instance_key.startswith(prefix):
+        cluster_name = instance_key[len(prefix) :]
+        if cluster_name:
+            return None, cluster_name
+    return None
 
 
 def _instance_creds(raw: dict, category: str) -> dict:
@@ -359,6 +361,7 @@ def _merge_init_config(instances: dict, template: list, field_map: dict, key: st
 
     关键约束：只覆盖 auth 类字段，域名/端口/集群名/保留策略等非敏感字段必须原样保留；
     否则初始化会拿着空地址去建集群。未匹配到配置元素的实例按模板追加。
+    无任何字段被覆盖（实例键非法、字段全空等）时返回 None，表示不覆盖 Chart 原值。
     """
     configs = _load_env_init_config(key)
     if configs is None:
@@ -370,8 +373,13 @@ def _merge_init_config(instances: dict, template: list, field_map: dict, key: st
     else:
         merged = copy.deepcopy(configs)
 
+    applied = 0
     for instance_key, creds in instances.items():
-        index, cluster_name = _parse_init_instance_key(instance_key)
+        parsed = _parse_init_instance_key(instance_key)
+        if parsed is None:
+            logger.warning("[KMS] %s 的实例键不符合 default 或 default__<cluster_name> 规则，已忽略该实例凭据", key)
+            continue
+        index, cluster_name = parsed
         target = None
         if cluster_name is not None:
             target = next(
@@ -389,6 +397,11 @@ def _merge_init_config(instances: dict, template: list, field_map: dict, key: st
             if value in (None, ""):
                 continue
             _deep_set(target, list(dst_path), value)
+            applied += 1
+    if applied == 0:
+        # 没有任何敏感字段被覆盖时不写回：避免把 Chart 原值替换成一份等价副本，
+        # 也避免把未匹配到任何字段的空白模板元素写进配置数组。
+        return None
     return json.dumps(merged, ensure_ascii=False)
 
 
@@ -451,17 +464,21 @@ def _transform_document_bundle(raw: dict) -> dict:
 
     ai = _dig(raw, "ai", default={}) or {}
     if isinstance(ai, dict):
-        if "audit_log_search" in ai and isinstance(ai["audit_log_search"], dict):
-            secrets["BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY"] = ai["audit_log_search"].get("secret_key", "")
-        if "user_intent" in ai and isinstance(ai["user_intent"], dict):
-            secrets["BKAPP_AI_USER_INTENT_SECRET_KEY"] = ai["user_intent"].get("secret_key", "")
+        audit_log_search = ai.get("audit_log_search")
+        if isinstance(audit_log_search, dict) and "secret_key" in audit_log_search:
+            secrets["BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY"] = audit_log_search["secret_key"]
+        user_intent = ai.get("user_intent")
+        if isinstance(user_intent, dict) and "secret_key" in user_intent:
+            secrets["BKAPP_AI_USER_INTENT_SECRET_KEY"] = user_intent["secret_key"]
 
     tokens = _dig(raw, "tokens", default={}) or {}
     if isinstance(tokens, dict):
-        if "alert" in tokens and isinstance(tokens["alert"], dict):
-            secrets["BKAPP_ALERT_ACCESS_TOKEN"] = tokens["alert"].get("token", "")
-        if "log_export_status" in tokens and isinstance(tokens["log_export_status"], dict):
-            secrets["BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN"] = tokens["log_export_status"].get("token", "")
+        alert = tokens.get("alert")
+        if isinstance(alert, dict) and "token" in alert:
+            secrets["BKAPP_ALERT_ACCESS_TOKEN"] = alert["token"]
+        log_export_status = tokens.get("log_export_status")
+        if isinstance(log_export_status, dict) and "token" in log_export_status:
+            secrets["BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN"] = log_export_status["token"]
 
     bkrepo = _dig(raw, "bkrepo", "default", default={}) or {}
     if "password" in bkrepo:
