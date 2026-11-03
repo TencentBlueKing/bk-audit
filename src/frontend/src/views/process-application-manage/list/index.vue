@@ -189,6 +189,7 @@
     onMounted,
     onUnmounted,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -602,11 +603,35 @@
   };
 
 
-  // 查看命中风险
+  // 关联规则表格和套餐列表共用地址栏，打开前记下查询串，关闭时还原
+  let rulePanelSearch: string | null = null;
   const showRisks = (item: ProcessApplicationManageModel) => {
+    rulePanelSearch = window.location.search;
     detailItem.value = item;
     showScopeRiskDetail.value = true;
   };
+  const replacePageSearch = (search: string) => {
+    const nextUrl = `${window.location.pathname}${search}${window.location.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl === currentUrl) return;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  };
+  watch(showScopeRiskDetail, (visible) => {
+    if (visible) return;
+    if (rulePanelSearch !== null) {
+      const search = rulePanelSearch;
+      rulePanelSearch = null;
+      replacePageSearch(search);
+      return;
+    }
+    // 侧滑打开前没有记下查询串时，套餐列表本身也没按套餐 ID 筛选，就清掉残留的 id
+    if (searchKey.value.some(item => item.id === 'id')) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('id')) return;
+    params.delete('id');
+    const search = params.toString();
+    replacePageSearch(search ? `?${search}` : '');
+  });
   const handleToggle = (item: ProcessApplicationManageModel) => {
     detailItem.value = item;
     return toggleApplication({

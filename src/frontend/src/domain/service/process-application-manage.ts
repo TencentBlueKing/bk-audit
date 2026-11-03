@@ -91,7 +91,8 @@ export default {
   fetchRuleList(params: {
     page: number,
     page_size: number,
-    id: string
+    id: string,
+    scene_id?: string,
   }) {
     return ProcessApplicationManageSource.getRuleList(params)
       .then(({ data }) => data);

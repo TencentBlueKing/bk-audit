@@ -62,6 +62,7 @@
         @mouseleave="handleDrillMouseLeave">
         <bk-popover
           boundary="body"
+          class="field-cell-text"
           placement="top"
           theme="black">
           <span style="cursor: pointer;">
@@ -79,51 +80,51 @@
             </div>
           </template>
         </bk-popover>
-        <!-- 删除 -->
-        <audit-popconfirm
-          ref="drillPopconfirmRef"
-          class="ml8"
-          :confirm-handler="() => handleRemove()"
-          :content="t('移除操作无法撤回，请谨慎操作！')"
-          :title="t('确认移除以下工具？')"
-          @hide="handleDrillPopconfirmHide">
-          <audit-icon
-            class="remove-btn"
-            :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
-            type="delete-fill"
-            @click="handleDrillPopconfirmShow" />
-          <template #content>
-            <bk-table
-              ref="refTable"
-              :columns="columns"
-              :data="localEventItem.drill_config"
-              height="auto"
-              max-height="100%"
-              show-overflow-tooltip
-              stripe />
-          </template>
-        </audit-popconfirm>
-        <bk-popover
-          v-if="localEventItem.drill_config
-            .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
-          boundary="body"
-          placement="top"
-          theme="black">
-          <audit-icon
-            class="renew-tips"
-            type="info-fill" />
-          <template #content>
-            <div>
-              <div>{{ t('以下工具已更新，请确认：') }}</div>
-              <div
-                v-for="drill in localEventItem.drill_config
-                  .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
-                :key="drill.tool.uid">
-                {{ getDrillDisplayName(drill) }}
+        <div class="field-cell-actions">
+          <audit-popconfirm
+            ref="drillPopconfirmRef"
+            :confirm-handler="() => handleRemove()"
+            :content="t('移除操作无法撤回，请谨慎操作！')"
+            :title="t('确认移除以下工具？')"
+            @hide="handleDrillPopconfirmHide">
+            <audit-icon
+              class="remove-btn"
+              :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
+              type="delete-fill"
+              @click="handleDrillPopconfirmShow" />
+            <template #content>
+              <bk-table
+                ref="refTable"
+                :columns="columns"
+                :data="localEventItem.drill_config"
+                height="auto"
+                max-height="100%"
+                show-overflow-tooltip
+                stripe />
+            </template>
+          </audit-popconfirm>
+          <bk-popover
+            v-if="localEventItem.drill_config
+              .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+            boundary="body"
+            placement="top"
+            theme="black">
+            <audit-icon
+              class="renew-tips"
+              type="info-fill" />
+            <template #content>
+              <div>
+                <div>{{ t('以下工具已更新，请确认：') }}</div>
+                <div
+                  v-for="drill in localEventItem.drill_config
+                    .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                  :key="drill.tool.uid">
+                  {{ getDrillDisplayName(drill) }}
+                </div>
               </div>
-            </div>
-          </template>
-        </bk-popover>
+            </template>
+          </bk-popover>
+        </div>
       </div>
       <!-- 字段下钻 -->
       <field-reference
@@ -331,12 +332,28 @@
       }
     }
 
+    .field-cell-text {
+      min-width: 0;
+    }
+
+    .field-cell-actions {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      margin-left: auto;
+      gap: 8px;
+
+      :deep(.audit-popconfirm) {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+      }
+    }
+
     .remove-btn {
-      position: absolute;
-      right: 28px;
-      z-index: 1;
       display: none;
       font-size: 12px;
+      line-height: 1;
       color: #c4c6cc;
       transition: all .15s;
 
@@ -349,15 +366,9 @@
       }
     }
 
-    .remove-mappings-btn {
-      top: 40%;
-      right: 8px;
-    }
-
     .renew-tips {
-      position: absolute;
-      right: 8px;
       font-size: 14px;
+      line-height: 1;
       color: #3a84ff;
     }
   }
