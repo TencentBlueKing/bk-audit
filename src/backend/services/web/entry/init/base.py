@@ -30,7 +30,12 @@ from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
-from core.kms import get_secret_json
+from core.kms import (
+    INIT_PASSWORD_ENCODING_CIPHERTEXT,
+    INIT_PASSWORD_ENCODING_FIELD,
+    INIT_PASSWORD_ENCODING_PLAINTEXT,
+    get_secret_json,
+)
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
 from services.web.databus.constants import (
@@ -117,19 +122,19 @@ class SystemInitHelper:
 
 def adapt_auth_password(config: dict) -> None:
     """按资源层契约适配 auth_info.password 的编码。"""
-    if not settings.ENABLE_BKCRYPTO:
-        return
     auth_info = config.get("auth_info")
     if not isinstance(auth_info, dict):
+        return
+    encoding = auth_info.pop(INIT_PASSWORD_ENCODING_FIELD, INIT_PASSWORD_ENCODING_CIPHERTEXT)
+    if not settings.ENABLE_BKCRYPTO:
         return
     password = auth_info.get("password")
     if not password:
         return
-    try:
-        # 明文无法通过 SM2 解密，能解出结果即说明调用方给的已经是密文
-        asymmetric_cipher.decrypt(password)
-    except Exception:  # noqa: BLE001 - 解密失败统一视为明文，交由下方加密
+    if encoding == INIT_PASSWORD_ENCODING_PLAINTEXT:
         auth_info["password"] = asymmetric_cipher.encrypt(password)
+    elif encoding != INIT_PASSWORD_ENCODING_CIPHERTEXT:
+        print("[InitPassword] Unknown password encoding declaration, password kept as is")
 
 
 class SystemInitHandler:

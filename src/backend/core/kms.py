@@ -313,6 +313,10 @@ def _deep_set(node, path, value) -> None:
 # 初始化凭据字段 -> 配置元素内的嵌套路径
 _INIT_AUTH_FIELD_MAP = {"username": ("auth_info", "username"), "password": ("auth_info", "password")}
 _INIT_REDIS_FIELD_MAP = {"password": ("connection_info", "password")}
+INIT_PASSWORD_ENCODING_FIELD = "password_encoding"
+INIT_PASSWORD_ENCODING_PLAINTEXT = "plaintext"
+INIT_PASSWORD_ENCODING_CIPHERTEXT = "ciphertext"
+
 # 初始化配置的默认实例键：对应 Chart 配置数组的第一个元素
 _INIT_DEFAULT_INSTANCE_KEY = "default"
 
@@ -398,9 +402,13 @@ def _merge_init_config(instances: dict, template: list, field_map: dict, key: st
                 continue
             _deep_set(target, list(dst_path), value)
             applied += 1
+            if dst_path == _INIT_AUTH_FIELD_MAP["password"]:
+                _deep_set(
+                    target,
+                    [*dst_path[:-1], INIT_PASSWORD_ENCODING_FIELD],
+                    INIT_PASSWORD_ENCODING_PLAINTEXT,
+                )
     if applied == 0:
-        # 没有任何敏感字段被覆盖时不写回：避免把 Chart 原值替换成一份等价副本，
-        # 也避免把未匹配到任何字段的空白模板元素写进配置数组。
         return None
     return json.dumps(merged, ensure_ascii=False)
 
