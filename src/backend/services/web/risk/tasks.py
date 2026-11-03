@@ -672,48 +672,35 @@ def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
     )
 
 
-def _sync_auto_result_lock_name(node_id: str = None, **kwargs) -> str:
-    """锁名：单节点同步与周期同步分开
-
-    周期任务要遍历执行中的节点，耗时长；共用一把锁会让重试/终止后的兜底同步被静默跳过
-    （CacheLockCheckFailed），状态长期停在乐观写入的执行中。
-    """
-
-    return f"celery:sync_auto_result:{node_id}" if node_id else "celery:sync_auto_result"
-
-
 @periodic_task(
     run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
     queue="risk",
-    time_limit=settings.SYNC_AUTO_RESULT_TASK_TIME_LIMIT,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
-@lock(load_lock_name=_sync_auto_result_lock_name, timeout=settings.SYNC_AUTO_RESULT_LOCK_TIMEOUT)
+@lock(lock_name="celery:sync_auto_result")
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
-    # 筛选所有需要更新的节点
+    # 无 node_id 时收窄候选集：只有审批/套餐节点需要跟外部系统（ITSM/SOPS）同步状态，
+    # 其余节点（NewRisk/转单/记经验等）按设计长期保持 running，进补偿只会拖垮本任务。
+    # 只取主键且不做分页：既不实例化模型、不加载 JSONField，也避免 LIMIT/OFFSET 漏/重节点。
     if node_id:
-        # 与周期分支同口径：测试单（is_test=True 的 AutoProcess 节点）同样纳入同步，
-        # 否则重试/强制终止后的兜底同步会空转，状态永久停留在乐观写入的执行中
-        nodes = TicketNode.objects.filter(id=node_id).filter(
-            Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__)
-        )
+        node_ids = [node_id]
     else:
-        # 测试单（is_test=True）同样纳入同步：它是一次性发单任务，结束很快，
-        # 但此前仅在前端轮询 get_task_status 时被动回写，页面关闭后会永久停留在 RUNNING
-        # 只取最近 N 条：历史积压的 RUNNING 节点量极大，全量遍历会让单次任务跑不完并长期占用锁，
-        # 导致后续所有同步被跳过、状态不更新；优先保证新记录被及时同步
-        nodes = (
-            TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
-            .filter(Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__))
-            .order_by("-timestamp")[: settings.SYNC_AUTO_RESULT_MAX_NODES]
+        node_ids = list(
+            TicketNode.objects.filter(
+                status=TicketNodeStatus.RUNNING,
+                action__in=[ForApprove.__name__, AutoProcess.__name__],
+            )
+            .order_by()
+            .values_list("id", flat=True)
         )
 
     # 逐个更新
-    for node in nodes:
+    for current_node_id in node_ids:
         try:
             with transaction.atomic():
-                node = TicketNode.objects.select_for_update().get(id=node.id)
+                node = TicketNode.objects.select_for_update().get(id=current_node_id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
                     ticket = node.process_result.get("ticket") or {}
@@ -756,7 +743,7 @@ def sync_auto_result(node_id: str = None):
                         node.status = TicketNodeStatus.FINISHED
                 node.save(update_fields=["process_result", "status", "duration"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-            logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
+            logger_celery.exception("[SyncAutoResult] Error %s %s", current_node_id, err)
 
 
 def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
