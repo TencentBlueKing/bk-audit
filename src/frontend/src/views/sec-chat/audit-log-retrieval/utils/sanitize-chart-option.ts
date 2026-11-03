@@ -274,7 +274,8 @@ const asAxisList = (axis: unknown): Record<string, any>[] => {
 
 /** 类目原文含 T 时，轴刻度只换展示，不改 data */
 const ensureIsoCategoryDisplay = (axis: unknown) => {
-  asAxisList(axis).forEach((host) => {
+  asAxisList(axis).forEach((axisItem) => {
+    const host = axisItem;
     const categories = Array.isArray(host.data) ? host.data : [];
     if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
     if (!isRecord(host.axisLabel)) host.axisLabel = {};
@@ -307,7 +308,8 @@ const bumpEdge = (current: unknown, inset: number) => (
  * 默认 width 是占位值，会把滑块拉成坐标区全宽，left/right 因此不生效，所以时间轴要清掉 width。
  */
 const attachDataZoomLabels = (option: Record<string, any>) => {
-  asZoomList(option.dataZoom).forEach((zoom) => {
+  asZoomList(option.dataZoom).forEach((zoomItem) => {
+    const zoom = zoomItem;
     if (zoom.type === 'inside') return;
     const horizontal = zoom.orient !== 'vertical';
     const axis = horizontal ? option.xAxis : option.yAxis;
