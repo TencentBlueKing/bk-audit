@@ -310,6 +310,17 @@ class ProcessApplicationsViewSet(ResourceViewSet):
             .first()
         )
 
+    def get_scene_id_for_pa_rules(self):
+        """套餐规则列表的鉴权场景。
+
+        场景套餐沿用自身绑定的场景。全局套餐没有场景实例，改用请求中的 scene_id，
+        校验调用方在该场景下的规则查看权限。
+        """
+        scene_id = self.get_scene_id_by_pa()
+        if scene_id is not None:
+            return scene_id
+        return self.get_scene_id()
+
     def get_permissions(self):
         # 执行记录（列表/详情）为只读审计流水，登录即可查看，不做场景实例级鉴权；
         # 数据范围由资源内部按风险授权（IAM + 本地授权）收敛，与风险列表同口径
@@ -344,7 +355,7 @@ class ProcessApplicationsViewSet(ResourceViewSet):
                 InstanceActionPermission(
                     actions=[ActionEnum.LIST_RULE],
                     resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id_by_pa,
+                    get_instance_id=self.get_scene_id_for_pa_rules,
                 ),
             ]
         return []
