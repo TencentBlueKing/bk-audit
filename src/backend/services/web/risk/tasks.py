@@ -654,16 +654,26 @@ def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
     # 筛选所有需要更新的节点
+    # 无 node_id 时收窄候选集：只有审批/套餐节点需要跟外部系统（ITSM/SOPS）同步状态，
+    # 其余节点（NewRisk/转单/记经验等）按设计长期保持 running，进补偿只会拖垮本任务。
+    # 只取主键且不做分页：既不实例化模型、不加载 JSONField，也避免 LIMIT/OFFSET 漏/重节点。
     if node_id:
-        nodes = TicketNode.objects.filter(id=node_id)
+        node_ids = [node_id]
     else:
-        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
+        node_ids = list(
+            TicketNode.objects.filter(
+                status=TicketNodeStatus.RUNNING,
+                action__in=[ForApprove.__name__, AutoProcess.__name__],
+            )
+            .order_by()
+            .values_list("id", flat=True)
+        )
 
     # 逐个更新
-    for node in nodes:
+    for current_node_id in node_ids:
         try:
             with transaction.atomic():
-                node = TicketNode.objects.select_for_update().get(id=node.id)
+                node = TicketNode.objects.select_for_update().get(id=current_node_id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
                     sn = node.process_result.get("ticket", {}).get("sn")
@@ -721,7 +731,7 @@ def sync_auto_result(node_id: str = None):
                         node.status = TicketNodeStatus.FINISHED
                 node.save(update_fields=["process_result", "status", "duration"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-            logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
+            logger_celery.exception("[SyncAutoResult] Error %s %s", current_node_id, err)
 
 
 def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
