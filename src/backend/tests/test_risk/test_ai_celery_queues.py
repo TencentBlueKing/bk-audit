@@ -1,6 +1,8 @@
 """AI Celery workload 路由契约。"""
 
+import os
 from pathlib import Path
+from unittest import mock
 
 import yaml
 from django.conf import settings
@@ -27,6 +29,7 @@ from services.web.risk.tasks import (
     render_ai_variable,
     render_risk_report,
 )
+from services.web.settings import _rate_limit_or_default
 from tests.base import TestCase
 
 APP_DESC = Path(__file__).resolve().parents[2] / "app_desc.yaml"
@@ -67,6 +70,12 @@ class TestAICeleryWorkloadRouting(TestCase):
         self.assertEqual(render_template.rate_limit, settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT)
         self.assertNotIsInstance(render_template, AIAgentTask)
         self.assertNotEqual(generate_analyse_report.queue, render_template.queue)
+
+    def test_blank_single_risk_rate_limit_keeps_its_own_default(self):
+        with mock.patch.dict(os.environ, {"BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT": "  "}, clear=False):
+            self.assertEqual(_rate_limit_or_default("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m"), "5/m")
+        with mock.patch.dict(os.environ, {"BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT": "8/m"}, clear=False):
+            self.assertEqual(_rate_limit_or_default("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m"), "8/m")
 
     def test_app_desc_workers_consume_workload_queues(self):
         desc = yaml.safe_load(APP_DESC.read_text())

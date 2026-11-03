@@ -7,7 +7,8 @@
 - ContentQualityChecker：纯检测器，返回问题列表，不产生副作用。
 - check_and_report_quality()：公共函数，封装检测 + 监控事件上报，
   按 issue_type 维度逐条上报。调用方根据返回值自行决定后续行为
-  （如 RiskReportHandler 会抛出 ContentQualityError 触发 Celery 重试）。
+  （RiskReportHandler 抛出 ContentQualityError；仅 empty / too_short / ai_thinking 触发 Celery 重试，
+  已写入正文的失败文本直接终态）。
 
 检测规则（共 7 种）：
 1. empty            — 内容为空
