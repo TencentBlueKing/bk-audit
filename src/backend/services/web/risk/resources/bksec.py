@@ -106,6 +106,7 @@ class ListBkSecProjects(BkSecResourceMeta):
             if not isinstance(project, dict):
                 continue
             project_id = str(project.get("id", ""))
+            project_name = str(project.get("name") or "").lower()
             try:
                 # 风险类型按 项目 + is_formal + 身份 维度缓存；用户身份调用，网关按数据域出数据
                 items = fetch_risk_access_items(project_id=project_id, is_formal=is_formal, as_platform=False)
@@ -117,9 +118,16 @@ class ListBkSecProjects(BkSecResourceMeta):
                 )
                 items = []
             risk_types = [_normalize_risk_type(item) for item in items if isinstance(item, dict)]
-            # 名称过滤在本地做：缓存键不含关键字，否则不同关键字互相污染缓存
-            if keyword:
+            # 名称过滤在本地做：缓存键不含关键字，否则不同关键字互相污染缓存。
+            # 同一关键字取并集，项目名始终保留：
+            # - 项目名命中：该项目下全部风险类型
+            # - 仅风险类型名命中：所属项目 + 命中的风险类型
+            # - 两边都不命中：不返回该项目
+            name_matched = bool(keyword) and keyword in project_name
+            if keyword and not name_matched:
                 risk_types = [rt for rt in risk_types if keyword in (rt.get("risk_type_name") or "").lower()]
+                if not risk_types:
+                    continue
             result.append(
                 {
                     "id": project_id,

@@ -860,7 +860,12 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
 class ListBkSecProjectsReqSerializer(serializers.Serializer):
     """查询 BKSEC 项目及风险类型（策略页下拉，一次返回两级）"""
 
-    name__icontains = serializers.CharField(label=gettext_lazy("名称模糊搜索"), required=False, allow_blank=True)
+    name__icontains = serializers.CharField(
+        label=gettext_lazy("名称模糊搜索"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("项目名命中与风险类型名命中取并集：项目名命中返回该项目及全部风险类型；" "仅风险类型名命中返回所属项目（保留项目名）及命中的风险类型；都不命中则不返回该项目"),
+    )
     is_formal = serializers.CharField(label=gettext_lazy("是否正式"), required=False, allow_blank=True)
 
 
