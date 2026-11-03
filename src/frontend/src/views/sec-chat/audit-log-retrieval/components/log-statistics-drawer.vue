@@ -151,7 +151,7 @@
                 @mouseenter="showLegendTip(item, $event)">
                 <span
                   class="legend-dot"
-                  :style="{ background: isLegendItemOn(card.key, item.name) ? item.color : 'var(--audit-neutral-text-04)' }" />
+                  :style="{ background: legendDotColor(card.key, item) }" />
                 <span class="legend-label">
                   <span class="legend-name">{{ item.name }}</span>
                   <span class="legend-meta">：{{ item.valueText }} ( {{ item.percent }} )</span>
@@ -185,7 +185,7 @@
                   @mouseenter="showChartLegendTip(item.name, $event)">
                   <span
                     class="legend-dot"
-                    :style="{ background: isLegendItemOn(card.key, item.name) ? item.color : 'var(--audit-neutral-text-04)' }" />
+                    :style="{ background: legendDotColor(card.key, item) }" />
                   <span class="chart-legend-name">{{ truncateLegendLabel(item.name) }}</span>
                 </div>
               </div>
@@ -332,10 +332,7 @@
     TREND_CARD_TITLE,
     visibleStatisticsRatio,
   } from '../utils/map-statistics-output';
-  import {
-    type ChartSanitizeErrorCode,
-    sanitizeChartOption,
-  } from '../utils/sanitize-chart-option';
+  import { sanitizeChartOption } from '../utils/sanitize-chart-option';
 
   const props = withDefaults(defineProps<{
     isShow?: boolean;
@@ -473,6 +470,10 @@
 
   const isLegendItemOn = (cardKey: string, name: string) => (
     legendSelected.value[cardKey]?.[name] !== false
+  );
+
+  const legendDotColor = (cardKey: string, item: { name: string; color: string }) => (
+    isLegendItemOn(cardKey, item.name) ? item.color : 'var(--audit-neutral-text-04)'
   );
 
   const chartBoxHeight = (card: ChartCardView) => {
@@ -709,8 +710,6 @@
     return BUILTIN_CARD_TITLES.has(title) ? t(title) : title;
   };
 
-  const errorText = (_errorCode: ChartSanitizeErrorCode) => t('图表配置不合法');
-
   /** echarts 自身抛错的卡片，key 记在这里，和配置层的 errorCode 分开 */
   const mountFailedKeys = ref<Set<string>>(new Set());
 
@@ -719,7 +718,7 @@
   );
 
   const cardErrorText = (card: StatisticsChartCard) => (
-    card.errorCode ? errorText(card.errorCode) : t('图表渲染失败')
+    card.errorCode ? t('图表配置不合法') : t('图表渲染失败')
   );
 
   const markMountFailed = (key: string) => {
@@ -876,7 +875,8 @@
     }));
   };
 
-  const liftChartLegend = (option: Record<string, any>) => {
+  const liftChartLegend = (rawOption: Record<string, any>) => {
+    const option = rawOption;
     const items = collectLegendItems(option);
     if (!items.length) return { items };
     const grid = isPlainRecord(option.grid) ? option.grid : null;
