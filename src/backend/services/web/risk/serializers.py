@@ -1540,6 +1540,26 @@ class ListProcessApplicationsReqSerializer(serializers.Serializer):
         return data
 
 
+class ListRuleByPAReqSerializer(serializers.Serializer):
+    """套餐关联规则列表。场景套餐可不传 scene_id；全局套餐必须传当前场景。"""
+
+    id = serializers.IntegerField(label=gettext_lazy("处理套餐ID"))
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("全局套餐必传，只返回该场景下挂在此套餐上的规则；场景套餐沿用自身场景绑定，可不传"),
+    )
+    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
+    order_type = serializers.ChoiceField(
+        label=gettext_lazy("排序方式"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=OrderTypeChoices.choices,
+    )
+
+
 class TicketNodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketNode

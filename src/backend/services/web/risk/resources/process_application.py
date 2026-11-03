@@ -41,6 +41,7 @@ from services.web.risk.serializers import (
     ListAllProcessApplicationsReqSerializer,
     ListProcessApplicationsReqSerializer,
     ListRiskResponseSerializer,
+    ListRuleByPAReqSerializer,
     PAExecutionRecordDetailReqSerializer,
     PAExecutionRecordDetailResponseSerializer,
     PAExecutionRecordListReqSerializer,
@@ -257,6 +258,7 @@ class ListRiskByPA(ProcessApplicationMeta):
 
 class ListRuleByPA(ProcessApplicationMeta):
     name = gettext_lazy("获取处理套餐关联的规则")
+    RequestSerializer = ListRuleByPAReqSerializer
     ResponseSerializer = RiskRuleInfoSerializer
     many_response_data = True
     audit_action = ActionEnum.LIST_RULE
