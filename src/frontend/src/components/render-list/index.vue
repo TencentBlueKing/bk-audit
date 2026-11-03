@@ -37,7 +37,7 @@
         :data="listData.results"
         :height="tableHeight"
         :max-height="tableMaxHeight"
-        :min-height="300"
+        :min-height="isLayoutMaxHeight ? 0 : 300"
         :pagination="pagination"
         remote-pagination
         :scrollbar="false"
@@ -145,8 +145,12 @@
     sceneIdKey?: string,
     /** 用表格骨架替代 bk-loading，默认关闭 */
     useSkeleton?: boolean,
+    /** 表格最大高度（含表头和分页）。传入后按内容收缩，超出部分只在表体内滚动 */
+    layoutHeight?: number,
     /** 骨架最短展示毫秒。请求快于淡入时避免停在透明帧，默认不额外等待 */
     skeletonMinDuration?: number,
+    /** 是否把分页和筛选写回路由。嵌套在侧滑里的表格应关闭，避免污染外层列表 */
+    syncUrl?: boolean,
   }
 
   interface ISettings{
@@ -185,6 +189,8 @@
     sceneIdKey: 'scope_id',
     useSkeleton: false,
     skeletonMinDuration: 0,
+    layoutHeight: undefined,
+    syncUrl: true,
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -206,7 +212,8 @@
     align: 'right',
     layout: ['total', 'limit', 'list'],
   });
-  const tableMaxHeight = ref(0);
+  const isLayoutMaxHeight = computed(() => typeof props.layoutHeight === 'number' && props.layoutHeight > 0);
+  const tableMaxHeight = ref<string | number>(isLayoutMaxHeight.value ? 'auto' : 0);
   const tableHeight = ref<string | number>('auto');
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
@@ -267,6 +274,12 @@
   });
   const skeletonRowCount = computed(() => Math.max(lastSkeletonRowCount.value, 1));
   const skeletonBoxStyle = computed(() => {
+    if (isLayoutMaxHeight.value) {
+      return {
+        maxHeight: `${props.layoutHeight}px`,
+        overflow: 'hidden',
+      };
+    }
     if (typeof tableHeight.value !== 'number') {
       return {
         flex: '1 1 auto',
@@ -432,9 +445,12 @@
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
           run(params).finally(() => {
-            isLoading.value = false;
+            // 被新请求取消的旧请求不能关掉骨架，否则会先闪出空态
+            if (fetchSeq === latestFetchSeq) {
+              isLoading.value = false;
+            }
           });
-          if (fetchSeq === latestFetchSeq) {
+          if (props.syncUrl && fetchSeq === latestFetchSeq) {
             replaceSearchParams({
               ...params,
               ...sceneContext,
@@ -617,22 +633,52 @@
     window.removeEventListener('resize', handleResize);
   });
 
+  const resolveTableBoxHeight = (dimensions: {
+    tableHeaderHeight: number;
+    paginationHeight: number;
+    tableRowHeight: number;
+    rowNum: number;
+    fixedHeight?: number;
+  }) => {
+    if (dimensions.fixedHeight) {
+      return dimensions.fixedHeight;
+    }
+    const nextHeight = dimensions.tableHeaderHeight
+      + dimensions.rowNum * dimensions.tableRowHeight
+      + dimensions.paginationHeight
+      + 8;
+    return nextHeight < 300 ? 300 : nextHeight;
+  };
+
   // 计算表格尺寸信息
   const calculateTableDimensions = () => {
+    const tableHeaderHeight = 42;
+    const paginationHeight = 60;
+    const tableRowHeight = 42;
+    const layoutHeight = props.layoutHeight;
+    // 侧滑等容器传入总高度时，按容器计算，避免沿用窗口偏移把分页顶出可视区
+    if (typeof layoutHeight === 'number' && layoutHeight > 0) {
+      const tableRowTotalHeight = layoutHeight - tableHeaderHeight - paginationHeight - 8;
+      const rowNum = Math.max(1, Math.floor(tableRowTotalHeight / tableRowHeight));
+      return {
+        tableHeaderHeight,
+        paginationHeight,
+        tableRowHeight,
+        rowNum,
+        fixedHeight: layoutHeight,
+      };
+    }
     if (!rootRef.value) {
       return {
-        tableHeaderHeight: 42,
-        paginationHeight: 60,
-        tableRowHeight: 42,
+        tableHeaderHeight,
+        paginationHeight,
+        tableRowHeight,
         rowNum: 10,
       };
     }
     const { top } = getOffset(rootRef.value);
     const windowInnerHeight = window.innerHeight;
-    const tableHeaderHeight = 42;
-    const paginationHeight = 60;
     const pageOffsetBottom = 20;
-    const tableRowHeight = 42;
 
     const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
 
@@ -645,17 +691,21 @@
     };
   };
 
+  const applyTableBoxHeight = (nextHeight: number) => {
+    // 侧滑的最大高度由外层加在表体上，这里保持 auto，分页才能紧跟内容
+    if (isLayoutMaxHeight.value) {
+      tableMaxHeight.value = 'auto';
+      tableHeight.value = 'auto';
+      return;
+    }
+    tableMaxHeight.value = nextHeight;
+    tableHeight.value = nextHeight;
+  };
+
   // 初始化表格高度
   const initTableHeight = () => {
     nextTick(() => {
-      const dimensions = calculateTableDimensions();
-      const nextHeight = dimensions.tableHeaderHeight
-        + dimensions.rowNum * dimensions.tableRowHeight
-        + dimensions.paginationHeight
-        + 8;
-      // eslint-disable-next-line max-len
-      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
-      tableHeight.value = tableMaxHeight.value;
+      applyTableBoxHeight(resolveTableBoxHeight(calculateTableDimensions()));
     });
   };
 
@@ -668,17 +718,11 @@
         ...pagination.limitList,
         nextLimit,
       ]);
+      const nextHeight = resolveTableBoxHeight(dimensions);
 
       // 如果用户已经手动选择了分页大小，则不再自动调整分页大小
       if (isUserSelectedPageSize.value) {
-        // 只更新表格高度，不修改分页大小
-        const nextHeight = dimensions.tableHeaderHeight
-          + dimensions.rowNum * dimensions.tableRowHeight
-          + dimensions.paginationHeight
-          + 8;
-        // eslint-disable-next-line max-len
-        tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
-        tableHeight.value = tableMaxHeight.value;
+        applyTableBoxHeight(nextHeight);
         return;
       }
 
@@ -686,13 +730,7 @@
       if (pagination.limit > 10) {
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
       }
-      const nextHeight = dimensions.tableHeaderHeight
-        + dimensions.rowNum * dimensions.tableRowHeight
-        + dimensions.paginationHeight
-        + 8;
-      // eslint-disable-next-line max-len
-      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
-      tableHeight.value = tableMaxHeight.value;
+      applyTableBoxHeight(nextHeight);
 
       if (isLimitChanged && isReady) {
         pagination.current = 1;
@@ -702,6 +740,13 @@
       }
     });
   };
+
+  watch(() => props.layoutHeight, (height) => {
+    if (typeof height !== 'number' || height <= 0) {
+      return;
+    }
+    calcTableHeight();
+  });
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>) {
