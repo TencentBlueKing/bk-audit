@@ -144,6 +144,7 @@ from services.web.risk.models import (
     TicketPermission,
     UserType,
 )
+from services.web.risk.permissions import ensure_user_may_confirm_risk
 from services.web.risk.serializers import (
     BULK_ACTION_MAX_RISK_IDS,
     BULK_AUTO_PROCESS_MAX_RISK_IDS,
@@ -1017,6 +1018,7 @@ class UpdateRiskLabel(RiskMeta):
         elif new_risk_label == RiskLabel.MISREPORT:
 
             if risk.status == RiskStatus.PENDING_CONFIRM:
+                ensure_user_may_confirm_risk(get_request_username(), risk)
                 ConfirmAsMisReportResource().perform_request(
                     {
                         "risk_id": risk.risk_id,

@@ -24,6 +24,7 @@ from bk_resource.settings import bk_resource_settings
 
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
+from services.web.risk.exceptions import RiskConfirmPermissionDenied
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
     APPROVE_SERVICE_INFO,
@@ -109,6 +110,64 @@ class RiskLabelTest(TicketTest):
             self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
             # MisReport→CloseRisk: display_status 同步为 CLOSED
             self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
+
+    @mock.patch(
+        "services.web.risk.permissions.PermissionService.is_allowed",
+        mock.Mock(return_value=False),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="processor"),
+    )
+    def test_misreport_pending_confirm_rejects_processor(self):
+        """当前处理人不是确认人，也不能通过风险标记把待确认单据确认为误报。"""
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+                "current_operator": ["processor"],
+            }
+        ) as risk:
+            with self.assertRaises(RiskConfirmPermissionDenied):
+                resource.risk.update_risk_label(
+                    risk_id=risk.risk_id, risk_label=RiskLabel.MISREPORT, description=uuid.uuid1().hex
+                )
+            risk.refresh_from_db()
+            self.assertEquals(risk.status, RiskStatus.PENDING_CONFIRM)
+            self.assertNotEquals(risk.risk_label, RiskLabel.MISREPORT)
+
+    @mock.patch(
+        "services.web.risk.permissions.PermissionService.is_allowed",
+        mock.Mock(return_value=True),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="platform_admin"),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_misreport_pending_confirm_allows_platform_admin(self):
+        """平台管理员不是确认人时，仍可通过风险标记把待确认单据确认为误报。"""
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        ) as risk:
+            resource.risk.update_risk_label(
+                risk_id=risk.risk_id, risk_label=RiskLabel.MISREPORT, description=uuid.uuid1().hex
+            )
+            risk.refresh_from_db()
+            self.assertEquals(risk.status, RiskStatus.CLOSED.value)
+            self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
