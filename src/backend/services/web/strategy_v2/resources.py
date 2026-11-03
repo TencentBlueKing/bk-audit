@@ -1217,15 +1217,18 @@ class ListStrategy(StrategyV2Base):
                     # 未开启: report_enabled=False
                     report_status_q |= Q(report_enabled=False)
             queryset = queryset.filter(report_status_q)
-        # bksec_enabled filter
-        bksec_enabled = validated_request_data.pop("bksec_enabled", None)
-        if bksec_enabled is not None:
-            if bksec_enabled:
-                queryset = queryset.filter(bksec_config__enabled=True)
-            else:
-                # 未配置（bksec_config 无 enabled 键）时 JSON_EXTRACT 为 NULL，
-                # 等值匹配与 exclude 都会漏掉这类策略，需显式补 isnull 分支
-                queryset = queryset.filter(Q(bksec_config__enabled=False) | Q(bksec_config__enabled__isnull=True))
+        # bksec_enabled filter（多选：true/false 任一命中即返回）
+        bksec_enabled = validated_request_data.pop("bksec_enabled", None) or []
+        if bksec_enabled:
+            bksec_enabled_q = Q()
+            for value in bksec_enabled:
+                if str(value).strip().lower() == "true":
+                    bksec_enabled_q |= Q(bksec_config__enabled=True)
+                else:
+                    # 未配置（bksec_config 无 enabled 键）时 JSON_EXTRACT 为 NULL，
+                    # 等值匹配与 exclude 都会漏掉这类策略，需显式补 isnull 分支
+                    bksec_enabled_q |= Q(bksec_config__enabled=False) | Q(bksec_config__enabled__isnull=True)
+            queryset = queryset.filter(bksec_enabled_q)
 
         # 预加载策略标签，避免N+1查询
         queryset = queryset.prefetch_related(

@@ -286,7 +286,7 @@ class TestBkSecProjectsAggregate:
         assert result[1]["risk_types"][0]["risk_type_id"] == "2"
 
     def test_keyword_filters_risk_types(self):
-        """名称搜索只过滤风险类型，不影响项目返回"""
+        """未命中项目名时只返回名称匹配的风险类型"""
         projects = [{"id": 17, "name": "应用运维安全"}]
         items = [
             {"id": 1, "name": "云账号未启用MFA", "is_formal": True, "risk_access_fields": []},
@@ -714,6 +714,43 @@ class TestBkSecResources:
         assert result["has_sample_risk"] is True
         assert result["ticket"]["fields"]["operator"] == "admin"
         assert risk.risk_id in result["ticket"]["fields"]["target"]
+
+    def test_list_projects_keyword_matches_project_name(self):
+        """项目名命中与风险类型名命中取并集；类型命中时保留所属项目名，只留命中的类型"""
+        projects = [{"id": 17, "name": "云安全项目"}, {"id": 18, "name": "主机安全"}]
+        items_by_project = {
+            "17": [
+                {"id": 159, "name": "云账号未启用MFA", "is_formal": True},
+                {"id": 161, "name": "密钥泄露", "is_formal": True},
+            ],
+            "18": [
+                {"id": 160, "name": "高危端口开放", "is_formal": True},
+                {"id": 162, "name": "云账号异常登录", "is_formal": True},
+            ],
+        }
+        with mock.patch(
+            "apps.feature.handlers.FeatureHandler", return_value=mock.Mock(check=mock.Mock(return_value=True))
+        ), mock.patch(
+            "services.web.risk.resources.bksec.api.bk_sec.project_choices", mock.Mock(return_value=projects)
+        ), mock.patch(
+            "services.web.risk.resources.bksec.fetch_risk_access_items",
+            mock.Mock(side_effect=lambda project_id="", **kwargs: items_by_project.get(str(project_id), [])),
+        ):
+            # 并集：项目名命中的项目带全部类型；另一个项目只因类型名命中而留下，项目名仍在
+            result = resource.risk.list_bk_sec_projects.perform_request({"name__icontains": "云"})
+            assert [(p["id"], p["name"]) for p in result] == [("17", "云安全项目"), ("18", "主机安全")]
+            assert [rt["risk_type_id"] for rt in result[0]["risk_types"]] == ["159", "161"]
+            assert [rt["risk_type_id"] for rt in result[1]["risk_types"]] == ["162"]
+            # 只有类型名命中
+            result = resource.risk.list_bk_sec_projects.perform_request({"name__icontains": "高危端口"})
+            assert [(p["id"], p["name"]) for p in result] == [("18", "主机安全")]
+            assert [rt["risk_type_id"] for rt in result[0]["risk_types"]] == ["160"]
+            # 项目名和风险类型都不命中：不返回
+            assert resource.risk.list_bk_sec_projects.perform_request({"name__icontains": "不存在"}) == []
+            # 不传关键字：项目 + 全量风险类型
+            result = resource.risk.list_bk_sec_projects.perform_request({})
+            risk_types = {p["id"]: [rt["risk_type_id"] for rt in p["risk_types"]] for p in result}
+            assert risk_types == {"17": ["159", "161"], "18": ["160", "162"]}
 
     def test_send_test_ticket(self, settings):
         """测试发送经 SOPS 真实通道（create_task + start_task），事件常量含测试标记与处理人覆盖"""

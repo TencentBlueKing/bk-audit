@@ -1495,11 +1495,12 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         required=False,
         help_text="可选值: %s，多个用逗号分隔" % ", ".join(f"{value}({label})" for value, label in StrategyReportStatus.choices),
     )
-    bksec_enabled = serializers.BooleanField(
+    bksec_enabled = serializers.CharField(
         label=gettext_lazy("BKSEC 发单是否启用"),
         required=False,
         allow_null=True,
-        help_text=gettext_lazy("按 BKSEC 安全工单发单开关筛选策略。true=已启用，false=未启用（含未配置）"),
+        allow_blank=True,
+        help_text="可选值: true,false，多个用逗号分隔（如 true,false），任一命中即返回；" "true=已启用，false=未启用（含未配置）",
     )
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
@@ -1532,6 +1533,16 @@ class ListStrategyRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(gettext_lazy("无效的报告状态值: %s") % ", ".join(invalid_values))
         return value
 
+    def validate_bksec_enabled(self, value: str) -> str:
+        """只接受 true/false（逗号分隔多选），其余值直接报错，避免静默忽略导致筛选结果不符预期"""
+
+        if not value:
+            return value
+        invalid_values = [v for v in value.split(",") if v and v.strip().lower() not in ("true", "false")]
+        if invalid_values:
+            raise serializers.ValidationError(gettext_lazy("无效的 BKSEC 启用状态值: %s") % ", ".join(invalid_values))
+        return value
+
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
         # split into array
@@ -1545,7 +1556,6 @@ class ListStrategyRequestSerializer(serializers.Serializer):
                 "binding_type",
                 "dispatch_scene_id",
                 "updated_by",
-                "bksec_enabled",
             ]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
