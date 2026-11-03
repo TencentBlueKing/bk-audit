@@ -24,6 +24,7 @@ from bk_resource import resource
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
 from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
@@ -114,6 +115,23 @@ class SystemInitHelper:
         return config
 
 
+def adapt_auth_password(config: dict) -> None:
+    """按资源层契约适配 auth_info.password 的编码。"""
+    if not settings.ENABLE_BKCRYPTO:
+        return
+    auth_info = config.get("auth_info")
+    if not isinstance(auth_info, dict):
+        return
+    password = auth_info.get("password")
+    if not password:
+        return
+    try:
+        # 明文无法通过 SM2 解密，能解出结果即说明调用方给的已经是密文
+        asymmetric_cipher.decrypt(password)
+    except Exception:  # noqa: BLE001 - 解密失败统一视为明文，交由下方加密
+        auth_info["password"] = asymmetric_cipher.encrypt(password)
+
+
 class SystemInitHandler:
     def init(self):
         print("[Main] Init Start")
@@ -150,6 +168,7 @@ class SystemInitHandler:
     def _init_es(self, es_config: dict):
         # 不打印 es_config：其内容来自 get_secret()，含集群账号密码
         print("[InitEs] Start")
+        adapt_auth_password(es_config)
         # 创建默认ES集群的时候，已经创建了默认namespace的collector plugin。
         cluster_id = resource.databus.storage.create_storage(es_config)
         print(f"[InitEs] Resp => {cluster_id}")
@@ -179,6 +198,7 @@ class SystemInitHandler:
         print("[InitDoris] Start")
         if not doris_config.get('pre_defined', False):
             raise ParamsNotValid(message=gettext_lazy("Doris必须是预定义的"))
+        adapt_auth_password(doris_config)
         cluster_id = resource.databus.storage.create_storage(doris_config)
         print(f"[InitDoris] Resp => {cluster_id}")
         GlobalMetaConfig.set(EVENT_DORIS_CLUSTER_ID_KEY, cluster_id)

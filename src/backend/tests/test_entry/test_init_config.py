@@ -35,7 +35,7 @@ from services.web.entry.constants import (
     INIT_ES_FISHED_KEY,
     INIT_REDIS_FISHED_KEY,
 )
-from services.web.entry.init.base import SystemInitHandler
+from services.web.entry.init.base import SystemInitHandler, adapt_auth_password
 
 # 合成配置（含嵌套凭据），不含任何真实凭据
 ES_CONFIG = [{"cluster_name": "es-1", "auth_info": {"username": "admin", "password": "SYNTHETIC-ES-PWD-0001"}}]
@@ -178,3 +178,59 @@ class TestInitFailureNotLeak(SimpleTestCase):
         self.assertIn("create_or_update_redis failed", output)
         for password in NESTED_PASSWORDS:
             self.assertNotIn(password, output)
+
+
+class FakeRoundTripCipher:
+    """模拟真实 SM2 的「密文/明文不可互换」：只接受自己产出的密文。"""
+
+    PREFIX = "SM2#"
+
+    def encrypt(self, plaintext: str) -> str:
+        return "{}{}".format(self.PREFIX, plaintext)
+
+    def decrypt(self, ciphertext: str) -> str:
+        if not (isinstance(ciphertext, str) and ciphertext.startswith(self.PREFIX)):
+            raise ValueError("decrypt failed: not a ciphertext")
+        return ciphertext[len(self.PREFIX) :]
+
+
+@override_settings(BKAPP_INIT_SYSTEM="True")
+class TestInitPasswordEncoding(SimpleTestCase):
+    """初始化边界必须把原始口令适配成资源层要求的密文口径。"""
+
+    @staticmethod
+    def _config(password: str) -> dict:
+        return {"cluster_name": "es-1", "auth_info": {"username": "u", "password": password}}
+
+    @override_settings(ENABLE_BKCRYPTO=False)
+    @mock.patch("services.web.entry.init.base.asymmetric_cipher", new=FakeRoundTripCipher())
+    def test_switch_off_keeps_plaintext(self):
+        """业务加密关闭：FakeAsymmetricCipher 加解密恒等，口令原样传递。"""
+        config = self._config("PLAIN-PWD")
+        adapt_auth_password(config)
+        self.assertEqual(config["auth_info"]["password"], "PLAIN-PWD")
+
+    @override_settings(ENABLE_BKCRYPTO=True)
+    @mock.patch("services.web.entry.init.base.asymmetric_cipher", new=FakeRoundTripCipher())
+    def test_plaintext_encrypted_when_bkcrypto_enabled(self):
+        config = self._config("PLAIN-PWD")
+        adapt_auth_password(config)
+        self.assertEqual(config["auth_info"]["password"], "SM2#PLAIN-PWD")
+
+    @override_settings(ENABLE_BKCRYPTO=True)
+    @mock.patch("services.web.entry.init.base.asymmetric_cipher", new=FakeRoundTripCipher())
+    def test_existing_ciphertext_not_encrypted_twice(self):
+        """历史配置已是密文时透传，避免二次加密。"""
+        config = self._config("SM2#PLAIN-PWD")
+        adapt_auth_password(config)
+        self.assertEqual(config["auth_info"]["password"], "SM2#PLAIN-PWD")
+
+    @override_settings(ENABLE_BKCRYPTO=True)
+    @mock.patch("services.web.entry.init.base.asymmetric_cipher", new=FakeRoundTripCipher())
+    @mock.patch("services.web.entry.init.base.resource.databus.storage.storage_activate")
+    @mock.patch("services.web.entry.init.base.resource.databus.storage.create_storage", return_value=101)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    def test_init_es_sends_ciphertext_to_resource(self, _mock_set, mock_create, _mock_activate):
+        """_init_es 交给资源层的必须是密文，资源层解密后才是原始口令。"""
+        SystemInitHandler()._init_es(self._config("PLAIN-PWD"))
+        self.assertEqual(mock_create.call_args[0][0]["auth_info"]["password"], "SM2#PLAIN-PWD")
