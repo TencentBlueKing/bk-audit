@@ -98,7 +98,7 @@
           v-else
           v-bk-tooltips="{
             content: t('审计策略不支持编辑数据源'),
-            disabled: !isEditMode,
+            disabled: !isDataSourceLocked,
             placement: 'top',
           }"
           class="select-group">
@@ -106,7 +106,7 @@
             ref="dataSourcePickerRef"
             v-model="tableId"
             :decode-type-biz-id="decodeTypeBizId"
-            :disabled="isEditMode"
+            :disabled="isDataSourceLocked"
             :list="allConfigTypeTable"
             :load-children="handlePickerLoadChildren"
             :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
@@ -401,7 +401,8 @@
   const isCloneMode = isStrategyCloneRoute(route.name);
   const isPlatformMode = isPlatformStrategyRoute(route.name);
   const strategyStatus = computed(() => props.editData?.status);
-  const { isStrategyConfigLocked } = useStrategyConfigLock(strategyStatus);
+  const { isStrategyConfigLocked, isDraftStrategyEdit } = useStrategyConfigLock(strategyStatus);
+  const isDataSourceLocked = computed(() => isEditMode && !isDraftStrategyEdit.value);
   const strategySceneParams = computed(() => getStrategyResourceSceneParams(route));
   const strategySystemScopeParams = computed(() => getStrategySystemScopeParams(route));
 

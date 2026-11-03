@@ -103,7 +103,8 @@ class ProcessApplicationManage extends ModuleBase {
   getRuleList(params: {
     page: number,
     page_size: number,
-    id: string
+    id: string,
+    scene_id?: string,
   }, payload = {} as IRequestPayload) {
     return Request.get(`${this.module}/${params.id}/rules/`, {
       params,
