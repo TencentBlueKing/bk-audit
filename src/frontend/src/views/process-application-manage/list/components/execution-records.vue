@@ -24,16 +24,24 @@
       ref="panelRef"
       class="execution-records"
       data-testid="execution-records-panel">
-      <bk-search-select
-        v-model="searchKey"
-        class="execution-search"
-        clearable
-        :data="searchData"
-        :defaut-using-item="{ inputHtml: t('请选择') }"
-        :get-menu-list="getMenuList"
-        :placeholder="t('搜索 任务ID、任务名称、套餐名称（ID）、风险ID、状态、执行人')"
-        unique-select
-        @update:model-value="search" />
+      <div class="execution-toolbar">
+        <date-picker
+          id="execution-records-range"
+          v-model="timeRange"
+          class="execution-time-range"
+          data-testid="execution-records-time-range"
+          @update:model-value="search" />
+        <bk-search-select
+          v-model="searchKey"
+          class="execution-search"
+          clearable
+          :data="searchData"
+          :defaut-using-item="{ inputHtml: t('请选择') }"
+          :get-menu-list="getMenuList"
+          :placeholder="t('搜索 任务ID、任务名称、套餐名称（ID）、风险ID、状态、执行人')"
+          unique-select
+          @update:model-value="search" />
+      </div>
       <tdesign-list
         v-if="isShow"
         ref="listRef"
@@ -66,6 +74,8 @@
   import { computed, defineComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
+
+  import { DateRange } from '@blueking/date-picker';
 
   import MetaManageService from '@service/meta-manage';
   import ProcessApplicationManageService from '@service/process-application-manage';
@@ -113,6 +123,7 @@
   }
 
   const now = useNow(() => props.isShow);
+  const timeRange = ref<[string, string]>(['now-1M', 'now']);
   const listRef = ref();
   const panelRef = ref<HTMLElement | null>(null);
   const tableMaxHeight = ref(360);
@@ -581,6 +592,15 @@
     return '';
   };
 
+  const timeQuery = () => {
+    const range = new DateRange(timeRange.value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+    if (!range.isValidate || !range.startDisplayText || !range.endDisplayText) return {};
+    return {
+      from: range.startDisplayText,
+      to: range.endDisplayText,
+    };
+  };
+
   const dataSource = (params: Record<string, any>) => {
     const packageNames = fieldValue('application_name')
       .split(',')
@@ -599,6 +619,7 @@
       trigger_type: params.trigger_type || fieldValue('trigger_type') || undefined,
       status: params.status || fieldValue('status') || undefined,
       scene_id: props.sceneId || undefined,
+      ...timeQuery(),
     });
   };
 
@@ -718,6 +739,13 @@
     window.removeEventListener('resize', syncTableMaxHeight);
   });
 </script>
+<style lang="postcss">
+/* 时间范围弹层挂在 body 上，默认层级低于侧滑 */
+.__bk-date-picker-popover__.__bk-date-picker-popover__execution-records-range {
+  z-index: 10060 !important;
+  margin-left: 32px !important;
+}
+</style>
 <style lang="postcss" scoped>
 .execution-records {
   display: flex;
@@ -730,9 +758,31 @@
   box-sizing: border-box;
 }
 
-.execution-search {
+.execution-toolbar {
+  display: flex;
   flex-shrink: 0;
+  gap: var(--audit-space-8);
+  align-items: center;
   width: 100%;
+}
+
+.execution-time-range {
+  display: inline-flex;
+  flex: 0 0 220px;
+  width: 220px;
+  box-sizing: border-box;
+}
+
+.execution-time-range :deep(.date-content) {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.execution-search {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .execution-table {

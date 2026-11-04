@@ -172,7 +172,7 @@
                 {{ row.value }}
               </span>
               <span
-                v-else-if="row.kind === 'status'"
+                v-else-if="row.kind === 'status' && row.value && row.value !== '--'"
                 class="bksec-status">
                 <i class="bksec-status-mark" />
                 {{ row.value }}
@@ -199,7 +199,6 @@
 </template>
 <script setup lang="ts">
   import { Message } from 'bkui-vue';
-  import dayjs from 'dayjs';
   import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -229,8 +228,6 @@
     fieldValues: Record<string, string>;
     fields?: Array<{ id: string; name: string; required?: boolean }>;
     strategyId?: string | number;
-    strategyType?: string;
-    strategyName?: string;
   }
   interface Emits {
     (e: 'update:isShow', value: boolean): void;
@@ -267,7 +264,6 @@
   ];
   const previewError = ref(false);
   const previewRows = ref<BksecTicketPreviewRow[]>([]);
-  const openedAt = ref('');
   const sending = ref(false);
   const testForm = ref({ handler: '' });
   const handlerSelectorKey = ref(0);
@@ -358,12 +354,9 @@
   const renderLocal = () => {
     previewError.value = false;
     previewRows.value = buildLocalPreview({
-      fieldValues: props.fieldValues || {},
       fields: previewFields(),
       riskTypeId: props.riskTypeId,
       riskTypeName: props.riskTypeName,
-      strategyName: props.strategyName,
-      openedAt: openedAt.value,
     });
   };
 
@@ -496,7 +489,6 @@
     const ticket = ++openSeq;
     stopPoll();
     sending.value = false;
-    openedAt.value = dayjs().format('YYYY-MM-DD HH:mm:ss');
     previewError.value = false;
     if (isCreateMode.value) {
       riskList.value = [];
