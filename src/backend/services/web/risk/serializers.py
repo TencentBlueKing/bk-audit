@@ -926,6 +926,26 @@ class ReportBkSecTicketSentResponseSerializer(serializers.Serializer):
     updated = serializers.BooleanField(label=gettext_lazy("是否实际更新"), help_text=gettext_lazy("False 表示状态未变化（已是推送成功）"))
 
 
+class _OptionalDateTimeField(serializers.DateTimeField):
+    """可选时间：空串视为未传，接受列表展示格式和 ISO 8601。"""
+
+    def to_internal_value(self, value):
+        if value in ("", None):
+            return None
+        return super().to_internal_value(value)
+
+
+def _execution_record_range_field(label, help_text):
+    return _OptionalDateTimeField(
+        label=label,
+        required=False,
+        allow_null=True,
+        default=None,
+        input_formats=["%Y-%m-%d %H:%M:%S", "iso-8601"],
+        help_text=help_text,
+    )
+
+
 class PAExecutionRecordListReqSerializer(serializers.Serializer):
     """处理套餐执行记录列表筛选参数"""
 
@@ -972,6 +992,10 @@ class PAExecutionRecordListReqSerializer(serializers.Serializer):
         help_text=gettext_lazy("支持多选，逗号分隔（如 failed,running），任一命中即返回"),
     )
     operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
+    to = _execution_record_range_field(
+        gettext_lazy("开始时间范围终点"),
+        gettext_lazy("闭区间终点，格式 YYYY-MM-DD HH:MM:SS。筛选 start_time <= to"),
+    )
     order_by = serializers.CharField(
         label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
     )
@@ -979,6 +1003,20 @@ class PAExecutionRecordListReqSerializer(serializers.Serializer):
     page_size = serializers.IntegerField(
         label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
     )
+
+    def validate(self, attrs):
+        time_from = attrs.get("from")
+        time_to = attrs.get("to")
+        if time_from is not None and time_to is not None and time_from > time_to:
+            raise serializers.ValidationError(gettext("from 不能晚于 to"))
+        return attrs
+
+
+# from 是 Python 关键字，不能写成类属性，对外参数名仍然是 from。
+PAExecutionRecordListReqSerializer._declared_fields["from"] = _execution_record_range_field(
+    gettext_lazy("开始时间范围起点"),
+    gettext_lazy("闭区间起点，格式 YYYY-MM-DD HH:MM:SS。筛选 start_time >= from；与 to 都不传时套餐列表默认近 30 天"),
+)
 
 
 class PAExecutionRecordDetailReqSerializer(serializers.Serializer):
