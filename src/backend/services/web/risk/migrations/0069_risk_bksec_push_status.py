@@ -15,12 +15,14 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
-        ("risk", "0067_ticketnode_duration"),
+        ("risk", "0068_alter_processapplication_approve_service_id_and_more"),
     ]
 
     operations = [
@@ -28,7 +30,11 @@ class Migration(migrations.Migration):
             model_name="risk",
             name="bksec_push_status",
             field=models.CharField(
-                choices=[("not_pushed", "未推送"), ("success", "推送成功"), ("failed", "推送失败")],
+                choices=[
+                    ("not_pushed", "未推送"),
+                    ("success", "推送成功"),
+                    ("failed", "推送失败"),
+                ],
                 db_index=True,
                 default="not_pushed",
                 help_text="BKSEC 推送状态：未推送 / 推送成功 / 推送失败",
