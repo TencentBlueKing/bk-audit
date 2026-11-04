@@ -14,6 +14,10 @@ export interface ExecutionListQuery {
   keyword?: string;
   sort?: string | string[];
   scene_id?: string;
+  /** 闭区间起点，YYYY-MM-DD HH:mm:ss，筛选 start_time >= from */
+  from?: string;
+  /** 闭区间终点，YYYY-MM-DD HH:mm:ss */
+  to?: string;
 }
 
 const toNumber = (value?: string) => {
@@ -52,6 +56,8 @@ export const toExecutionListQuery = (params: ExecutionListQuery = {}) => {
   if (params.status) query.result = params.status;
   if (params.executor) query.operator = params.executor;
   if (params.keyword) query.keyword = params.keyword;
+  if (params.from) query.from = params.from;
+  if (params.to) query.to = params.to;
   const orderBy = mapOrderBy(params.sort);
   if (orderBy) query.order_by = orderBy;
   return query;
