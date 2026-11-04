@@ -319,6 +319,7 @@ INIT_PASSWORD_ENCODING_CIPHERTEXT = "ciphertext"
 
 # 初始化配置的默认实例键：对应 Chart 配置数组的第一个元素
 _INIT_DEFAULT_INSTANCE_KEY = "default"
+_INIT_INIT_INSTANCE_KEY = "init"
 
 
 def _load_env_init_config(key: str) -> Optional[list]:
@@ -341,8 +342,8 @@ def _load_env_init_config(key: str) -> Optional[list]:
 
 
 def _parse_init_instance_key(instance_key: str) -> Optional[tuple]:
-    """初始化凭据的实例键解析：default -> (0, None)；default__<cluster> -> (None, cluster)。"""
-    if instance_key == _INIT_DEFAULT_INSTANCE_KEY:
+    """初始化凭据的实例键解析：(default, init) -> (0, None)；default__<cluster> -> (None, cluster)。"""
+    if instance_key in (_INIT_DEFAULT_INSTANCE_KEY, _INIT_INIT_INSTANCE_KEY):
         return 0, None
     prefix = "%s__" % _INIT_DEFAULT_INSTANCE_KEY
     if instance_key.startswith(prefix):
