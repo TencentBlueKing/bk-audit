@@ -526,7 +526,7 @@ class TestGetPAExecutionRecordDetail:
         risk = self._prepare()
         pa_constants = [
             {"key": "risk_id", "name": "风险ID", "value": "R-D"},
-            {"key": "operator", "name": "初始责任人", "value": ["frodomei"]},
+            {"key": "operator", "name": "初始责任人", "value": ["张三"]},
         ]
         node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1, pa_constants=pa_constants)
         resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
