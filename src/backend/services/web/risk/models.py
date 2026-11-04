@@ -47,6 +47,7 @@ from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     AnalyseReportStatus,
     AnalyseReportType,
+    BkSecPushStatus,
     EventMappingFields,
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
@@ -266,6 +267,21 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         blank=True,
         help_text=gettext_lazy("关注人通知组完整信息快照，包含组ID、名称、成员、通知方式、描述"),
     )
+    bksec_push_status = models.CharField(
+        gettext_lazy("BKSEC Push Status"),
+        max_length=32,
+        choices=BkSecPushStatus.choices,
+        default=BkSecPushStatus.NOT_PUSHED,
+        db_index=True,
+        help_text=gettext_lazy("BKSEC 推送状态：未推送 / 推送成功 / 推送失败"),
+    )
+    bksec_push_event_id = models.CharField(
+        gettext_lazy("BKSEC Push Event ID"),
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("BKSEC 推送返回的事件 ID（WeSec 侧 event_id，非工单号），用于排查"),
+    )
 
     def can_auto_generate_report(self) -> bool:
         """
@@ -389,7 +405,7 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
     def last_history(self) -> Union["TicketNode", None]:
         from services.web.risk.handlers.ticket import MisReport, ReOpenMisReport
 
-        nodes = TicketNode.objects.filter(risk_id=self.risk_id).order_by("-timestamp")
+        nodes = TicketNode.objects.filter(risk_id=self.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
             if node.action not in [MisReport.__name__, ReOpenMisReport.__name__]:
                 return node
@@ -551,6 +567,9 @@ class ProcessApplication(SoftDeleteModel):
     approve_config = models.JSONField(gettext_lazy("Approve Config"), null=True, blank=True)
     description = models.TextField(gettext_lazy("Description"), null=True, blank=True)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
+    is_builtin = models.BooleanField(
+        gettext_lazy("Is Builtin"), default=False, help_text=gettext_lazy("系统内置套餐（如 BKSEC 发单），请勿删除或停用")
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Process Application")
@@ -574,6 +593,13 @@ class RiskRule(SoftDeleteModel):
     auto_close_risk = models.BooleanField(gettext_lazy("Auto Close Risk"), default=True)
     priority_index = models.IntegerField(gettext_lazy("Priority Index"), default=0)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
+    auto_strategy_id = models.BigIntegerField(
+        gettext_lazy("Auto Created By Strategy"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("策略 BKSEC 发单自动创建时记录来源策略 ID，非空表示系统自动规则"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Risk Rule")
@@ -664,6 +690,14 @@ class TicketNode(models.Model):
         choices=TicketNodeStatus.choices,
         default=TicketNodeStatus.RUNNING,
         db_index=True,
+    )
+    is_test = models.BooleanField(gettext_lazy("Is Test"), default=False, db_index=True)
+    duration = models.IntegerField(
+        gettext_lazy("Duration"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("处理耗时（秒），用于执行记录排序；未结束/缺失为 null"),
     )
 
     class Meta:

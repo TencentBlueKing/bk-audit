@@ -176,6 +176,11 @@ class CreateEvent(EventMeta):
             else:
                 continue
 
+            # 映射取不到值（source_field 在 event_data 中不存在）时保留调用方传入的字段，
+            # 避免 str(None) 写入 "None" 覆盖有效值（责任人、事件来源等）
+            if mapped_value is None:
+                continue
+
             if field_name == EventMappingFields.EVENT_TYPE.field_name:
                 event[field_name] = (
                     mapped_value

@@ -5,6 +5,13 @@ from django.core.exceptions import ImproperlyConfigured
 
 from config import default as platform_settings
 
+
+def _rate_limit_or_default(env_name: str, default: str) -> str:
+    """空环境变量保持该限流自己的默认值，不关闭，也不继承其它限流配置。"""
+    value = (os.getenv(env_name) or "").strip()
+    return value or default
+
+
 INSTALLED_APPS = (
     "services.web.analyze",
     "services.web.databus",
@@ -31,7 +38,13 @@ RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", 60 * 5))
 # 渲染任务限流，格式: "次数/时间单位"，如 "10/m", "100/m", "1000/h"
 RENDER_TASK_RATE_LIMIT = os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "5/m")
 # 单风险报告自动渲染量较大，继续使用历史任务级限流，避免迁移影响线上吞吐。
-RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT = os.getenv("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m")
+# 环境变量为空时保持 5/m，避免产线配空后把已有限流关掉。
+RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT = _rate_limit_or_default("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m")
+# AI 标题 / 多风险分析：独立环境变量，便于分别调配额
+AI_TITLE_TASK_RATE_LIMIT = os.getenv("BKAPP_AI_TITLE_TASK_RATE_LIMIT", "5/m")
+RISK_MULTI_ANALYSE_TASK_RATE_LIMIT = os.getenv("BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT", "5/m")
+# 单风险报告 AI 客户端全局限流，与任务级限流分开，不回落到 RENDER_TASK_RATE_LIMIT。
+AI_AUDIT_REPORT_RATE_LIMIT = _rate_limit_or_default("BKAPP_AI_AUDIT_REPORT_RATE_LIMIT", "5/m")
 # 渲染任务重试延迟时间（秒），默认 10 秒
 RENDER_RETRY_DELAY = int(os.getenv("BKAPP_RENDER_RETRY_DELAY", 10))
 # AI Provider 缓存超时时间（秒），默认 2 小时

@@ -17,6 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 
+from client_throttler import Throttler, ThrottlerConfig
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_plugins_ai_agent.default import AIAgentBase
@@ -46,6 +48,16 @@ class ChatCompletion(BaseChatCompletion):
     agent_code = AIAgentCode.AUDIT_REPORT
     # 默认保留单风险渲染的历史任务级限流；普通 AI 任务可在单次请求中显式启用全局限流。
     enable_agent_rate_limit = False
+
+    def perform_request(self, validated_request_data):
+        """全局限流后再请求单风险报告智能体，避免把插件库连接打满。"""
+        return Throttler(
+            config=ThrottlerConfig(
+                func=super().perform_request,
+                key=f"{self.__module__}.{self.__class__.__name__}",
+                rate=settings.AI_AUDIT_REPORT_RATE_LIMIT,
+            )
+        )(validated_request_data)
 
     def postprocess_agui_final_content(self, content: str) -> tuple[str, str]:
         """审计报告优先返回完整 assistant 正文中的 <final_answer>。"""

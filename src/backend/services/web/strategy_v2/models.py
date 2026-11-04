@@ -129,6 +129,12 @@ class Strategy(SoftDeleteModel):
         blank=True,
         help_text=gettext_lazy("报告模板配置（template + ai_variables）"),
     )
+    bksec_config = models.JSONField(
+        gettext_lazy("BKSEC 安全工单配置"),
+        default=dict,
+        blank=True,
+        help_text=gettext_lazy("BKSEC 发单配置（enabled / risk_type_id / field_mappings）"),
+    )
     rule_order = models.JSONField(
         gettext_lazy("Rule Order"),
         default=list,

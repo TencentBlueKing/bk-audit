@@ -204,6 +204,8 @@ class StrategyTest(TestCase):
                     "risk_hazard": "",
                     "risk_guidance": "",
                     "risk_title": "risk title",
+                    # 场景策略：处理人必填（全局策略由分派规则维护）
+                    "processor": [self.notice_group.group_id],
                 }
             ],
             # 满足规则策略对基础字段映射的校验要求
@@ -475,6 +477,54 @@ class StrategyTest(TestCase):
         self.assertIn(auto_strategy.strategy_id, strategy_ids)
         self.assertIn(manual_strategy.strategy_id, strategy_ids)
         self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
+
+    def test_list_strategy_filter_by_bksec_enabled(self):
+        """测试策略列表按 bksec_enabled 筛选（支持 true,false 多选；false 含未配置）"""
+        enabled_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="bksec_enabled_strategy",
+            configs={},
+            bksec_config={"enabled": True},
+        )
+        disabled_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="bksec_disabled_strategy",
+            configs={},
+            bksec_config={"enabled": False},
+        )
+        # 未配置（bksec_config 无 enabled 键）等价于未启用
+        unset_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="bksec_unset_strategy",
+            configs={},
+            bksec_config={},
+        )
+        for strategy in (enabled_strategy, disabled_strategy, unset_strategy):
+            self._bind_strategy_to_scene(strategy.strategy_id)
+
+        result = self._list_strategy(bksec_enabled="true")
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertIn(enabled_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(unset_strategy.strategy_id, strategy_ids)
+
+        result = self._list_strategy(bksec_enabled="false")
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertNotIn(enabled_strategy.strategy_id, strategy_ids)
+        self.assertIn(disabled_strategy.strategy_id, strategy_ids)
+        self.assertIn(unset_strategy.strategy_id, strategy_ids)
+
+        # 多选：任一命中即返回
+        result = self._list_strategy(bksec_enabled="true,false")
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertIn(enabled_strategy.strategy_id, strategy_ids)
+        self.assertIn(disabled_strategy.strategy_id, strategy_ids)
+        self.assertIn(unset_strategy.strategy_id, strategy_ids)
+
+    def test_list_strategy_filter_by_bksec_enabled_invalid(self):
+        """非法取值直接报错，不静默忽略"""
+        with self.assertRaises(ValidateException):
+            self._list_strategy(bksec_enabled="true,abc")
 
     def test_create_rule_strategy(self) -> None:
         """Create Rule Strategy with risk_field_config"""

@@ -405,6 +405,36 @@ class TicketNodeStatus(TextChoices):
     FINISHED = "finished", gettext_lazy("已完成")
 
 
+class BkSecPushStatus(TextChoices):
+    """
+    BKSEC 推送状态（风险单维度，只记当前状态）
+
+    SUCCESS 由发单插件在 BKSEC 推单成功（响应 2xx）后主动上报置位；
+    FAILED 在套餐任务终态失败时置位（推单重试耗尽 → 节点失败 → 任务失败）。
+
+    SOPS 侧无法推断该状态：发单发生在长驻的「回调 / 轮询」节点内部，节点始终 RUNNING，
+    任务状态只能证明「套餐跑了」，不能证明「工单发了」。
+    """
+
+    NOT_PUSHED = "not_pushed", gettext_lazy("未推送")
+    SUCCESS = "success", gettext_lazy("推送成功")
+    FAILED = "failed", gettext_lazy("推送失败")
+
+
+# 执行记录 keyword 全量搜索：枚举字段「内部值 → 前端中文展示词」映射（展示词与 docs/bksec_frontend_api.md 5.1 一致）
+# 命中规则：keyword 等于内部值（大小写不敏感），或是展示词的子串（子串命中要求 keyword 长度 >= 2，防单字噪音）
+PA_TRIGGER_KEYWORD_LABELS = {
+    "auto": "自动",
+    "manual": "手动",
+    "test": "测试",
+}
+PA_RESULT_KEYWORD_LABELS = {
+    "success": "执行成功",
+    "failed": "执行失败",
+    "running": "执行中",
+}
+
+
 class RiskRuleOperator(TextChoices):
     """
     风险规则匹配符
@@ -865,17 +895,39 @@ class ContentQualityIssueType(TextChoices):
     EVENT_QUERY_FAILED = "event_query_failed", gettext_lazy("事件查询失败")
 
 
+# 这些质量问题再渲染一次仍可能得到完整正文。
+# 已写入正文的失败文本不在此列，重试只会再打一次下游。
+RETRYABLE_CONTENT_QUALITY_ISSUE_TYPES = frozenset(
+    {
+        ContentQualityIssueType.EMPTY.value,
+        ContentQualityIssueType.TOO_SHORT.value,
+        ContentQualityIssueType.AI_THINKING.value,
+    }
+)
+
+
 class ContentQualityError(Exception):
     """报告内容质量异常
 
-    当质量检测发现问题时抛出，用于触发 Celery 任务重试。
-    issues 元素类型为 services.web.risk.report.quality.ContentQualityIssue
+    issues 元素类型为 services.web.risk.report.quality.ContentQualityIssue。
+    retryable 为 True 时由渲染任务重试；失败文本已经写进正文时为 False，任务直接终态。
     """
 
     def __init__(self, issues: list):
         self.issues = issues
         summary = "; ".join(f"{i.issue_type}(x{i.count}): {i.detail}" for i in issues)
         super().__init__(f"报告内容质量异常: {summary}")
+
+    @property
+    def retryable(self) -> bool:
+        if not self.issues:
+            return False
+        return all(self._issue_type_value(issue) in RETRYABLE_CONTENT_QUALITY_ISSUE_TYPES for issue in self.issues)
+
+    @staticmethod
+    def _issue_type_value(issue) -> str:
+        issue_type = getattr(issue, "issue_type", "")
+        return str(getattr(issue_type, "value", issue_type))
 
 
 @register_choices("analyse_report_type")

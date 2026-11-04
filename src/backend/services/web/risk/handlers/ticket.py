@@ -36,16 +36,18 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
-from apps.sops.constants import SOPSConstantSourceType, SOPSTaskStatus
+from apps.sops.constants import SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import (
     DEFAULT_RISK_OPERATE_NOTICE_CONFIG,
     RISK_OPERATE_NOTICE_CONFIG_KEY,
     SECURITY_PERSON_KEY,
     ApproveTicketFields,
+    BkSecPushStatus,
     RiskDisplayStatus,
     RiskLabel,
     RiskStatus,
+    TicketNodeStatus,
 )
 from services.web.risk.exceptions import AutoProcessParamsError
 from services.web.risk.handlers.risk import RiskHandler
@@ -58,20 +60,16 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.parser import RiskNoticeParser
+from services.web.risk.utils import (
+    build_pa_constants,
+    calc_task_duration,
+    is_user_input_constant,
+)
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
-
-def _is_user_input_constant(constant: dict) -> bool:
-    """创建任务时需要覆盖的用户入参。
-
-    标准运维里 show 才是执行参数。custom 与从节点输入勾选出来的 component_inputs
-    都取创建任务时传入的值；component_outputs 绑定节点输出，隐藏变量保留模板绑定。
-    """
-
-    return (
-        constant.get("show_type") == "show" and constant.get("source_type") in SOPSConstantSourceType.user_input_types()
-    )
+# 流转历史去重窗口（秒）：窗口期内内容完全相同的重复写入视为同一次流转，不再重复落库
+HISTORY_DEDUP_WINDOW_SEC = 5
 
 
 def _is_condition_hide(constant: dict) -> bool:
@@ -122,7 +120,7 @@ def validate_auto_process_params(pa_id: int, pa_params: Any) -> None:
     pa_params = pa_params if isinstance(pa_params, dict) else {}
     missing_keys = []
     for c in template_info["pipeline_tree"]["constants"].values():
-        if not _is_user_input_constant(c):
+        if not is_user_input_constant(c):
             continue
         field = pa_params.get(c["key"])
         if not isinstance(field, dict):
@@ -150,6 +148,8 @@ class RiskFlowBaseHandler:
     name = gettext_lazy("默认流转")
     allowed_status = []
     enable_notice = True
+    # 是否允许重复写入流转历史：纯留痕类动作（如风险处理经验）需要保留每一次记录
+    allow_duplicate_history = False
 
     # 默认映射：status → display_status
     # 子类可覆盖以实现特殊映射（如 NewRisk 将 AWAIT_PROCESS 映射为"待处理"）
@@ -268,7 +268,7 @@ class RiskFlowBaseHandler:
         需要处理审批失败和执行失败两种情况
         """
 
-        nodes = TicketNode.objects.filter(risk_id=self.risk.risk_id).order_by("-timestamp")
+        nodes = TicketNode.objects.filter(risk_id=self.risk.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
             if node.action == CustomProcess.__name__ and node.extra.get("custom_action") == AutoProcess.__name__:
                 return [node.operator]
@@ -350,17 +350,50 @@ class RiskFlowBaseHandler:
         记录流转历史
         """
 
-        TicketNode.objects.create(
-            risk_id=self.risk.risk_id,
-            operator=self.operator,
-            current_operator=self.risk.current_operator,
-            action=self.__class__.__name__,
-            timestamp=datetime.datetime.now().timestamp(),
-            time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
-            process_result=process_result,
-            extra=self.build_history(process_result=process_result, *args, **kwargs),
-        )
+        self._create_history_node(process_result, self.build_history(process_result=process_result, *args, **kwargs))
         self.risk.save(update_fields=["last_operate_time"])
+
+    def _create_history_node(self, process_result: dict, extra: dict, **fields) -> Optional[TicketNode]:
+        """写入一条流转历史节点
+
+        幂等兜底：同一次流转被重复写入会产出两条内容完全相同的节点（执行记录/流转历史出现重复数据），
+        故在写入层判断——同一风险单、同一动作在窗口期内已存在 process_result 与 extra 均相同的节点时跳过。
+        所有写入流转历史的地方都应走这里，避免直接 TicketNode.objects.create；
+        fields 用于补充额外落库字段（如 itsm_version）。
+        """
+
+        if not self.allow_duplicate_history and self._has_same_history(process_result, extra):
+            logger.warning(
+                f"[RecordHistory] Skip duplicated node, risk_id={self.risk.risk_id}, action={self.__class__.__name__}"
+            )
+            return None
+        create_params = {
+            "risk_id": self.risk.risk_id,
+            "operator": self.operator,
+            "current_operator": self.risk.current_operator,
+            "action": self.__class__.__name__,
+            "timestamp": datetime.datetime.now().timestamp(),
+            "time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+            "process_result": process_result,
+            "duration": process_result.get("duration"),
+            "extra": extra,
+        }
+        create_params.update(fields)
+        return TicketNode.objects.create(**create_params)
+
+    def _has_same_history(self, process_result: dict, extra: dict) -> bool:
+        """窗口期内是否已存在内容完全相同的流转节点"""
+
+        latest = (
+            TicketNode.objects.filter(risk_id=self.risk.risk_id, action=self.__class__.__name__)
+            .order_by("-timestamp")
+            .first()
+        )
+        if latest is None:
+            return False
+        if datetime.datetime.now().timestamp() - (latest.timestamp or 0) > HISTORY_DEDUP_WINDOW_SEC:
+            return False
+        return (latest.process_result or {}) == (process_result or {}) and (latest.extra or {}) == (extra or {})
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         """
@@ -468,8 +501,9 @@ class NewRisk(RiskFlowBaseHandler):
         if not getattr(self.risk, "dispatch_rule_id", None):
             self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
-        # 只有有责任人时走规则
-        if self.risk.operator:
+        # 只有有责任人时走规则；系统自动规则例外（如策略 BKSEC 发单）：
+        # 自动派单不依赖责任人，无责任人也走规则，发单责任人兜底为安全接口人
+        if self.risk.operator or self._has_enabled_auto_rule():
             # 初始化处理规则
             self.match_risk_rule()
             # 重新初始化
@@ -482,6 +516,13 @@ class NewRisk(RiskFlowBaseHandler):
         # 有处理套餐则当前处理人为空，否则为安全责任人
         self.risk.current_operator = [] if self.process_application and self.risk.operator else self.load_processor()
         self.risk.save(update_fields=["current_operator"])
+
+    def _has_enabled_auto_rule(self) -> bool:
+        """策略是否存在启用的系统自动规则（auto_strategy_id 非空）：自动派单不依赖责任人，无责任人也走规则匹配。
+
+        按最新版本判定——启停只作用于最新版本，历史版本的 is_enabled 不代表当前状态。
+        """
+        return RiskRule.load_latest_rules().filter(auto_strategy_id=self.risk.strategy_id, is_enabled=True).exists()
 
     def match_risk_rule(self) -> None:
         RiskRuleHandler(risk_id=self.risk.risk_id).bind_rule()
@@ -515,7 +556,37 @@ class CloseRisk(RiskFlowBaseHandler):
         return
 
     def process(self, description: str, *args, **kwargs) -> dict:
+        # 关单即终止：风险单不再跟进时撤销仍在执行的自动派单任务。
+        # BKSEC 一直不回拨时回调/轮询节点会长期挂起、任务永不结束，关单是唯一的兜底终止时机。
+        self._revoke_running_auto_process()
         return {}
+
+    def _revoke_running_auto_process(self) -> None:
+        """
+        撤销本风险单仍在执行的自动派单任务
+
+        复用强制终止能力：它内部先查 SOPS 任务状态，已结束的只回写节点状态、不会误撤销，
+        因此"任务成功后自动关单"这条路径走过来也只是顺带把节点状态同步为已结束。
+
+        撤销失败只记日志：关单不应被撤销失败阻断。
+        """
+
+        nodes = TicketNode.objects.filter(
+            risk_id=self.risk.risk_id,
+            action=AutoProcess.__name__,
+            status=TicketNodeStatus.RUNNING,
+            is_test=False,
+        )
+        for node in nodes:
+            try:
+                resource.risk.force_revoke_auto_process(risk_id=self.risk.risk_id, node_id=node.id)
+            except Exception as err:  # NOCC:broad-except(撤销失败不得阻断关单)
+                logger.exception(
+                    "[CloseRisk] revoke auto process failed, risk_id=%s node_id=%s err=%s",
+                    self.risk.risk_id,
+                    node.id,
+                    err,
+                )
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         self.risk.current_operator = []
@@ -669,7 +740,10 @@ class AutoProcess(RiskFlowBaseHandler):
         task_id = self.load_task_id()
         if task_id:
             try:
-                return {"status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)}
+                process_result = {
+                    "status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                }
+                return self._attach_failure_hint(process_result, task_id=task_id)
             except APIRequestError as err:
                 # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
                 err_data = getattr(err, "data", {}) or {}
@@ -678,12 +752,16 @@ class AutoProcess(RiskFlowBaseHandler):
                         f"[AutoProcess] get_task_status business error, "
                         f"risk_id={self.risk.risk_id}, task_id={task_id}, err={err}"
                     )
-                    return {"status": {"state": SOPSTaskStatus.FAILED}}
+                    return self._attach_failure_hint({"status": {"state": SOPSTaskStatus.FAILED}})
                 # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
                 raise
-        # 优先使用参数
-        pa_config = pa_config
-        # 或者使用上个节点(审批节点)配置
+
+        # 触发方式快照：人工选择(显式传参) / 审批通过(上个节点为审批) / 规则自动匹配
+        last_node = self.risk.last_history
+        trigger = (
+            "manual" if pa_config else ("approve" if last_node and last_node.action == ForApprove.__name__ else "auto")
+        )
+        # pa_config 优先用显式传参；未传时取上个节点（审批节点）的配置
         if not pa_config and self.risk.last_history.action == ForApprove.__name__:
             pa_config = self.risk.last_history.extra.get("pa_config")
         # 配置有处理套餐则重新初始化处理套餐
@@ -698,11 +776,19 @@ class AutoProcess(RiskFlowBaseHandler):
         pa_params = pa_params if pa_params is not None else (self.rule.pa_params if self.rule else {})
         if not isinstance(pa_params, dict):
             pa_params = {}
+        # BKSEC 自动规则：pa_params 存的是模板，派单时按当前风险渲染成终值。
+        # 渲染上下文只组装一次（load_risk_events 为外部查询，不可按字段重复触发）
+        is_bksec_auto_rule = bool(getattr(self.rule, "auto_strategy_id", None))
+        bksec_context = None
+        if is_bksec_auto_rule:
+            from services.web.risk.bksec.render import build_render_context
+
+            bksec_context = build_render_context(risk=self.risk)
         constants = {}
         missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
             # 只覆盖用户入参。节点输出和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
-            if not _is_user_input_constant(c):
+            if not is_user_input_constant(c):
                 continue
             field = pa_params.get(c["key"])
             if not isinstance(field, dict):
@@ -714,12 +800,22 @@ class AutoProcess(RiskFlowBaseHandler):
             # 前端保证字段映射和直接输入互斥；取值后统一在调用边界适配 BK-SOPS 协议。
             field_name = field.get("field")
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
+            # 责任人为空时兜底安全接口人。
+            if field_name == "operator" and not value:
+                value = [person for person in (self.load_security_person() or []) if person]
+            # BKSEC 自动规则：pa_params 存的是模板，派单时按当前风险加工成终值
+            if is_bksec_auto_rule:
+                from services.web.risk.bksec.contract import render_bksec_constant
+
+                value = render_bksec_constant(c["key"], value, bksec_context, self.risk)
             value = _normalize_sops_constant_value(c, value)
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
         if missing_keys:
             raise AutoProcessParamsError(keys=",".join(missing_keys))
+        # 入参快照（key/name/value）：执行记录详情据此展示"当时真正发出去的套餐入参"
+        pa_constants = build_pa_constants(template_info["pipeline_tree"]["constants"], constants)
         params = {
             "name": f"{self.process_application.name}_{int(datetime.datetime.now().timestamp() * 1000)}",
             "constants": constants,
@@ -729,10 +825,29 @@ class AutoProcess(RiskFlowBaseHandler):
         # 没有任务创建任务
         result = api.bk_sops.create_task(**params)
         api.bk_sops.start_task(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        return {
+        process_result = {
             "task": result,
             "status": api.bk_sops.get_task_status(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID),
+            # 套餐/任务快照：执行记录据此展示（历史节点无快照时由记录接口走规则链路兜底）
+            "pa_id": self.process_application.id,
+            "pa_name": self.process_application.name,
+            "task_name": params["name"],
+            "trigger": trigger,
+            # 套餐入参快照：后续状态刷新是原地 update 合并，该键不会被冲掉
+            "pa_constants": pa_constants,
         }
+        return self._attach_failure_hint(process_result, task_id=str(result.get("task_id") or ""))
+
+    def _attach_failure_hint(self, process_result: dict, task_id: str = "") -> dict:
+        """写入点落失败提示（非失败状态原样返回）"""
+        status = process_result.get("status") or {}
+        if status.get("state") in SOPSTaskStatus.get_failed_status():
+            from services.web.risk.utils import fill_failure_info
+
+            process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
+        # 冗余存储 duration（秒），用于排序
+        process_result["duration"] = calc_task_duration(status)
+        return process_result
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         auto_close_risk = self.get_auto_close_risk(pa_config=kwargs.get("pa_config"))
@@ -757,9 +872,34 @@ class AutoProcess(RiskFlowBaseHandler):
             self.risk.status = RiskStatus.AWAIT_PROCESS
         else:
             self.risk.status = RiskStatus.AUTO_PROCESS
-        self.risk.save(update_fields=["status"])
+        update_fields = ["status"]
+        # 任务失败即视为推送失败（推单重试耗尽会走到这里）；严格说任务失败也可能来自
+        # 校验/渲染等环节，绝大多数情况就是推单失败，先统一处理，后续可让插件上报细分原因
+        if "status" in process_result and process_result["status"]["state"] in SOPSTaskStatus.get_failed_status():
+            self.risk.bksec_push_status = BkSecPushStatus.FAILED
+            update_fields.append("bksec_push_status")
+        self.risk.save(update_fields=update_fields)
 
     def load_task_id(self) -> str:
+        # 优先复用本风险单正在执行的套餐任务：last_history 会被人工处理/新建等节点顶掉，
+        # 只看它会误判为"没有任务"从而重复建单（执行记录出现两条相同任务）
+        # is_test=False：测试单的执行记录同样记为 AutoProcess 且乐观写入执行中，
+        # 若不排除，发过测试单的风险单会被判定为"已有任务"→ 正式派单根本不建任务，
+        # 且其任务成功后触发自动关单 → 演变成"发个测试单就把风险关了"
+        running_node = (
+            TicketNode.objects.filter(
+                risk_id=self.risk.risk_id,
+                action=AutoProcess.__name__,
+                status=TicketNodeStatus.RUNNING,
+                is_test=False,
+            )
+            .order_by("-timestamp")
+            .first()
+        )
+        if running_node:
+            task_id = str((running_node.process_result or {}).get("task", {}).get("task_id", "") or "")
+            if task_id:
+                return task_id
         return self.risk.last_history.process_result.get("task", {}).get("task_id", "")
 
     def record_history(self, process_result: dict, **kwargs) -> None:
@@ -772,7 +912,10 @@ class AutoProcess(RiskFlowBaseHandler):
             history_status = self.risk.last_history.process_result.get("status") or {}
             if current_status.get("state") != history_status.get("state"):
                 self.risk.last_history.process_result.update(process_result)
-                self.risk.last_history.save(update_fields=["process_result"])
+                # duration 任务耗时写入执行记录
+                if "duration" in process_result:
+                    self.risk.last_history.duration = process_result["duration"]
+                self.risk.last_history.save(update_fields=["process_result", "duration"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         history = {**kwargs}
@@ -947,6 +1090,8 @@ class RiskExperienceRecord(CustomProcess):
 
     name = gettext_lazy("风险处理经验")
     enable_notice = False
+    # 每次保存都是一次独立留痕，不做历史去重
+    allow_duplicate_history = True
 
     def pre_check(self, *args, **kwargs) -> None:
         pass
