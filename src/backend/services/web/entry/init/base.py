@@ -26,6 +26,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
+from apps.itsm.utils import is_itsm_v4_enabled
 from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
@@ -37,7 +38,10 @@ from core.kms import (
     get_secret_json,
 )
 from core.utils.distutils import strtobool
-from services.web.databus.collector.snapshot.system.base import create_iam_data_link
+from services.web.databus.collector.snapshot.system.base import (
+    create_iam_data_link,
+    init_itsm_v4,
+)
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     ClusterMode,
@@ -61,6 +65,7 @@ from services.web.entry.constants import (
     INIT_ES_FISHED_KEY,
     INIT_EVENT_FINISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
+    INIT_ITSM_V4_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
     INIT_SDK_CONFIG_FINISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
@@ -139,6 +144,12 @@ def adapt_auth_password(config: dict) -> None:
 
 class SystemInitHandler:
     def init(self):
+        """
+        执行系统初始化。
+
+        返回 True 表示全部完成；返回 False 表示存在未完成项（如 ITSM V4 迁移），
+        调用方必须据此返回非零退出码，否则 pre_release_hook 的 && 链会把未完成的迁移当作发布成功。
+        """
         print("[Main] Init Start")
         self.pre_init()
         self.init_standard_fields()
@@ -152,7 +163,29 @@ class SystemInitHandler:
         self.init_asset()
         self.init_system_rule_audit()
         self.init_global_meta_config()
+        if not self.init_itsm_v4():
+            return False
         print("[Main] Init Finished")
+        return True
+
+    def init_itsm_v4(self):
+        """返回 True 表示迁移已完成；未完成时返回 False，由 init() 阻断发布"""
+        if not is_itsm_v4_enabled():
+            # 未升级 ITSM V4 的部署环境：不做套餐迁移，也不写完成标记，保留 V3 接口契约
+            print("[InitItsmV4] Disabled by BKAPP_ENABLE_ITSM_V4, Skip")
+            return True
+        if self.pre_check(INIT_ITSM_V4_FINISHED_KEY):
+            print("[InitItsmV4] Already Finished, Skip")
+            return True
+        result = init_itsm_v4()
+        if result:
+            self.post_init(INIT_ITSM_V4_FINISHED_KEY)
+            return True
+        # ITSM V4 未迁移完成时，部分套餐仍保存 V3 id，而新版本审批链路统一按 V4 调用，
+        # 放行发布会导致这批审批直接失败，因此必须把未完成状态传播出去阻断发布。
+        print("[InitItsmV4] Unfinished: 仍有套餐保持 V3 id，下一轮 init_system 会继续迁移")
+        print("[Main] Init Unfinished: ITSM V4 迁移未完成，阻断发布；请排查后重试 init_system")
+        return False
 
     def pre_init(self):
         enable_system_init = strtobool(os.getenv("BKAPP_INIT_SYSTEM", "False"))

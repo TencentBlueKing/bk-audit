@@ -42,6 +42,7 @@ INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY = "init_system_rule_audit_finished_check"
 INIT_SDK_CONFIG_FINISHED_KEY = "init_sdk_config_finished_check"
 INIT_DOC_CONFIG_FINISHED_KEY = "init_doc_config_finished_check"
 INIT_AGENT_CONFIG_FINISHED_KEY = "init_agent_config_finished_check"
+INIT_ITSM_V4_FINISHED_KEY = "init_itsm_v4_finished_check"
 
 DEFAULT_QUERY_STRING_HELP_KEY = "query_string_help"
 DEFAULT_QUERY_STRING_HELP_ENV_KEY = "BKAPP_QUERY_STRING_HELP"

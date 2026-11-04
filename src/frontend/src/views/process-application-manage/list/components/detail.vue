@@ -118,6 +118,17 @@
 
   import RenderInfoItem from './render-info-item.vue';
 
+  // V4 表单字段 key 带 ticket__ 命名空间前缀（如 ticket__title），
+  // 内置字段接口返回裸 key（title），过滤时需去前缀再比对；
+  // 但保存与提单仍使用原始带前缀 key。
+  const stripTicketPrefix = (key: string): string => {
+    const prefix = 'ticket__';
+    if (key.startsWith(prefix)) {
+      return key.slice(prefix.length);
+    }
+    return key.split('__').pop() as string;
+  };
+
   const props = defineProps<Props>();
   const fieldMap = ref<Record<string, string>>({});
   interface Props{
@@ -130,7 +141,7 @@
   const filterDetailDataFields = computed(() => {
     if (!detailData.value) return [] as ServiceField[];
     const { fields } = detailData.value;
-    const res = fields.filter(item => !fieldMap.value[item.key]);
+    const res = fields.filter(item => !fieldMap.value[stripTicketPrefix(item.key)]);
     return res;
   });
 
