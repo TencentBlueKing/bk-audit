@@ -712,6 +712,16 @@ class TestBkSecResources:
                 {"bksec_config": config.model_dump(), "risk_id": risk.risk_id}
             )
         assert result["has_sample_risk"] is True
+        assert "risk" not in result
+        assert "risk_context_keys" not in result
+        assert result["ticket_header"] == {
+            "ticket_id": "",
+            "title": "",
+            "submit_time": "",
+            "deadline": "",
+            "status": "",
+            "current_operator_org": "",
+        }
         assert result["ticket"]["fields"]["operator"] == "admin"
         assert risk.risk_id in result["ticket"]["fields"]["target"]
 
