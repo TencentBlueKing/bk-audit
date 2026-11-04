@@ -23,6 +23,7 @@ export interface PreviewField {
 }
 
 export interface LocalPreviewInput {
+  fieldValues: Record<string, string>;
   fields: PreviewField[];
   riskTypeId?: string | null;
   riskTypeName?: string;
@@ -51,6 +52,14 @@ const dash = (value: unknown) => {
   return text || '--';
 };
 
+const variableToken = /\{\{\s*[^}]+\s*\}\}/g;
+
+/** 新建没有风险数据，变量替换为空；去掉变量后整段为空则显示 --。 */
+export const renderLocalField = (template?: string) => {
+  if (!template || !String(template).trim()) return '--';
+  return dash(String(template).replace(variableToken, ''));
+};
+
 const levelLabel = (value: unknown) => {
   const text = String(value || '').trim();
   return LEVEL_LABEL[text] || text || '--';
@@ -73,8 +82,9 @@ const extensionRows = (
     value: dash(resolve(field.id)),
   }));
 
-/** 新建没有风险数据，只展示已选风险类型，其余字段为空。 */
+/** 新建没有风险数据。固定信息为空，已填工单字段按原文展示，变量替换为空。 */
 export const buildLocalPreview = (input: LocalPreviewInput): BksecTicketPreviewRow[] => {
+  const values = input.fieldValues || {};
   const rows: BksecTicketPreviewRow[] = [
     { key: 'ticket_id', label: '工单ID', value: '--' },
     { key: 'title', label: '工单标题', value: '--' },
@@ -87,12 +97,12 @@ export const buildLocalPreview = (input: LocalPreviewInput): BksecTicketPreviewR
     { key: 'event_time', label: '风险发现时间', value: '--' },
     { key: 'channel', label: '风险发现途径', value: '--' },
     { key: 'current_operator', label: '当前责任人', value: '--' },
-    { key: 'operator', label: '初始责任人', value: '--' },
+    { key: 'operator', label: '初始责任人', value: renderLocalField(values.operator) },
     { key: 'org', label: '当前责任人所属组织', value: '--' },
     { key: 'description', label: '风险描述', value: '--', kind: 'multiline' },
     { key: 'guidance', label: '处理指引', value: '--', kind: 'multiline' },
   ];
-  rows.push(...extensionRows(input.fields || [], () => '--'));
+  rows.push(...extensionRows(input.fields || [], fieldId => renderLocalField(values[fieldId])));
   return rows;
 };
 
