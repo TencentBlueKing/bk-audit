@@ -1048,9 +1048,7 @@ class PreviewTicketResponseSerializer(serializers.Serializer):
     risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
     has_sample_risk = serializers.BooleanField(label=gettext_lazy("是否有样例风险单"))
     ticket = serializers.JSONField(label=gettext_lazy("工单报文"))
-    ticket_header = serializers.JSONField(label=gettext_lazy("工单头"), help_text=gettext_lazy("BKSEC 侧生成字段的占位"))
-    risk = serializers.JSONField(label=gettext_lazy("风险变量"))
-    risk_context_keys = serializers.JSONField(label=gettext_lazy("可用变量清单"))
+    ticket_header = serializers.JSONField(label=gettext_lazy("工单头"), help_text=gettext_lazy("发单前为空，空值由前端展示"))
     warnings = serializers.JSONField(label=gettext_lazy("告警"))
 
 

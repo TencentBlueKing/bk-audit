@@ -39,7 +39,6 @@ from services.web.risk.bksec.constants import (
     BKSEC_RISK_TYPES_CACHE_KEY,
 )
 from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
-from services.web.risk.bksec.render import build_risk_data
 from services.web.risk.constants import BkSecPushStatus
 from services.web.risk.models import ProcessApplication, Risk, TicketNode
 from services.web.strategy_v2.models import Strategy
@@ -208,19 +207,16 @@ def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
         payload = build_event_payload(config, risk=risk)
     except Exception as err:  # NOCC:broad-except(预览即时报错，区别于正式发送的失败重试链路)
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
-    risk_data = build_risk_data(risk)
     warnings = []
     if risk is not None and not (payload.get("fields", {}).get(BKSEC_FIELD_INITIAL_OWNER) or "").strip():
         warnings.append(gettext_lazy("初始责任人为空（该风险单无责任人且未配置安全接口人兜底），工单可能被 BKSEC 拒收，请到系统配置设置安全接口人或调整映射"))
-    # 工单头（BKSEC 侧生成，发单前不存在）：后端 mock 占位，仅用于前端预览工单外观，
-    # 非审计中心上报内容、不进入真实报文。发单后由 BKSEC 生成真实值。
-    risk_id = getattr(risk, "risk_id", "") or ""
+    # 工单头由 BKSEC 在发单后生成，预览阶段没有真实值。字段留空，空值展示由前端处理。
     ticket_header = {
-        "ticket_id": risk_id,
-        "title": "{}（安全工单）".format(risk_data.get("title", "")),
-        "submit_time": risk_data.get("event_time", ""),
-        "deadline": risk_data.get("event_time", ""),
-        "status": "待受理",
+        "ticket_id": "",
+        "title": "",
+        "submit_time": "",
+        "deadline": "",
+        "status": "",
         "current_operator_org": "",
     }
     return {
@@ -229,8 +225,6 @@ def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
         "has_sample_risk": risk is not None,
         "ticket": payload,
         "ticket_header": ticket_header,
-        "risk": risk_data,
-        "risk_context_keys": list(risk_data.keys()),
         "warnings": warnings,
     }
 
