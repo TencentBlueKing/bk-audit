@@ -95,6 +95,7 @@
           @clear-search="handleClearSearch"
           @delete="handleDelete"
           @edit="handleEdit"
+          @filter-change="handleTableFilterChange"
           @preview="handlePreview"
           @request-success="handleRequestSuccess"
           @toggle-status="handleToggleStatus" />
@@ -118,7 +119,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+  import { nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -203,11 +204,12 @@
       name: '工具类型',
       id: 'tool_type',
       placeholder: '请选择工具类型',
-      multiple: false,
+      multiple: true,
       children: [
-        { id: 'data_search', name: '数据查询' },
-        { id: 'api', name: 'API' },
-        { id: 'bk_vision', name: 'BK-Vision' },
+        { id: 'data_search', name: t('数据查询') },
+        { id: 'api', name: t('API接口') },
+        { id: 'bk_vision', name: t('BKVision图表') },
+        { id: 'smart_page', name: t('智能用户画像') },
       ],
     },
     {
@@ -420,6 +422,28 @@
     handleSearch(searchValue.value);
   };
 
+  // 表头「工具类型」筛选回写到搜索框，避免后续搜索把表头筛选冲掉
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    if (!Object.prototype.hasOwnProperty.call(filters, 'tool_type')) return;
+    const rawValue = filters.tool_type;
+    const selectedTypes: string[] = (Array.isArray(rawValue) ? rawValue : [rawValue])
+      .filter(item => item !== undefined && item !== null && item !== '')
+      .map(item => String(item));
+    const toolTypeConfig = searchSelectData.value.find(item => item.id === 'tool_type');
+    const nextSearchValue = searchValue.value.filter(item => item.id !== 'tool_type');
+    if (selectedTypes.length && toolTypeConfig) {
+      nextSearchValue.push({
+        id: 'tool_type',
+        name: toolTypeConfig.name,
+        values: selectedTypes.map(id => ({
+          id,
+          name: toolTypeConfig.children?.find(child => child.id === id)?.name || id,
+        })),
+      });
+    }
+    searchValue.value = nextSearchValue;
+  };
+
   const handleClearSearch = () => {
     searchValue.value = [];
     statusFilter.value = 'all';
@@ -566,7 +590,10 @@
     removePageParams(LIST_PAGE_KEY);
     clearSearchState();
     if (hasKey) {
-      handleSearch(searchValue.value);
+      // 需晚于子组件 onMounted 中的默认排序请求，否则表头筛选字段（tool_type）会被其清空
+      nextTick(() => {
+        handleSearch(searchValue.value);
+      });
     }
     // 监听场景切换事件
     onEvent('scene:change', () => {
