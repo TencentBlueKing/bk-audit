@@ -30,7 +30,7 @@
           v-model="timeRange"
           class="execution-time-range"
           data-testid="execution-records-time-range"
-          @update:model-value="search" />
+          @update:model-value="searchByTime" />
         <bk-search-select
           v-model="searchKey"
           class="execution-search"
@@ -55,7 +55,30 @@
         :search-params="linkedSearchParams"
         use-skeleton
         @clear-search="handleClearFilter"
-        @filter-change="handleTableFilterChange" />
+        @filter-change="handleTableFilterChange">
+        <template #empty>
+          <bk-exception
+            class="execution-search-empty"
+            scene="part"
+            type="search-empty">
+            <div class="execution-search-empty-text">
+              <div>{{ t('搜索结果为空') }}</div>
+              <div class="execution-search-empty-tip">
+                {{ t('可以尝试调整关键词') }}
+                <template v-if="hasSearchCondition">
+                  {{ t('或') }}
+                  <bk-button
+                    text
+                    theme="primary"
+                    @click="handleClearFilter">
+                    {{ t('清空搜索条件') }}
+                  </bk-button>
+                </template>
+              </div>
+            </div>
+          </bk-exception>
+        </template>
+      </tdesign-list>
     </div>
   </audit-sideslider>
   <execution-detail
@@ -285,6 +308,15 @@
       .filter(Boolean)
       .join(',');
   };
+
+  const chipHasValue = (item: SearchKey) => {
+    const values = (item.values || []).map(value => String(value.id || '').trim()).filter(Boolean);
+    if (values.length) return true;
+    const known = searchData.value.some(field => field.id === item.id);
+    if (!known || item.type === 'text') return Boolean((item.name || '').trim());
+    return false;
+  };
+  const hasSearchCondition = computed(() => searchKey.value.some(chipHasValue));
 
   const linkedFilterIds = ['application_name', 'trigger_type', 'status'];
   const linkedSearchParams = computed(() => ({
@@ -625,6 +657,18 @@
 
   const search = () => {
     if (syncingTableFilter) return;
+    // 条件还没选完时不请求，避免空结果样式先闪出来
+    if (searchKey.value.some(item => !chipHasValue(item))) return;
+    nextTick(() => {
+      listRef.value?.fetchData({
+        page: 1,
+        ...linkedSearchParams.value,
+      });
+    });
+  };
+
+  const searchByTime = () => {
+    if (syncingTableFilter) return;
     nextTick(() => {
       listRef.value?.fetchData({
         page: 1,
@@ -823,6 +867,8 @@
     height: var(--execution-table-height, 360px);
     max-height: var(--execution-table-height, 360px);
     overflow: auto;
+    container-type: inline-size;
+    container-name: execution-table;
   }
 
   :deep(.t-table table) {
@@ -839,19 +885,43 @@
     padding: 0;
   }
 
+  :deep(.is-loading .t-table__empty) {
+    visibility: hidden;
+  }
+
   :deep(.t-table__empty) {
+    position: sticky;
+    left: 0;
+    box-sizing: border-box;
+    width: 100cqi !important;
+    max-width: 100cqi !important;
     height: 100%;
   }
 
   :deep(.t-table__empty .bk-exception) {
     display: flex !important;
-    width: 100% !important;
+    width: auto !important;
+    max-width: 100%;
     height: 100% !important;
     min-height: 0 !important;
     padding-top: 0 !important;
     box-sizing: border-box;
     align-items: center;
     justify-content: center;
+  }
+
+  .execution-search-empty-text {
+    width: max-content;
+    max-width: 100%;
+    color: var(--audit-neutral-text-02, #63656e);
+    line-height: 22px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .execution-search-empty-tip {
+    margin-top: 8px;
+    color: var(--audit-neutral-text-04, #979ba5);
   }
 
   :deep(.tdesign-list-pagination) {
