@@ -1,9 +1,13 @@
 import { defineComponent, h } from 'vue';
 
-/** 失败原因提示：正文单独滚动，避免把气泡箭头裁掉。 */
+/** 长文本提示：正文单独滚动，避免把气泡箭头裁掉。 */
 export const executionErrorTip = (
   content: string,
-  extra: { placement?: 'top' | 'bottom'; disabled?: boolean } = {},
+  extra: {
+    placement?: 'top' | 'bottom' | 'bottom-start';
+    disabled?: boolean;
+    extCls?: string;
+  } = {},
 ) => ({
   content: defineComponent({
     setup() {
@@ -13,5 +17,5 @@ export const executionErrorTip = (
   placement: extra.placement || 'top',
   disabled: extra.disabled,
   delay: 80,
-  extCls: 'execution-attempt-tip',
+  extCls: extra.extCls || 'execution-attempt-tip',
 });
