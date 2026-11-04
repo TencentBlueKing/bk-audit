@@ -25,6 +25,7 @@
     row-key="uid"
     :search-params="searchParams"
     @clear-search="handleClearSearch"
+    @filter-change="handleFilterChange"
     @request-success="handleRequestSuccess" />
 </template>
 
@@ -45,7 +46,7 @@
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // 工具类型枚举
-  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
+  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision' | 'smart_page';
 
   interface TagItem {
     tag_id: string;
@@ -95,6 +96,7 @@
     (e: 'toggle-status', row: ToolModel): void;
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
+    (e: 'filter-change', filters: Record<string, any>): void;
   }
 
   const props = defineProps<Props>();
@@ -125,7 +127,13 @@
     api: t('API接口'),
     data_search: t('数据查询'),
     bk_vision: t('BKVision图表'),
+    smart_page: t('智能用户画像'),
   };
+
+  const toolTypeFilterList = (Object.keys(toolType) as ToolTypeKey[]).map(key => ({
+    label: toolType[key],
+    value: key,
+  }));
 
   const isPlatformTool = (row: ToolModel) => row.visibility?.binding_type === 'platform_binding';
 
@@ -209,6 +217,7 @@
       title: t('工具名称'),
       colKey: 'name',
       width: 400,
+      fixed: 'left',
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
@@ -238,28 +247,34 @@
     {
       title: t('工具说明'),
       colKey: 'description',
-      minWidth: 200,
+      minWidth: 400,
       ellipsis: true,
     },
     {
       title: t('工具类型'),
       colKey: 'tool_type',
-      width: 200,
+      width: 140,
       ellipsis: true,
+      filter: {
+        type: 'multiple',
+        showConfirmAndReset: true,
+        resetValue: [],
+        list: toolTypeFilterList,
+      },
       cell: (h: any, { row }: { row: ToolModel }) => <span>
-        {toolType[row.tool_type]}
+        {toolType[row.tool_type] || '--'}
         </span>,
     },
     {
       title: t('标签'),
       colKey: 'tags',
-      width: 300,
+      width: 240,
       cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags, row.uid),
     },
     {
-      title: t('引用策略'),
+      title: t('被引用'),
       colKey: 'strategies',
-      width: 150,
+      width: 100,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => {
         if (!row.strategies || row.strategies.length === 0) {
@@ -285,7 +300,7 @@
     {
       title: t('状态'),
       colKey: 'status',
-      width: 150,
+      width: 100,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
@@ -300,13 +315,13 @@
     {
       title: t('更新人'),
       colKey: 'updated_by',
-      width: 150,
+      width: 120,
       ellipsis: true,
     },
     {
       title: t('更新时间'),
       colKey: 'updated_at',
-      width: 200,
+      width: 170,
       ellipsis: true,
       sortType: 'all',
       sorter: true,
@@ -433,6 +448,10 @@
 
   const handleClearSearch = () => {
     emit('clear-search');
+  };
+
+  const handleFilterChange = (filters: Record<string, any>) => {
+    emit('filter-change', filters);
   };
 
   const handleRequestSuccess = (data: any) => {
