@@ -97,10 +97,12 @@
           :strategy-list="strategyList"
           :system-name-map="systemNameMap"
           :system-options="visibilitySystemOptions"
+          :tags-enums="tagsEnums"
           @clear-search="handleClearSearch"
           @delete="handleDelete"
           @edit="handleEdit"
           @edit-visibility="handleEditVisibility"
+          @filter-change="handleTableFilterChange"
           @preview="handlePreview"
           @request-success="handleRequestSuccess"
           @toggle-status="handleToggleStatus" />
@@ -370,12 +372,12 @@
       name: '工具类型',
       id: 'tool_type',
       placeholder: '请选择工具类型',
-      multiple: false,
+      multiple: true,
       children: [
-        { id: 'data_search', name: '数据查询' },
-        { id: 'api', name: 'API' },
-        { id: 'bk_vision', name: 'BK-Vision' },
-        { id: 'smart_page', name: '智能用户画像' },
+        { id: 'data_search', name: t('数据查询') },
+        { id: 'api', name: t('API接口') },
+        { id: 'bk_vision', name: t('BKVision图表') },
+        { id: 'smart_page', name: t('智能用户画像') },
       ],
     },
     {
@@ -643,6 +645,28 @@
 
   const handleStatusFilterChange = () => {
     handleSearch(searchValue.value);
+  };
+
+  // 表头「工具类型」筛选回写到搜索框，避免后续搜索把表头筛选冲掉
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    if (!Object.prototype.hasOwnProperty.call(filters, 'tool_type')) return;
+    const rawValue = filters.tool_type;
+    const selectedTypes: string[] = (Array.isArray(rawValue) ? rawValue : [rawValue])
+      .filter(item => item !== undefined && item !== null && item !== '')
+      .map(item => String(item));
+    const toolTypeConfig = searchSelectData.value.find(item => item.id === 'tool_type');
+    const nextSearchValue = searchValue.value.filter(item => item.id !== 'tool_type');
+    if (selectedTypes.length && toolTypeConfig) {
+      nextSearchValue.push({
+        id: 'tool_type',
+        name: toolTypeConfig.name,
+        values: selectedTypes.map(id => ({
+          id,
+          name: toolTypeConfig.children?.find(child => child.id === id)?.name || id,
+        })),
+      });
+    }
+    searchValue.value = nextSearchValue;
   };
 
   const handleClearSearch = () => {

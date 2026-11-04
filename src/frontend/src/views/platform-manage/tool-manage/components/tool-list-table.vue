@@ -27,6 +27,7 @@
     row-key="uid"
     :search-params="searchParams"
     @clear-search="handleClearSearch"
+    @filter-change="handleFilterChange"
     @request-success="handleRequestSuccess" />
 </template>
 
@@ -99,6 +100,11 @@
     name: string;
   }
 
+  interface TagItem {
+    tag_id: string;
+    tag_name: string;
+  }
+
   interface Props {
     searchParams: Record<string, any>;
     sceneNameMap?: Record<string, string>;
@@ -106,6 +112,7 @@
     sceneOptions?: SceneOption[];
     systemOptions?: SystemOption[];
     strategyList?: StrategyOption[];
+    tagsEnums?: TagItem[];
   }
 
   interface Emits {
@@ -116,6 +123,7 @@
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
     (e: 'status-counts', counts: { all: number; published: number; unpublished: number }): void;
+    (e: 'filter-change', filters: Record<string, any>): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -124,6 +132,7 @@
     sceneOptions: () => [],
     systemOptions: () => [],
     strategyList: () => [],
+    tagsEnums: () => [],
   });
   const emit = defineEmits<Emits>();
 
@@ -159,12 +168,57 @@
     smart_page: t('智能用户画像'),
   };
 
+  const toolTypeFilterList = (Object.keys(toolType) as ToolTypeKey[]).map(key => ({
+    label: toolType[key],
+    value: key,
+  }));
+
   const formatCellText = (value: unknown) => {
     if (value === null || value === undefined || value === '') {
       return '--';
     }
     return String(value);
   };
+
+  const getTagName = (tagId: string) => props.tagsEnums
+    .find(item => String(item.tag_id) === String(tagId))?.tag_name || tagId;
+
+  const renderTagsContent = (tags: string[], rowKey: string) => {
+    if (!tags || tags.length === 0) {
+      return <span>--</span>;
+    }
+    return <EditTag data={tags.map(getTagName)} key={rowKey} showCopy={false} />;
+  };
+
+  const getStrategyName = (strategyId: number) => {
+    const strategy = props.strategyList.find(item => String(item.value) === String(strategyId));
+    return strategy ? strategy.label : `${strategyId}`;
+  };
+
+  const handleStrategyClick = (strategyId: number) => {
+    const url = router.resolve({
+      name: 'strategyList',
+      query: { strategy_id: String(strategyId) },
+    }).href;
+    window.open(url, '_blank');
+  };
+
+  const renderStrategiesTooltipContent = (strategies: number[]) => (
+    <div class="strategies-tooltip-content">
+      {strategies.map((strategyId: number) => (
+        <div
+          class="strategy-item"
+          onClick={() => handleStrategyClick(strategyId)}>
+          <span class="strategy-name">
+            {getStrategyName(strategyId)}（{strategyId}）
+          </span>
+          <audit-icon
+            class="strategy-link-icon"
+            type="jump-link" />
+        </div>
+      ))}
+    </div>
+  );
 
   // 根据可见范围信息组装标签文案（场景 + 平台/系统）
   // 后端 visibility_type 枚举值：
@@ -598,6 +652,7 @@
       title: t('工具名称'),
       colKey: 'name',
       width: 250,
+      fixed: 'left',
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
@@ -611,7 +666,7 @@
     {
       title: t('工具说明'),
       colKey: 'description',
-      width: 450,
+      minWidth: 400,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{formatCellText(row.description)}</span>
@@ -620,22 +675,60 @@
     {
       title: t('工具类型'),
       colKey: 'tool_type',
-      width: 150,
+      width: 140,
       ellipsis: true,
+      filter: {
+        type: 'multiple',
+        showConfirmAndReset: true,
+        resetValue: [],
+        list: toolTypeFilterList,
+      },
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{toolType[row.tool_type] || '--'}</span>
       ),
     },
     {
+      title: t('标签'),
+      colKey: 'tags',
+      width: 240,
+      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags, row.uid),
+    },
+    {
       title: t('可见范围'),
       colKey: 'visibility',
-      width: 400,
+      width: 300,
       cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row),
+    },
+    {
+      title: t('被引用'),
+      colKey: 'strategies',
+      width: 100,
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: ToolModel }) => {
+        if (!row.strategies || row.strategies.length === 0) {
+          return <span>--</span>;
+        }
+        return (
+          <bk-popover
+            placement="bottom"
+            theme="dark"
+            trigger="hover">
+            {{
+              default: () => (
+                <span class="strategies-count">
+                  {row.strategies.length} {t('个')}
+                </span>
+              ),
+              content: () => renderStrategiesTooltipContent(row.strategies),
+            }}
+          </bk-popover>
+        );
+      },
     },
     {
       title: t('状态'),
       colKey: 'status',
-      width: 120,
+      width: 100,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
@@ -659,7 +752,7 @@
     {
       title: t('更新时间'),
       colKey: 'updated_at',
-      width: 150,
+      width: 170,
       ellipsis: true,
       sortType: 'all',
       sorter: true,
@@ -757,6 +850,10 @@
 
   const handleClearSearch = () => {
     emit('clear-search');
+  };
+
+  const handleFilterChange = (filters: Record<string, any>) => {
+    emit('filter-change', filters);
   };
 
   const handleRequestSuccess = (data: any) => {
@@ -930,6 +1027,31 @@
     max-width: 400px;
     word-break: break-all;
     white-space: normal;
+  }
+
+  .strategies-count {
+    color: #4d4f56;
+    cursor: pointer;
+    border-bottom: 1px dashed #c4c6cc;
+  }
+
+  .strategies-tooltip-content {
+    .strategy-item {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+
+    .strategy-name {
+      color: #fff;
+    }
+
+    .strategy-link-icon {
+      font-size: 16px;
+      color: #699df4;
+    }
   }
 
   .tool-jump-scope-popover.bk-popover.bk-pop2-content {
