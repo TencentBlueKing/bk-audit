@@ -17,10 +17,12 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import datetime
 
 from django.db import transaction
 from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
@@ -313,7 +315,12 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
     获取处理套餐执行记录（执行记录侧滑：套餐页看全部/单套餐，风险入口按风险ID筛选）
 
     数据链路：TicketNode(action=AutoProcess) → Risk(rule_id) → RiskRule(pa_id) → 套餐
+
+    开始时间按 from、to 闭区间筛选。套餐列表两个都不传时默认近 30 天；
+    带 risk_id 的风险入口不套默认。
     """
+
+    DEFAULT_START_TIME_LOOKBACK = datetime.timedelta(days=30)
 
     name = gettext_lazy("获取处理套餐执行记录")
     # 分页响应：返回 {count, page, page_size, num_pages, results[]}；框架无 serializer 时直接透传 dict
@@ -469,6 +476,17 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         # 风险入口：按风险 ID 筛选
         if risk_id:
             nodes = nodes.filter(risk_id=risk_id)
+
+        # 开始时间闭区间：from <= timestamp <= to。套餐列表缺省近 30 天；风险入口不套默认。
+        time_from = validated_request_data.get("from")
+        time_to = validated_request_data.get("to")
+        if not risk_id and time_from is None and time_to is None:
+            time_to = timezone.now()
+            time_from = time_to - self.DEFAULT_START_TIME_LOOKBACK
+        if time_from is not None:
+            nodes = nodes.filter(timestamp__gte=time_from.timestamp())
+        if time_to is not None:
+            nodes = nodes.filter(timestamp__lte=time_to.timestamp())
 
         # 执行人筛选
         if operator:

@@ -16,18 +16,22 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import datetime
 import time
 from unittest import mock
 
 import pytest
 from bk_resource import resource
+from bk_resource.exceptions import ValidateException
 from django.db.models import Q
 from django.http import Http404
+from django.utils import timezone
 
 from apps.sops.constants import SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
+from services.web.risk.serializers import PAExecutionRecordListReqSerializer
 from tests.test_risk.test_tickets.constants import RISK_INFO
 
 
@@ -419,6 +423,70 @@ class TestListPAExecutionRecords:
         assert {r["sops_task_id"] for r in resp["results"]} == {"111"}
         resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "套餐B"})
         assert resp["count"] == 0
+
+    @staticmethod
+    def _stamp(node, when):
+        node.timestamp = when.timestamp()
+        node.time = timezone.localtime(when).strftime("%Y-%m-%d %H:%M:%S")
+        node.save(update_fields=["timestamp", "time"])
+
+    def test_default_range_is_last_30_days(self):
+        """套餐列表不传 from/to 时只保留近 30 天的开始时间"""
+        _, _, risk_a, _ = self._prepare()
+        now = timezone.now()
+        recent = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1)
+        old = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=2)
+        self._stamp(recent, now - datetime.timedelta(days=1))
+        self._stamp(old, now - datetime.timedelta(days=40))
+        resp = resource.risk.list_pa_execution_records.perform_request({})
+        assert {item["sops_task_id"] for item in resp["results"]} == {"1"}
+
+    def test_from_to_is_inclusive(self):
+        """from <= start_time <= to，边界两边都包含"""
+        _, _, risk_a, _ = self._prepare()
+        start = timezone.now().replace(microsecond=0) - datetime.timedelta(days=10)
+        end = start + datetime.timedelta(hours=2)
+        before = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1)
+        at_from = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=2)
+        at_to = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=3)
+        after = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=4)
+        self._stamp(before, start - datetime.timedelta(seconds=1))
+        self._stamp(at_from, start)
+        self._stamp(at_to, end)
+        self._stamp(after, end + datetime.timedelta(seconds=1))
+        resp = resource.risk.list_pa_execution_records.perform_request({"from": start, "to": end})
+        assert {item["sops_task_id"] for item in resp["results"]} == {"2", "3"}
+
+    def test_open_ended_from_or_to(self):
+        """只传一边时，另一边不限制"""
+        _, _, risk_a, _ = self._prepare()
+        start = timezone.now().replace(microsecond=0) - datetime.timedelta(days=10)
+        early = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1)
+        late = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=2)
+        self._stamp(early, start - datetime.timedelta(hours=1))
+        self._stamp(late, start + datetime.timedelta(hours=1))
+        resp = resource.risk.list_pa_execution_records.perform_request({"from": start})
+        assert {item["sops_task_id"] for item in resp["results"]} == {"2"}
+        resp = resource.risk.list_pa_execution_records.perform_request({"to": start})
+        assert {item["sops_task_id"] for item in resp["results"]} == {"1"}
+
+    def test_risk_id_does_not_apply_default_range(self):
+        """风险入口不套近 30 天默认，更早的执行记录仍能查到"""
+        _, _, risk_a, _ = self._prepare()
+        old = _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=9)
+        self._stamp(old, timezone.now() - datetime.timedelta(days=40))
+        resp = resource.risk.list_pa_execution_records.perform_request({"risk_id": risk_a.risk_id})
+        assert {item["sops_task_id"] for item in resp["results"]} == {"9"}
+
+    def test_from_after_to_rejected(self):
+        serializer = PAExecutionRecordListReqSerializer(
+            data={"from": "2026-11-04 00:00:00", "to": "2026-10-04 00:00:00"}
+        )
+        assert not serializer.is_valid()
+        with pytest.raises(ValidateException):
+            resource.risk.list_pa_execution_records.request(
+                {"from": "2026-11-04 00:00:00", "to": "2026-10-04 00:00:00"}
+            )
 
 
 @pytest.mark.django_db
