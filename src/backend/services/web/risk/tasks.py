@@ -80,6 +80,7 @@ from services.web.risk.handlers.ticket import (
     ForApprove,
     NewRisk,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
     AnalyseReportAgentRequestInfo,
@@ -631,9 +632,10 @@ def sync_auto_result(node_id: str = None):
                 node = TicketNode.objects.select_for_update().get(id=node.id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
-                    sn = node.process_result.get("ticket", {}).get("sn")
-                    if sn:
-                        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+                    ticket = node.process_result.get("ticket") or {}
+                    ticket_id = str(ticket.get("id") or "")
+                    if ticket_id:
+                        status = get_itsm_ticket_status(ticket_id)
                         node.process_result["status"] = status
                         node.status = (
                             TicketNodeStatus.FINISHED
@@ -646,6 +648,15 @@ def sync_auto_result(node_id: str = None):
                             ]
                             else TicketNodeStatus.RUNNING
                         )
+                    elif ticket.get("sn"):
+                        # V3 遗留单据：只有 sn、无 V4 工单 ID，无法用 V4 查询。
+                        # 保持运行态等待人工处理，否则会被误判完成而不再轮询
+                        logger_celery.warning(
+                            "[SyncAutoResult] legacy itsm ticket without v4 id, keep running: node=%s, sn=%s",
+                            node.id,
+                            ticket.get("sn"),
+                        )
+                        node.status = TicketNodeStatus.RUNNING
                     else:
                         node.status = TicketNodeStatus.FINISHED
                 # 自动处理套餐节点
