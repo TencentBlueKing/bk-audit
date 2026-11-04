@@ -197,11 +197,16 @@
           {{ t('上一步') }}
         </bk-button>
         <bk-button
-          class="ml8"
+          class="bksec-submit ml8"
           data-testid="bksec-ticket-submit"
           theme="primary"
           @click="handleNext">
-          {{ primaryActionText }}
+          <span class="bksec-submit-text">
+            <span>{{ primaryActionText }}</span>
+            <span
+              class="bksec-submit-sizer"
+              aria-hidden="true">{{ t('完成创建') }}</span>
+          </span>
         </bk-button>
         <bk-button
           v-if="showSaveDraftButton"
@@ -792,6 +797,19 @@
 
 .bksec-collapse-icon.is-collapsed {
   transform: rotate(-90deg);
+}
+
+.bksec-submit-text {
+  display: inline-grid;
+  justify-items: center;
+}
+
+.bksec-submit-text > span {
+  grid-area: 1 / 1;
+}
+
+.bksec-submit-sizer {
+  visibility: hidden;
 }
 
 .bksec-body {

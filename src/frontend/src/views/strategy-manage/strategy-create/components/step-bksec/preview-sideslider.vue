@@ -354,6 +354,7 @@
   const renderLocal = () => {
     previewError.value = false;
     previewRows.value = buildLocalPreview({
+      fieldValues: props.fieldValues || {},
       fields: previewFields(),
       riskTypeId: props.riskTypeId,
       riskTypeName: props.riskTypeName,
