@@ -405,6 +405,11 @@ class TicketNodeStatus(TextChoices):
     FINISHED = "finished", gettext_lazy("已完成")
 
 
+class ItsmVersion(TextChoices):
+    V3 = "v3", gettext_lazy("ITSM V3")
+    V4 = "v4", gettext_lazy("ITSM V4")
+
+
 class RiskRuleOperator(TextChoices):
     """
     风险规则匹配符
