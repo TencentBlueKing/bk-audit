@@ -491,17 +491,12 @@
     overflowed[key] = target.scrollWidth > target.clientWidth + 1
       || target.scrollHeight > target.clientHeight + 1;
   };
-  const lineTip = (key: string, content: string) => ({
-    content,
+  const lineTip = (key: string, content: string) => executionErrorTip(content, {
     disabled: !overflowed[key],
-    delay: 80,
-    extCls: 'execution-attempt-tip',
   });
-  const headerTitleTip = computed(() => ({
-    content: detail.value?.task_name || '',
+  const headerTitleTip = computed(() => executionErrorTip(detail.value?.task_name || '', {
     disabled: !detail.value?.task_name || !overflowed['header-task-name'],
-    placement: 'bottom-start' as const,
-    delay: 80,
+    placement: 'bottom-start',
     extCls: 'execution-header-tip',
   }));
   const errorTip = (key: string, content: string, placement: 'top' | 'bottom' = 'top') => executionErrorTip(content, {
