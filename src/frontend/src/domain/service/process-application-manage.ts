@@ -115,6 +115,8 @@ export default {
     executor?: string,
     sort?: string | string[],
     scene_id?: string,
+    from?: string,
+    to?: string,
   }) {
     return ProcessApplicationManageSource.getExecutionRecords(params)
       .then(({ data }) => ({

@@ -241,8 +241,7 @@
       :project-id="projectId"
       :risk-type-id="riskTypeId"
       :risk-type-name="riskTypeName"
-      :strategy-id="strategyId"
-      :strategy-name="strategyName" />
+      :strategy-id="strategyId" />
   </div>
 </template>
 <script setup lang="ts">
@@ -269,12 +268,11 @@
   import { buildVariableGroups } from './variable-groups';
 
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
-  import { getStrategyRouteNames } from '../../../utils/strategy-routes';
+  import { getStrategyRouteNames, isStrategyEditRoute } from '../../../utils/strategy-routes';
 
   interface Props {
     formData?: Record<string, any>;
     strategyType?: string;
-    strategyName?: string;
   }
   interface Emits {
     (e: 'previousStep', step: number, params: Record<string, any>): void;
@@ -291,7 +289,6 @@
   const props = withDefaults(defineProps<Props>(), {
     formData: () => ({}),
     strategyType: '',
-    strategyName: '',
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -335,7 +332,9 @@
   });
 
   const strategyId = computed(() => props.formData?.strategy_id || route.params.id);
-  const primaryActionText = computed(() => t('完成创建'));
+  const primaryActionText = computed(() => (
+    isStrategyEditRoute(route.name) ? t('保存') : t('完成创建')
+  ));
   const canPreview = computed(() => enabled.value && !!riskTypeId.value);
   const previewTip = computed(() => (
     riskTypeId.value ? t('请先启用BKSEC安全工单') : t('请先选择风险类型')
