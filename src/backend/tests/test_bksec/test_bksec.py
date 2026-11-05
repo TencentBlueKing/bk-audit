@@ -22,8 +22,13 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from django.conf import settings
+from django.http import Http404
 from rest_framework import serializers
 
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import InstanceActionPermission
+from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException, ValidationError
 from services.web.risk.bksec import sync_bksec_rule
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import BKSEC_RULE_PRIORITY_BASE
@@ -37,7 +42,10 @@ from services.web.risk.bksec.service import (
     has_bksec_ticket_sent,
     validate_bksec_test_target,
 )
+from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, RiskRule, TicketNode
+from services.web.risk.permissions import BkSecTestTaskStatusPermission
+from services.web.risk.views import TicketViewSet
 from tests.test_risk.test_tickets.base import RiskContext
 from tests.test_risk.test_tickets.constants import RISK_INFO
 
@@ -74,6 +82,20 @@ BKSEC_CONFIG_DATA = {
         {"key": "description", "name": "描述", "value": "{{ risk.event_content }}"},
     ],
 }
+
+
+def _create_test_node(risk, task_id, operator="tester"):
+    return TicketNode.objects.create(
+        risk_id=risk.risk_id,
+        operator=operator,
+        action="AutoProcess",
+        timestamp=1,
+        time="2026-01-01 00:00:00",
+        process_result={"task": {"task_id": task_id}},
+        extra={},
+        status=TicketNodeStatus.RUNNING,
+        is_test=True,
+    )
 
 
 class TestRiskAccessFetch:
@@ -853,6 +875,21 @@ class TestBkSecResources:
             create_task.assert_not_called()
             assert "正式派单" in str(err.value.args)
 
+    def test_preview_permission_binds_sample_risk_strategy(self):
+        """预览按样例风险所属策略做实例鉴权，而不是任意策略可编辑"""
+        with RiskContext() as risk:
+            view = TicketViewSet()
+            view.action = "preview"
+            view.request = mock.Mock(query_params={}, data={"risk_id": risk.risk_id})
+            assert view.get_sample_strategy_id() == risk.strategy_id
+            permissions = view.get_permissions()
+            assert len(permissions) == 1
+            permission = permissions[0]
+            assert isinstance(permission, InstanceActionPermission)
+            assert permission.actions == [ActionEnum.EDIT_STRATEGY]
+            assert permission.resource_meta is ResourceEnum.STRATEGY
+            assert permission.get_instance_id() == risk.strategy_id
+
     def test_test_task_status_failure_hint(self):
         """任务失败时轮询接口返回失败提示：透出失败节点的原始错误文本，取不到才回退通用提示"""
 
@@ -863,33 +900,124 @@ class TestBkSecResources:
                 "children": {"node1": {"id": "node1", "name": "发单节点", "state": "FAILED"}},
             }
 
-        with mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value=make_failed_status()),
-        ), mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
-            mock.Mock(return_value={"ex_data": "plugin execute failed: Config matching query does not exist."}),
-        ):
-            result = resource.risk.get_task_status.perform_request({"task_id": "1"})
-        assert result["state"] == "FAILED"
-        assert "Config matching query does not exist" in result["failure_hint"]
-        # 节点错误取不到 → 通用指引
-        with mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value=make_failed_status()),
-        ), mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
-            mock.Mock(side_effect=Exception("boom")),
-        ):
-            result = resource.risk.get_task_status.perform_request({"task_id": "1"})
-        assert result["failure_hint"] == resource.risk.get_task_status.GENERIC_HINT
-        # 成功状态不附带提示
-        with mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value={"state": "FINISHED"}),
-        ):
-            result = resource.risk.get_task_status.perform_request({"task_id": "1"})
-        assert "failure_hint" not in result
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=1)
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value=make_failed_status()),
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
+                mock.Mock(return_value={"ex_data": "plugin execute failed: Config matching query does not exist."}),
+            ):
+                result = resource.risk.get_task_status.perform_request({"task_id": "1"})
+            assert result["state"] == "FAILED"
+            assert "Config matching query does not exist" in result["failure_hint"]
+            # 节点错误取不到 → 通用指引。上一次失败已把节点写成终态，换一条仍在运行的测试单。
+            _create_test_node(risk, task_id="2")
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value=make_failed_status()),
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
+                mock.Mock(side_effect=Exception("boom")),
+            ):
+                result = resource.risk.get_task_status.perform_request({"task_id": "2"})
+            assert result["failure_hint"] == resource.risk.get_task_status.GENERIC_HINT
+            # 成功状态不附带提示
+            _create_test_node(risk, task_id="3")
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value={"state": "FINISHED"}),
+            ):
+                result = resource.risk.get_task_status.perform_request({"task_id": "3"})
+            assert "failure_hint" not in result
+
+    def test_task_status_unknown_task_does_not_query_sops(self):
+        """task_id 对不上测试节点时 404，不回源 SOPS"""
+        with mock.patch("services.web.risk.resources.bksec.api.bk_sops.get_task_status") as get_status:
+            with pytest.raises(Http404):
+                resource.risk.get_task_status.perform_request({"task_id": "999"})
+        get_status.assert_not_called()
+
+    def test_task_status_ignores_formal_node(self):
+        """正式派单节点即使 task_id 命中，也不能经测试状态接口回源"""
+        with RiskContext() as risk:
+            TicketNode.objects.create(
+                risk_id=risk.risk_id,
+                operator="tester",
+                action="AutoProcess",
+                timestamp=1,
+                time="2026-01-01 00:00:00",
+                process_result={"task": {"task_id": 9}},
+                extra={},
+                is_test=False,
+            )
+            with mock.patch("services.web.risk.resources.bksec.api.bk_sops.get_task_status") as get_status:
+                with pytest.raises(Http404):
+                    resource.risk.get_task_status.perform_request({"task_id": "9"})
+            get_status.assert_not_called()
+
+    def test_task_status_requires_strategy_edit_permission(self):
+        """命中测试节点后，无策略编辑权限则拒绝，且不回源 SOPS"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=42)
+            with mock.patch("services.web.risk.permissions.PermissionService") as service_cls, mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status"
+            ) as get_status:
+                service_cls.return_value.is_allowed.side_effect = PermissionException("编辑策略", {})
+                with pytest.raises(PermissionException):
+                    resource.risk.get_task_status.perform_request({"task_id": "42"})
+            get_status.assert_not_called()
+
+    def test_task_status_matches_integer_task_id(self):
+        """task_id 以数字落库时，字符串入参仍能定位测试节点"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=7)
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission") as ensure, mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                return_value={"state": "RUNNING"},
+            ) as get_status:
+                result = resource.risk.get_task_status.perform_request({"task_id": "7"})
+            assert result["state"] == "RUNNING"
+            assert result["task_id"] == "7"
+            ensure.assert_called_once_with(risk.strategy_id)
+            get_status.assert_called_once()
+
+    def test_task_status_risk_id_without_own_node_returns_empty(self):
+        """刷新恢复只定位本人的测试单；没有则空结果，不回源"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=8, operator="other")
+            with mock.patch("services.web.risk.resources.bksec.get_request_username", return_value="me"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status"
+            ) as get_status:
+                assert resource.risk.get_task_status.perform_request({"risk_id": risk.risk_id}) == {}
+            get_status.assert_not_called()
+
+    def test_task_status_permission_uses_node_strategy(self):
+        """视图层：task_id 定位到测试节点后，按该风险所属策略鉴权"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=42)
+            request = mock.Mock(query_params={"task_id": "42"}, data={})
+            permission = BkSecTestTaskStatusPermission()
+            with mock.patch("services.web.risk.permissions.IAMPermission.has_permission", return_value=True) as allowed:
+                assert permission.has_permission(request, view=None) is True
+            allowed.assert_called_once()
+            assert str(permission.resources[0].id) == str(risk.strategy_id)
+
+    def test_task_status_permission_missing_node_skips_iam(self):
+        """视图层：task_id 没有对应测试节点时不打 IAM，交给资源层 404"""
+        request = mock.Mock(query_params={"task_id": "missing"}, data={})
+        permission = BkSecTestTaskStatusPermission()
+        with mock.patch("services.web.risk.permissions.IAMPermission.has_permission") as allowed:
+            assert permission.has_permission(request, view=None) is True
+        allowed.assert_not_called()
+
+    def test_task_status_permission_missing_strategy_rejected(self):
+        """只传 risk_id 且风险不存在时，视图层拒绝，不把空实例交给 IAM"""
+        request = mock.Mock(query_params={"risk_id": "missing-risk"}, data={})
+        permission = BkSecTestTaskStatusPermission()
+        with pytest.raises(ValidationError):
+            permission.has_permission(request, view=None)
 
 
 @pytest.mark.django_db
