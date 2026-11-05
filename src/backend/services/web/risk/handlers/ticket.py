@@ -877,10 +877,12 @@ class AutoProcess(RiskFlowBaseHandler):
         3. 自动更新审批状态
         """
 
-        # 人工显式选择套餐时不复用上一轮任务，直接按本次 pa_config 建新任务。
-        # 自动轮询不带 pa_config，才刷新已有任务，避免 last_history 被顶掉后重复建单。
+        # 人工显式选择，或最后一条是带本次套餐配置的审批节点时，不复用更早的任务。
+        # 自动轮询两者都没有，才刷新已有任务，避免最后一条记录被顶掉后重复建单。
+        explicit_pa_config = pa_config
+        approval_pa_config = None if explicit_pa_config else self._pa_config_from_latest_approval()
         self._reused_task_node = None
-        if pa_config is None:
+        if explicit_pa_config is None and approval_pa_config is None:
             reused = self._refresh_existing_task()
             if reused is not None:
                 return reused
@@ -888,11 +890,17 @@ class AutoProcess(RiskFlowBaseHandler):
         # 触发方式快照：人工选择(显式传参) / 审批通过(上个节点为审批) / 规则自动匹配
         last_node = self.risk.last_history
         trigger = (
-            "manual" if pa_config else ("approve" if last_node and last_node.action == ForApprove.__name__ else "auto")
+            "manual"
+            if explicit_pa_config
+            else ("approve" if last_node and last_node.action == ForApprove.__name__ else "auto")
         )
-        # pa_config 优先用显式传参；未传时取上个节点（审批节点）的配置
-        if not pa_config and self.risk.last_history.action == ForApprove.__name__:
-            pa_config = self.risk.last_history.extra.get("pa_config")
+        # 显式传参优先；否则用刚通过的审批节点配置
+        if explicit_pa_config:
+            pa_config = explicit_pa_config
+        elif approval_pa_config:
+            pa_config = approval_pa_config
+        elif last_node and last_node.action == ForApprove.__name__:
+            pa_config = (last_node.extra or {}).get("pa_config")
         # 配置有处理套餐则重新初始化处理套餐
         pa_id, pa_params = None, None
         if pa_config:
@@ -1033,6 +1041,19 @@ class AutoProcess(RiskFlowBaseHandler):
         if getattr(self, "_reused_task_node", None) is not None:
             return False
         return bool(self.process_application and self.process_application.is_builtin)
+
+    def _pa_config_from_latest_approval(self) -> Optional[dict]:
+        """最后一条是审批节点且记下了本次套餐时，返回这份配置。更早的执行中任务不属于这次审批。"""
+
+        last = self.risk.last_history
+        if last is None or getattr(getattr(last, "_state", None), "adding", True):
+            return None
+        if last.action != ForApprove.__name__:
+            return None
+        pa_config = (last.extra or {}).get("pa_config")
+        if not isinstance(pa_config, dict) or not pa_config.get("pa_id"):
+            return None
+        return pa_config
 
     def _refresh_existing_task(self) -> Optional[dict]:
         """刷新已有套餐任务。标准运维里仍在执行的才复用；已结束的写回所属节点并结束这条记录。"""

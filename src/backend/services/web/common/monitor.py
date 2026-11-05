@@ -154,7 +154,6 @@ class BkSecConfigSyncFailedEvent(Event):
         - token_fetch_failed: 调用 risk_access 列表接口异常
         - upsert_rejected: 插件返回 result=false，拒绝写入 Config
         - api_unreachable: 调用插件 Config 同步接口异常（含 5xx）
-        - config_invalid: 已保存的 bksec_config 无法解析，自动规则已停用
 
     """
 

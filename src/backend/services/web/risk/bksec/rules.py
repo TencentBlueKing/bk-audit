@@ -262,21 +262,12 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
     return instance
 
 
-def sync_bksec_rule_or_keep_strategy(
-    strategy: Strategy, previous_bksec_config: Optional[dict], strategy_alive: Optional[bool] = None
-) -> None:
-    """同步发单规则。插件拒绝配置或内置套餐未就绪时，只把 bksec_config 写回保存前的值，其余策略内容保持已保存状态。"""
+def sync_bksec_rule_or_keep_strategy(strategy: Strategy, strategy_alive: Optional[bool] = None) -> None:
+    """同步发单规则。启用配置同步失败时抛出校验错误，由调用方事务回滚本次保存。"""
     try:
         sync_bksec_rule(strategy, strategy_alive=strategy_alive)
     except (BkSecPluginSyncError, BkSecPresetNotReady) as err:
-        strategy.bksec_config = {} if previous_bksec_config is None else previous_bksec_config
-        strategy.save(update_fields=["bksec_config"])
-        if isinstance(err, BkSecPresetNotReady):
-            strategy.bksec_sync_message = gettext(
-                "策略已保存，BKSEC 工单配置因内置发单套餐未就绪未生效，请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID 后重新保存该配置"
-            )
-        else:
-            strategy.bksec_sync_message = gettext("策略已保存，BKSEC 工单配置因插件同步失败未生效，请稍后重新保存该配置：%s") % str(err)
+        raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
 
 
 def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = False) -> tuple:
