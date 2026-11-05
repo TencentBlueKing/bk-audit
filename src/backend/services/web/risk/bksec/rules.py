@@ -205,17 +205,18 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
             strategy.strategy_id,
         )
         return None
-    # 启用 → 确保预置套餐存在
-    from services.web.risk.bksec.service import find_preset_pa
+    # 启用 → 按模板 ID 补齐内置套餐。仍没有则报错，避免策略显示已启用却没有自动规则。
+    from rest_framework import serializers
 
-    pa = find_preset_pa()
+    from services.web.risk.bksec.service import ensure_preset_pa
+
+    pa = ensure_preset_pa()
     if pa is None:
         logger.warning(
-            "[BkSecRule] Preset process application missing (BKSEC_SOPS_TEMPLATE_ID unset?), "
-            "skip rule sync, strategy_id=%s",
+            "[BkSecRule] Preset process application missing (BKSEC_SOPS_TEMPLATE_ID unset?), strategy_id=%s",
             strategy.strategy_id,
         )
-        return None
+        raise serializers.ValidationError(gettext("BKSEC 内置发单套餐未就绪：请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID"))
     fields = _build_rule_fields(strategy, config, pa.id)
     # 幂等：内容一致 → 仅原地确保启用
     if latest and all(getattr(latest, k) == v for k, v in fields.items()):

@@ -664,13 +664,45 @@ class TestBkSecRules:
         assert latest.is_enabled and latest.version == rule.version
 
     def test_sync_rule_without_preset_pa(self, settings):
+        from rest_framework import serializers
+
         from services.web.risk.bksec.rules import sync_bksec_rule
 
         settings.BKSEC_SOPS_TEMPLATE_ID = None
         RiskRule.objects.all().delete()
         ProcessApplication.objects.all().delete()
         strategy = self._strategy(BKSEC_CONFIG_DATA)
-        assert sync_bksec_rule(strategy) is None
+        with pytest.raises(serializers.ValidationError):
+            sync_bksec_rule(strategy)
+
+    def test_sync_rule_creates_builtin_pa_without_touching_old_pa(self, settings):
+        """模板 ID 已配置但没有对应内置套餐时自动补齐，旧套餐的模板 ID 保持不变。"""
+        from services.web.risk.bksec.rules import sync_bksec_rule
+        from services.web.risk.bksec.service import ensure_preset_pa
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "20002"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        old_pa = ProcessApplication.objects.create(
+            name="旧发单套餐", sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=False
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        rule = sync_bksec_rule(strategy)
+        builtin = ProcessApplication.objects.get(is_builtin=True, sops_template_id=20002)
+        assert rule.pa_id == builtin.id
+        assert builtin.need_approve is False
+        old_pa.refresh_from_db()
+        assert old_pa.sops_template_id == 10001
+        assert old_pa.is_builtin is False
+        # 再次补齐不新增；换成另一个模板 ID 时再插入一条，原来的内置套餐不改
+        assert ensure_preset_pa().id == builtin.id
+        assert ProcessApplication.objects.filter(is_builtin=True).count() == 1
+        settings.BKSEC_SOPS_TEMPLATE_ID = "30003"
+        created = ensure_preset_pa()
+        assert created.sops_template_id == 30003
+        builtin.refresh_from_db()
+        assert builtin.sops_template_id == 20002
+        assert ProcessApplication.objects.filter(is_builtin=True).count() == 2
 
     def test_sync_rule_scene_binding_follows_strategy(self, settings):
         """规则场景归属跟随策略：策略改绑场景后规则可见性同步更新"""
