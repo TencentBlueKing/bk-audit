@@ -688,18 +688,37 @@ class TestBkSecRules:
         )
         strategy = self._strategy(BKSEC_CONFIG_DATA)
         rule = sync_bksec_rule(strategy)
+        from services.web.scene.constants import (
+            BindingType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceBinding
+
+        def _assert_platform_all_scenes(pa):
+            binding = ResourceBinding.objects.get(
+                resource_type=ResourceVisibilityType.PROCESS_APPLICATION.value,
+                resource_id=str(pa.id),
+            )
+            assert binding.binding_type == BindingType.PLATFORM_BINDING.value
+            assert binding.visibility_type == VisibilityScope.ALL_SCENES.value
+
         builtin = ProcessApplication.objects.get(is_builtin=True, sops_template_id=20002)
         assert rule.pa_id == builtin.id
         assert builtin.need_approve is False
+        _assert_platform_all_scenes(builtin)
         old_pa.refresh_from_db()
         assert old_pa.sops_template_id == 10001
         assert old_pa.is_builtin is False
-        # 再次补齐不新增；换成另一个模板 ID 时再插入一条，原来的内置套餐不改
+        # 已有内置套餐缺绑定时，再次补齐会补上平台级、全部场景可见，不另插套餐
+        ResourceBinding.objects.filter(resource_id=str(builtin.id)).delete()
         assert ensure_preset_pa().id == builtin.id
+        _assert_platform_all_scenes(builtin)
         assert ProcessApplication.objects.filter(is_builtin=True).count() == 1
         settings.BKSEC_SOPS_TEMPLATE_ID = "30003"
         created = ensure_preset_pa()
         assert created.sops_template_id == 30003
+        _assert_platform_all_scenes(created)
         builtin.refresh_from_db()
         assert builtin.sops_template_id == 20002
         assert ProcessApplication.objects.filter(is_builtin=True).count() == 2
@@ -952,6 +971,51 @@ class TestBkSecRules:
         assert strategy.bksec_config == previous
         assert "未生效" in result.bksec_sync_message
         assert "plugin down" in result.bksec_sync_message
+        update_remote.assert_called_once()
+
+    def test_missing_preset_pa_restores_bksec_config_and_update_continues(self, settings):
+        """内置套餐补不出来时，更新保留其余字段，bksec_config 回到保存前，并继续部署。"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = None
+        previous = {"enabled": False}
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="before-rename",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=previous,
+        )
+
+        def fake_update_db(strategy, validated_request_data, draft_save):
+            strategy.strategy_name = "renamed-after-save"
+            strategy.description = "other-field-saved"
+            strategy.bksec_config = BKSEC_CONFIG_DATA
+            strategy.save(update_fields=["strategy_name", "description", "bksec_config"])
+            return True
+
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", side_effect=fake_update_db), mock.patch.object(
+            updater, "update_remote"
+        ) as update_remote, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ):
+            result = updater.perform_request(
+                {"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type}
+            )
+
+        strategy.refresh_from_db()
+        assert strategy.strategy_name == "renamed-after-save"
+        assert strategy.description == "other-field-saved"
+        assert strategy.bksec_config == previous
+        assert "内置发单套餐未就绪" in result.bksec_sync_message
+        assert not RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).exists()
         update_remote.assert_called_once()
 
 
@@ -1322,3 +1386,40 @@ class TestBkSecPushStatus:
         """未推送过的风险单允许测试发送"""
         with RiskContext() as risk:
             validate_bksec_test_target(risk)
+
+    def test_push_failure_only_for_builtin_pa_and_keeps_success(self):
+        """只有内置发单套餐失败才记推送失败，已成功不被其他套餐失败盖掉。"""
+        from apps.sops.constants import SOPSTaskStatus
+        from services.web.risk.constants import BkSecPushStatus
+        from services.web.risk.handlers.ticket import AutoProcess
+
+        builtin = ProcessApplication.objects.create(
+            name="builtin-pa", sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        other = ProcessApplication.objects.create(
+            name="other-pa", sops_template_id=10002, need_approve=False, is_enabled=True, is_builtin=False
+        )
+        failed = {"state": SOPSTaskStatus.FAILED.value}
+        with RiskContext() as risk:
+            handler = AutoProcess(risk_id=risk.risk_id, operator="admin")
+            handler.update_status(
+                {"status": failed, "pa_id": other.id},
+                pa_config={"auto_close_risk": False},
+            )
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.NOT_PUSHED
+
+            handler.update_status(
+                {"status": failed, "pa_id": builtin.id},
+                pa_config={"auto_close_risk": False},
+            )
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.FAILED
+
+            risk.bksec_push_status = BkSecPushStatus.SUCCESS
+            risk.save(update_fields=["bksec_push_status"])
+            handler.risk.refresh_from_db()
+            handler._reused_task_node = mock.Mock(process_result={"pa_id": other.id})
+            handler.update_status({"status": failed}, pa_config={"auto_close_risk": False})
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.SUCCESS

@@ -814,12 +814,37 @@ class AutoProcess(RiskFlowBaseHandler):
         else:
             self.risk.status = RiskStatus.AUTO_PROCESS
         update_fields = ["status"]
-        # 任务失败即视为推送失败（推单重试耗尽会走到这里）；严格说任务失败也可能来自
-        # 校验/渲染等环节，绝大多数情况就是推单失败，先统一处理，后续可让插件上报细分原因
-        if "status" in process_result and process_result["status"]["state"] in SOPSTaskStatus.get_failed_status():
-            self.risk.bksec_push_status = BkSecPushStatus.FAILED
+        if self._record_bksec_push_failure(process_result):
             update_fields.append("bksec_push_status")
         self.risk.save(update_fields=update_fields)
+
+    def _record_bksec_push_failure(self, process_result: dict) -> bool:
+        """内置发单套餐失败时记推送失败。已经推送成功的不改回失败，其他套餐不写这个字段。"""
+
+        status = (process_result or {}).get("status") or {}
+        if status.get("state") not in SOPSTaskStatus.get_failed_status():
+            return False
+        if self.risk.bksec_push_status == BkSecPushStatus.SUCCESS:
+            return False
+        if not self._failed_task_is_builtin_pa(process_result):
+            return False
+        self.risk.bksec_push_status = BkSecPushStatus.FAILED
+        return True
+
+    def _failed_task_is_builtin_pa(self, process_result: dict) -> bool:
+        """这次失败的任务是否落在 BKSEC 内置发单套餐上。"""
+
+        pa_id = (process_result or {}).get("pa_id")
+        if pa_id in (None, "", 0):
+            node = getattr(self, "_reused_task_node", None)
+            if node is not None:
+                pa_id = (getattr(node, "process_result", None) or {}).get("pa_id")
+        if pa_id not in (None, "", 0):
+            pa = ProcessApplication.objects.filter(id=pa_id).only("id", "is_builtin").first()
+            return bool(pa and pa.is_builtin)
+        if getattr(self, "_reused_task_node", None) is not None:
+            return False
+        return bool(self.process_application and self.process_application.is_builtin)
 
     def _refresh_existing_task(self) -> Optional[dict]:
         """刷新已有套餐任务。标准运维里仍在执行的才复用；已结束的写回所属节点并结束这条记录。"""

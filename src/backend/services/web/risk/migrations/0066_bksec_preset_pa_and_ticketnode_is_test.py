@@ -22,14 +22,39 @@ import uuid
 from django.db import migrations, models
 
 PRESET_PA_NAME = "【内置】BKSEC安全工单发单"
+PROCESS_APPLICATION = "process_application"
+PLATFORM_BINDING = "platform_binding"
+ALL_SCENES = "all_scenes"
+
+
+def bind_builtin_pa_all_scenes(apps, pa):
+    """内置套餐绑成平台级，全部场景可见。"""
+
+    resource_binding = apps.get_model("scene", "ResourceBinding")
+    binding = resource_binding.objects.filter(
+        resource_type=PROCESS_APPLICATION,
+        resource_id=str(pa.id),
+    ).first()
+    if binding is None:
+        resource_binding.objects.create(
+            resource_type=PROCESS_APPLICATION,
+            resource_id=str(pa.id),
+            binding_type=PLATFORM_BINDING,
+            visibility_type=ALL_SCENES,
+        )
+        return
+    if binding.binding_type != PLATFORM_BINDING or binding.visibility_type != ALL_SCENES:
+        binding.binding_type = PLATFORM_BINDING
+        binding.visibility_type = ALL_SCENES
+        binding.save(update_fields=["binding_type", "visibility_type"])
 
 
 def create_builtin_pa(apps, schema_editor):
     """
-    迁移时按 BKAPP_BKSEC_SOPS_TEMPLATE_ID 补齐内置套餐。
+    迁移时按 BKAPP_BKSEC_SOPS_TEMPLATE_ID 补齐内置套餐，并绑成平台级、全部场景可见。
 
-    未配置或不是整数时跳过，迁移仍然成功。已有同模板 ID 的内置套餐则不动，
-    也不修改其他套餐的模板 ID。运行时还会再补一次，环境变量后配或更换模板 ID 仍然有效。
+    未配置或不是整数时跳过，迁移仍然成功。已有同模板 ID 的内置套餐则不新建，
+    只补绑定，也不修改其他套餐的模板 ID。运行时还会再补一次，环境变量后配或更换模板 ID 仍然有效。
     """
     raw = os.environ.get("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
     if not raw:
@@ -39,9 +64,11 @@ def create_builtin_pa(apps, schema_editor):
     except (TypeError, ValueError):
         return
     process_application = apps.get_model("risk", "ProcessApplication")
-    if process_application.objects.filter(is_builtin=True, sops_template_id=template_id).exists():
+    existing = process_application.objects.filter(is_builtin=True, sops_template_id=template_id).order_by("-id").first()
+    if existing is not None:
+        bind_builtin_pa_all_scenes(apps, existing)
         return
-    process_application.objects.create(
+    pa = process_application.objects.create(
         uniq_id=uuid.uuid4().hex,
         name=PRESET_PA_NAME,
         sops_template_id=template_id,
@@ -50,12 +77,14 @@ def create_builtin_pa(apps, schema_editor):
         is_builtin=True,
         is_deleted=False,
     )
+    bind_builtin_pa_all_scenes(apps, pa)
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
         ("risk", "0065_alter_risk_longtext_charset_utf8mb4"),
+        ("scene", "0014_scene_permission_application"),
     ]
 
     operations = [

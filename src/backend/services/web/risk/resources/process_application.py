@@ -486,11 +486,6 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
         # 场景先按风险所属场景收窄，再按该场景可见套餐过滤。没有候选套餐时返回空结果。
         nodes = _filter_execution_nodes_by_scope(nodes, pa_id, scene_id)
-
-        # 风险入口：按风险 ID 筛选
-        if risk_id:
-            nodes = nodes.filter(risk_id=risk_id)
-
         # 开始时间闭区间：from <= timestamp <= to。套餐列表缺省近 30 天；风险入口不套默认。
         time_from = validated_request_data.get("from")
         time_to = validated_request_data.get("to")
