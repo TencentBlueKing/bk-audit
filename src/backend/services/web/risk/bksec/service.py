@@ -236,21 +236,25 @@ def prepare_test_constants(strategy: Strategy, config: BkSecConfig, risk: Risk, 
     - 必填校验 validate_for_submit 只执行一次；
     - Config 同步用独立测试 key（{strategy_id}_test），不影响正式配置；
       策略未保存时也要先建测试 Config，插件才能接受本次发送；
-    - 测试接收人：BKSEC push_event 发单仅支持单人，取首个覆盖 ${operator}
-      （契约兼容单值 operator，保证测试单隔离）。
+    - 测试接收人：BKSEC push_event 发单仅支持单人，取首个非空接收人覆盖 ${operator}
+      （契约兼容单值 operator，保证测试单隔离）。没有有效接收人则拒绝，避免落到正式责任人。
+    - once_task 由 build_plugin_constants 固定为测试模式，不根据接收人是否为空推导。
     """
     try:
         config.validate_for_submit()
     except ValueError as err:
         raise serializers.ValidationError(gettext_lazy("BKSEC 配置不合法：%s") % err)
+    receivers = [str(item or "").strip() for item in test_receivers or []]
+    receivers = [item for item in receivers if item]
+    if not receivers:
+        raise serializers.ValidationError(gettext_lazy("至少指定一个测试接收人"))
     from services.web.risk.bksec.rules import sync_plugin_config
 
     success, message = sync_plugin_config(strategy, config, is_test=True)
     if not success:
         raise serializers.ValidationError(gettext_lazy("测试前插件配置同步失败，无法发送测试工单：%s") % message)
-    test_operator = test_receivers[0] if test_receivers else ""
     try:
-        return build_plugin_constants(config, risk=risk, test_operator=test_operator)
+        return build_plugin_constants(config, risk=risk, test_operator=receivers[0])
     except Exception as err:  # NOCC:broad-except(测试发送即时报错，便于定位配置问题)
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
 

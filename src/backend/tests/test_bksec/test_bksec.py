@@ -507,6 +507,7 @@ class TestContract:
         assert constants["${risk_id}"] == risk.risk_id
         assert constants["${event_type}"] == '["SuperPermission"]'  # event_type 从 risk.event_type 序列化
         assert constants["${operator}"] == '["tester"]'  # 数组串，满足插件 json.loads 契约
+        assert constants["${once_task}"] == "yes"  # 测试发送固定测试模式，不随接收人推导
         # event_data 还原为事件拓展数据
         assert json.loads(constants["${event_data}"]) == {"username": "admin"}
         # risk_type_extra 承载全部字段映射（含 target/target_type/operator，与独立入参重复但语义独立）
@@ -514,6 +515,12 @@ class TestContract:
         assert "description" in extra and "operator" in extra and "target_type" in extra
         # target 独立入参模板已渲染
         assert risk.risk_id in constants["${target}"]
+        # 接收人为空时仍固定测试模式，不回落到正式 once_task=no
+        with mock.patch(
+            "services.web.risk.bksec.render.load_risk_events", mock.Mock(return_value=[{"event_id": "e1"}])
+        ):
+            without_receiver = build_plugin_constants(config, risk=risk, test_operator="")
+        assert without_receiver["${once_task}"] == "yes"
 
     def test_render_bksec_constant_dispatch(self):
         """派单值加工收口：标量模板 / risk_type_extra JSON 重组 / operator 契约，各走各的分支"""
@@ -829,6 +836,7 @@ class TestBkSecResources:
         assert "description" in extra and "operator" in extra
         # Bug1 修复锁定：测试发送必须以指定处理人覆盖初始责任人，保证隔离
         assert constants["${operator}"] == '["tester"]'  # 数组串，满足插件 json.loads 契约
+        assert constants["${once_task}"] == "yes"
         # 决策 A 修复锁定：测试发送必须携带样例风险单，risk 变量按真实数据渲染；
         # target 独立入参模板已渲染
         assert risk.risk_id in constants["${target}"]
@@ -840,6 +848,30 @@ class TestBkSecResources:
         assert snapshot["${event_content}"]["name"] == "风险描述"
         assert snapshot["${event_type}"]["value"] == '["SuperPermission"]'
         assert snapshot["${operator}"]["value"] == '["tester"]'
+
+    def test_empty_test_receivers_rejected_before_send(self):
+        """空接收人、空白接收人在序列化和 Resource.request 都被拒绝，不生成正式发送参数"""
+        from bk_resource.exceptions import ValidateException
+
+        from services.web.risk.serializers import SendTestTicketReqSerializer
+
+        for receivers in ([], [""], ["  "], ["", "  "]):
+            serializer = SendTestTicketReqSerializer(
+                data={"test_receivers": receivers, "risk_id": "risk-1", "bksec_config": BKSEC_CONFIG_DATA}
+            )
+            assert serializer.is_valid() is False
+            assert "test_receivers" in serializer.errors
+        serializer = SendTestTicketReqSerializer(
+            data={"test_receivers": ["  tester  ", ""], "risk_id": "risk-1", "bksec_config": BKSEC_CONFIG_DATA}
+        )
+        assert serializer.is_valid() is True
+        assert serializer.validated_data["test_receivers"] == ["tester"]
+        with mock.patch("services.web.risk.resources.bksec.api.bk_sops.create_task") as create_task:
+            with pytest.raises(ValidateException):
+                resource.risk.send_test_ticket.request(
+                    {"test_receivers": [], "risk_id": "risk-1", "bksec_config": BKSEC_CONFIG_DATA}
+                )
+        create_task.assert_not_called()
 
     def test_send_test_ticket_blocked_by_formal_dispatch(self, settings):
         """回调隔离守卫：风险存在正式派单历史时拒绝测试发送（防插件回调复用污染/静默拦截）"""
