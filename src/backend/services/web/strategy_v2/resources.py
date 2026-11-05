@@ -850,10 +850,13 @@ class UpdateStrategy(StrategyV2Base):
             strategy=strategy, validated_request_data=validated_request_data, draft_save=draft_save
         )
         # BKSEC 发单规则同步（草稿保存不部署、不建规则）
+        # 正式提交时 update_db 不改状态，策略仍是 DRAFT。不显式传启用态的话，同步会把它当成未启用直接返回，
+        # 后面的部署也不会再同步，自动规则和插件配置就漏掉了。
+        submitting_draft = is_draft_strategy and is_draft is False
         if not draft_save:
             from services.web.risk.bksec.rules import sync_bksec_rule
 
-            sync_bksec_rule(strategy)
+            sync_bksec_rule(strategy, strategy_alive=True if submitting_draft else None)
         if is_draft_strategy:
             # 草稿策略：仅落库不部署；提交（is_draft=False）时走创建链路部署（草稿从未部署，无 flow_id）
             if is_draft is False:
