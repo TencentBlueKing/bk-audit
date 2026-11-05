@@ -817,6 +817,111 @@ class TestBkSecRules:
         assert sync.call_args.kwargs["strategy_alive"] is None
         controller.assert_not_called()
 
+    def test_plugin_sync_failure_keeps_strategy_and_restores_bksec_config(self, settings):
+        """插件拒绝配置时规则回滚，bksec_config 回到保存前，其余字段保留，并给出说明。"""
+        from django.db import transaction
+
+        from services.web.risk.bksec.rules import sync_bksec_rule_or_keep_strategy
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.serializers import (
+            CreateStrategyResponseSerializer,
+            UpdateStrategyResponseSerializer,
+        )
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        previous = {"enabled": False}
+        with mock.patch(
+            "services.web.risk.bksec.rules.sync_plugin_config", return_value=(False, "plugin down")
+        ), mock.patch("time.sleep"):
+            with transaction.atomic():
+                created = Strategy.objects.create(
+                    namespace="default",
+                    strategy_name="kept-on-create",
+                    description="other-field-saved",
+                    bksec_config=BKSEC_CONFIG_DATA,
+                )
+                sync_bksec_rule_or_keep_strategy(created, {})
+            updated = Strategy.objects.create(
+                namespace="default",
+                strategy_name="before-rename",
+                description="before-desc",
+                bksec_config=previous,
+            )
+            updated.strategy_name = "renamed-after-save"
+            updated.description = "other-field-saved"
+            updated.bksec_config = BKSEC_CONFIG_DATA
+            updated.save(update_fields=["strategy_name", "description", "bksec_config"])
+            sync_bksec_rule_or_keep_strategy(updated, previous)
+
+        created.refresh_from_db()
+        updated.refresh_from_db()
+        assert created.strategy_name == "kept-on-create"
+        assert created.description == "other-field-saved"
+        assert created.bksec_config == {}
+        assert updated.strategy_name == "renamed-after-save"
+        assert updated.description == "other-field-saved"
+        assert updated.bksec_config == previous
+        assert not RiskRule.objects.filter(auto_strategy_id__in=[created.strategy_id, updated.strategy_id]).exists()
+        created_data = CreateStrategyResponseSerializer(created).data
+        updated_data = UpdateStrategyResponseSerializer(updated).data
+        assert "未生效" in created_data["bksec_sync_message"]
+        assert "plugin down" in created_data["bksec_sync_message"]
+        assert created_data["bksec_config"] == {}
+        assert updated_data["bksec_config"] == previous
+        assert "strategy_id" in created_data and "strategy_name" in created_data
+
+    def test_update_continues_after_plugin_sync_failure(self):
+        """更新接口在插件同步失败后仍保存其余字段，并继续后续部署。"""
+        from services.web.risk.bksec.rules import BkSecPluginSyncError
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        previous = {"enabled": False}
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="before-rename",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=previous,
+        )
+
+        def fake_update_db(strategy, validated_request_data, draft_save):
+            strategy.strategy_name = "renamed-after-save"
+            strategy.description = "other-field-saved"
+            strategy.bksec_config = BKSEC_CONFIG_DATA
+            strategy.save(update_fields=["strategy_name", "description", "bksec_config"])
+            return True
+
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", side_effect=fake_update_db), mock.patch.object(
+            updater, "update_remote"
+        ) as update_remote, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=BkSecPluginSyncError("plugin down")
+        ):
+            result = updater.perform_request(
+                {"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type}
+            )
+
+        strategy.refresh_from_db()
+        assert strategy.strategy_name == "renamed-after-save"
+        assert strategy.description == "other-field-saved"
+        assert strategy.bksec_config == previous
+        assert "未生效" in result.bksec_sync_message
+        assert "plugin down" in result.bksec_sync_message
+        update_remote.assert_called_once()
+
 
 @pytest.mark.django_db
 class TestBkSecResources:
