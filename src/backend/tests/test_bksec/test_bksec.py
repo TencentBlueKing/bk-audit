@@ -722,6 +722,101 @@ class TestBkSecRules:
         assert updated.version == rule.version + 1
         assert _rule_scenes(updated.rule_id) == [scene_b.scene_id]
 
+    def test_draft_status_needs_explicit_alive_to_create_rule(self, settings):
+        """状态仍是 DRAFT 时，不传 strategy_alive 不建规则；显式启用才会建规则并同步插件配置"""
+        from services.web.risk.bksec.rules import sync_bksec_rule
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        strategy.status = StrategyStatusChoices.DRAFT.value
+        strategy.save(update_fields=["status"])
+        with mock.patch(
+            "services.web.risk.bksec.rules.sync_plugin_config", mock.Mock(return_value=(True, "ok"))
+        ) as plugin_sync:
+            assert sync_bksec_rule(strategy) is None
+            plugin_sync.assert_not_called()
+            rule = sync_bksec_rule(strategy, strategy_alive=True)
+        assert rule is not None and rule.is_enabled
+        assert rule.auto_strategy_id == strategy.strategy_id
+        plugin_sync.assert_called_once()
+        strategy.status = StrategyStatusChoices.RUNNING.value
+        strategy.save(update_fields=["status"])
+
+    def test_draft_submit_syncs_bksec_rule_as_alive(self):
+        """草稿以 is_draft=False 提交时，在部署前按启用态同步发单规则"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="bksec_draft_submit",
+            status=StrategyStatusChoices.DRAFT.value,
+            bksec_config=BKSEC_CONFIG_DATA,
+        )
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", return_value=False) as update_db, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller"
+        ) as controller, mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule"
+        ) as sync:
+            updater.perform_request(
+                {
+                    "strategy_id": strategy.strategy_id,
+                    "strategy_type": strategy.strategy_type,
+                    "is_draft": False,
+                }
+            )
+        sync.assert_called_once()
+        assert sync.call_args.args[0].strategy_id == strategy.strategy_id
+        assert sync.call_args.args[0].status == StrategyStatusChoices.DRAFT.value
+        assert sync.call_args.kwargs["strategy_alive"] is True
+        update_db.assert_called_once()
+        controller.assert_called_once()
+
+    def test_running_update_derives_bksec_alive_from_status(self):
+        """已提交策略的普通更新不覆盖启用态，仍按当前状态推导"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="bksec_running_update",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=BKSEC_CONFIG_DATA,
+        )
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", return_value=False), mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller"
+        ) as controller, mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule"
+        ) as sync:
+            updater.perform_request({"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type})
+        sync.assert_called_once()
+        assert sync.call_args.kwargs["strategy_alive"] is None
+        controller.assert_not_called()
+
 
 @pytest.mark.django_db
 class TestBkSecResources:
