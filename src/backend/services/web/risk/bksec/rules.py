@@ -53,6 +53,24 @@ class BkSecPresetNotReady(serializers.ValidationError):
 # 处理规则的生命周期管理
 
 
+def _report_invalid_bksec_config(strategy: Strategy, err: Exception) -> None:
+    """配置无法解析时上报。上报失败不影响「停用自动规则」这条降级。"""
+
+    try:
+        from services.web.common.monitor import BkSecConfigSyncFailedEvent
+
+        BkSecConfigSyncFailedEvent(
+            context={
+                "strategy_id": str(strategy.strategy_id),
+                "stage": BkSecConfigSyncStage.RULE_SYNC.value,
+                "fail_reason": BkSecConfigSyncFailReason.CONFIG_INVALID.value,
+            },
+            extra={"error": str(err)},
+        ).report()
+    except Exception:  # NOCC:broad-except(告警失败不得挡住规则停用)
+        logger.exception("[BkSecRule] Report invalid bksec_config failed, strategy_id=%s", strategy.strategy_id)
+
+
 def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
     """
     解析策略的 BKSEC 配置：Strategy.bksec_config（JSON 字段）→ 校验过的 BkSecConfig 对象
@@ -66,6 +84,7 @@ def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
         return BkSecConfig.model_validate(raw)
     except Exception as err:  # NOCC:broad-except(配置解析降级)
         logger.exception("[BkSecRule] Invalid bksec_config, strategy_id=%s err=%s", strategy.strategy_id, err)
+        _report_invalid_bksec_config(strategy, err)
         return None
 
 

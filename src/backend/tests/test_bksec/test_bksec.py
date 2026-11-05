@@ -251,6 +251,14 @@ class TestBkSecPluginConfigAuth:
         assert "无权" in message
         assert upsert.call_count == 0
 
+    def test_visibility_check_skips_cache(self):
+        """写路径每次都向网关确认，不复用下拉列表的 300 秒缓存"""
+        from services.web.risk.bksec.service import is_risk_type_visible
+
+        with mock.patch("services.web.risk.bksec.service.fetch_risk_access_items", return_value=[{"id": "1"}]) as fetch:
+            assert is_risk_type_visible("1", project_id="17") is True
+        assert fetch.call_args.kwargs["use_cache"] is False
+
     def test_visible_risk_type_allowed(self):
         """用户可见的 (项目, 风险类型) 正常同步，写入的是该类型自身的 token"""
         (success, _), upsert = self._sync("17", "1")
@@ -642,6 +650,78 @@ class TestBkSecRules:
         )
         strategy.status = "running"
         strategy.save(update_fields=["status"])
+
+    def test_invalid_config_disables_rule_and_reports(self, settings):
+        """已保存的配置解析失败时停用自动规则，并上报配置不合法。"""
+        from services.web.risk.bksec.rules import sync_bksec_rule
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        rule = sync_bksec_rule(strategy)
+        strategy.bksec_config = {"enabled": True, "field_mappings": "bad"}
+        strategy.save(update_fields=["bksec_config"])
+        with mock.patch("services.web.common.monitor.BkSecConfigSyncFailedEvent") as event:
+            assert sync_bksec_rule(strategy) is None
+        event.assert_called_once()
+        assert event.call_args.kwargs["context"]["fail_reason"] == "config_invalid"
+        assert event.return_value.report.called
+        latest = RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).order_by("-version").first()
+        assert latest.rule_id == rule.rule_id
+        assert latest.is_enabled is False
+
+    def _toggle(self, strategy, toggle, sync_side_effect):
+        from services.web.strategy_v2.resources import ToggleStrategy
+
+        calls = []
+
+        def sync(*args, **kwargs):
+            calls.append(("sync", kwargs.get("strategy_alive")))
+            if isinstance(sync_side_effect, Exception):
+                raise sync_side_effect
+            return sync_side_effect
+
+        with mock.patch.object(ToggleStrategy, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            ToggleStrategy, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller",
+            side_effect=lambda *args, **kwargs: calls.append(("controller", args[0])),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=sync
+        ):
+            ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": toggle})
+        return calls
+
+    def test_toggle_enable_syncs_before_controller(self):
+        """启用时先同步规则，成功后才投递控制器。"""
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        calls = self._toggle(strategy, True, None)
+        assert calls == [("sync", True), ("controller", "enable")]
+
+    def test_toggle_enable_keeps_strategy_off_when_plugin_sync_fails(self):
+        """插件同步失败时不投递启用，接口返回校验错误。"""
+        from services.web.risk.bksec.rules import BkSecPluginSyncError
+        from services.web.strategy_v2.resources import ToggleStrategy
+
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        with mock.patch.object(ToggleStrategy, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            ToggleStrategy, "add_audit_instance_to_context"
+        ), mock.patch("services.web.strategy_v2.resources.call_controller") as controller, mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=BkSecPluginSyncError("plugin down")
+        ):
+            with pytest.raises(serializers.ValidationError, match="策略未启用"):
+                ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": True})
+        controller.assert_not_called()
+
+    def test_toggle_disable_stops_controller_before_rule(self):
+        """停用仍先停策略，再停规则。停用路径不经过插件同步。"""
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        calls = self._toggle(strategy, False, None)
+        assert calls == [("controller", "disabled"), ("sync", False)]
 
     def test_auto_rule_edit_guard(self):
         """自动规则禁人工维护：Update/Toggle/Delete/批量调整一律拒绝"""

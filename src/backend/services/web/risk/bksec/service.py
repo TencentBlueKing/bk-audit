@@ -233,7 +233,10 @@ def is_risk_type_visible(risk_type_id: str, project_id: str = "", as_platform: b
     无用户上下文（后台任务）时用户身份请求会被框架降级为平台身份，等价于不裁剪，不会误阻断。
     """
     for is_formal in ("true", "false"):
-        for item in fetch_risk_access_items(project_id=project_id, is_formal=is_formal, as_platform=as_platform):
+        # 写路径不走展示缓存。权限收回后，下一次保存或测试必须重新向网关确认。
+        for item in fetch_risk_access_items(
+            project_id=project_id, is_formal=is_formal, use_cache=False, as_platform=as_platform
+        ):
             if str(item.get("id")) == str(risk_type_id):
                 return True
     return False
