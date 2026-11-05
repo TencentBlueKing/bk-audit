@@ -117,6 +117,56 @@ class TestListPAExecutionRecords:
         assert records[0]["result"] == "success"
         assert records[0]["risk_title"] == (risk_a.title or "")
 
+    def test_scene_filter_limits_risk_scene_and_empty_pa_returns_nothing(self):
+        """场景筛选按风险所属场景收窄；指定了条件但没有候选套餐时返回空，而不是全部记录。"""
+        from services.web.scene.constants import (
+            BindingType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
+
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        ResourceBinding.objects.filter(resource_type=ResourceVisibilityType.PROCESS_APPLICATION).delete()
+        scene_a = Scene.objects.create(name="exec-record-scene-a")
+        scene_b = Scene.objects.create(name="exec-record-scene-b")
+        empty_scene = Scene.objects.create(name="exec-record-scene-empty")
+        risk_a.scene_id = scene_a.scene_id
+        risk_b.scene_id = scene_b.scene_id
+        risk_a.save(update_fields=["scene_id"])
+        risk_b.save(update_fields=["scene_id"])
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            resource_id=str(pa_a.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SCENES,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene=scene_a)
+        ResourceBindingScene.objects.create(binding=binding, scene=scene_b)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11, pa_id=pa_a.id, pa_name="套餐A")
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=22, pa_id=pa_a.id, pa_name="套餐A")
+
+        resp_a = resource.risk.list_pa_execution_records.perform_request({"scene_id": scene_a.scene_id})
+        resp_b = resource.risk.list_pa_execution_records.perform_request({"scene_id": scene_b.scene_id})
+        assert {item["risk_id"] for item in resp_a["results"]} == {risk_a.risk_id}
+        assert {item["risk_id"] for item in resp_b["results"]} == {risk_b.risk_id}
+
+        resp_all = resource.risk.list_pa_execution_records.perform_request({})
+        assert resp_all["count"] == 2
+
+        resp_empty_scene = resource.risk.list_pa_execution_records.perform_request({"scene_id": empty_scene.scene_id})
+        assert resp_empty_scene["count"] == 0
+        resp_missing_pa = resource.risk.list_pa_execution_records.perform_request({"pa_id": 999999999})
+        assert resp_missing_pa["count"] == 0
+        resp_other_pa = resource.risk.list_pa_execution_records.perform_request(
+            {"scene_id": scene_a.scene_id, "pa_id": pa_b.id}
+        )
+        assert resp_other_pa["count"] == 0
+
     def test_sops_task_url_empty_when_missing(self):
         """历史节点无 task_url 时透出空串，前端降级纯文本"""
         pa_a, pa_b, risk_a, risk_b = self._prepare()
@@ -526,7 +576,7 @@ class TestGetPAExecutionRecordDetail:
         risk = self._prepare()
         pa_constants = [
             {"key": "risk_id", "name": "风险ID", "value": "R-D"},
-            {"key": "operator", "name": "初始责任人", "value": ["frodomei"]},
+            {"key": "operator", "name": "初始责任人", "value": ["张三"]},
         ]
         node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1, pa_constants=pa_constants)
         resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})

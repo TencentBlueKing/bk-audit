@@ -195,7 +195,10 @@ def _pa_filter_q(pa_ids: list) -> Q:
     - 执行时快照 process_result.pa_id 优先：覆盖手动分派 / 测试单 / 规则改绑后的历史记录
     - 无快照的历史节点走规则链路：按 (rule_id, rule_version) 精确命中；
       风险无 rule_version 时按规则最新版本归属（与展示兜底一致）
+    - 候选套餐为空时不命中任何记录。空 Q() 会被 filter 当成不过滤
     """
+    if not pa_ids:
+        return Q(pk__in=[])
     # 快照命中：pa_id 写入为 int，JSON 路径查询类型敏感，兼容 str（同 task_id 筛选）
     snapshot_q = Q()
     for value in pa_ids:
@@ -220,6 +223,28 @@ def _pa_filter_q(pa_ids: list) -> Q:
         return snapshot_q
     legacy_q = no_snapshot_q & Q(risk_id__in=Risk.objects.filter(legacy_rule_q).values("risk_id"))
     return snapshot_q | legacy_q
+
+
+def _filter_execution_nodes_by_scope(nodes, pa_id, scene_id):
+    """按风险所属场景和候选套餐收窄执行记录。指定了条件但没有候选套餐时返回空查询。"""
+    if scene_id:
+        nodes = nodes.filter(risk_id__in=Risk.objects.filter(scene_id=scene_id).values("risk_id"))
+    if not (pa_id or scene_id):
+        return nodes
+    pa_queryset = ProcessApplication.objects.all()
+    if pa_id:
+        pa_queryset = pa_queryset.filter(id=pa_id)
+    if scene_id:
+        pa_queryset = CompositeScopeFilter.filter_queryset(
+            queryset=pa_queryset,
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            pk_field="id",
+        )
+    pa_ids = list(pa_queryset.values_list("id", flat=True))
+    if not pa_ids:
+        return nodes.none()
+    return nodes.filter(_pa_filter_q(pa_ids))
 
 
 class UpdateProcessApplication(ProcessApplicationMeta):
@@ -382,7 +407,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         """枚举字段关键词展开：内部值全等（大小写不敏感）或 keyword 是展示词的子串
 
         - 只做「keyword ⊂ 展示词」单向匹配：`成功` → `执行成功`；反向（展示词 ⊂ keyword）
-          会把长关键词误展开（如 `frodomei测试专用` 含「测试」→ 全部 trigger=test），故不支持
+          会把长关键词误展开（如 `张三测试专用` 含「测试」→ 全部 trigger=test），故不支持
         - 子串命中要求 keyword 长度 >= 2，防单字噪音（如「中」误命中「执行中」）
         - 英文部分匹配（如 "aut"）不展开，交由字段 icontains 兜底
         - 未命中贡献空条件（Q()），不影响其他字段的 OR
@@ -459,24 +484,8 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         # 执行记录 ID 精确过滤（TicketNode.id 为 UUID；空值不过滤）
         nodes = self._filter_by_record_id(nodes, record_id)
 
-        # 套餐筛选 / 场景范围：归属口径与展示一致——执行时快照优先，无快照走规则（含版本）链路兜底
-        if pa_id or scene_id:
-            pa_queryset = ProcessApplication.objects.all()
-            if pa_id:
-                pa_queryset = pa_queryset.filter(id=pa_id)
-            if scene_id:
-                pa_queryset = CompositeScopeFilter.filter_queryset(
-                    queryset=pa_queryset,
-                    scene_id=scene_id,
-                    resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
-                    pk_field="id",
-                )
-            nodes = nodes.filter(_pa_filter_q(list(pa_queryset.values_list("id", flat=True))))
-
-        # 风险入口：按风险 ID 筛选
-        if risk_id:
-            nodes = nodes.filter(risk_id=risk_id)
-
+        # 场景先按风险所属场景收窄，再按该场景可见套餐过滤。没有候选套餐时返回空结果。
+        nodes = _filter_execution_nodes_by_scope(nodes, pa_id, scene_id)
         # 开始时间闭区间：from <= timestamp <= to。套餐列表缺省近 30 天；风险入口不套默认。
         time_from = validated_request_data.get("from")
         time_to = validated_request_data.get("to")

@@ -885,25 +885,13 @@ class AutoProcess(RiskFlowBaseHandler):
         3. 自动更新审批状态
         """
 
-        # 已有任务获取状态
-        task_id = self.load_task_id()
-        if task_id:
-            try:
-                process_result = {
-                    "status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-                }
-                return self._attach_failure_hint(process_result, task_id=task_id)
-            except APIRequestError as err:
-                # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
-                err_data = getattr(err, "data", {}) or {}
-                if "code" in err_data:
-                    logger.exception(
-                        f"[AutoProcess] get_task_status business error, "
-                        f"risk_id={self.risk.risk_id}, task_id={task_id}, err={err}"
-                    )
-                    return self._attach_failure_hint({"status": {"state": SOPSTaskStatus.FAILED}})
-                # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
-                raise
+        # 人工显式选择套餐时不复用上一轮任务，直接按本次 pa_config 建新任务。
+        # 自动轮询不带 pa_config，才刷新已有任务，避免 last_history 被顶掉后重复建单。
+        self._reused_task_node = None
+        if pa_config is None:
+            reused = self._refresh_existing_task()
+            if reused is not None:
+                return reused
 
         # 触发方式快照：人工选择(显式传参) / 审批通过(上个节点为审批) / 规则自动匹配
         last_node = self.risk.last_history
@@ -1022,19 +1010,74 @@ class AutoProcess(RiskFlowBaseHandler):
         else:
             self.risk.status = RiskStatus.AUTO_PROCESS
         update_fields = ["status"]
-        # 任务失败即视为推送失败（推单重试耗尽会走到这里）；严格说任务失败也可能来自
-        # 校验/渲染等环节，绝大多数情况就是推单失败，先统一处理，后续可让插件上报细分原因
-        if "status" in process_result and process_result["status"]["state"] in SOPSTaskStatus.get_failed_status():
-            self.risk.bksec_push_status = BkSecPushStatus.FAILED
+        if self._record_bksec_push_failure(process_result):
             update_fields.append("bksec_push_status")
         self.risk.save(update_fields=update_fields)
 
-    def load_task_id(self) -> str:
-        # 优先复用本风险单正在执行的套餐任务：last_history 会被人工处理/新建等节点顶掉，
-        # 只看它会误判为"没有任务"从而重复建单（执行记录出现两条相同任务）
-        # is_test=False：测试单的执行记录同样记为 AutoProcess 且乐观写入执行中，
-        # 若不排除，发过测试单的风险单会被判定为"已有任务"→ 正式派单根本不建任务，
-        # 且其任务成功后触发自动关单 → 演变成"发个测试单就把风险关了"
+    def _record_bksec_push_failure(self, process_result: dict) -> bool:
+        """内置发单套餐失败时记推送失败。已经推送成功的不改回失败，其他套餐不写这个字段。"""
+
+        status = (process_result or {}).get("status") or {}
+        if status.get("state") not in SOPSTaskStatus.get_failed_status():
+            return False
+        if self.risk.bksec_push_status == BkSecPushStatus.SUCCESS:
+            return False
+        if not self._failed_task_is_builtin_pa(process_result):
+            return False
+        self.risk.bksec_push_status = BkSecPushStatus.FAILED
+        return True
+
+    def _failed_task_is_builtin_pa(self, process_result: dict) -> bool:
+        """这次失败的任务是否落在 BKSEC 内置发单套餐上。"""
+
+        pa_id = (process_result or {}).get("pa_id")
+        if pa_id in (None, "", 0):
+            node = getattr(self, "_reused_task_node", None)
+            if node is not None:
+                pa_id = (getattr(node, "process_result", None) or {}).get("pa_id")
+        if pa_id not in (None, "", 0):
+            pa = ProcessApplication.objects.filter(id=pa_id).only("id", "is_builtin").first()
+            return bool(pa and pa.is_builtin)
+        if getattr(self, "_reused_task_node", None) is not None:
+            return False
+        return bool(self.process_application and self.process_application.is_builtin)
+
+    def _refresh_existing_task(self) -> Optional[dict]:
+        """刷新已有套餐任务。标准运维里仍在执行的才复用；已结束的写回所属节点并结束这条记录。"""
+        node, task_id = self._locate_open_task()
+        if not task_id:
+            return None
+        try:
+            status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+            process_result = {"status": status}
+        except APIRequestError as err:
+            # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
+            err_data = getattr(err, "data", {}) or {}
+            if "code" not in err_data:
+                # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
+                raise
+            logger.exception(
+                "[AutoProcess] get_task_status business error, risk_id=%s, task_id=%s, err=%s",
+                self.risk.risk_id,
+                task_id,
+                err,
+            )
+            process_result = {"status": {"state": SOPSTaskStatus.FAILED}}
+            status = process_result["status"]
+        process_result = self._attach_failure_hint(process_result, task_id=task_id)
+        # 状态写回任务所属节点，避免落到后来插入的人工处理节点上。
+        self._reused_task_node = node
+        # 本地 RUNNING 只是候选。真实状态已结束时立刻标完成，后续不再凭这个字段复用。
+        # 本轮仍返回终态，风险状态机才能离开自动处理，而不会另建一条任务。
+        if status.get("state") in SOPSTaskStatus.get_finished_status():
+            self._close_finished_task_node(node, process_result)
+        return process_result
+
+    def _locate_open_task(self):
+        """定位可能仍在执行的正式套餐任务，返回 (所属节点, task_id)。"""
+        # last_history 会被人工处理/新建等节点顶掉，只看它会误判为"没有任务"从而重复建单。
+        # is_test=False：测试单同样记为 AutoProcess 且乐观写入执行中，
+        # 若不排除，发过测试单的风险单会被判定为"已有任务"，正式派单不建任务。
         running_node = (
             TicketNode.objects.filter(
                 risk_id=self.risk.risk_id,
@@ -1048,23 +1091,52 @@ class AutoProcess(RiskFlowBaseHandler):
         if running_node:
             task_id = str((running_node.process_result or {}).get("task", {}).get("task_id", "") or "")
             if task_id:
-                return task_id
-        return self.risk.last_history.process_result.get("task", {}).get("task_id", "")
+                return running_node, task_id
+        last = self.risk.last_history
+        if last is None or getattr(last._state, "adding", True):
+            return None, ""
+        task_id = str((last.process_result or {}).get("task", {}).get("task_id", "") or "")
+        if task_id:
+            return last, task_id
+        return None, ""
+
+    def _close_finished_task_node(self, node: Optional[TicketNode], process_result: dict) -> None:
+        """把终态写回持有该任务的节点，并标成已完成。不写到后来插入的人工处理节点。"""
+        if node is None or getattr(node._state, "adding", True):
+            return
+        merged = dict(node.process_result or {})
+        merged.update(process_result)
+        node.process_result = merged
+        node.status = TicketNodeStatus.FINISHED
+        update_fields = ["process_result", "status"]
+        if "duration" in process_result:
+            node.duration = process_result["duration"]
+            update_fields.append("duration")
+        node.save(update_fields=update_fields)
 
     def record_history(self, process_result: dict, **kwargs) -> None:
         # 首次执行记录完整信息
         if "task" in process_result:
             return super().record_history(process_result, **kwargs)
-        # 已有单据且状态不同则更新状态
+        # 状态刷新写回任务所属节点。last_history 可能已是刚插入的人工处理节点。
         if "status" in process_result:
+            node = self._reused_task_node or self.risk.last_history
+            if node is None or getattr(node._state, "adding", True):
+                return
             current_status = process_result.get("status") or {}
-            history_status = self.risk.last_history.process_result.get("status") or {}
+            history_status = (node.process_result or {}).get("status") or {}
+            update_fields = []
             if current_status.get("state") != history_status.get("state"):
-                self.risk.last_history.process_result.update(process_result)
+                merged = dict(node.process_result or {})
+                merged.update(process_result)
+                node.process_result = merged
+                update_fields.append("process_result")
                 # duration 任务耗时写入执行记录
                 if "duration" in process_result:
-                    self.risk.last_history.duration = process_result["duration"]
-                self.risk.last_history.save(update_fields=["process_result", "duration"])
+                    node.duration = process_result["duration"]
+                    update_fields.append("duration")
+            if update_fields:
+                node.save(update_fields=update_fields)
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         history = {**kwargs}

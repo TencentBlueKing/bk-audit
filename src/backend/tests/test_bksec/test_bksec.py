@@ -22,8 +22,13 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from django.conf import settings
+from django.http import Http404
 from rest_framework import serializers
 
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import InstanceActionPermission
+from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException, ValidationError
 from services.web.risk.bksec import sync_bksec_rule
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import BKSEC_RULE_PRIORITY_BASE
@@ -37,7 +42,10 @@ from services.web.risk.bksec.service import (
     has_bksec_ticket_sent,
     validate_bksec_test_target,
 )
+from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, RiskRule, TicketNode
+from services.web.risk.permissions import BkSecTestTaskStatusPermission
+from services.web.risk.views import TicketViewSet
 from tests.test_risk.test_tickets.base import RiskContext
 from tests.test_risk.test_tickets.constants import RISK_INFO
 
@@ -74,6 +82,20 @@ BKSEC_CONFIG_DATA = {
         {"key": "description", "name": "描述", "value": "{{ risk.event_content }}"},
     ],
 }
+
+
+def _create_test_node(risk, task_id, operator="tester"):
+    return TicketNode.objects.create(
+        risk_id=risk.risk_id,
+        operator=operator,
+        action="AutoProcess",
+        timestamp=1,
+        time="2026-01-01 00:00:00",
+        process_result={"task": {"task_id": task_id}},
+        extra={},
+        status=TicketNodeStatus.RUNNING,
+        is_test=True,
+    )
 
 
 class TestRiskAccessFetch:
@@ -485,6 +507,7 @@ class TestContract:
         assert constants["${risk_id}"] == risk.risk_id
         assert constants["${event_type}"] == '["SuperPermission"]'  # event_type 从 risk.event_type 序列化
         assert constants["${operator}"] == '["tester"]'  # 数组串，满足插件 json.loads 契约
+        assert constants["${once_task}"] == "yes"  # 测试发送固定测试模式，不随接收人推导
         # event_data 还原为事件拓展数据
         assert json.loads(constants["${event_data}"]) == {"username": "admin"}
         # risk_type_extra 承载全部字段映射（含 target/target_type/operator，与独立入参重复但语义独立）
@@ -492,6 +515,12 @@ class TestContract:
         assert "description" in extra and "operator" in extra and "target_type" in extra
         # target 独立入参模板已渲染
         assert risk.risk_id in constants["${target}"]
+        # 接收人为空时仍固定测试模式，不回落到正式 once_task=no
+        with mock.patch(
+            "services.web.risk.bksec.render.load_risk_events", mock.Mock(return_value=[{"event_id": "e1"}])
+        ):
+            without_receiver = build_plugin_constants(config, risk=risk, test_operator="")
+        assert without_receiver["${once_task}"] == "yes"
 
     def test_render_bksec_constant_dispatch(self):
         """派单值加工收口：标量模板 / risk_type_extra JSON 重组 / operator 契约，各走各的分支"""
@@ -635,13 +664,64 @@ class TestBkSecRules:
         assert latest.is_enabled and latest.version == rule.version
 
     def test_sync_rule_without_preset_pa(self, settings):
+        from rest_framework import serializers
+
         from services.web.risk.bksec.rules import sync_bksec_rule
 
         settings.BKSEC_SOPS_TEMPLATE_ID = None
         RiskRule.objects.all().delete()
         ProcessApplication.objects.all().delete()
         strategy = self._strategy(BKSEC_CONFIG_DATA)
-        assert sync_bksec_rule(strategy) is None
+        with pytest.raises(serializers.ValidationError):
+            sync_bksec_rule(strategy)
+
+    def test_sync_rule_creates_builtin_pa_without_touching_old_pa(self, settings):
+        """模板 ID 已配置但没有对应内置套餐时自动补齐，旧套餐的模板 ID 保持不变。"""
+        from services.web.risk.bksec.rules import sync_bksec_rule
+        from services.web.risk.bksec.service import ensure_preset_pa
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "20002"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        old_pa = ProcessApplication.objects.create(
+            name="旧发单套餐", sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=False
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        rule = sync_bksec_rule(strategy)
+        from services.web.scene.constants import (
+            BindingType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceBinding
+
+        def _assert_platform_all_scenes(pa):
+            binding = ResourceBinding.objects.get(
+                resource_type=ResourceVisibilityType.PROCESS_APPLICATION.value,
+                resource_id=str(pa.id),
+            )
+            assert binding.binding_type == BindingType.PLATFORM_BINDING.value
+            assert binding.visibility_type == VisibilityScope.ALL_SCENES.value
+
+        builtin = ProcessApplication.objects.get(is_builtin=True, sops_template_id=20002)
+        assert rule.pa_id == builtin.id
+        assert builtin.need_approve is False
+        _assert_platform_all_scenes(builtin)
+        old_pa.refresh_from_db()
+        assert old_pa.sops_template_id == 10001
+        assert old_pa.is_builtin is False
+        # 已有内置套餐缺绑定时，再次补齐会补上平台级、全部场景可见，不另插套餐
+        ResourceBinding.objects.filter(resource_id=str(builtin.id)).delete()
+        assert ensure_preset_pa().id == builtin.id
+        _assert_platform_all_scenes(builtin)
+        assert ProcessApplication.objects.filter(is_builtin=True).count() == 1
+        settings.BKSEC_SOPS_TEMPLATE_ID = "30003"
+        created = ensure_preset_pa()
+        assert created.sops_template_id == 30003
+        _assert_platform_all_scenes(created)
+        builtin.refresh_from_db()
+        assert builtin.sops_template_id == 20002
+        assert ProcessApplication.objects.filter(is_builtin=True).count() == 2
 
     def test_sync_rule_scene_binding_follows_strategy(self, settings):
         """规则场景归属跟随策略：策略改绑场景后规则可见性同步更新"""
@@ -692,6 +772,251 @@ class TestBkSecRules:
         updated = sync_bksec_rule(strategy)
         assert updated.version == rule.version + 1
         assert _rule_scenes(updated.rule_id) == [scene_b.scene_id]
+
+    def test_draft_status_needs_explicit_alive_to_create_rule(self, settings):
+        """状态仍是 DRAFT 时，不传 strategy_alive 不建规则；显式启用才会建规则并同步插件配置"""
+        from services.web.risk.bksec.rules import sync_bksec_rule
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        strategy.status = StrategyStatusChoices.DRAFT.value
+        strategy.save(update_fields=["status"])
+        with mock.patch(
+            "services.web.risk.bksec.rules.sync_plugin_config", mock.Mock(return_value=(True, "ok"))
+        ) as plugin_sync:
+            assert sync_bksec_rule(strategy) is None
+            plugin_sync.assert_not_called()
+            rule = sync_bksec_rule(strategy, strategy_alive=True)
+        assert rule is not None and rule.is_enabled
+        assert rule.auto_strategy_id == strategy.strategy_id
+        plugin_sync.assert_called_once()
+        strategy.status = StrategyStatusChoices.RUNNING.value
+        strategy.save(update_fields=["status"])
+
+    def test_draft_submit_syncs_bksec_rule_as_alive(self):
+        """草稿以 is_draft=False 提交时，在部署前按启用态同步发单规则"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="bksec_draft_submit",
+            status=StrategyStatusChoices.DRAFT.value,
+            bksec_config=BKSEC_CONFIG_DATA,
+        )
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", return_value=False) as update_db, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller"
+        ) as controller, mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule"
+        ) as sync:
+            updater.perform_request(
+                {
+                    "strategy_id": strategy.strategy_id,
+                    "strategy_type": strategy.strategy_type,
+                    "is_draft": False,
+                }
+            )
+        sync.assert_called_once()
+        assert sync.call_args.args[0].strategy_id == strategy.strategy_id
+        assert sync.call_args.args[0].status == StrategyStatusChoices.DRAFT.value
+        assert sync.call_args.kwargs["strategy_alive"] is True
+        update_db.assert_called_once()
+        controller.assert_called_once()
+
+    def test_running_update_derives_bksec_alive_from_status(self):
+        """已提交策略的普通更新不覆盖启用态，仍按当前状态推导"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="bksec_running_update",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=BKSEC_CONFIG_DATA,
+        )
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", return_value=False), mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller"
+        ) as controller, mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule"
+        ) as sync:
+            updater.perform_request({"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type})
+        sync.assert_called_once()
+        assert sync.call_args.kwargs["strategy_alive"] is None
+        controller.assert_not_called()
+
+    def test_plugin_sync_failure_keeps_strategy_and_restores_bksec_config(self, settings):
+        """插件拒绝配置时规则回滚，bksec_config 回到保存前，其余字段保留，并给出说明。"""
+        from django.db import transaction
+
+        from services.web.risk.bksec.rules import sync_bksec_rule_or_keep_strategy
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.serializers import (
+            CreateStrategyResponseSerializer,
+            UpdateStrategyResponseSerializer,
+        )
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        previous = {"enabled": False}
+        with mock.patch(
+            "services.web.risk.bksec.rules.sync_plugin_config", return_value=(False, "plugin down")
+        ), mock.patch("time.sleep"):
+            with transaction.atomic():
+                created = Strategy.objects.create(
+                    namespace="default",
+                    strategy_name="kept-on-create",
+                    description="other-field-saved",
+                    bksec_config=BKSEC_CONFIG_DATA,
+                )
+                sync_bksec_rule_or_keep_strategy(created, {})
+            updated = Strategy.objects.create(
+                namespace="default",
+                strategy_name="before-rename",
+                description="before-desc",
+                bksec_config=previous,
+            )
+            updated.strategy_name = "renamed-after-save"
+            updated.description = "other-field-saved"
+            updated.bksec_config = BKSEC_CONFIG_DATA
+            updated.save(update_fields=["strategy_name", "description", "bksec_config"])
+            sync_bksec_rule_or_keep_strategy(updated, previous)
+
+        created.refresh_from_db()
+        updated.refresh_from_db()
+        assert created.strategy_name == "kept-on-create"
+        assert created.description == "other-field-saved"
+        assert created.bksec_config == {}
+        assert updated.strategy_name == "renamed-after-save"
+        assert updated.description == "other-field-saved"
+        assert updated.bksec_config == previous
+        assert not RiskRule.objects.filter(auto_strategy_id__in=[created.strategy_id, updated.strategy_id]).exists()
+        created_data = CreateStrategyResponseSerializer(created).data
+        updated_data = UpdateStrategyResponseSerializer(updated).data
+        assert "未生效" in created_data["bksec_sync_message"]
+        assert "plugin down" in created_data["bksec_sync_message"]
+        assert created_data["bksec_config"] == {}
+        assert updated_data["bksec_config"] == previous
+        assert "strategy_id" in created_data and "strategy_name" in created_data
+
+    def test_update_continues_after_plugin_sync_failure(self):
+        """更新接口在插件同步失败后仍保存其余字段，并继续后续部署。"""
+        from services.web.risk.bksec.rules import BkSecPluginSyncError
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        previous = {"enabled": False}
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="before-rename",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=previous,
+        )
+
+        def fake_update_db(strategy, validated_request_data, draft_save):
+            strategy.strategy_name = "renamed-after-save"
+            strategy.description = "other-field-saved"
+            strategy.bksec_config = BKSEC_CONFIG_DATA
+            strategy.save(update_fields=["strategy_name", "description", "bksec_config"])
+            return True
+
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", side_effect=fake_update_db), mock.patch.object(
+            updater, "update_remote"
+        ) as update_remote, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=BkSecPluginSyncError("plugin down")
+        ):
+            result = updater.perform_request(
+                {"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type}
+            )
+
+        strategy.refresh_from_db()
+        assert strategy.strategy_name == "renamed-after-save"
+        assert strategy.description == "other-field-saved"
+        assert strategy.bksec_config == previous
+        assert "未生效" in result.bksec_sync_message
+        assert "plugin down" in result.bksec_sync_message
+        update_remote.assert_called_once()
+
+    def test_missing_preset_pa_restores_bksec_config_and_update_continues(self, settings):
+        """内置套餐补不出来时，更新保留其余字段，bksec_config 回到保存前，并继续部署。"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = None
+        previous = {"enabled": False}
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="before-rename",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=previous,
+        )
+
+        def fake_update_db(strategy, validated_request_data, draft_save):
+            strategy.strategy_name = "renamed-after-save"
+            strategy.description = "other-field-saved"
+            strategy.bksec_config = BKSEC_CONFIG_DATA
+            strategy.save(update_fields=["strategy_name", "description", "bksec_config"])
+            return True
+
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", side_effect=fake_update_db), mock.patch.object(
+            updater, "update_remote"
+        ) as update_remote, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ):
+            result = updater.perform_request(
+                {"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type}
+            )
+
+        strategy.refresh_from_db()
+        assert strategy.strategy_name == "renamed-after-save"
+        assert strategy.description == "other-field-saved"
+        assert strategy.bksec_config == previous
+        assert "内置发单套餐未就绪" in result.bksec_sync_message
+        assert not RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).exists()
+        update_remote.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -807,6 +1132,7 @@ class TestBkSecResources:
         assert "description" in extra and "operator" in extra
         # Bug1 修复锁定：测试发送必须以指定处理人覆盖初始责任人，保证隔离
         assert constants["${operator}"] == '["tester"]'  # 数组串，满足插件 json.loads 契约
+        assert constants["${once_task}"] == "yes"
         # 决策 A 修复锁定：测试发送必须携带样例风险单，risk 变量按真实数据渲染；
         # target 独立入参模板已渲染
         assert risk.risk_id in constants["${target}"]
@@ -818,6 +1144,30 @@ class TestBkSecResources:
         assert snapshot["${event_content}"]["name"] == "风险描述"
         assert snapshot["${event_type}"]["value"] == '["SuperPermission"]'
         assert snapshot["${operator}"]["value"] == '["tester"]'
+
+    def test_empty_test_receivers_rejected_before_send(self):
+        """空接收人、空白接收人在序列化和 Resource.request 都被拒绝，不生成正式发送参数"""
+        from bk_resource.exceptions import ValidateException
+
+        from services.web.risk.serializers import SendTestTicketReqSerializer
+
+        for receivers in ([], [""], ["  "], ["", "  "]):
+            serializer = SendTestTicketReqSerializer(
+                data={"test_receivers": receivers, "risk_id": "risk-1", "bksec_config": BKSEC_CONFIG_DATA}
+            )
+            assert serializer.is_valid() is False
+            assert "test_receivers" in serializer.errors
+        serializer = SendTestTicketReqSerializer(
+            data={"test_receivers": ["  tester  ", ""], "risk_id": "risk-1", "bksec_config": BKSEC_CONFIG_DATA}
+        )
+        assert serializer.is_valid() is True
+        assert serializer.validated_data["test_receivers"] == ["tester"]
+        with mock.patch("services.web.risk.resources.bksec.api.bk_sops.create_task") as create_task:
+            with pytest.raises(ValidateException):
+                resource.risk.send_test_ticket.request(
+                    {"test_receivers": [], "risk_id": "risk-1", "bksec_config": BKSEC_CONFIG_DATA}
+                )
+        create_task.assert_not_called()
 
     def test_send_test_ticket_blocked_by_formal_dispatch(self, settings):
         """回调隔离守卫：风险存在正式派单历史时拒绝测试发送（防插件回调复用污染/静默拦截）"""
@@ -853,6 +1203,21 @@ class TestBkSecResources:
             create_task.assert_not_called()
             assert "正式派单" in str(err.value.args)
 
+    def test_preview_permission_binds_sample_risk_strategy(self):
+        """预览按样例风险所属策略做实例鉴权，而不是任意策略可编辑"""
+        with RiskContext() as risk:
+            view = TicketViewSet()
+            view.action = "preview"
+            view.request = mock.Mock(query_params={}, data={"risk_id": risk.risk_id})
+            assert view.get_sample_strategy_id() == risk.strategy_id
+            permissions = view.get_permissions()
+            assert len(permissions) == 1
+            permission = permissions[0]
+            assert isinstance(permission, InstanceActionPermission)
+            assert permission.actions == [ActionEnum.EDIT_STRATEGY]
+            assert permission.resource_meta is ResourceEnum.STRATEGY
+            assert permission.get_instance_id() == risk.strategy_id
+
     def test_test_task_status_failure_hint(self):
         """任务失败时轮询接口返回失败提示：透出失败节点的原始错误文本，取不到才回退通用提示"""
 
@@ -863,33 +1228,124 @@ class TestBkSecResources:
                 "children": {"node1": {"id": "node1", "name": "发单节点", "state": "FAILED"}},
             }
 
-        with mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value=make_failed_status()),
-        ), mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
-            mock.Mock(return_value={"ex_data": "plugin execute failed: Config matching query does not exist."}),
-        ):
-            result = resource.risk.get_task_status.perform_request({"task_id": "1"})
-        assert result["state"] == "FAILED"
-        assert "Config matching query does not exist" in result["failure_hint"]
-        # 节点错误取不到 → 通用指引
-        with mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value=make_failed_status()),
-        ), mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
-            mock.Mock(side_effect=Exception("boom")),
-        ):
-            result = resource.risk.get_task_status.perform_request({"task_id": "1"})
-        assert result["failure_hint"] == resource.risk.get_task_status.GENERIC_HINT
-        # 成功状态不附带提示
-        with mock.patch(
-            "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value={"state": "FINISHED"}),
-        ):
-            result = resource.risk.get_task_status.perform_request({"task_id": "1"})
-        assert "failure_hint" not in result
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=1)
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value=make_failed_status()),
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
+                mock.Mock(return_value={"ex_data": "plugin execute failed: Config matching query does not exist."}),
+            ):
+                result = resource.risk.get_task_status.perform_request({"task_id": "1"})
+            assert result["state"] == "FAILED"
+            assert "Config matching query does not exist" in result["failure_hint"]
+            # 节点错误取不到 → 通用指引。上一次失败已把节点写成终态，换一条仍在运行的测试单。
+            _create_test_node(risk, task_id="2")
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value=make_failed_status()),
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
+                mock.Mock(side_effect=Exception("boom")),
+            ):
+                result = resource.risk.get_task_status.perform_request({"task_id": "2"})
+            assert result["failure_hint"] == resource.risk.get_task_status.GENERIC_HINT
+            # 成功状态不附带提示
+            _create_test_node(risk, task_id="3")
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value={"state": "FINISHED"}),
+            ):
+                result = resource.risk.get_task_status.perform_request({"task_id": "3"})
+            assert "failure_hint" not in result
+
+    def test_task_status_unknown_task_does_not_query_sops(self):
+        """task_id 对不上测试节点时 404，不回源 SOPS"""
+        with mock.patch("services.web.risk.resources.bksec.api.bk_sops.get_task_status") as get_status:
+            with pytest.raises(Http404):
+                resource.risk.get_task_status.perform_request({"task_id": "999"})
+        get_status.assert_not_called()
+
+    def test_task_status_ignores_formal_node(self):
+        """正式派单节点即使 task_id 命中，也不能经测试状态接口回源"""
+        with RiskContext() as risk:
+            TicketNode.objects.create(
+                risk_id=risk.risk_id,
+                operator="tester",
+                action="AutoProcess",
+                timestamp=1,
+                time="2026-01-01 00:00:00",
+                process_result={"task": {"task_id": 9}},
+                extra={},
+                is_test=False,
+            )
+            with mock.patch("services.web.risk.resources.bksec.api.bk_sops.get_task_status") as get_status:
+                with pytest.raises(Http404):
+                    resource.risk.get_task_status.perform_request({"task_id": "9"})
+            get_status.assert_not_called()
+
+    def test_task_status_requires_strategy_edit_permission(self):
+        """命中测试节点后，无策略编辑权限则拒绝，且不回源 SOPS"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=42)
+            with mock.patch("services.web.risk.permissions.PermissionService") as service_cls, mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status"
+            ) as get_status:
+                service_cls.return_value.is_allowed.side_effect = PermissionException("编辑策略", {})
+                with pytest.raises(PermissionException):
+                    resource.risk.get_task_status.perform_request({"task_id": "42"})
+            get_status.assert_not_called()
+
+    def test_task_status_matches_integer_task_id(self):
+        """task_id 以数字落库时，字符串入参仍能定位测试节点"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=7)
+            with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission") as ensure, mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                return_value={"state": "RUNNING"},
+            ) as get_status:
+                result = resource.risk.get_task_status.perform_request({"task_id": "7"})
+            assert result["state"] == "RUNNING"
+            assert result["task_id"] == "7"
+            ensure.assert_called_once_with(risk.strategy_id)
+            get_status.assert_called_once()
+
+    def test_task_status_risk_id_without_own_node_returns_empty(self):
+        """刷新恢复只定位本人的测试单；没有则空结果，不回源"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=8, operator="other")
+            with mock.patch("services.web.risk.resources.bksec.get_request_username", return_value="me"), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status"
+            ) as get_status:
+                assert resource.risk.get_task_status.perform_request({"risk_id": risk.risk_id}) == {}
+            get_status.assert_not_called()
+
+    def test_task_status_permission_uses_node_strategy(self):
+        """视图层：task_id 定位到测试节点后，按该风险所属策略鉴权"""
+        with RiskContext() as risk:
+            _create_test_node(risk, task_id=42)
+            request = mock.Mock(query_params={"task_id": "42"}, data={})
+            permission = BkSecTestTaskStatusPermission()
+            with mock.patch("services.web.risk.permissions.IAMPermission.has_permission", return_value=True) as allowed:
+                assert permission.has_permission(request, view=None) is True
+            allowed.assert_called_once()
+            assert str(permission.resources[0].id) == str(risk.strategy_id)
+
+    def test_task_status_permission_missing_node_skips_iam(self):
+        """视图层：task_id 没有对应测试节点时不打 IAM，交给资源层 404"""
+        request = mock.Mock(query_params={"task_id": "missing"}, data={})
+        permission = BkSecTestTaskStatusPermission()
+        with mock.patch("services.web.risk.permissions.IAMPermission.has_permission") as allowed:
+            assert permission.has_permission(request, view=None) is True
+        allowed.assert_not_called()
+
+    def test_task_status_permission_missing_strategy_rejected(self):
+        """只传 risk_id 且风险不存在时，视图层拒绝，不把空实例交给 IAM"""
+        request = mock.Mock(query_params={"risk_id": "missing-risk"}, data={})
+        permission = BkSecTestTaskStatusPermission()
+        with pytest.raises(ValidationError):
+            permission.has_permission(request, view=None)
 
 
 @pytest.mark.django_db
@@ -930,3 +1386,40 @@ class TestBkSecPushStatus:
         """未推送过的风险单允许测试发送"""
         with RiskContext() as risk:
             validate_bksec_test_target(risk)
+
+    def test_push_failure_only_for_builtin_pa_and_keeps_success(self):
+        """只有内置发单套餐失败才记推送失败，已成功不被其他套餐失败盖掉。"""
+        from apps.sops.constants import SOPSTaskStatus
+        from services.web.risk.constants import BkSecPushStatus
+        from services.web.risk.handlers.ticket import AutoProcess
+
+        builtin = ProcessApplication.objects.create(
+            name="builtin-pa", sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        other = ProcessApplication.objects.create(
+            name="other-pa", sops_template_id=10002, need_approve=False, is_enabled=True, is_builtin=False
+        )
+        failed = {"state": SOPSTaskStatus.FAILED.value}
+        with RiskContext() as risk:
+            handler = AutoProcess(risk_id=risk.risk_id, operator="admin")
+            handler.update_status(
+                {"status": failed, "pa_id": other.id},
+                pa_config={"auto_close_risk": False},
+            )
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.NOT_PUSHED
+
+            handler.update_status(
+                {"status": failed, "pa_id": builtin.id},
+                pa_config={"auto_close_risk": False},
+            )
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.FAILED
+
+            risk.bksec_push_status = BkSecPushStatus.SUCCESS
+            risk.save(update_fields=["bksec_push_status"])
+            handler.risk.refresh_from_db()
+            handler._reused_task_node = mock.Mock(process_result={"pa_id": other.id})
+            handler.update_status({"status": failed}, pa_config={"auto_close_risk": False})
+            risk.refresh_from_db()
+            assert risk.bksec_push_status == BkSecPushStatus.SUCCESS

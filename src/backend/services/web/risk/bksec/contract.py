@@ -191,6 +191,7 @@ def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, tes
     constants[BKSEC_PARAM_TARGET_TYPE] = render_value(config.target_type, context)
     constants[BKSEC_PARAM_TARGET] = render_value(config.target, context)
     constants[BKSEC_PARAM_OPERATOR] = coerce_operator_constant(render_value(config.operator, context), risk=risk)
+    test_operator = str(test_operator or "").strip()
     if test_operator:
         constants[BKSEC_PARAM_OPERATOR] = json.dumps([test_operator], ensure_ascii=False)
     # risk_type_extra 承载全部字段映射（初始责任人兜底与预览同口径）
@@ -198,9 +199,9 @@ def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, tes
         render_field_values(((m.key, m.value) for m in config.field_mappings), context),
         ensure_ascii=False,
     )
-    # 插件控制参数（${action} 由 SOPS 模板节点输入决定，审计侧不传）：
-    # 测试发送用 once_task=yes 立即结束、豁免单次去重（样例风险单的 raw_event_id 可能已被正式发送占用）
-    constants[BKSEC_PARAM_ONCE_TASK] = BKSEC_ONCE_TASK_TEST if test_operator else BKSEC_ONCE_TASK_DEFAULT
+    # 本函数只服务测试发送。once_task 固定 yes，插件据此走测试 Callback；
+    # 不根据接收人是否为空切换正式模式（空接收人由测试入口直接拒绝）。
+    constants[BKSEC_PARAM_ONCE_TASK] = BKSEC_ONCE_TASK_TEST
     return constants
 
 

@@ -33,6 +33,7 @@ from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
     BKSEC_CACHE_TIMEOUT,
     BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_PRESET_PA_NAME,
     BKSEC_RISK_ACCESS_MAX_PAGES,
     BKSEC_RISK_ACCESS_ORDERING,
     BKSEC_RISK_ACCESS_PAGE_SIZE,
@@ -46,21 +47,79 @@ from services.web.strategy_v2.models import Strategy
 logger = logging.getLogger("celery")
 
 
+def preset_template_id() -> Optional[int]:
+    """环境变量 BKAPP_BKSEC_SOPS_TEMPLATE_ID。未配置或不是整数时返回 None。"""
+    raw = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
+    if raw in (None, ""):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def find_preset_pa() -> Optional[ProcessApplication]:
     """
     查找 BKSEC 预置发单套餐（is_builtin=True 且 sops_template_id=BKSEC_SOPS_TEMPLATE_ID）
     """
-    template_id = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
-    if not template_id:
+    template_id = preset_template_id()
+    if template_id is None:
         return None
-    try:
-        return (
-            ProcessApplication.objects.filter(is_builtin=True, sops_template_id=int(template_id))
-            .order_by("-id")
-            .first()
-        )
-    except (TypeError, ValueError):
+    return ProcessApplication.objects.filter(is_builtin=True, sops_template_id=template_id).order_by("-id").first()
+
+
+def _ensure_preset_pa_platform_binding(pa: ProcessApplication) -> None:
+    """内置套餐固定为平台级绑定，全部场景可见。"""
+
+    from services.web.scene.constants import (
+        BindingType,
+        ResourceVisibilityType,
+        VisibilityScope,
+    )
+    from services.web.scene.models import ResourceBinding
+
+    binding, _created = ResourceBinding.objects.get_or_create(
+        resource_type=ResourceVisibilityType.PROCESS_APPLICATION.value,
+        resource_id=str(pa.id),
+        defaults={
+            "binding_type": BindingType.PLATFORM_BINDING.value,
+            "visibility_type": VisibilityScope.ALL_SCENES.value,
+        },
+    )
+    if (
+        binding.binding_type != BindingType.PLATFORM_BINDING.value
+        or binding.visibility_type != VisibilityScope.ALL_SCENES.value
+    ):
+        binding.binding_type = BindingType.PLATFORM_BINDING.value
+        binding.visibility_type = VisibilityScope.ALL_SCENES.value
+        binding.save(update_fields=["binding_type", "visibility_type"])
+
+
+def ensure_preset_pa() -> Optional[ProcessApplication]:
+    """
+    按当前模板 ID 幂等补齐内置套餐。
+
+    没有对应的内置套餐才插入一条。已有同模板 ID 的内置套餐保持原样，
+    其他套餐的模板 ID 也不改。环境变量以后换成新模板 ID 时，再插入一条新的内置套餐。
+    未配置模板 ID 时不创建，返回 None。
+    补齐或再次命中时，把套餐绑成平台级、全部场景可见。
+    """
+    template_id = preset_template_id()
+    if template_id is None:
         return None
+    existing = find_preset_pa()
+    if existing is not None:
+        _ensure_preset_pa_platform_binding(existing)
+        return existing
+    pa = ProcessApplication.objects.create(
+        name=BKSEC_PRESET_PA_NAME,
+        sops_template_id=template_id,
+        need_approve=False,
+        is_enabled=True,
+        is_builtin=True,
+    )
+    _ensure_preset_pa_platform_binding(pa)
+    return pa
 
 
 def _risk_access_cache_identity(as_platform: bool) -> str:
@@ -236,21 +295,25 @@ def prepare_test_constants(strategy: Strategy, config: BkSecConfig, risk: Risk, 
     - 必填校验 validate_for_submit 只执行一次；
     - Config 同步用独立测试 key（{strategy_id}_test），不影响正式配置；
       策略未保存时也要先建测试 Config，插件才能接受本次发送；
-    - 测试接收人：BKSEC push_event 发单仅支持单人，取首个覆盖 ${operator}
-      （契约兼容单值 operator，保证测试单隔离）。
+    - 测试接收人：BKSEC push_event 发单仅支持单人，取首个非空接收人覆盖 ${operator}
+      （契约兼容单值 operator，保证测试单隔离）。没有有效接收人则拒绝，避免落到正式责任人。
+    - once_task 由 build_plugin_constants 固定为测试模式，不根据接收人是否为空推导。
     """
     try:
         config.validate_for_submit()
     except ValueError as err:
         raise serializers.ValidationError(gettext_lazy("BKSEC 配置不合法：%s") % err)
+    receivers = [str(item or "").strip() for item in test_receivers or []]
+    receivers = [item for item in receivers if item]
+    if not receivers:
+        raise serializers.ValidationError(gettext_lazy("至少指定一个测试接收人"))
     from services.web.risk.bksec.rules import sync_plugin_config
 
     success, message = sync_plugin_config(strategy, config, is_test=True)
     if not success:
         raise serializers.ValidationError(gettext_lazy("测试前插件配置同步失败，无法发送测试工单：%s") % message)
-    test_operator = test_receivers[0] if test_receivers else ""
     try:
-        return build_plugin_constants(config, risk=risk, test_operator=test_operator)
+        return build_plugin_constants(config, risk=risk, test_operator=receivers[0])
     except Exception as err:  # NOCC:broad-except(测试发送即时报错，便于定位配置问题)
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
 

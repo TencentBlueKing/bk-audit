@@ -879,10 +879,23 @@ class PreviewTicketReqSerializer(serializers.Serializer):
 class SendTestTicketReqSerializer(serializers.Serializer):
     """发送测试工单（经 SOPS 真实通道，仅发给指定接收人）"""
 
-    test_receivers = serializers.ListField(label=gettext_lazy("测试接收人"), child=serializers.CharField(), required=True)
+    test_receivers = serializers.ListField(
+        label=gettext_lazy("测试接收人"),
+        child=serializers.CharField(allow_blank=True),
+        required=True,
+        allow_empty=True,
+    )
     # 测试发送必须指定样例风险单：不传则所有 {{ risk.xxx }} 渲染为空，测试单大量字段为空、失去验证意义
     risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
     bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
+
+    def validate_test_receivers(self, value):
+        # ListField(required=True) 仍接受 [] 和 ["  "]。空接收人不能进入测试发送。
+        receivers = [str(item or "").strip() for item in value or []]
+        receivers = [item for item in receivers if item]
+        if not receivers:
+            raise serializers.ValidationError(gettext_lazy("至少指定一个测试接收人"))
+        return receivers
 
 
 class GetTaskStatusReqSerializer(serializers.Serializer):
