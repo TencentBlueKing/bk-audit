@@ -20,7 +20,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("risk", "0067_ticketnode_duration"),
+        ("risk", "0068_ticketnode_duration"),
     ]
 
     operations = [

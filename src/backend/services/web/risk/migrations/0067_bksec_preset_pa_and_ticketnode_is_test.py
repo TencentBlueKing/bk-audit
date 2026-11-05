@@ -83,7 +83,7 @@ def create_builtin_pa(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("risk", "0065_alter_risk_longtext_charset_utf8mb4"),
+        ("risk", "0066_alter_processapplication_approve_service_id_and_more"),
         ("scene", "0014_scene_permission_application"),
     ]
 

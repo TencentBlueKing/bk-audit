@@ -22,7 +22,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("risk", "0066_bksec_preset_pa_and_ticketnode_is_test"),
+        ("risk", "0067_bksec_preset_pa_and_ticketnode_is_test"),
     ]
 
     operations = [
