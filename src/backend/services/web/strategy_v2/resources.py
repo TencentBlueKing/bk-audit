@@ -781,14 +781,13 @@ class CreateStrategy(StrategyV2Base):
                 strategy.status = StrategyStatusChoices.DRAFT
                 strategy.save(update_fields=["status"])
             # BKSEC 发单规则同步（草稿不建规则，提交后自动创建/更新）
-            # 放在本事务内：插件同步失败时规则随内层事务回滚，这里把 bksec_config 写回空配置，
-            # 策略其余字段随本事务一起提交。
+            # 放在本事务内：启用配置同步失败时抛错，策略创建和规则一起回滚，后面的部署不会执行。
             if not is_draft:
                 from services.web.risk.bksec.rules import (
                     sync_bksec_rule_or_keep_strategy,
                 )
 
-                sync_bksec_rule_or_keep_strategy(strategy, {})
+                sync_bksec_rule_or_keep_strategy(strategy)
         # create
         # TODO: 当前外部 controller / IAM 调用保留在事务内；若本地事务回滚，
         # 外部侧可能残留已创建的控制器或授权。后续可迁移到事务提交后执行或增加补偿机制。
@@ -849,26 +848,22 @@ class UpdateStrategy(StrategyV2Base):
             raise StrategyTypeCanNotChange()
         # save origin data
         instance_origin_data = StrategyInfoSerializer(strategy).data
-        # 插件同步失败时只回退这次写入的 bksec_config，名称、规则等其余改动保留
-        import copy
-
-        previous_bksec_config = copy.deepcopy(strategy.bksec_config or {})
-        # update db
-        need_update_remote = self.update_db(
-            strategy=strategy, validated_request_data=validated_request_data, draft_save=draft_save
-        )
-        # BKSEC 发单规则同步（草稿保存不部署、不建规则）
-        # 正式提交时 update_db 不改状态，策略仍是 DRAFT。不显式传启用态的话，同步会把它当成未启用直接返回，
-        # 后面的部署也不会再同步，自动规则和插件配置就漏掉了。
+        # 策略更新和 BKSEC 同步放在同一事务。启用配置同步失败时整次保存回滚，不继续部署。
+        # 正式提交时 update_db 不改状态，策略仍是 DRAFT。不显式传启用态的话，同步会把它当成未启用直接返回。
         submitting_draft = is_draft_strategy and is_draft is False
-        if not draft_save:
-            from services.web.risk.bksec.rules import sync_bksec_rule_or_keep_strategy
-
-            sync_bksec_rule_or_keep_strategy(
-                strategy,
-                previous_bksec_config,
-                strategy_alive=True if submitting_draft else None,
+        with transaction.atomic():
+            need_update_remote = self.update_db(
+                strategy=strategy, validated_request_data=validated_request_data, draft_save=draft_save
             )
+            if not draft_save:
+                from services.web.risk.bksec.rules import (
+                    sync_bksec_rule_or_keep_strategy,
+                )
+
+                sync_bksec_rule_or_keep_strategy(
+                    strategy,
+                    strategy_alive=True if submitting_draft else None,
+                )
         if is_draft_strategy:
             # 草稿策略：仅落库不部署；提交（is_draft=False）时走创建链路部署（草稿从未部署，无 flow_id）
             if is_draft is False:
@@ -1429,11 +1424,16 @@ class ToggleStrategy(StrategyV2Base):
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
-        from services.web.risk.bksec.rules import sync_bksec_rule
+        from services.web.risk.bksec.rules import BkSecPluginSyncError, sync_bksec_rule
 
         if validated_request_data["toggle"]:
+            # 先同步规则。控制器启用是异步任务，失败后再补停用会和启用任务抢顺序。
+            # 同步失败时规则事务回滚，这里直接拒绝，策略保持关闭。
+            try:
+                sync_bksec_rule(strategy, strategy_alive=True)
+            except BkSecPluginSyncError as err:
+                raise serializers.ValidationError(gettext("策略未启用，BKSEC 工单配置同步失败：%s") % err)
             call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
-            sync_bksec_rule(strategy, strategy_alive=True)
         else:
             call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
             sync_bksec_rule(strategy, strategy_alive=False)

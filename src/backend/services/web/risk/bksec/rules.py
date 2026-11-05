@@ -53,6 +53,24 @@ class BkSecPresetNotReady(serializers.ValidationError):
 # 处理规则的生命周期管理
 
 
+def _report_invalid_bksec_config(strategy: Strategy, err: Exception) -> None:
+    """配置无法解析时上报。上报失败不影响「停用自动规则」这条降级。"""
+
+    try:
+        from services.web.common.monitor import BkSecConfigSyncFailedEvent
+
+        BkSecConfigSyncFailedEvent(
+            context={
+                "strategy_id": str(strategy.strategy_id),
+                "stage": BkSecConfigSyncStage.RULE_SYNC.value,
+                "fail_reason": BkSecConfigSyncFailReason.CONFIG_INVALID.value,
+            },
+            extra={"error": str(err)},
+        ).report()
+    except Exception:  # NOCC:broad-except(告警失败不得挡住规则停用)
+        logger.exception("[BkSecRule] Report invalid bksec_config failed, strategy_id=%s", strategy.strategy_id)
+
+
 def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
     """
     解析策略的 BKSEC 配置：Strategy.bksec_config（JSON 字段）→ 校验过的 BkSecConfig 对象
@@ -66,6 +84,7 @@ def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
         return BkSecConfig.model_validate(raw)
     except Exception as err:  # NOCC:broad-except(配置解析降级)
         logger.exception("[BkSecRule] Invalid bksec_config, strategy_id=%s err=%s", strategy.strategy_id, err)
+        _report_invalid_bksec_config(strategy, err)
         return None
 
 
@@ -243,21 +262,12 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
     return instance
 
 
-def sync_bksec_rule_or_keep_strategy(
-    strategy: Strategy, previous_bksec_config: Optional[dict], strategy_alive: Optional[bool] = None
-) -> None:
-    """同步发单规则。插件拒绝配置或内置套餐未就绪时，只把 bksec_config 写回保存前的值，其余策略内容保持已保存状态。"""
+def sync_bksec_rule_or_keep_strategy(strategy: Strategy, strategy_alive: Optional[bool] = None) -> None:
+    """同步发单规则。启用配置同步失败时抛出校验错误，由调用方事务回滚本次保存。"""
     try:
         sync_bksec_rule(strategy, strategy_alive=strategy_alive)
     except (BkSecPluginSyncError, BkSecPresetNotReady) as err:
-        strategy.bksec_config = {} if previous_bksec_config is None else previous_bksec_config
-        strategy.save(update_fields=["bksec_config"])
-        if isinstance(err, BkSecPresetNotReady):
-            strategy.bksec_sync_message = gettext(
-                "策略已保存，BKSEC 工单配置因内置发单套餐未就绪未生效，请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID 后重新保存该配置"
-            )
-        else:
-            strategy.bksec_sync_message = gettext("策略已保存，BKSEC 工单配置因插件同步失败未生效，请稍后重新保存该配置：%s") % str(err)
+        raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
 
 
 def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = False) -> tuple:

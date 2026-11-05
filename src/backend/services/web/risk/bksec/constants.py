@@ -81,6 +81,7 @@ class BkSecConfigSyncStage(TextChoices):
 
     STRATEGY_SAVE = "strategy_save", gettext_lazy("保存策略")
     TEST_SEND = "test_send", gettext_lazy("测试发送")
+    RULE_SYNC = "rule_sync", gettext_lazy("同步发单规则")
 
 
 class BkSecConfigSyncFailReason(TextChoices):
@@ -93,6 +94,7 @@ class BkSecConfigSyncFailReason(TextChoices):
     TOKEN_FETCH_FAILED = "token_fetch_failed", gettext_lazy("获取 token 失败")
     UPSERT_REJECTED = "upsert_rejected", gettext_lazy("插件拒绝写入 Config")
     API_UNREACHABLE = "api_unreachable", gettext_lazy("插件配置接口不可达")
+    CONFIG_INVALID = "config_invalid", gettext_lazy("BKSEC 配置无法解析")
 
 
 # 查询类接口缓存（只读展示场景，容忍短暂陈旧；token 等凭证查找不走缓存）

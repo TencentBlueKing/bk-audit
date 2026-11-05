@@ -17,11 +17,13 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import logging
+import uuid
 from typing import List, Optional
 
 from bk_resource import api
 from django.conf import settings
 from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
@@ -95,6 +97,12 @@ def _ensure_preset_pa_platform_binding(pa: ProcessApplication) -> None:
         binding.save(update_fields=["binding_type", "visibility_type"])
 
 
+def _builtin_pa_uniq_id(template_id: int) -> str:
+    """同一模板的内置套餐固定 uniq_id，并发插入会撞上已有唯一约束。"""
+
+    return uuid.uuid5(uuid.NAMESPACE_OID, "bksec-builtin-pa:{}".format(template_id)).hex
+
+
 def ensure_preset_pa() -> Optional[ProcessApplication]:
     """
     按当前模板 ID 幂等补齐内置套餐。
@@ -102,6 +110,7 @@ def ensure_preset_pa() -> Optional[ProcessApplication]:
     没有对应的内置套餐才插入一条。已有同模板 ID 的内置套餐保持原样，
     其他套餐的模板 ID 也不改。环境变量以后换成新模板 ID 时，再插入一条新的内置套餐。
     未配置模板 ID 时不创建，返回 None。
+    两个请求同时查空时，后插入的请求撞上 uniq_id 唯一约束，再查回先插入的那条。
     补齐或再次命中时，把套餐绑成平台级、全部场景可见。
     """
     template_id = preset_template_id()
@@ -111,13 +120,21 @@ def ensure_preset_pa() -> Optional[ProcessApplication]:
     if existing is not None:
         _ensure_preset_pa_platform_binding(existing)
         return existing
-    pa = ProcessApplication.objects.create(
-        name=BKSEC_PRESET_PA_NAME,
-        sops_template_id=template_id,
-        need_approve=False,
-        is_enabled=True,
-        is_builtin=True,
-    )
+    try:
+        # 规则同步包在外层事务里。嵌套事务把唯一冲突限制在这次插入，不回滚外层。
+        with transaction.atomic():
+            pa = ProcessApplication.objects.create(
+                uniq_id=_builtin_pa_uniq_id(template_id),
+                name=BKSEC_PRESET_PA_NAME,
+                sops_template_id=template_id,
+                need_approve=False,
+                is_enabled=True,
+                is_builtin=True,
+            )
+    except IntegrityError:
+        pa = find_preset_pa()
+        if pa is None:
+            raise
     _ensure_preset_pa_platform_binding(pa)
     return pa
 
@@ -233,7 +250,10 @@ def is_risk_type_visible(risk_type_id: str, project_id: str = "", as_platform: b
     无用户上下文（后台任务）时用户身份请求会被框架降级为平台身份，等价于不裁剪，不会误阻断。
     """
     for is_formal in ("true", "false"):
-        for item in fetch_risk_access_items(project_id=project_id, is_formal=is_formal, as_platform=as_platform):
+        # 写路径不走展示缓存。权限收回后，下一次保存或测试必须重新向网关确认。
+        for item in fetch_risk_access_items(
+            project_id=project_id, is_formal=is_formal, use_cache=False, as_platform=as_platform
+        ):
             if str(item.get("id")) == str(risk_type_id):
                 return True
     return False
