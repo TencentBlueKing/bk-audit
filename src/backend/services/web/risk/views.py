@@ -23,7 +23,6 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
-    ActionPermission,
     IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
@@ -33,8 +32,10 @@ from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from core.view_sets import APIGWViewSet
 from services.web.risk.permissions import (
     BatchRiskTicketPermission,
+    BkSecTestTaskStatusPermission,
     RiskTicketPermission,
     RiskViewPermission,
+    strategy_id_of_risk,
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
@@ -530,11 +531,22 @@ class TicketViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.get_task_status, endpoint="test_task_status"),
     ]
 
+    def get_sample_strategy_id(self):
+        """样例风险单所属策略。预览和测试发送都按这个实例鉴权。"""
+
+        return strategy_id_of_risk(get_value_by_request(self.request, "risk_id"))
+
     def get_permissions(self):
         if self.action in ["preview", "test_send"]:
-            return [ActionPermission(actions=[ActionEnum.EDIT_STRATEGY])]
-        elif self.action == "test_task_status":
-            return [IsAuthenticated()]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_STRATEGY],
+                    resource_meta=ResourceEnum.STRATEGY,
+                    get_instance_id=self.get_sample_strategy_id,
+                )
+            ]
+        if self.action == "test_task_status":
+            return [IsAuthenticated(), BkSecTestTaskStatusPermission()]
         return []
 
 

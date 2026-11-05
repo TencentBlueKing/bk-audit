@@ -15,8 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Callable, List, Set
+from typing import Callable, List, Optional, Set
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext
 
@@ -24,8 +25,10 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.handlers.service import PermissionService
-from core.exceptions import PermissionException
-from services.web.risk.models import Risk, TicketPermission, UserType
+from core.exceptions import PermissionException, ValidationError
+from core.models import get_request_username
+from core.utils.data import get_value_by_request
+from services.web.risk.models import Risk, TicketNode, TicketPermission, UserType
 from services.web.strategy_v2.models import Strategy
 
 
@@ -173,3 +176,71 @@ class GenerateStrategyRiskPermission:
             permission=apply_data,
             apply_url=apply_url,
         )
+
+
+def strategy_id_of_risk(risk_id: str):
+    """由样例风险单反查所属策略。风险不存在或未关联策略时返回 None。"""
+
+    if not risk_id:
+        return None
+    return Risk.objects.filter(risk_id=risk_id).values_list("strategy_id", flat=True).first()
+
+
+def find_bksec_test_node_by_task_id(task_id: str) -> Optional[TicketNode]:
+    """
+    按 SOPS task_id 精确查找测试节点。
+
+    process_result.task.task_id 可能存成 int 或 str，JSON 查询对类型敏感，两种都匹配。
+    只命中测试节点，正式派单任务不能经这个入口回源。
+    """
+
+    normalized = str(task_id or "").strip()
+    if not normalized:
+        return None
+    lookup = Q(process_result__task__task_id=normalized)
+    if normalized.isdigit():
+        lookup |= Q(process_result__task__task_id=int(normalized))
+    return TicketNode.objects.filter(is_test=True, action="AutoProcess").filter(lookup).order_by("-timestamp").first()
+
+
+def ensure_strategy_edit_permission(strategy_id) -> None:
+    """校验当前用户对目标策略实例的编辑权限。无实例 ID 时直接拒绝。"""
+
+    if strategy_id is None or str(strategy_id).strip().lower() in {"", "none", "null"}:
+        raise ValidationError(message=gettext("无法获取权限校验资源实例ID"))
+    username = get_request_username()
+    client = PermissionService(username=username) if username else PermissionService()
+    client.is_allowed(
+        action=ActionEnum.EDIT_STRATEGY,
+        resources=[ResourceEnum.STRATEGY.create_instance(strategy_id)],
+        raise_exception=True,
+    )
+
+
+class BkSecTestTaskStatusPermission(IAMPermission):
+    """
+    测试任务状态查询权限。
+
+    task_id 能定位到测试节点时，校验该节点风险所属策略的编辑权限。
+    节点不存在时放行，由资源层返回 404，避免把「任务不存在」报成缺少实例 ID，也不回源 SOPS。
+    只传 risk_id 时直接校验该风险所属策略。
+    """
+
+    def __init__(self):
+        super().__init__(actions=[ActionEnum.EDIT_STRATEGY])
+
+    def has_permission(self, request, view):
+        task_id = get_value_by_request(request, "task_id") or ""
+        risk_id = get_value_by_request(request, "risk_id") or ""
+        if task_id:
+            node = find_bksec_test_node_by_task_id(task_id)
+            if node is None:
+                return True
+            risk_id = node.risk_id
+        elif not risk_id:
+            return True
+        strategy_id = strategy_id_of_risk(risk_id)
+        if strategy_id is None or str(strategy_id).strip().lower() in {"", "none", "null"}:
+            raise ValidationError(message=gettext("无法获取权限校验资源实例ID"))
+        self.resources = [ResourceEnum.STRATEGY.create_instance(strategy_id)]
+        return super().has_permission(request, view)
