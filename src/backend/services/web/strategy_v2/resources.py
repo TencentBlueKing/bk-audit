@@ -1429,11 +1429,16 @@ class ToggleStrategy(StrategyV2Base):
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
-        from services.web.risk.bksec.rules import sync_bksec_rule
+        from services.web.risk.bksec.rules import BkSecPluginSyncError, sync_bksec_rule
 
         if validated_request_data["toggle"]:
+            # 先同步规则。控制器启用是异步任务，失败后再补停用会和启用任务抢顺序。
+            # 同步失败时规则事务回滚，这里直接拒绝，策略保持关闭。
+            try:
+                sync_bksec_rule(strategy, strategy_alive=True)
+            except BkSecPluginSyncError as err:
+                raise serializers.ValidationError(gettext("策略未启用，BKSEC 工单配置同步失败：%s") % err)
             call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
-            sync_bksec_rule(strategy, strategy_alive=True)
         else:
             call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
             sync_bksec_rule(strategy, strategy_alive=False)

@@ -145,6 +145,7 @@ class BkSecConfigSyncFailedEvent(Event):
     - stage: 同步场景
         - strategy_save: 保存策略时的同步（失败会阻断策略保存）
         - test_send: 测试发送时的同步
+        - rule_sync: 同步发单规则时解析已保存的配置
     - fail_reason: 失败原因
         - api_url_missing: 插件配置地址未配置（BKSEC_PLUGIN_CONFIG_API_URL 为空）
         - risk_type_forbidden: 该 risk_type_id 不在当前用户可见范围内（越权，阻断）
@@ -153,6 +154,7 @@ class BkSecConfigSyncFailedEvent(Event):
         - token_fetch_failed: 调用 risk_access 列表接口异常
         - upsert_rejected: 插件返回 result=false，拒绝写入 Config
         - api_unreachable: 调用插件 Config 同步接口异常（含 5xx）
+        - config_invalid: 已保存的 bksec_config 无法解析，自动规则已停用
 
     """
 
