@@ -464,7 +464,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
     def perform_request(self, validated_request_data):
         record_id = (validated_request_data.get("id") or "").strip()
         pa_id = validated_request_data.get("pa_id")
-        risk_id = validated_request_data.get("risk_id")
+        risk_id = (validated_request_data.get("risk_id") or "").strip()
         scene_id = validated_request_data.get("scene_id")
         task_id = validated_request_data.get("task_id", "").strip()
         task_name = validated_request_data.get("task_name", "").strip()
@@ -480,6 +480,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         nodes = TicketNode.objects.filter(action="AutoProcess")
         # 数据范围收敛（对齐风险列表口径）：仅展示调用者有权查看的风险（IAM + 本地授权）的执行记录
         nodes = nodes.filter(risk_id__in=Risk.load_authed_risks(action=ActionEnum.LIST_RISK).values("risk_id"))
+        # 风险入口按风险单精确过滤。空值保持套餐列表的全量口径，并继续套近 30 天默认。
+        if risk_id:
+            nodes = nodes.filter(risk_id=risk_id)
 
         # 执行记录 ID 精确过滤（TicketNode.id 为 UUID；空值不过滤）
         nodes = self._filter_by_record_id(nodes, record_id)
