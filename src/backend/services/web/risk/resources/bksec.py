@@ -38,8 +38,8 @@ from services.web.risk.bksec.constants import (
 from services.web.risk.bksec.service import (
     build_ticket_preview,
     ensure_bksec_enabled,
+    ensure_preset_pa,
     fetch_risk_access_items,
-    find_preset_pa,
     parse_bksec_config,
     prepare_test_constants,
     validate_bksec_test_target,
@@ -192,10 +192,10 @@ class SendTestTicket(TicketResourceMeta):
         validate_bksec_test_target(risk)
         # 测试发送前置（一次性）：必填校验 → 插件 Config 同步（{id}_test）→ 渲染终值入参
         constants = prepare_test_constants(strategy, config, risk, validated_request_data["test_receivers"])
-        # 确保预置套餐就绪
-        pa = find_preset_pa()
+        # 按当前模板 ID 补齐内置套餐；环境变量未配置时无法补齐
+        pa = ensure_preset_pa()
         if pa is None:
-            raise serializers.ValidationError(gettext_lazy("预置发单套餐未就绪（未配置套餐模板 ID 或未创建内置套餐），无法发送测试工单"))
+            raise serializers.ValidationError(gettext_lazy("预置发单套餐未就绪：请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID"))
         # 经预置套餐模板创建并启动测试任务（与正式发送同一通道、同一入参结构）。
         # 注意：插件侧错误（Config 缺失/白名单/参数格式）发生在 SOPS 异步执行阶段，
         # 此处只能捕获 SOPS 调用自身的失败（网络/鉴权），插件错误由 get_task_status 轮询侧转换提示
