@@ -531,10 +531,18 @@ class TicketViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.get_task_status, endpoint="test_task_status"),
     ]
 
-    def get_sample_strategy_id(self):
-        """样例风险单所属策略。预览和测试发送都按这个实例鉴权。"""
+    def get_sample_risk_id(self):
+        """预览和测试发送只认请求体里的 risk_id，与 POST Resource 取数一致。"""
 
-        return strategy_id_of_risk(get_value_by_request(self.request, "risk_id"))
+        data = getattr(self.request, "data", None) or {}
+        if not isinstance(data, dict):
+            return None
+        return data.get("risk_id")
+
+    def get_sample_strategy_id(self):
+        """样例风险单所属策略。与 get_sample_risk_id 使用同一个请求体 risk_id。"""
+
+        return strategy_id_of_risk(self.get_sample_risk_id())
 
     def get_permissions(self):
         if self.action in ["preview", "test_send"]:
@@ -543,7 +551,12 @@ class TicketViewSet(ResourceViewSet):
                     actions=[ActionEnum.EDIT_STRATEGY],
                     resource_meta=ResourceEnum.STRATEGY,
                     get_instance_id=self.get_sample_strategy_id,
-                )
+                ),
+                RiskViewPermission(
+                    actions=[ActionEnum.LIST_RISK],
+                    resource_meta=ResourceEnum.RISK,
+                    get_instance_id=self.get_sample_risk_id,
+                ),
             ]
         if self.action == "test_task_status":
             return [IsAuthenticated(), BkSecTestTaskStatusPermission()]
