@@ -569,7 +569,6 @@ class TicketViewSet(ResourceViewSet):
             ]
         if self.action == "test_task_status":
             return [IsAuthenticated(), BkSecTestTaskStatusPermission()]
-        return []
 
 
 class RiskEventSubscriptionApigwViewSet(APIGWViewSet):

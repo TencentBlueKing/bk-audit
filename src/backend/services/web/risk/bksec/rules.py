@@ -21,6 +21,7 @@ from typing import Optional
 
 from django.db import transaction
 from django.utils.translation import gettext
+from rest_framework import serializers
 
 from api.domains import BKSEC_PLUGIN_CONFIG_API_URL
 from services.web.risk.bksec.config import BkSecConfig
@@ -43,6 +44,10 @@ logger = logging.getLogger("celery")
 
 class BkSecPluginSyncError(Exception):
     """插件没有接受本次 BKSEC 配置。规则事务已回滚，调用方只需回退 bksec_config。"""
+
+
+class BkSecPresetNotReady(serializers.ValidationError):
+    """内置发单套餐补不出来。保存策略时回退 bksec_config；未接住时仍按校验错误返回。"""
 
 
 # 处理规则的生命周期管理
@@ -206,8 +211,6 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         )
         return None
     # 启用 → 按模板 ID 补齐内置套餐。仍没有则报错，避免策略显示已启用却没有自动规则。
-    from rest_framework import serializers
-
     from services.web.risk.bksec.service import ensure_preset_pa
 
     pa = ensure_preset_pa()
@@ -216,7 +219,7 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
             "[BkSecRule] Preset process application missing (BKSEC_SOPS_TEMPLATE_ID unset?), strategy_id=%s",
             strategy.strategy_id,
         )
-        raise serializers.ValidationError(gettext("BKSEC 内置发单套餐未就绪：请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID"))
+        raise BkSecPresetNotReady(gettext("BKSEC 内置发单套餐未就绪：请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID"))
     fields = _build_rule_fields(strategy, config, pa.id)
     # 幂等：内容一致 → 仅原地确保启用
     if latest and all(getattr(latest, k) == v for k, v in fields.items()):
@@ -243,13 +246,18 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
 def sync_bksec_rule_or_keep_strategy(
     strategy: Strategy, previous_bksec_config: Optional[dict], strategy_alive: Optional[bool] = None
 ) -> None:
-    """同步发单规则。插件拒绝配置时只把 bksec_config 写回保存前的值，其余策略内容保持已保存状态。"""
+    """同步发单规则。插件拒绝配置或内置套餐未就绪时，只把 bksec_config 写回保存前的值，其余策略内容保持已保存状态。"""
     try:
         sync_bksec_rule(strategy, strategy_alive=strategy_alive)
-    except BkSecPluginSyncError as err:
+    except (BkSecPluginSyncError, BkSecPresetNotReady) as err:
         strategy.bksec_config = {} if previous_bksec_config is None else previous_bksec_config
         strategy.save(update_fields=["bksec_config"])
-        strategy.bksec_sync_message = gettext("策略已保存，BKSEC 工单配置因插件同步失败未生效，请稍后重新保存该配置：%s") % str(err)
+        if isinstance(err, BkSecPresetNotReady):
+            strategy.bksec_sync_message = gettext(
+                "策略已保存，BKSEC 工单配置因内置发单套餐未就绪未生效，请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID 后重新保存该配置"
+            )
+        else:
+            strategy.bksec_sync_message = gettext("策略已保存，BKSEC 工单配置因插件同步失败未生效，请稍后重新保存该配置：%s") % str(err)
 
 
 def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = False) -> tuple:

@@ -68,6 +68,33 @@ def find_preset_pa() -> Optional[ProcessApplication]:
     return ProcessApplication.objects.filter(is_builtin=True, sops_template_id=template_id).order_by("-id").first()
 
 
+def _ensure_preset_pa_platform_binding(pa: ProcessApplication) -> None:
+    """内置套餐固定为平台级绑定，全部场景可见。"""
+
+    from services.web.scene.constants import (
+        BindingType,
+        ResourceVisibilityType,
+        VisibilityScope,
+    )
+    from services.web.scene.models import ResourceBinding
+
+    binding, _created = ResourceBinding.objects.get_or_create(
+        resource_type=ResourceVisibilityType.PROCESS_APPLICATION.value,
+        resource_id=str(pa.id),
+        defaults={
+            "binding_type": BindingType.PLATFORM_BINDING.value,
+            "visibility_type": VisibilityScope.ALL_SCENES.value,
+        },
+    )
+    if (
+        binding.binding_type != BindingType.PLATFORM_BINDING.value
+        or binding.visibility_type != VisibilityScope.ALL_SCENES.value
+    ):
+        binding.binding_type = BindingType.PLATFORM_BINDING.value
+        binding.visibility_type = VisibilityScope.ALL_SCENES.value
+        binding.save(update_fields=["binding_type", "visibility_type"])
+
+
 def ensure_preset_pa() -> Optional[ProcessApplication]:
     """
     按当前模板 ID 幂等补齐内置套餐。
@@ -75,20 +102,24 @@ def ensure_preset_pa() -> Optional[ProcessApplication]:
     没有对应的内置套餐才插入一条。已有同模板 ID 的内置套餐保持原样，
     其他套餐的模板 ID 也不改。环境变量以后换成新模板 ID 时，再插入一条新的内置套餐。
     未配置模板 ID 时不创建，返回 None。
+    补齐或再次命中时，把套餐绑成平台级、全部场景可见。
     """
     template_id = preset_template_id()
     if template_id is None:
         return None
     existing = find_preset_pa()
     if existing is not None:
+        _ensure_preset_pa_platform_binding(existing)
         return existing
-    return ProcessApplication.objects.create(
+    pa = ProcessApplication.objects.create(
         name=BKSEC_PRESET_PA_NAME,
         sops_template_id=template_id,
         need_approve=False,
         is_enabled=True,
         is_builtin=True,
     )
+    _ensure_preset_pa_platform_binding(pa)
+    return pa
 
 
 def _risk_access_cache_identity(as_platform: bool) -> str:
