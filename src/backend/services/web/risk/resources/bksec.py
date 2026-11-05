@@ -22,8 +22,9 @@ import logging
 from bk_resource import api
 from bk_resource.base import Resource
 from django.conf import settings
+from django.http import Http404
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 from rest_framework.settings import api_settings
 
@@ -45,6 +46,11 @@ from services.web.risk.bksec.service import (
 )
 from services.web.risk.constants import BkSecPushStatus, TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
+from services.web.risk.permissions import (
+    ensure_strategy_edit_permission,
+    find_bksec_test_node_by_task_id,
+    strategy_id_of_risk,
+)
 from services.web.risk.serializers import (
     GetTaskStatusReqSerializer,
     ListBkSecProjectsReqSerializer,
@@ -259,10 +265,11 @@ class GetTaskStatus(TicketResourceMeta):
     查询测试任务状态（透传 SOPS 任务状态，供前端轮询至终态）
 
     两个入口二选一：
-    - task_id：会话内轮询（测试发送返回值携带）；
+    - task_id：会话内轮询（测试发送返回值携带）。必须先命中本地测试节点，再校验该风险所属策略的编辑权限；
     - risk_id：刷新后恢复——task_id 随内存丢失，改用样例风险单 ID 定位本人最近一条测试单，
-      用户身份由后端从请求上下文获取，前端无法伪造。
+      用户身份由后端从请求上下文获取，前端无法伪造。命中节点后同样校验策略编辑权限。
 
+    未确认是当前用户有权查看的测试节点之前，不回源 SOPS。
     """
 
     name = gettext_lazy("查询测试任务状态")
@@ -275,7 +282,12 @@ class GetTaskStatus(TicketResourceMeta):
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data.get("task_id") or ""
-        if not task_id:
+        if task_id:
+            # 会话内轮询：task_id 必须属于测试节点。正式任务、其它业务任务直接 404，不回源。
+            node = find_bksec_test_node_by_task_id(task_id)
+            if node is None:
+                raise Http404(gettext("测试任务不存在"))
+        else:
             # 刷新恢复：按样例风险单 + 当前登录用户定位最近一条测试单，取其 task_id 继续走统一逻辑
             node = self._find_latest_test_node(validated_request_data["risk_id"])
             if node is None:
@@ -283,6 +295,7 @@ class GetTaskStatus(TicketResourceMeta):
             task_id = str((node.process_result or {}).get("task", {}).get("task_id") or "")
             if not task_id:
                 return {}
+        ensure_strategy_edit_permission(strategy_id_of_risk(node.risk_id))
         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
         result = dict(status)
         # 回传 task_id：strategy_id 恢复场景下前端据此接续后续轮询
@@ -296,13 +309,12 @@ class GetTaskStatus(TicketResourceMeta):
             result["failure_hint"] = failure_hint
 
         # 测试单执行记录状态同步（一次性发送，无轮询任务，由前端查询时更新）
-        if state in SOPSTaskStatus.get_finished_status():
-            node = self._find_test_node(task_id)
-            if node:
-                from django.db import transaction
+        if state in SOPSTaskStatus.get_finished_status() and node.status != TicketNodeStatus.FINISHED:
+            from django.db import transaction
 
-                with transaction.atomic():
-                    node = TicketNode.objects.select_for_update().get(id=node.id)
+            with transaction.atomic():
+                node = TicketNode.objects.select_for_update().get(id=node.id)
+                if node.status != TicketNodeStatus.FINISHED:
                     node.process_result["status"] = dict(status)
                     if failure_hint:
                         node.process_result["failure_hint"] = failure_hint
@@ -332,19 +344,6 @@ class GetTaskStatus(TicketResourceMeta):
                 return node
             history = (node.process_result or {}).get("retry_history") or []
             if any((item or {}).get("operator") == username for item in history):
-                return node
-        return None
-
-    @staticmethod
-    def _find_test_node(task_id: str):
-        """
-        按 task_id 定位测试节点，取最近的未结束测试节点逐个比对
-        """
-        candidates = TicketNode.objects.filter(is_test=True, status=TicketNodeStatus.RUNNING).order_by("-timestamp")[
-            :BKSEC_TEST_NODE_SCAN_LIMIT
-        ]
-        for node in candidates:
-            if str((node.process_result or {}).get("task", {}).get("task_id", "")) == str(task_id):
                 return node
         return None
 
