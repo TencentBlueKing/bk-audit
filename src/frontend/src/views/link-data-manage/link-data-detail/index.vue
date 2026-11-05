@@ -38,7 +38,10 @@
                 :data="linkDataDetail"
                 :max-version-map="maxVersionMap"
                 :strategy-tag-map="strategyTagMap"
-                style="height: calc(100% - 50px)" />
+                style="height: calc(100% - 50px)"
+                v-bind="active === 'basicInfo'
+                  ? { tagEditable: Boolean(editPermissionMap[linkDataDetail.uid]), tagList }
+                  : {}" />
             </scroll-faker>
           </bk-tab-panel>
         </bk-tab>
@@ -64,10 +67,13 @@
     show(uid?:string):void
   }
   interface Props {
-    maxVersionMap: Record<string, number>
+    maxVersionMap: Record<string, number>,
+    editPermissionMap?: Record<string, boolean>,
   }
 
-  defineProps<Props>();
+  withDefaults(defineProps<Props>(), {
+    editPermissionMap: () => ({}),
+  });
   const { t } = useI18n();
 
   const showDetail = ref(false);
@@ -77,6 +83,7 @@
     linkStrategy: LinkStrategy,
   };
   const strategyTagMap = ref<Record<string, string>>({});
+  const tagList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
 
   const panels = [
     { name: 'basicInfo', label: t('基础信息') },
@@ -96,6 +103,7 @@
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
+      tagList.value = data;
     },
   });
 
