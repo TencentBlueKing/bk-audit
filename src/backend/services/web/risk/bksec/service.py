@@ -33,6 +33,7 @@ from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
     BKSEC_CACHE_TIMEOUT,
     BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_PRESET_PA_NAME,
     BKSEC_RISK_ACCESS_MAX_PAGES,
     BKSEC_RISK_ACCESS_ORDERING,
     BKSEC_RISK_ACCESS_PAGE_SIZE,
@@ -46,21 +47,48 @@ from services.web.strategy_v2.models import Strategy
 logger = logging.getLogger("celery")
 
 
+def preset_template_id() -> Optional[int]:
+    """环境变量 BKAPP_BKSEC_SOPS_TEMPLATE_ID。未配置或不是整数时返回 None。"""
+    raw = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
+    if raw in (None, ""):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def find_preset_pa() -> Optional[ProcessApplication]:
     """
     查找 BKSEC 预置发单套餐（is_builtin=True 且 sops_template_id=BKSEC_SOPS_TEMPLATE_ID）
     """
-    template_id = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
-    if not template_id:
+    template_id = preset_template_id()
+    if template_id is None:
         return None
-    try:
-        return (
-            ProcessApplication.objects.filter(is_builtin=True, sops_template_id=int(template_id))
-            .order_by("-id")
-            .first()
-        )
-    except (TypeError, ValueError):
+    return ProcessApplication.objects.filter(is_builtin=True, sops_template_id=template_id).order_by("-id").first()
+
+
+def ensure_preset_pa() -> Optional[ProcessApplication]:
+    """
+    按当前模板 ID 幂等补齐内置套餐。
+
+    没有对应的内置套餐才插入一条。已有同模板 ID 的内置套餐保持原样，
+    其他套餐的模板 ID 也不改。环境变量以后换成新模板 ID 时，再插入一条新的内置套餐。
+    未配置模板 ID 时不创建，返回 None。
+    """
+    template_id = preset_template_id()
+    if template_id is None:
         return None
+    existing = find_preset_pa()
+    if existing is not None:
+        return existing
+    return ProcessApplication.objects.create(
+        name=BKSEC_PRESET_PA_NAME,
+        sops_template_id=template_id,
+        need_approve=False,
+        is_enabled=True,
+        is_builtin=True,
+    )
 
 
 def _risk_access_cache_identity(as_platform: bool) -> str:

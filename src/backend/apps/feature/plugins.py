@@ -81,8 +81,8 @@ class BksecPlugin(BaseFeaturePlugin):
          BKSEC_SOPS_TEMPLATE_ID（预置发单套餐模板）、
          BKSEC_PLUGIN_CONFIG_API_URL（发单插件 Config 同步地址）；
          （BKSEC_PROJECT_ID 已移除：项目由前端随策略配置选择，支持多项目）
-      2. 已存在内置处理套餐（ProcessApplication.is_builtin=True, sops_template_id=BKSEC_SOPS_TEMPLATE_ID），
-         即发单能力就绪。
+      2. 已存在内置处理套餐（ProcessApplication.is_builtin=True, sops_template_id=BKSEC_SOPS_TEMPLATE_ID）。
+         模板 ID 已配置但套餐还没有时，检查开关前会按该模板 ID 自动补齐，不改已有套餐。
 
     """
 
@@ -94,10 +94,12 @@ class BksecPlugin(BaseFeaturePlugin):
         if self.feature.status == FeatureStatusChoices.DENY.value:
             return FeatureStatusChoices.DENY.value
 
-        from services.web.risk.bksec.service import find_preset_pa
+        from services.web.risk.bksec.service import ensure_preset_pa, find_preset_pa
 
-        # 检查必配环境变量与内置套餐
+        # 检查必配环境变量与内置套餐。模板 ID 已有时先补齐套餐，再判断开关能否放开。
         missing_env = [name for name in self.REQUIRED_ENV if not getattr(settings, name, None)]
+        if "BKSEC_SOPS_TEMPLATE_ID" not in missing_env:
+            ensure_preset_pa()
         has_preset_pa = find_preset_pa() is not None
         self._feature.config = {
             "missing_env": missing_env,

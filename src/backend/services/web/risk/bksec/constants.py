@@ -63,6 +63,8 @@ BKSEC_RULE_PRIORITY_BASE = 9000
 
 # 自动创建的处理规则
 BKSEC_AUTO_RULE_NAME = gettext_lazy("【自动】策略 %s BKSEC发单")
+# 按环境变量指向的标准运维模板自动补齐的内置套餐。已有同模板 ID 的内置套餐不改。
+BKSEC_PRESET_PA_NAME = "【内置】BKSEC安全工单发单"
 
 BKSEC_FIELD_RISK_ASSET = "target"
 BKSEC_FIELD_INITIAL_OWNER = "operator"

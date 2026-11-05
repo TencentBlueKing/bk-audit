@@ -16,7 +16,40 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import os
+import uuid
+
 from django.db import migrations, models
+
+PRESET_PA_NAME = "【内置】BKSEC安全工单发单"
+
+
+def create_builtin_pa(apps, schema_editor):
+    """
+    迁移时按 BKAPP_BKSEC_SOPS_TEMPLATE_ID 补齐内置套餐。
+
+    未配置或不是整数时跳过，迁移仍然成功。已有同模板 ID 的内置套餐则不动，
+    也不修改其他套餐的模板 ID。运行时还会再补一次，环境变量后配或更换模板 ID 仍然有效。
+    """
+    raw = os.environ.get("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
+    if not raw:
+        return
+    try:
+        template_id = int(raw)
+    except (TypeError, ValueError):
+        return
+    process_application = apps.get_model("risk", "ProcessApplication")
+    if process_application.objects.filter(is_builtin=True, sops_template_id=template_id).exists():
+        return
+    process_application.objects.create(
+        uniq_id=uuid.uuid4().hex,
+        name=PRESET_PA_NAME,
+        sops_template_id=template_id,
+        need_approve=False,
+        is_enabled=True,
+        is_builtin=True,
+        is_deleted=False,
+    )
 
 
 class Migration(migrations.Migration):
@@ -51,4 +84,5 @@ class Migration(migrations.Migration):
             name="is_test",
             field=models.BooleanField(db_index=True, default=False, verbose_name="Is Test"),
         ),
+        migrations.RunPython(create_builtin_pa, migrations.RunPython.noop),
     ]
