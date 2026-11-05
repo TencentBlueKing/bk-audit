@@ -1285,7 +1285,19 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         return data
 
 
-class CreateStrategyResponseSerializer(serializers.ModelSerializer):
+class _BkSecSyncNoticeSerializer(serializers.ModelSerializer):
+    """插件同步失败时带上说明和已回退的 bksec_config。成功时响应字段保持不变。"""
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        message = getattr(instance, "bksec_sync_message", "") or ""
+        if message:
+            data["bksec_sync_message"] = message
+            data["bksec_config"] = instance.bksec_config or {}
+        return data
+
+
+class CreateStrategyResponseSerializer(_BkSecSyncNoticeSerializer):
     """
     Create Strategy
     """
@@ -1449,7 +1461,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         return data
 
 
-class UpdateStrategyResponseSerializer(serializers.ModelSerializer):
+class UpdateStrategyResponseSerializer(_BkSecSyncNoticeSerializer):
     """
     Update Strategy
     """

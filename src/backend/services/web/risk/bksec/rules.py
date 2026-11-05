@@ -40,6 +40,11 @@ from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
 
+
+class BkSecPluginSyncError(Exception):
+    """插件没有接受本次 BKSEC 配置。规则事务已回滚，调用方只需回退 bksec_config。"""
+
+
 # 处理规则的生命周期管理
 
 
@@ -217,8 +222,8 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         _toggle_rule(latest, is_enabled=True)
         # 场景归属跟随策略（策略改绑场景后规则可见性同步，内容未变不产生新版本）
         _sync_rule_scene_binding(strategy, latest)
-        # Config 同步：即使规则内容未变，插件侧凭证/配方可能更新（如用户改了 target_type）
-        # 启用路径为保存前置强校验：同步失败则阻断策略保存，避免“假启用”（规则在、插件无 Config、发不出单）
+        # Config 同步：即使规则内容未变，插件侧凭证/配方也可能更新（如用户改了 target_type）
+        # 同步失败抛 BkSecPluginSyncError，本事务回滚规则变更，调用方回退 bksec_config
         _ensure_plugin_config_synced(strategy, config)
         return latest
     # 内容变化/首次 → 创建启用的新版本
@@ -229,9 +234,21 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         instance.rule_id,
         instance.version,
     )
-    # 启用路径同步插件 Config，失败阻断保存
+    # 启用路径同步插件 Config；失败时本事务回滚刚写入的规则
     _ensure_plugin_config_synced(strategy, config)
     return instance
+
+
+def sync_bksec_rule_or_keep_strategy(
+    strategy: Strategy, previous_bksec_config: Optional[dict], strategy_alive: Optional[bool] = None
+) -> None:
+    """同步发单规则。插件拒绝配置时只把 bksec_config 写回保存前的值，其余策略内容保持已保存状态。"""
+    try:
+        sync_bksec_rule(strategy, strategy_alive=strategy_alive)
+    except BkSecPluginSyncError as err:
+        strategy.bksec_config = {} if previous_bksec_config is None else previous_bksec_config
+        strategy.save(update_fields=["bksec_config"])
+        strategy.bksec_sync_message = gettext("策略已保存，BKSEC 工单配置因插件同步失败未生效，请稍后重新保存该配置：%s") % str(err)
 
 
 def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = False) -> tuple:
@@ -350,14 +367,12 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
 
 def _ensure_plugin_config_synced(strategy: Strategy, config: BkSecConfig) -> None:
     """
-    启用路径的插件 Config 同步：失败阻断保存，带重试。
+    启用路径的插件 Config 同步：失败抛出 BkSecPluginSyncError，带重试。
 
-    阻断保证配置正确性；重试解决短暂抖动（插件服务不可用/网络异常等）。
-    失败后用户重新保存即可（手动补偿）。
+    重试解决短暂抖动（插件服务不可用/网络异常等）。
+    失败后本函数所在的规则事务回滚，调用方把 bksec_config 写回保存前的值。
     """
     import time
-
-    from rest_framework import serializers
 
     max_retries = 3
     message = ""
@@ -367,4 +382,4 @@ def _ensure_plugin_config_synced(strategy: Strategy, config: BkSecConfig) -> Non
             return
         if attempt < max_retries - 1:
             time.sleep(1)  # 重试间隔
-    raise serializers.ValidationError(gettext("BKSEC 安全工单已启用但插件配置同步失败，策略保存被阻断：%s") % message)
+    raise BkSecPluginSyncError(message)
