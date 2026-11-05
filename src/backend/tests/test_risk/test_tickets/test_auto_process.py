@@ -24,10 +24,10 @@ from bk_resource.settings import bk_resource_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.constants import RiskDisplayStatus, RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus, TicketNodeStatus
 from services.web.risk.exceptions import AutoProcessParamsError
-from services.web.risk.handlers.ticket import AutoProcess, ForApprove
-from services.web.risk.models import Risk
+from services.web.risk.handlers.ticket import AutoProcess, CustomProcess, ForApprove
+from services.web.risk.models import Risk, TicketNode
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
     APPROVE_SERVICE_INFO,
@@ -496,3 +496,137 @@ class AutoProcessTest(TicketTest):
                 risk = Risk.objects.get(risk_id=risk.risk_id)
                 self.assertEquals(risk.last_history.action, AutoProcess.__name__)
                 self.assertEquals(risk.last_history.extra["pa_config"], pa_config)
+
+    def _create_node(self, risk, action, timestamp, process_result, status=TicketNodeStatus.RUNNING):
+        return TicketNode.objects.create(
+            risk_id=risk.risk_id,
+            operator="admin",
+            action=action,
+            timestamp=timestamp,
+            time="2020-01-01 00:00:00",
+            process_result=process_result,
+            status=status,
+        )
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_manual_pa_does_not_reuse_failed_running_task(self):
+        """失败任务的节点还没被定时任务刷完时，人工选新套餐要建新任务，不能查旧任务。"""
+        with RuleContext(pa_info={"need_approve": False}) as (pa, _):
+            with RiskContext() as risk:
+                risk.status = RiskStatus.AWAIT_PROCESS
+                risk.save()
+                old = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.FAILED.value}},
+                )
+                create_task = mock.Mock(return_value={"task_id": "new-task"})
+                get_task_status = mock.Mock(return_value={"state": SOPSTaskStatus.RUNNING.value})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
+                    return_value=SOPS_TEMPLATE_INFO,
+                ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.start_task", return_value=None
+                ), mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", get_task_status
+                ):
+                    pa_config = {**CUSTOM_AUTO_PROCESS_PARAMS, "pa_id": pa.id}
+                    resource.risk.custom_auto_process(risk_id=risk.risk_id, **pa_config)
+                create_task.assert_called_once()
+                queried = [call.kwargs.get("task_id") for call in get_task_status.call_args_list]
+                self.assertNotIn("old-task", queried)
+                self.assertIn("new-task", queried)
+                old.refresh_from_db()
+                self.assertEqual(old.status, TicketNodeStatus.RUNNING)
+                self.assertEqual(old.process_result["task"]["task_id"], "old-task")
+                created = TicketNode.objects.filter(risk_id=risk.risk_id, action=AutoProcess.__name__).exclude(
+                    id=old.id
+                )
+                self.assertEqual(created.count(), 1)
+                self.assertEqual(created.get().process_result["task"]["task_id"], "new-task")
+                custom = TicketNode.objects.get(risk_id=risk.risk_id, action=CustomProcess.__name__)
+                self.assertNotIn("status", custom.process_result or {})
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_refresh_writes_terminal_state_to_owning_node(self):
+        """自动轮询发现任务已结束时，终态写回持有任务的节点，不写到后来的人工节点，也不另建任务。"""
+        with RuleContext(pa_info={"need_approve": False}) as (_, rule):
+            with RiskContext() as risk:
+                risk.rule_id = rule.rule_id
+                risk.rule_version = rule.version
+                risk.status = RiskStatus.AUTO_PROCESS
+                risk.save()
+                owning = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.RUNNING.value}},
+                )
+                custom = self._create_node(risk, CustomProcess.__name__, 2, {})
+                create_task = mock.Mock(return_value={"task_id": "should-not-create"})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
+                    return_value={"state": SOPSTaskStatus.FAILED.value},
+                ) as get_task_status, mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task
+                ):
+                    AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+                create_task.assert_not_called()
+                get_task_status.assert_called_once()
+                self.assertEqual(get_task_status.call_args.kwargs["task_id"], "old-task")
+                owning.refresh_from_db()
+                custom.refresh_from_db()
+                self.assertEqual(owning.status, TicketNodeStatus.FINISHED)
+                self.assertEqual(owning.process_result["status"]["state"], SOPSTaskStatus.FAILED.value)
+                self.assertEqual(custom.process_result, {})
+                risk.refresh_from_db()
+                self.assertEqual(risk.status, RiskStatus.AWAIT_PROCESS)
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_refresh_reuses_task_still_running_remotely(self):
+        """标准运维里仍在执行的任务继续复用，状态写回所属节点，不另建任务。"""
+        with RuleContext(pa_info={"need_approve": False}) as (_, rule):
+            with RiskContext() as risk:
+                risk.rule_id = rule.rule_id
+                risk.rule_version = rule.version
+                risk.status = RiskStatus.AUTO_PROCESS
+                risk.save()
+                owning = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.CREATED.value}},
+                )
+                custom = self._create_node(risk, CustomProcess.__name__, 2, {})
+                create_task = mock.Mock(return_value={"task_id": "should-not-create"})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
+                    return_value={"state": SOPSTaskStatus.RUNNING.value},
+                ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task):
+                    AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+                create_task.assert_not_called()
+                owning.refresh_from_db()
+                custom.refresh_from_db()
+                self.assertEqual(owning.status, TicketNodeStatus.RUNNING)
+                self.assertEqual(owning.process_result["status"]["state"], SOPSTaskStatus.RUNNING.value)
+                self.assertEqual(custom.process_result, {})
