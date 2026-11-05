@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
 
-# SOPS 插件「审计中心WeSec发单」(v1.0.0) 入参契约：
+# SOPS 插件「审计中心WeSec发单」(v1.1.0) 入参契约：
 # 插件 Inputs 共 15 个参数；
 # 其中 ${action}（执行模式 callback/poll）是 SOPS 模板的节点输入
 # 由模板分支节点按当前状态配置——首单走 callback 节点，后续重发走 poll 节点（周期检查 event_end_time，有新事件则更新工单）
