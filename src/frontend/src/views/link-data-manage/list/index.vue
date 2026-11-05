@@ -55,6 +55,7 @@
     @update="handleCreateUpdate" />
   <link-data-detail
     ref="detailRef"
+    :edit-permission-map="editLinkTablePermissionMap"
     :max-version-map="maxVersionMap" />
 </template>
 <script setup lang="tsx">
@@ -72,7 +73,7 @@
   import useRecordPage from '@hooks/use-record-page';
   import useUrlSearch from '@hooks/use-url-search';
 
-  import EditTag from '@components/edit-box/tag.vue';
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import CreateLinkData from '../link-data-create/index.vue';
@@ -176,10 +177,26 @@
     tag_name: string
   }>>([]);
   const strategyTagMap = ref<Record<string, string>>({});
+  const editingTagUid = ref('');
+  const editLinkTablePermissionMap = ref<Record<string, boolean>>({});
   const total = ref(0);
   const searchKey = ref<Array<SearchKey>>([]);
   const leftLabelFilterCondition = ref('');
   const maxVersionMap = ref<Record<string, number>>({});
+
+  const handleTagEdit = (data: LinkDataModel) => {
+    editingTagUid.value = data.uid;
+  };
+
+  const handleTagEditCancel = () => {
+    editingTagUid.value = '';
+  };
+
+  // TODO: 待后端标签绑定接口就绪后接入保存
+  const handleTagSave = () => {
+    editingTagUid.value = '';
+  };
+
   const tableColumn = ref([
     {
       label: () => t('联表数据名称'),
@@ -196,7 +213,17 @@
       width: 230,
       render: ({ data }: { data: LinkDataModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
-        return <EditTag data={tags} key={data.id} />;
+        return (
+          <InlineTag
+            editable={Boolean(data.permission?.edit_link_table)}
+            isEditing={editingTagUid.value === data.uid}
+            key={data.id}
+            tagList={linkDataLabelList.value}
+            tags={tags}
+            onCancel={handleTagEditCancel}
+            onEdit={() => handleTagEdit(data)}
+            onSave={handleTagSave} />
+        );
       },
     },
     {
@@ -453,6 +480,9 @@
   };
 
   const handleRequestSuccess = (data: LinkData) => {
+    data.results.forEach((item) => {
+      editLinkTablePermissionMap.value[item.uid] = Boolean(item.permission?.edit_link_table);
+    });
     fetchLinkTableTags().then(() => {
       searchData = [
         ...defaultSearchData,
