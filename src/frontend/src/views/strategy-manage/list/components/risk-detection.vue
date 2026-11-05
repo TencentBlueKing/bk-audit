@@ -29,7 +29,14 @@
           </render-info-block>
           <render-info-block>
             <render-info-item :label="t('标签')">
-              <edit-tag :data="data.tags?.map(item=> strategyMap[item] || item) || ''" />
+              <inline-tag
+                :editable="tagEditable"
+                :is-editing="isTagEditing"
+                :tag-list="tagList"
+                :tags="data.tags?.map(item => strategyMap[item] || item) || []"
+                @cancel="isTagEditing = false"
+                @edit="isTagEditing = true"
+                @save="handleTagSave" />
             </render-info-item>
           </render-info-block>
           <render-info-block>
@@ -148,7 +155,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import EditTag from '@components/edit-box/tag.vue';
+  import InlineTag from '@components/edit-box/inline-tag.vue';
 
   import editWayIcon from '@images/strategy-manage/edit.svg';
   import modelWayIcon from '@images/strategy-manage/model.svg';
@@ -165,13 +172,25 @@
 
   interface Props {
     data: StrategyModel,
-    strategyMap: Record<string, string>
+    strategyMap: Record<string, string>,
+    tagEditable?: boolean,
+    tagList?: Array<{ tag_id: string | number, tag_name: string }>,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    tagEditable: false,
+    tagList: () => [],
+  });
   const { t } = useI18n();
   const route = useRoute();
   const isPlatformMode = computed(() => isPlatformStrategyRoute(route.name));
+
+  const isTagEditing = ref(false);
+
+  // TODO: 待后端标签绑定接口就绪后接入保存
+  const handleTagSave = () => {
+    isTagEditing.value = false;
+  };
 
   const fetchStrategyTableList = (params: {
     table_type: string;

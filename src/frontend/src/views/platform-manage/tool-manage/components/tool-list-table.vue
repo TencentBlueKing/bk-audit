@@ -49,6 +49,7 @@
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -56,6 +57,8 @@
 
   import sceneIconUrl from '@images/scene.svg';
   import systemIconUrl from '@images/system.svg';
+
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
 
   // 工具类型枚举
   type ToolTypeKey = 'api' | 'data_search' | 'bk_vision' | 'smart_page';
@@ -183,12 +186,33 @@
   const getTagName = (tagId: string) => props.tagsEnums
     .find(item => String(item.tag_id) === String(tagId))?.tag_name || tagId;
 
-  const renderTagsContent = (tags: string[], rowKey: string) => {
-    if (!tags || tags.length === 0) {
-      return <span>--</span>;
-    }
-    return <EditTag data={tags.map(getTagName)} key={rowKey} showCopy={false} />;
+  const editingTagUid = ref('');
+  const tagOptions = computed(() => filterVirtualToolTags(props.tagsEnums));
+
+  const handleTagEdit = (row: ToolModel) => {
+    editingTagUid.value = row.uid;
   };
+
+  const handleTagEditCancel = () => {
+    editingTagUid.value = '';
+  };
+
+  // TODO: 待后端标签绑定接口就绪后接入保存
+  const handleTagSave = () => {
+    editingTagUid.value = '';
+  };
+
+  const renderTagsContent = (row: ToolModel) => (
+    <InlineTag
+      isEditing={editingTagUid.value === row.uid}
+      key={row.uid}
+      showCopy={false}
+      tagList={tagOptions.value}
+      tags={(row.tags || []).map(getTagName)}
+      onCancel={handleTagEditCancel}
+      onEdit={() => handleTagEdit(row)}
+      onSave={handleTagSave} />
+  );
 
   const getStrategyName = (strategyId: number) => {
     const strategy = props.strategyList.find(item => String(item.value) === String(strategyId));
@@ -691,7 +715,7 @@
       title: t('标签'),
       colKey: 'tags',
       width: 240,
-      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags, row.uid),
+      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row),
     },
     {
       title: t('可见范围'),

@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="tsx">
-  import { nextTick, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -38,11 +38,12 @@
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
-  import EditTag from '@components/edit-box/tag.vue';
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import { formatReferencedStrategyNames } from '@views/tool-manage-shared/strategy-reference';
 
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // 工具类型枚举
@@ -150,12 +151,36 @@
     return tagName;
   };
 
-  const renderTagsContent = (tags: string[], rowKey: string) => {
-    if (!tags || tags.length === 0) {
-      return <span>--</span>;
-    }
-    const labels = tags.map((tagId: string) => returnTagsName(tagId));
-    return <EditTag data={labels} key={rowKey} showCopy={false} />;
+  const editingTagUid = ref('');
+  const tagOptions = computed(() => filterVirtualToolTags(props.tagsEnums));
+
+  const handleTagEdit = (row: ToolModel) => {
+    editingTagUid.value = row.uid;
+  };
+
+  const handleTagEditCancel = () => {
+    editingTagUid.value = '';
+  };
+
+  // TODO: 待后端标签绑定接口就绪后接入保存
+  const handleTagSave = () => {
+    editingTagUid.value = '';
+  };
+
+  const renderTagsContent = (row: ToolModel) => {
+    const labels = (row.tags || []).map((tagId: string) => returnTagsName(tagId));
+    return (
+      <InlineTag
+        editable={!isPlatformTool(row)}
+        isEditing={editingTagUid.value === row.uid}
+        key={row.uid}
+        showCopy={false}
+        tagList={tagOptions.value}
+        tags={labels}
+        onCancel={handleTagEditCancel}
+        onEdit={() => handleTagEdit(row)}
+        onSave={handleTagSave} />
+    );
   };
 
   // 根据策略ID获取策略名称
@@ -269,7 +294,7 @@
       title: t('标签'),
       colKey: 'tags',
       width: 240,
-      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags, row.uid),
+      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row),
     },
     {
       title: t('被引用'),

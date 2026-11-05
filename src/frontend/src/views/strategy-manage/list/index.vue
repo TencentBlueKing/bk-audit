@@ -236,6 +236,8 @@
         :data="strategyItem"
         :detail-loading="detailLoading"
         :strategy-map="strategyTagMap"
+        :tag-editable="isStrategyTagEditable(strategyItem)"
+        :tag-list="strategyLabelList"
         :user-group-list="userGroupList"
         @tab-change="handleDetailTabChange" />
     </div>
@@ -332,6 +334,7 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -669,6 +672,7 @@
   // 列表是否已成功加载过（用于区分「场景相同但首屏请求失败」与「无需重复请求」）
   const hasListLoadedOnce = ref(false);
   const strategyTagMap = ref<Record<string, string>>({});
+  const editingTagStrategyId = ref<number | null>(null);
   const statusMap = ref<Record<string, string>>({});
   // 挂起的需要轮询的id列表
   const pendingStatusIdList = ref<Array<number>>([]);
@@ -998,6 +1002,22 @@
     searchData.value = buildSearchData();
   };
 
+  const isStrategyTagEditable = (data: StrategyModel) => !isSceneGlobalStrategy(data)
+    && Boolean(resolveStrategyPermission(data.permission?.edit_strategy));
+
+  const handleTagEdit = (data: StrategyModel) => {
+    editingTagStrategyId.value = data.strategy_id;
+  };
+
+  const handleTagEditCancel = () => {
+    editingTagStrategyId.value = null;
+  };
+
+  // TODO: 待后端标签绑定接口就绪后接入保存
+  const handleTagSave = () => {
+    editingTagStrategyId.value = null;
+  };
+
   const tableColumn = ref([
     {
       label: () => t('策略ID'),
@@ -1094,9 +1114,15 @@
       render: ({ data }: { data: StrategyModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
         return (
-          <EditTag
-            data={tags}
+          <InlineTag
+            editable={isStrategyTagEditable(data)}
+            isEditing={editingTagStrategyId.value === data.strategy_id}
             key={`tags-${data.strategy_id}-${tags.join('|')}`}
+            tagList={strategyLabelList.value}
+            tags={tags}
+            onCancel={handleTagEditCancel}
+            onEdit={() => handleTagEdit(data)}
+            onSave={handleTagSave}
           />
         );
       },
@@ -2024,7 +2050,7 @@
     if (domList) {
       domList.forEach((dom) => {
         const el = dom as HTMLElement;
-        el.style.background = isNew ? '#f2fff4' : '#fff';
+        el.style.background = isNew ? '#f2fff4' : '';
       });
     }
   };
