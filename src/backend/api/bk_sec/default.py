@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-import json
 import os
 
 from bk_resource import BkApiResource
@@ -25,15 +24,6 @@ from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
 
 from api.domains import BKSEC_API_URL
-
-# Mock 数据文件路径（WeSec API 完整响应，仅 BKAPP_BKSEC_MOCK_ENABLED=True 时使用）
-_MOCK_DATA_FILE = os.path.join(os.path.dirname(__file__), "risk_type_list.json")
-
-
-def _load_mock_data():
-    """加载 Mock 数据（WeSec risk_access_list API 完整响应）"""
-    with open(_MOCK_DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 class BKSec(BkApiResource, abc.ABC):
@@ -44,9 +34,6 @@ class BKSec(BkApiResource, abc.ABC):
     rate_limit = settings.BKSEC_API_RATE_LIMIT
 
     def perform_request(self, validated_request_data):
-        # Mock 模式：直接返回本地数据
-        if getattr(settings, "BKSEC_MOCK_ENABLED", False):
-            return self._mock_request(validated_request_data)
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
@@ -55,9 +42,20 @@ class BKSec(BkApiResource, abc.ABC):
             )
         )(validated_request_data)
 
-    def _mock_request(self, validated_request_data):
-        """Mock 请求处理（子类可覆盖）"""
-        raise NotImplementedError
+    def add_esb_info_before_request(self, params: dict) -> dict:
+        """
+        应用身份换成 stag 凭证（与调用插件接口同一对环境变量），用户身份（bk_token/bk_username）保留透传
+
+        配置 BKAPP_BKSEC_PLUGIN_APP_CODE/SECRET 时覆写 bk_app_code/bk_app_secret；
+        未配置时回落审计自身应用凭证（super 默认行为）。
+        """
+        params = super().add_esb_info_before_request(params)
+        plugin_app_code = os.getenv("BKAPP_BKSEC_PLUGIN_APP_CODE")
+        plugin_app_secret = os.getenv("BKAPP_BKSEC_PLUGIN_APP_SECRET")
+        if plugin_app_code and plugin_app_secret:
+            params["bk_app_code"] = plugin_app_code
+            params["bk_app_secret"] = plugin_app_secret
+        return params
 
 
 class ProjectChoices(BKSec):
@@ -67,16 +65,6 @@ class ProjectChoices(BKSec):
     method = "GET"
     action = "/api/v1/project/choices/"
     platform_authorization = False
-
-    def _mock_request(self, validated_request_data):
-        # 从风险类型自带的 project 对象聚合（mock 数据为单项目；需多项目时往 risk_type_list.json 补即可）
-        data = _load_mock_data()
-        projects = {}
-        for item in (data.get("data") or {}).get("results", []):
-            project = item.get("project")
-            if isinstance(project, dict) and project.get("id") is not None:
-                projects[str(project["id"])] = {"id": project["id"], "name": project.get("name") or ""}
-        return list(projects.values())
 
 
 class RiskAccessList(BKSec):
@@ -91,31 +79,12 @@ class RiskAccessList(BKSec):
     action = "/api/v1/risk/risk_access/"
     platform_authorization = False
 
-    def _mock_request(self, validated_request_data):
-        data = _load_mock_data()
-        results = (data.get("data") or {}).get("results", [])
-
-        # is_formal 过滤（默认只返回正式类型，与真实 API 行为一致）
-        is_formal = validated_request_data.get("is_formal") or "true"
-        if is_formal == "true":
-            results = [r for r in results if r.get("is_formal")]
-        elif is_formal == "false":
-            results = [r for r in results if not r.get("is_formal")]
-
-        # name__icontains 模糊过滤
-        name_icontains = validated_request_data.get("name__icontains") or ""
-        if name_icontains:
-            keyword = name_icontains.lower()
-            results = [r for r in results if keyword in (r.get("name") or "").lower()]
-
-        return {"count": len(results), "results": results}
-
 
 class RiskAccessListAsPlatform(RiskAccessList):
     """查询风险类型列表（平台身份）
 
     同步插件 Config 取 token 专用：随平台凭证调用，不受操作者数据域影响，
-    保证 token 可见性稳定（与谁触发保存/测试无关）。接口/参数/mock 复用 RiskAccessList。
+    保证 token 可见性稳定（与谁触发保存/测试无关）。接口/参数复用 RiskAccessList。
     """
 
     name = "查询风险类型列表（平台身份）"
