@@ -7,11 +7,14 @@ from django.core.cache import cache
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
     RISK_RENDER_LOCK_KEY,
+    ContentQualityError,
+    ContentQualityIssueType,
     RiskReportStatus,
 )
 from services.web.risk.handlers.report import RiskReportHandler
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk, RiskReport
+from services.web.risk.report.quality import ContentQualityIssue
 from services.web.risk.tasks import render_risk_report
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -282,6 +285,58 @@ class TestRiskRenderTask(TestCase):
 
         # 验证监控事件被上报
         mock_report_event.assert_called_once()
+
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.tasks.render_risk_report.retry")
+    @mock.patch("services.web.risk.handlers.report.submit_render_task")
+    def test_ai_error_text_does_not_retry(self, mock_submit, mock_retry, mock_report_event):
+        """失败文本已经写进正文时不再重试，并上报渲染失败告警。"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.get.return_value = "[AI生成失败: (1226, 'max_user_connections')] 插件库连接已满，报告无法继续生成。"
+        mock_submit.return_value = mock_async_result
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        with self.assertRaises(ContentQualityError) as ctx:
+            render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        self.assertFalse(ctx.exception.retryable)
+        mock_retry.assert_not_called()
+        self.assertFalse(RiskReport.objects.filter(risk_id=self.risk.risk_id).exists())
+        event_names = {call.args[0]["data"][0]["event_name"] for call in mock_report_event.call_args_list}
+        self.assertIn("risk_report_render_failed", event_names)
+
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.tasks.render_risk_report.retry")
+    @mock.patch("services.web.risk.handlers.report.submit_render_task")
+    def test_empty_content_still_retries(self, mock_submit, mock_retry, mock_report_event):
+        """空内容仍可能是一次不完整输出，继续走重试。"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.get.return_value = ""
+        mock_submit.return_value = mock_async_result
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        mock_retry.assert_called_once()
+        self.assertEqual(mock_retry.call_args.kwargs["countdown"], 10)
+        self.assertNotIn("exc", mock_retry.call_args.kwargs)
+
+
+class TestContentQualityErrorRetryable(TestCase):
+    def test_failure_text_is_not_retryable(self):
+        issues = [
+            ContentQualityIssue(issue_type=ContentQualityIssueType.AI_ERROR, detail="[AI生成失败: "),
+            ContentQualityIssue(issue_type=ContentQualityIssueType.AI_THINKING, detail="正在思考..."),
+        ]
+        self.assertFalse(ContentQualityError(issues).retryable)
+
+    def test_incomplete_content_is_retryable(self):
+        issues = [ContentQualityIssue(issue_type=ContentQualityIssueType.EMPTY, detail="报告内容为空")]
+        self.assertTrue(ContentQualityError(issues).retryable)
 
 
 class TestRiskReportHandlerUnit(TestCase):

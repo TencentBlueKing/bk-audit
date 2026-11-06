@@ -401,6 +401,25 @@ class TestAIAuditReportStream(TestCase):
 
     def setUp(self):
         self.resource = ChatCompletion()
+        # 流式解析不走 Redis 限流，避免单测被 5/m 拖住。
+        throttle = mock.patch(
+            "api.bk_plugins_ai_audit_report.default.Throttler",
+            side_effect=lambda config: config.func,
+        )
+        throttle.start()
+        self.addCleanup(throttle.stop)
+
+    @mock.patch("api.bk_plugins_ai_audit_report.default.Throttler")
+    def test_perform_request_uses_audit_report_rate_limit(self, mock_throttler):
+        """全局限流只用单风险报告自己的速率，不继承渲染任务限流。"""
+        mock_throttler.return_value.return_value = "ok"
+        with override_settings(AI_AUDIT_REPORT_RATE_LIMIT="5/m", RENDER_TASK_RATE_LIMIT="99/m"):
+            result = self.resource.perform_request({"input": "x"})
+
+        self.assertEqual(result, "ok")
+        config = mock_throttler.call_args.kwargs["config"]
+        self.assertEqual(config.rate, "5/m")
+        self.assertEqual(config.key, "api.bk_plugins_ai_audit_report.default.ChatCompletion")
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
