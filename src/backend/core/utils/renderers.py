@@ -52,6 +52,9 @@ class APIRenderer(JSONRenderer):
             response.status_code = status.HTTP_200_OK
             res_data["data"] = data
             res_data["code"] = self.SUCCESS_CODE
+            message = self._extract_tool_execute_message(data)
+            if message:
+                res_data["message"] = message
             return super(APIRenderer, self).render(res_data, accepted_media_type, renderer_context)
 
         code = response.status_code
@@ -73,6 +76,19 @@ class APIRenderer(JSONRenderer):
             res_data["errors"] = errors
 
         return super(APIRenderer, self).render(res_data, accepted_media_type, renderer_context)
+
+    @staticmethod
+    def _extract_tool_execute_message(data):
+        """API 工具执行成功时，把第三方 message 提到接口外层 message。"""
+        if not isinstance(data, dict) or "tool_type" not in data:
+            return None
+        inner = data.get("data")
+        if not isinstance(inner, dict) or "status_code" not in inner:
+            return None
+        message = inner.get("message")
+        if not message:
+            return None
+        return message
 
     def format_error_message(self, error):  # pylint: disable=no-self-use
         """

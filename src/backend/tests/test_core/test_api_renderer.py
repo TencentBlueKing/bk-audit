@@ -24,6 +24,41 @@ class TestAPIRenderer(SimpleTestCase):
             )
         return json.loads(rendered)
 
+    def _render_success(self, data):
+        response = SimpleNamespace(status_code=200, data=data)
+        request = SimpleNamespace(otel_trace_id=None)
+        with mock.patch("blueapps.utils.request_provider.get_or_create_local_request_id", return_value="req-id"):
+            rendered = APIRenderer().render(
+                data=data,
+                renderer_context={
+                    "response": response,
+                    "request": request,
+                },
+            )
+        return json.loads(rendered)
+
+    def test_api_tool_execute_message_is_lifted_to_response_message(self):
+        payload = self._render_success(
+            {
+                "data": {
+                    "status_code": 404,
+                    "result": {"message": "No Risk matches the given query."},
+                    "err_type": "none",
+                    "message": "No Risk matches the given query.",
+                },
+                "tool_type": "api",
+            }
+        )
+
+        self.assertEqual(payload["message"], "No Risk matches the given query.")
+        self.assertTrue(payload["result"])
+        self.assertEqual(payload["code"], 0)
+
+    def test_success_without_tool_execute_message_keeps_message_null(self):
+        payload = self._render_success({"uid": "tool-1", "tool_type": "api"})
+
+        self.assertIsNone(payload["message"])
+
     def test_params_error_message_is_rendered_as_plain_string(self):
         payload = self._render_error({"params_error": [ErrorDetail("处理套餐不存在", code="invalid")]})
 
