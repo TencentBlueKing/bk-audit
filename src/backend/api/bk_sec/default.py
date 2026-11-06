@@ -64,7 +64,7 @@ class ProjectChoices(BKSec):
     name = "查询项目列表"
     method = "GET"
     action = "/api/v1/project/choices/"
-    platform_authorization = False
+    platform_authorization = True
 
 
 class RiskAccessList(BKSec):
