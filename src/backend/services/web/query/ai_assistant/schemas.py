@@ -252,7 +252,11 @@ class AIConditionItem(BaseModel):
     )
     field_type: FieldType = Field(
         default=FieldType.STRING,
-        description=("下发给查询执行层的叶子字段类型；上下文中的 object 表示 JSON 容器，不是可输出的查询类型。" "拓展字段类型不明确时结合用户表达与样例判断，缺省使用 string"),
+        description=(
+            "下发给查询执行层的叶子字段类型。标准字段的 field_type 取字段元数据的 field.field_type，"
+            "operator 取 allow_operators 中的合法值。object 表示 JSON 容器，不是可输出的查询类型。"
+            "仅拓展字段类型不明确时结合用户表达与样例判断，缺省使用 string。"
+        ),
     )
     operator: QueryConditionOperator = Field(
         ...,
