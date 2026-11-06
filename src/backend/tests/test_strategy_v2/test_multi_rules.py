@@ -179,6 +179,7 @@ class CheckRulesTest(TestCase):
             "rules": [
                 {
                     "rule_name": "r1",
+                    "processor": [1],
                     "conditions": {
                         "where": None,
                         "having": {
@@ -219,6 +220,7 @@ class CheckRulesTest(TestCase):
             "rules": [
                 {
                     "rule_name": "r1",
+                    "processor": [1],
                     "conditions": {
                         "where": {"connector": "and", "conditions": []},
                         "having": {
@@ -253,6 +255,27 @@ class CheckRulesTest(TestCase):
             with self.assertRaises(serializers.ValidationError) as cm:
                 self.mixin._check_rules(attrs)
             self.assertIn("同时为空", str(cm.exception))
+
+    def test_scene_strategy_rule_requires_processor(self):
+        """场景策略：发现规则处理人必填"""
+        attrs = {
+            "strategy_type": StrategyType.RULE.value,
+            "configs": self.valid_configs,
+            "rules": [{"rule_name": "r1", "conditions": {"where": self.valid_where}}],
+        }
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin._check_rules(attrs)
+        self.assertIn("processor", str(cm.exception))
+
+    def test_platform_binding_rule_allows_empty_processor(self):
+        """全局策略：处理人由分派规则维护，发现规则可留空"""
+        attrs = {
+            "binding_type": BindingType.PLATFORM_BINDING,
+            "strategy_type": StrategyType.RULE.value,
+            "configs": self.valid_configs,
+            "rules": [{"rule_name": "r1", "conditions": {"where": self.valid_where}}],
+        }
+        self.assertEqual(self.mixin._check_rules(attrs), attrs)
 
     def test_having_field_must_be_aggregate(self):
         """having 条件字段必须为聚合字段"""
@@ -365,10 +388,16 @@ class CheckRulesTest(TestCase):
             "rules": [
                 {
                     "rule_name": "rule_high",
+                    "processor": [1],
                     "conditions": {"where": self.valid_where},
                     "risk_level": RiskLevel.HIGH.value,
                 },
-                {"rule_name": "rule_low", "conditions": {"where": self.valid_where}, "risk_level": RiskLevel.LOW.value},
+                {
+                    "rule_name": "rule_low",
+                    "processor": [1],
+                    "conditions": {"where": self.valid_where},
+                    "risk_level": RiskLevel.LOW.value,
+                },
             ],
         }
         # 应该不抛异常
@@ -397,7 +426,7 @@ class CheckRulesTest(TestCase):
             "configs": self.valid_configs,
             "sql": "SELECT 1 AS event_data, 1 AS strategy_id",
             "rules": [
-                {"rule_name": "rule_only", "conditions": {"where": self.valid_where}},
+                {"rule_name": "rule_only", "processor": [1], "conditions": {"where": self.valid_where}},
             ],
         }
         result = self.mixin._check_rules(attrs)
