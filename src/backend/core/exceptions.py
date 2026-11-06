@@ -96,7 +96,8 @@ class ToolVariableValidateException(BlueException):
     STATUS_CODE = 400
 
     def __init__(self, message):
-        super().__init__(message)
+        self.MESSAGE = message
+        super().__init__(message=message)
 
 
 class AppPermissionDenied(BlueException):
