@@ -257,6 +257,20 @@ def ensure_strategy_edit_permission(strategy_id) -> None:
     )
 
 
+def ensure_risk_view_permission(risk_id: str) -> None:
+    """
+    校验当前用户对目标风险实例的查看权限，与预览、试发入口（RiskViewPermission）口径一致。
+
+    本地票据（处理人/关注人/确认人）命中直接通过，否则走 IAM LIST_RISK；无权限抛 PermissionException。
+    测试任务状态查询在回源 SOPS 前调用，防止持他人测试任务 ID 越权读取任务状态与节点失败原文。
+    """
+
+    permission = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
+    allowed = permission.has_risk_permission(risk_id=risk_id, operator=get_request_username())
+    if not allowed:
+        raise PermissionException(action_name=gettext(ActionEnum.LIST_RISK.name), permission={})
+
+
 class BkSecTestTaskStatusPermission(IAMPermission):
     """
     测试任务状态查询权限。
@@ -264,6 +278,8 @@ class BkSecTestTaskStatusPermission(IAMPermission):
     task_id 能定位到测试节点时，校验该节点风险所属策略的编辑权限。
     节点不存在时放行，由资源层返回 404，避免把「任务不存在」报成缺少实例 ID，也不回源 SOPS。
     只传 risk_id 时直接校验该风险所属策略。
+    策略编辑通过后追加关联风险的查看鉴权，与预览、试发入口口径对齐，
+    防止同策略编辑者持他人测试任务 ID 越权读取任务状态与节点失败原文。
     """
 
     def __init__(self):
@@ -283,4 +299,6 @@ class BkSecTestTaskStatusPermission(IAMPermission):
         if strategy_id is None or str(strategy_id).strip().lower() in {"", "none", "null"}:
             raise ValidationError(message=gettext("无法获取权限校验资源实例ID"))
         self.resources = [ResourceEnum.STRATEGY.create_instance(strategy_id)]
-        return super().has_permission(request, view)
+        result = super().has_permission(request, view)
+        ensure_risk_view_permission(risk_id)
+        return result

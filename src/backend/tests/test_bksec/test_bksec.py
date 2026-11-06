@@ -1354,6 +1354,8 @@ class TestBkSecResources:
         with RiskContext() as risk:
             _create_test_node(risk, task_id=1)
             with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.ensure_risk_view_permission"
+            ), mock.patch(
                 "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
                 mock.Mock(return_value=make_failed_status()),
             ), mock.patch(
@@ -1366,6 +1368,8 @@ class TestBkSecResources:
             # 节点错误取不到 → 通用指引。上一次失败已把节点写成终态，换一条仍在运行的测试单。
             _create_test_node(risk, task_id="2")
             with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.ensure_risk_view_permission"
+            ), mock.patch(
                 "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
                 mock.Mock(return_value=make_failed_status()),
             ), mock.patch(
@@ -1377,6 +1381,8 @@ class TestBkSecResources:
             # 成功状态不附带提示
             _create_test_node(risk, task_id="3")
             with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission"), mock.patch(
+                "services.web.risk.resources.bksec.ensure_risk_view_permission"
+            ), mock.patch(
                 "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
                 mock.Mock(return_value={"state": "FINISHED"}),
             ):
@@ -1425,6 +1431,8 @@ class TestBkSecResources:
         with RiskContext() as risk:
             _create_test_node(risk, task_id=7)
             with mock.patch("services.web.risk.resources.bksec.ensure_strategy_edit_permission") as ensure, mock.patch(
+                "services.web.risk.resources.bksec.ensure_risk_view_permission"
+            ), mock.patch(
                 "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
                 return_value={"state": "RUNNING"},
             ) as get_status:
@@ -1450,7 +1458,9 @@ class TestBkSecResources:
             _create_test_node(risk, task_id=42)
             request = mock.Mock(query_params={"task_id": "42"}, data={})
             permission = BkSecTestTaskStatusPermission()
-            with mock.patch("services.web.risk.permissions.IAMPermission.has_permission", return_value=True) as allowed:
+            with mock.patch(
+                "services.web.risk.permissions.IAMPermission.has_permission", return_value=True
+            ) as allowed, mock.patch("services.web.risk.permissions.ensure_risk_view_permission"):
                 assert permission.has_permission(request, view=None) is True
             allowed.assert_called_once()
             assert str(permission.resources[0].id) == str(risk.strategy_id)
