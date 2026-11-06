@@ -1427,13 +1427,23 @@ class ToggleStrategy(StrategyV2Base):
         from services.web.risk.bksec.rules import BkSecPluginSyncError, sync_bksec_rule
 
         if validated_request_data["toggle"]:
-            # 先同步规则。控制器启用是异步任务，失败后再补停用会和启用任务抢顺序。
-            # 同步失败时规则事务回滚，这里直接拒绝，策略保持关闭。
+            # 先同步规则：插件同步失败时规则事务回滚，这里直接拒绝，策略保持关闭。
             try:
                 sync_bksec_rule(strategy, strategy_alive=True)
             except BkSecPluginSyncError as err:
                 raise serializers.ValidationError(gettext("策略未启用，BKSEC 工单配置同步失败：%s") % err)
-            call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
+            try:
+                call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
+            except Exception:
+                # 控制器启用失败（如 get_flow_deploy_data 超时）：回退刚启用的发单规则，
+                # 保证策略与发单规则双关。补偿失败只记日志，不遮蔽原异常。
+                try:
+                    sync_bksec_rule(strategy, strategy_alive=False)
+                except Exception:
+                    logger.exception(
+                        "[ToggleStrategy] Rollback bksec rule failed, strategy_id=%s", strategy.strategy_id
+                    )
+                raise
         else:
             call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
             sync_bksec_rule(strategy, strategy_alive=False)

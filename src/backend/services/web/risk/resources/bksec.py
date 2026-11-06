@@ -47,6 +47,7 @@ from services.web.risk.bksec.service import (
 from services.web.risk.constants import BkSecPushStatus, TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
 from services.web.risk.permissions import (
+    ensure_risk_view_permission,
     ensure_strategy_edit_permission,
     find_bksec_test_node_by_task_id,
     strategy_id_of_risk,
@@ -269,6 +270,9 @@ class GetTaskStatus(TicketResourceMeta):
     - risk_id：刷新后恢复——task_id 随内存丢失，改用样例风险单 ID 定位本人最近一条测试单，
       用户身份由后端从请求上下文获取，前端无法伪造。命中节点后同样校验策略编辑权限。
 
+    策略编辑通过后，还须按命中节点的 risk_id 校验风险查看权限（与预览、试发入口口径对齐），
+    防止同策略编辑者持他人测试任务 ID 越权读取任务状态与节点失败原文。
+
     未确认是当前用户有权查看的测试节点之前，不回源 SOPS。
     """
 
@@ -296,6 +300,9 @@ class GetTaskStatus(TicketResourceMeta):
             if not task_id:
                 return {}
         ensure_strategy_edit_permission(strategy_id_of_risk(node.risk_id))
+        # 回源 SOPS 前校验关联风险查看权限，与预览、试发入口口径对齐，
+        # 防止同策略编辑者持他人测试任务 ID 越权读取任务状态与节点失败原文
+        ensure_risk_view_permission(node.risk_id)
         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
         result = dict(status)
         # 回传 task_id：strategy_id 恢复场景下前端据此接续后续轮询
