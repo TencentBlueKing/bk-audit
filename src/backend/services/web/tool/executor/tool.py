@@ -471,6 +471,18 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         final_params.extend(self._render_pagination_request_params(params))
         return final_params
 
+    @staticmethod
+    def _extract_response_message(parsed_result: Any) -> str:
+        """第三方 JSON 响应里的 message 提到执行结果的 message 上。"""
+        if not isinstance(parsed_result, dict):
+            return ""
+        message = parsed_result.get("message")
+        if message is None:
+            return ""
+        if isinstance(message, str):
+            return message
+        return str(message)
+
     def _execute(self, params: APIToolExecuteParams) -> ApiToolExecuteResult:
         # 1. 渲染参数
         request_params = self._render_request_params(params)
@@ -534,7 +546,7 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
                     status_code=response.status_code,
                     result=parsed_result,
                     err_type=ApiToolErrorType.NONE,
-                    message="",
+                    message=self._extract_response_message(parsed_result),
                 )
             except ValueError:
                 return ApiToolExecuteResult(

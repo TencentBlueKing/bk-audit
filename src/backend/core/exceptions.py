@@ -89,6 +89,16 @@ class PermissionException(BlueException):
         super(PermissionException, self).__init__(message, data=json.dumps(data), code="9900403")
 
 
+class ToolVariableValidateException(BlueException):
+    """工具入参校验失败，只返回 400 和错误信息。"""
+
+    ERROR_CODE = "400"
+    STATUS_CODE = 400
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
 class AppPermissionDenied(BlueException):
     ERROR_CODE = "403"
     MESSAGE = gettext_lazy("应用身份校验失败")
