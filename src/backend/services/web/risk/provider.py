@@ -443,7 +443,7 @@ class TicketNodeResourceProvider(IAMResourceProvider):
         return []
 
     def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
-        queryset = TicketNode.objects.all()
+        queryset = TicketNode.objects.filter(is_test=False)
         if parent_id and resource_type == ResourceEnum.RISK.id:
             queryset = queryset.filter(risk_id=str(parent_id))
         page_qs = queryset[page.slice_from : page.slice_to]
@@ -458,7 +458,7 @@ class TicketNodeResourceProvider(IAMResourceProvider):
     def filter_search_instance_results(
         self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
     ) -> Tuple[List[dict], int]:
-        queryset = TicketNode.objects.all()
+        queryset = TicketNode.objects.filter(is_test=False)
         if parent_id and resource_type == ResourceEnum.RISK.id:
             queryset = queryset.filter(risk_id=str(parent_id))
         if keyword:
@@ -484,7 +484,7 @@ class TicketNodeResourceProvider(IAMResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_ts = float(filter.start_time) / 1000.0
         end_ts = float(filter.end_time) / 1000.0
-        base_qs = TicketNode.objects.filter(timestamp__gt=start_ts, timestamp__lte=end_ts)
+        base_qs = TicketNode.objects.filter(timestamp__gt=start_ts, timestamp__lte=end_ts, is_test=False)
 
         pk_list = list(base_qs.order_by("timestamp").values_list("id", flat=True)[page.slice_from : page.slice_to])
         queryset = TicketNode.objects.filter(pk__in=pk_list).order_by("timestamp")
