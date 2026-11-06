@@ -77,7 +77,7 @@ class RiskAccessList(BKSec):
     name = "查询风险类型列表"
     method = "GET"
     action = "/api/v1/risk/risk_access/"
-    platform_authorization = False
+    platform_authorization = True
 
 
 class RiskAccessListAsPlatform(RiskAccessList):
