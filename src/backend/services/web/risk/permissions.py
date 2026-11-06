@@ -268,7 +268,11 @@ def ensure_risk_view_permission(risk_id: str) -> None:
     permission = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
     allowed = permission.has_risk_permission(risk_id=risk_id, operator=get_request_username())
     if not allowed:
-        raise PermissionException(action_name=gettext(ActionEnum.LIST_RISK.name), permission={})
+        resources = [ResourceEnum.RISK.create_instance(risk_id)]
+        apply_data, apply_url = PermissionService().get_apply_data([ActionEnum.LIST_RISK], resources)
+        raise PermissionException(
+            action_name=gettext(ActionEnum.LIST_RISK.name), permission=apply_data, apply_url=apply_url
+        )
 
 
 class BkSecTestTaskStatusPermission(IAMPermission):
