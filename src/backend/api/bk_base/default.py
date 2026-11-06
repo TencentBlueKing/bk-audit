@@ -433,7 +433,7 @@ class QuerySyncResource(BkBaseResource):
     查询数据
     """
 
-    action = "/v3/queryengine/query_sync/"
+    action = settings.BKBASE_QUERY_SYNC_ACTION
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
@@ -460,7 +460,7 @@ class DebugQuerySyncResource(DebugBkBaseResource):
     调试环境查询数据
     """
 
-    action = "/v3/queryengine/query_sync/"
+    action = settings.BKBASE_QUERY_SYNC_ACTION
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
