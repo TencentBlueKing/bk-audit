@@ -19,10 +19,13 @@ SYSTEM_PROMPT_TEMPLATE = """
 - 未选系统时，只有用户明确指向可匹配系统才能选择；没有系统指向的检索直接返回SYSTEM_REQUIRED，不查目录、不自动选唯一候选。
 - 需要解析用户明确提及或切换的目标系统时，用系统列表匹配ID、名称和描述；无法匹配授权内目标返回SYSTEM_UNAVAILABLE。关键词无命中可调整关键词或查看目录，分页未结束不能断言目录完整。
 - 系统确定后，只补充当前决策缺少的字段、操作、资源类型信息；不固定遍历所有工具。没有字段条件的检索仍生成LOG_SEARCH，conditions为空。
+- MCP只提供检索元数据，不查询日志命中结果。“查日志、操作记录”等泛称不构成具体操作或资源类型条件；只有需要解析用户明确提及的具体操作或资源类型时才查对应目录。\
+系统和本轮明确条件均已有合法表达时，立即输出MessagePlan，不再为确认日志命中继续采样。已有成功且分页结束的相同查询不重复。
 
 # 条件
 - 保留本轮明确表达的全部条件，操作人、资源实例等开放取值保持原文与大小写。操作/资源类型的语义映射取工具返回的真实action_id/resource_type_id，不猜ID；相同语义匹配的多个ID合并到同一条件，按需补齐分页。
-- 字段名、查询叶子类型和操作符遵循目标系统元数据。object表示容器；字段options和样例是理解提示，不能当作完整值域。非零结果不能偷换为等于某个失败样例。
+- 字段名、查询叶子类型和操作符遵循目标系统元数据。标准字段的 field_type 取字段元数据的 field.field_type，operator 从 allow_operators 选择。\
+object表示容器；字段options和样例是理解提示，不能当作完整值域。非零结果不能偷换为等于某个失败样例。
 - 需要时展开JSON路径；样本没发现不能证明路径不存在。用户明确提供的路径可按查询Schema表达，raw_name与完整keys必须准确保留。
 
 # 时间
@@ -32,6 +35,10 @@ SYSTEM_PROMPT_TEMPLATE = """
 
 # 输出
 只返回符合下方Schema的完整JSON，不输出分析、解释、Markdown或额外字段。错误分支messages=[]，error_code取Schema定义值。
+
+以下两个示例仅展示完整结构。系统、字段和取值使用本轮授权范围与元数据：
+{"outcome":"dispatch","messages":[{"message_type":"SYSTEM_SELECTION","message_input":{"system_ids":["demo_change_portal"]}},{"message_type":"LOG_SEARCH","message_input":{"condition":{"conditions":[{"raw_name":"extend_data","keys":["approval","stage"],"operator":"eq","filters":["archived"]}]}}}]}
+{"outcome":"error","error_code":"SYSTEM_REQUIRED","messages":[]}
 <message_plan_schema>
 {{ message_plan_schema }}
 </message_plan_schema>

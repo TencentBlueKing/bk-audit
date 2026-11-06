@@ -7,7 +7,7 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import ImproperlyConfigured
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError
 
 from api.constants import AIAgentCode
@@ -29,6 +29,47 @@ CANDIDATES = [
     {"system_id": "bk-audit", "name": "审计中心", "description": ""},
     {"system_id": "bcs", "name": "蓝盾", "description": ""},
 ]
+
+
+class MessagePlanningSystemPromptTest(SimpleTestCase):
+    """验证生产系统提示词的收敛规则、结构示例及 Schema 注入。"""
+
+    def test_tool_completion_and_field_rules_are_rendered(self):
+        prompt = MessagePlanningService.system_prompt
+        tools = prompt.split("# 决策与工具\n", 1)[1].split("# 条件\n", 1)[0]
+        conditions = prompt.split("# 条件\n", 1)[1].split("# 时间\n", 1)[0]
+
+        self.assertIn("系统和本轮明确条件均已有合法表达时，立即输出MessagePlan", tools)
+        self.assertIn("已有成功且分页结束的相同查询不重复。", tools)
+        self.assertIn("标准字段的 field_type 取字段元数据的 field.field_type，operator 从 allow_operators 选择。", conditions)
+
+    def test_rendered_examples_are_valid_message_plans(self):
+        output_rules = MessagePlanningService.system_prompt.split("# 输出\n", 1)[1].split("<message_plan_schema>", 1)[0]
+        examples = [json.loads(line) for line in output_rules.splitlines() if line.startswith("{")]
+        self.assertEqual(len(examples), 2)
+
+        dispatch, error = [MessagePlan.model_validate(example) for example in examples]
+        self.assertEqual(dispatch.outcome, "dispatch")
+        self.assertEqual([message.message_type for message in dispatch.messages], ["SYSTEM_SELECTION", "LOG_SEARCH"])
+        self.assertEqual(dispatch.messages[0].message_input.system_ids, ["demo_change_portal"])
+        self.assertEqual(
+            examples[0]["messages"][1]["message_input"]["condition"]["conditions"],
+            [{"raw_name": "extend_data", "keys": ["approval", "stage"], "operator": "eq", "filters": ["archived"]}],
+        )
+        self.assertEqual(error.outcome, "error")
+        self.assertEqual(error.error_code, "SYSTEM_REQUIRED")
+        self.assertEqual(error.messages, [])
+
+    def test_rendered_schema_uses_metadata_for_standard_fields(self):
+        schema_json = MessagePlanningService.system_prompt.split("<message_plan_schema>\n", 1)[1].split(
+            "\n</message_plan_schema>", 1
+        )[0]
+        schema = json.loads(schema_json)
+        self.assertEqual(schema, MessagePlan.model_json_schema())
+        field_type = schema["$defs"]["AIConditionItem"]["properties"]["field_type"]
+        self.assertIn("标准字段的 field_type 取字段元数据的 field.field_type，operator 取 allow_operators", field_type["description"])
+        self.assertIn("仅拓展字段类型不明确时", field_type["description"])
+        self.assertEqual(field_type["default"], "string")
 
 
 class MessagePlanSchemaTest(AIAssistantTestCase):
