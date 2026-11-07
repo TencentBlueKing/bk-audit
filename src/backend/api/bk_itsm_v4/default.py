@@ -24,6 +24,7 @@ from django.utils.translation import gettext_lazy
 from api.constants import APIProvider
 from api.domains import BK_ITSM_V4_API_URL
 from api.utils import get_endpoint
+from apps.itsm.utils import get_itsm_v4_system_token
 from core.bk_api_base import AuditBkApiResource
 
 
@@ -63,3 +64,54 @@ class TicketLogs(BKITSMV4):
     name = gettext_lazy("V4-查询工单操作日志")
     method = "GET"
     action = "/api/v1/ticket/logs/"
+
+
+class SystemWorkflowList(BKITSMV4):
+    # 对应 itsm 的 GetServices（服务列表查询）
+    name = gettext_lazy("V4-系统流程列表")
+    method = "GET"
+    action = "/api/v1/system_workflow/list/"
+
+    def set_headers(self, headers: dict, validated_request_data: dict) -> dict:
+        """
+        补充 SYSTEM-TOKEN 请求头, 创建 itsm 系统流程时，如果配置了 SYSTEM-TOKEN ，请求时就需要在请求头加入 SYSTEM-TOKEN
+        """
+
+        system_token = validated_request_data.get("system_token") or get_itsm_v4_system_token()
+        if system_token:
+            headers["SYSTEM-TOKEN"] = system_token
+        return headers
+
+
+class Workflows(BKITSMV4):
+    # 对应 itsm 的 GetServiceDetail（获取服务详情）
+    name = gettext_lazy("V4-获取流程的启用版本详情")
+    method = "GET"
+    action = "/api/v1/workflows/"
+
+
+class TicketDetail(BKITSMV4):
+    # 对应 itsm 的 GetTicketStatus（单据状态查询）,itsm 的查询审批结果用这个查，返回字段有 approve_result
+    name = gettext_lazy("V4-单据详情")
+    method = "GET"
+    action = "/api/v1/ticket/detail/"
+
+
+class ApprovalTasks(BKITSMV4):
+    # # 对应 itsm 的 TicketApproveResult（查询审批结果），但是返回结果缺少必要的字段 approve_result，废弃，使用 TicketDetail 代替
+    name = gettext_lazy("V4-获取审批节点任务列表")
+    method = "POST"
+    action = "/api/v1/approval_tasks/"
+
+
+class TicketHandle(BKITSMV4):
+    # 对应 itsm 的 OperateTicket（操作单据）
+    name = gettext_lazy("V4-操作单据")
+    method = "POST"
+    action = "/api/v1/ticket/handle/"
+
+
+class FullTextSearch(BKITSMV4):
+    name = gettext_lazy("V4-查订单列表")
+    method = "POST"
+    action = "/api/v1/ticket_search/full_text_search/"
