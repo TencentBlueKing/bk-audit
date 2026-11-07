@@ -52,7 +52,9 @@ function signature(condition, includeFieldType, normalizationFieldType) {
     const payload = {
         raw_name: field.raw_name,
         keys: field.keys || [],
-        operator: condition.operator,
+        operator: (condition.filters || []).length === 1
+            ? ({include: "eq", exclude: "neq"}[condition.operator] || condition.operator)
+            : condition.operator,
         filters: filterSignature(condition.filters, normalizationFieldType),
     };
     if (includeFieldType) {

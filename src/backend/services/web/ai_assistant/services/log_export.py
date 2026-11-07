@@ -1,11 +1,14 @@
 """日志检索消息的预览导出与全量导出编排。
 
 平台文档 §13：预览导出直接读取快照同步生成 Excel（不建任务）；
-全量导出复用既有 LogExportTask 链路（来源字段追踪）。
+全量导出复用既有 LogExportTask 链路（来源字段追踪）；
+F4.5 全量导出同步直出：条数守卫内尝试 API 进程内直出，任何降级信号自动转异步链路。
 """
 
 import logging
+from typing import Union
 
+from django.conf import settings
 from pydantic import ValidationError
 
 from core.exceptions import ValidationError as RequestValidationError
@@ -26,6 +29,7 @@ from services.web.ai_assistant.services.message import MessageService
 from services.web.query.ai_assistant.constants import (
     AI_ASSISTANT_EXPORT_SOURCE,
     SNAPSHOT_DEFAULT_COLUMNS,
+    SYNC_EXPORT_FALLBACK,
 )
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
@@ -34,11 +38,13 @@ from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
 from services.web.query.ai_assistant.exceptions import (
     AIPermissionDeniedError as QueryAIPermissionDeniedError,
 )
+from services.web.query.ai_assistant.exceptions import SyncExportFallback
 from services.web.query.ai_assistant.schemas import LogSearchOutput
 from services.web.query.ai_assistant.services.export import (
     FullExportService,
     PreviewExportFile,
     PreviewExportService,
+    SyncExportRunner,
 )
 from services.web.query.constants import LogExportFieldScope
 
@@ -80,11 +86,92 @@ class MessageExportService:
         """从消息快照重建查询条件并创建全量导出任务（数据范围前端不可覆盖）。"""
 
         message = self._get_success_log_search(message_uid=message_uid)
+        return self._create_full_export_with_message(message=message, export_config=export_config)
+
+    def export_or_fallback(self, *, message_uid: str, export_config: dict) -> Union[PreviewExportFile, dict]:
+        """F4.5 全量导出统一入口：同步优先、超限自动降级异步。
+
+        - 开关关闭 → 100% 现行为（异步任务，行为与历史一致）；
+        - 快照 total 超过同步条数上限 → 直接异步（廉价准入，不占并发槽不查 Doris）；
+        - 同步尝试中任何降级信号（SyncExportFallback）→ 原样落入既有异步链路；
+        - 权限/白名单校验失败 → 与异步路径同样报错（校验失败不降级）。
+
+        :return: PreviewExportFile = 同步直出文件；dict = 已创建的异步任务信息
+        """
+
+        if not settings.AI_EXPORT_SYNC_ENABLED:
+            return self.create_full_export(message_uid=message_uid, export_config=export_config)
+        message = self._get_success_log_search(message_uid=message_uid)
+        # 快照 total 预判（廉价准入）：超限直接异步，不发起同步尝试
+        try:
+            snapshot_total = LogSearchOutputSchema.model_validate(message.output_data).total
+        except ValidationError as error:
+            raise InvalidMessageSnapshot() from error
+        if snapshot_total > settings.AI_EXPORT_SYNC_MAX_COUNT:
+            logger.info(
+                "[MessageExportService] sync export skipped by snapshot total, message_id=%s, total=%s",
+                message.id,
+                snapshot_total,
+            )
+            return self._create_full_export_with_message(message=message, export_config=export_config)
         try:
             condition = LogSearchInputSchema.model_validate(message.input_data).condition
         except ValidationError as error:
             raise InvalidMessageSnapshot() from error
         namespace = str((message.context_data or {}).get("namespace") or "")
+        runner = SyncExportRunner(
+            condition=condition,
+            namespace=namespace,
+            export_config=self._build_export_config(message=message, export_config=export_config),
+            username=self.user,
+        )
+        try:
+            return runner.run()
+        except SyncExportFallback:
+            # 降级 = 正常分流：原样落入既有异步链路（export_config 传原始值，内部预处理幂等）；
+            # export_type 标记供前端分支提示（非"失败"，是数据量分流的正常结果）
+            result = self._create_full_export_with_message(message=message, export_config=export_config)
+            result["export_type"] = SYNC_EXPORT_FALLBACK
+            return result
+        except QueryAIPermissionDeniedError as error:
+            raise LogExportPermissionDenied() from error
+        except AIOutputInvalidError as error:
+            raise RequestValidationError("日志导出配置无效，请检查字段范围和列配置") from error
+
+    def _create_full_export_with_message(self, *, message: Message, export_config: dict) -> dict:
+        """持有 message 的全量异步导出（供 create_full_export 与同步降级两路复用）。"""
+
+        try:
+            condition = LogSearchInputSchema.model_validate(message.input_data).condition
+        except ValidationError as error:
+            raise InvalidMessageSnapshot() from error
+        namespace = str((message.context_data or {}).get("namespace") or "")
+        export_config = self._build_export_config(message=message, export_config=export_config)
+        try:
+            task = FullExportService.create_task(
+                condition=condition,
+                namespace=namespace,
+                export_config=export_config,
+                task_name=FullExportService.build_task_name(str(message.uid)),
+                username=self.user,
+            )
+        except QueryAIPermissionDeniedError as error:
+            raise LogExportPermissionDenied() from error
+        except AIOutputInvalidError as error:
+            raise RequestValidationError("日志导出配置无效，请检查字段范围和列配置") from error
+        except QueryAIAssistantError as error:
+            logger.warning(
+                "[MessageExportService] full export failed, message_id=%s, error=%s",
+                message.id,
+                error,
+            )
+            raise LogExportFailed() from error
+        # resource 调用经 bk_resource 框架序列化后返回 ReturnDict（dict 子类），按键访问而非属性访问
+        return {"export_task_id": task["id"], "status": task["status"]}
+
+    def _build_export_config(self, *, message: Message, export_config: dict) -> dict:
+        """export_config 预处理（同步直出与异步导出双路径同源）。"""
+
         export_config = dict(export_config or {})
         # 公开接口配置可省略，默认列与 AI 助手预览保持一致。
         export_config.setdefault("field_scope", LogExportFieldScope.AI_STANDARD.value)
@@ -110,27 +197,7 @@ class MessageExportService:
                     message.id,
                     extension_keys,
                 )
-        try:
-            task = FullExportService.create_task(
-                condition=condition,
-                namespace=namespace,
-                export_config=export_config,
-                task_name=FullExportService.build_task_name(str(message.uid)),
-                username=self.user,
-            )
-        except QueryAIPermissionDeniedError as error:
-            raise LogExportPermissionDenied() from error
-        except AIOutputInvalidError as error:
-            raise RequestValidationError("日志导出配置无效，请检查字段范围和列配置") from error
-        except QueryAIAssistantError as error:
-            logger.warning(
-                "[MessageExportService] full export failed, message_id=%s, error=%s",
-                message.id,
-                error,
-            )
-            raise LogExportFailed() from error
-        # resource 调用经 bk_resource 框架序列化后返回 ReturnDict（dict 子类），按键访问而非属性访问
-        return {"export_task_id": task["id"], "status": task["status"]}
+        return export_config
 
     @staticmethod
     def _extract_extension_keys(message: Message) -> list:

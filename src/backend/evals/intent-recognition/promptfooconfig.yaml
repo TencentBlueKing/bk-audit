@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: '通用消息规划 Agent 能力评估'
+description: '意图Agent按需元数据工具与消息规划本地评估'
 
 prompts:
   - '{{query}}'
@@ -9,7 +9,7 @@ providers:
     label: 'aidev-message-planning'
     config:
       model: ''
-      max_attempts: 3
+      max_attempts: 1
 
 defaultTest:
   assert:
@@ -27,3 +27,4 @@ tests:
   - file://tests/nested-extension-fields.yaml
   - file://tests/extension-type-operators.yaml
   - file://tests/invalid-conditions.yaml
+  - file://tests/mcp-scenarios.yaml

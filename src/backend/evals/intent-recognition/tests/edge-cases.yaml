@@ -47,8 +47,8 @@
       - raw_name: result_code
         keys: []
         field_type: int
-        operator: include
-        filters: [-1]
+        operator: neq
+        filters: [0]
   assert:
     - type: javascript
       value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'

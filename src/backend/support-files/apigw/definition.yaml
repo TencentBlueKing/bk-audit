@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.22"
+  version: "0.0.23"
   # 版本标题
-  title: "0.0.22"
+  title: "0.0.23"
   # 版本描述
-  comment: "统计专用 MCP 工具集；程序统计与聚合 AUTO 统一采用可配置的可读性阈值，TopN 与稀疏桶语义保持"
+  comment: "统计专用 MCP 工具集；程序统计与聚合 AUTO 可读性阈值及 TopN/稀疏桶语义保持；新增意图 Agent 专用 audit-meta（系统、操作、资源类型），复用二期字段及 JSON 子路径探索"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:
@@ -94,6 +94,22 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
+      - name: "audit-meta"
+        description: "意图识别 Agent 专用 MCP，按需查询系统、操作、资源类型及日志字段与子路径元数据"
+        labels:
+          - "audit"
+          - "meta"
+        resource_names:
+          - mcp_list_audit_systems
+          - mcp_get_audit_system_detail
+          - mcp_list_system_actions
+          - mcp_list_system_resource_types
+          - mcp_get_log_field_metadata
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
   - name: "prod"
     description: "生产环境"
     # 环境的英文名，蓝鲸官方网关需提供，以支持国际化
@@ -157,6 +173,22 @@ stages:
           - mcp_get_log_field_metadata
           - mcp_search_logs
           - mcp_aggregate_logs
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+      - name: "audit-meta"
+        description: "意图识别 Agent 专用 MCP，按需查询系统、操作、资源类型及日志字段与子路径元数据"
+        labels:
+          - "audit"
+          - "meta"
+        resource_names:
+          - mcp_list_audit_systems
+          - mcp_get_audit_system_detail
+          - mcp_list_system_actions
+          - mcp_list_system_resource_types
+          - mcp_get_log_field_metadata
         is_public: true
         status: 1
         protocol_type: "streamable_http"

@@ -111,3 +111,12 @@ assert.strictEqual(
 );
 
 console.log("condition_set assertions passed");
+
+assert.strictEqual(
+    matchesConditionSet({conditions: [{...username, operator: "include"}]}, [{raw_name: "username", operator: "eq", filters: ["eval_user_nested"]}]),
+    true, "单值IN与等于的查询语义等价，不应把正确结果误判为失败",
+);
+assert.strictEqual(
+    matchesConditionSet({conditions: [{...username, operator: "exclude"}]}, [{raw_name: "username", operator: "neq", filters: ["eval_user_nested"]}]),
+    true, "单值NOT IN与不等于的查询语义等价",
+);

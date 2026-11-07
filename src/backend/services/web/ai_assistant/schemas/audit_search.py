@@ -86,7 +86,8 @@ _UserIntentCandidatesField = serializers.ListField(
 class CommonQuerySchema(MessageSchema):
     """常见/历史操作条目：自然语言检索样例（D3 方案）。"""
 
-    query_text: str = Field(min_length=1, max_length=2048)
+    # 上限须不小于 UserIntentInputSchema.query_text：常用/历史榜单由真实检索原文重建，过短会在系统选择执行时校验失败
+    query_text: str = Field(min_length=1, max_length=4096)
 
 
 class SystemSelectionInputSchema(MessageSchema):
@@ -116,7 +117,8 @@ class SystemSelectionOutputSchema(MessageSchema):
 class UserIntentInputSchema(MessageSchema):
     """USER_INTENT 输入：只描述用户意图，会话 scope 从所属 Conversation 获取。"""
 
-    query_text: str = Field(min_length=1, max_length=2048)
+    # 对话输入框字符上限（产品要求与前端输入框限制同步放宽到 4096）
+    query_text: str = Field(min_length=1, max_length=4096)
     auto_execute: bool = True
 
 
@@ -208,8 +210,7 @@ class LogSearchInputSchema(MessageSchema):
 
     condition: Annotated[SearchCondition, _SearchConditionField]
     # 相对时间窗快捷标记（如 "now-1d"，与前端 datetime_origin 快捷项语法同源）：
-    # 仅 NL 链路携带——用户时间语义为相对表述（近N小时/近N天）或未提及时间（默认窗口）
-    # 时由消息规划层写入，明确时间段为 None；字段条件检索不传。condition 里的
+    # NL规划或前端编辑重查均可携带，明确日期范围为None；condition里的
     # start_time/end_time 恒为换算后的绝对时间（查询/导出/报告依赖），本标记仅供
     # 前端渲染「近N天」标签并按执行时刻动态换算，不参与查询（故不放 SearchCondition——
     # 其子类 AgentSearchCondition 是 MCP 工具契约，definition.yaml 静态快照不包含该字段）
