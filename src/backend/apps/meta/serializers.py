@@ -46,6 +46,7 @@ from apps.meta.constants import (
     SystemSortFieldEnum,
     SystemStageEnum,
     SystemStatusEnum,
+    TagBindingResourceType,
 )
 from apps.meta.exceptions import TagNameInValid, UniqueNameInValid
 from apps.meta.models import (
@@ -750,6 +751,45 @@ class SaveTagResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ["tag_id", "tag_name"]
+
+
+class TagBindingRequestSerializer(serializers.Serializer):
+    """
+    编辑策略/联表/工具的标签绑定
+    """
+
+    namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    resource_type = serializers.ChoiceField(label=gettext_lazy("资源类型"), choices=TagBindingResourceType.choices)
+    resource_id = serializers.CharField(label=gettext_lazy("资源ID"))
+    tags = serializers.ListField(
+        label=gettext_lazy("标签列表"),
+        child=serializers.CharField(label=gettext_lazy("标签名"), max_length=64, trim_whitespace=True),
+        allow_empty=True,
+        default=list,
+    )
+
+    def validate(self, attrs):
+        resource_type = attrs["resource_type"]
+        resource_id = attrs["resource_id"]
+
+        if resource_type == TagBindingResourceType.STRATEGY and not resource_id.isdigit():
+            raise serializers.ValidationError({"resource_id": gettext("策略ID必须为数字")})
+
+        return attrs
+
+    def validate_tags(self, tags: List[str]) -> List[str]:
+        valid_tags = []
+        seen = set()
+        for tag_name in tags:
+            if tag_name in seen:
+                continue
+            if tag_name.isdigit():
+                raise TagNameInValid(message="{}".format(gettext("标签不能使用纯数字，请修改")))
+            if not TAG_NAME_REGEXP.match(tag_name):
+                raise TagNameInValid(message="{} {}".format(TagNameInValid.MESSAGE, tag_name))
+            seen.add(tag_name)
+            valid_tags.append(tag_name)
+        return valid_tags
 
 
 class GetAssetPullInfoRequestSerializer(serializers.Serializer):
