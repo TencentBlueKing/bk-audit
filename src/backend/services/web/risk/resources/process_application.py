@@ -58,6 +58,7 @@ from services.web.risk.utils import (
     FAILURE_HINT_MAX_LEN,
     calc_task_duration,
     calc_task_finish_time,
+    calc_task_start_time,
     extract_attempt_records,
     iter_status_nodes,
 )
@@ -647,8 +648,8 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "pa_id": pa_id_of_record or 0,
                     "pa_name": current_pa_name,
                     "operator": node.operator,
-                    # start_time 为记录创建（派单）时间；finish_time/duration 仅终态输出
-                    "start_time": node.time,
+                    # start_time 优先取任务实际开始时间（快照），缺失退回记录创建时间；finish_time/duration 仅终态输出
+                    "start_time": calc_task_start_time(process_result.get("status") or {}) or node.time,
                     "finish_time": (
                         calc_task_finish_time(process_result.get("status") or {}) if result in FINAL_RESULTS else ""
                     ),
@@ -744,8 +745,8 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "pa_name": pa_name,
             "trigger": process_result.get("trigger") or "",
             "operator": node.operator,
-            # start_time 为记录创建（派单）时间；finish_time/duration 仅终态输出
-            "start_time": node.time,
+            # start_time 优先取任务实际开始时间（快照），缺失退回记录创建时间；finish_time/duration 仅终态输出
+            "start_time": calc_task_start_time(status_info) or node.time,
             "finish_time": calc_task_finish_time(status_info) if result in FINAL_RESULTS else "",
             "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
             "sops_task_url": str((process_result.get("task") or {}).get("task_url", "") or ""),
