@@ -21,6 +21,7 @@ import datetime
 
 from django.db import transaction
 from django.db.models import Case, Count, F, IntegerField, Q, Value, When
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
@@ -490,16 +491,19 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
         # 场景先按风险所属场景收窄，再按该场景可见套餐过滤。没有候选套餐时返回空结果。
         nodes = _filter_execution_nodes_by_scope(nodes, pa_id, scene_id)
-        # 开始时间闭区间：from <= timestamp <= to。套餐列表缺省近 30 天；风险入口不套默认。
+        # 实际开始时间：新记录读物化字段，历史记录回退创建时间。
+        # 筛选、排序、返回展示统一使用 actual_start，避免“展示实际开始时间、筛选/排序却用创建时间”。
+        nodes = nodes.annotate(actual_start=Coalesce("sops_start_time", "timestamp"))
+        # 开始时间闭区间：from <= actual_start <= to。套餐列表缺省近 30 天；风险入口不套默认。
         time_from = validated_request_data.get("from")
         time_to = validated_request_data.get("to")
         if not risk_id and time_from is None and time_to is None:
             time_to = timezone.now()
             time_from = time_to - self.DEFAULT_START_TIME_LOOKBACK
         if time_from is not None:
-            nodes = nodes.filter(timestamp__gte=time_from.timestamp())
+            nodes = nodes.filter(actual_start__gte=time_from.timestamp())
         if time_to is not None:
-            nodes = nodes.filter(timestamp__lte=time_to.timestamp())
+            nodes = nodes.filter(actual_start__lte=time_to.timestamp())
 
         # 执行人筛选
         if operator:
@@ -543,11 +547,12 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
         # 排序
         order_field_map = {
-            # start_time 为对外字段名；time 保留为兼容旧调用方的别名
-            "start_time": "timestamp",
-            "-start_time": "-timestamp",
-            "time": "timestamp",
-            "-time": "-timestamp",
+            # start_time 为对外字段名；time 保留为兼容旧调用方的别名。
+            # 统一按 actual_start（实际开始时间，历史记录回退记录创建时间）排序。
+            "start_time": "actual_start",
+            "-start_time": "-actual_start",
+            "time": "actual_start",
+            "-time": "-actual_start",
             "operator": "operator",
             "-operator": "-operator",
         }

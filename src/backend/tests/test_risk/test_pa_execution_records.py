@@ -55,6 +55,7 @@ def _create_node(
     finish_time: str = "",
     task_url: str = "",
     pa_constants: list = None,
+    sops_start_time: float = None,
 ) -> TicketNode:
     process_result = {"task": {"task_id": task_id, "task_url": task_url}, "status": {"state": state}}
     # 派单时渲染的入参快照（新链路写入；不传模拟快照上线前的历史节点）
@@ -76,6 +77,7 @@ def _create_node(
         time="2026-09-20 12:00:00",
         process_result=process_result,
         extra={},
+        sops_start_time=sops_start_time,
     )
 
 
@@ -547,6 +549,68 @@ class TestListPAExecutionRecords:
         self._stamp(after, end + datetime.timedelta(seconds=1))
         resp = resource.risk.list_pa_execution_records.perform_request({"from": start, "to": end})
         assert {item["sops_task_id"] for item in resp["results"]} == {"2", "3"}
+
+    def test_start_time_filter_uses_sops_start_time(self):
+        """from/to 按实际开始时间筛选，不再按记录创建时间。
+
+        创建 09:00、实际开始 10:00 的记录必须命中 09:30–10:30；
+        创建 10:00、实际开始 09:00 的记录必须被排除。
+        """
+        _, _, risk_a, _ = self._prepare()
+        actual_in_range = timezone.now().replace(microsecond=0) - datetime.timedelta(days=10)
+        actual_before = actual_in_range - datetime.timedelta(hours=1)
+        start_text = timezone.localtime(actual_in_range).strftime("%Y-%m-%d %H:%M:%S")
+        before_text = timezone.localtime(actual_before).strftime("%Y-%m-%d %H:%M:%S")
+        in_range = _create_node(
+            risk_a.risk_id,
+            SOPSTaskStatus.FINISHED.value,
+            task_id=1,
+            start_time=start_text,
+            sops_start_time=actual_in_range.timestamp(),
+        )
+        out_of_range = _create_node(
+            risk_a.risk_id,
+            SOPSTaskStatus.FINISHED.value,
+            task_id=2,
+            start_time=before_text,
+            sops_start_time=actual_before.timestamp(),
+        )
+        # 创建时间与真实开始时间相反：创建过早的在范围内，创建在范围内的实际过早
+        self._stamp(in_range, actual_in_range - datetime.timedelta(hours=1))
+        self._stamp(out_of_range, actual_in_range + datetime.timedelta(minutes=30))
+        window_from = actual_in_range - datetime.timedelta(minutes=30)
+        window_to = actual_in_range + datetime.timedelta(minutes=30)
+        resp = resource.risk.list_pa_execution_records.perform_request({"from": window_from, "to": window_to})
+        assert {item["sops_task_id"] for item in resp["results"]} == {"1"}
+
+    def test_start_time_sort_uses_sops_start_time(self):
+        """order_by=start_time 按实际开始时间排序，不按记录创建时间。"""
+        _, _, risk_a, _ = self._prepare()
+        actual_early = timezone.now().replace(microsecond=0) - datetime.timedelta(days=10)
+        actual_late = actual_early + datetime.timedelta(hours=2)
+        early_text = timezone.localtime(actual_early).strftime("%Y-%m-%d %H:%M:%S")
+        late_text = timezone.localtime(actual_late).strftime("%Y-%m-%d %H:%M:%S")
+        created_late = _create_node(
+            risk_a.risk_id,
+            SOPSTaskStatus.FINISHED.value,
+            task_id=1,
+            start_time=early_text,
+            sops_start_time=actual_early.timestamp(),
+        )
+        created_early = _create_node(
+            risk_a.risk_id,
+            SOPSTaskStatus.FINISHED.value,
+            task_id=2,
+            start_time=late_text,
+            sops_start_time=actual_late.timestamp(),
+        )
+        # 创建时间与真实开始时间相反
+        self._stamp(created_late, actual_late)
+        self._stamp(created_early, actual_early)
+        resp = resource.risk.list_pa_execution_records.perform_request({"order_by": "start_time"})
+        assert [item["sops_task_id"] for item in resp["results"]] == ["1", "2"]
+        resp = resource.risk.list_pa_execution_records.perform_request({"order_by": "-start_time"})
+        assert [item["sops_task_id"] for item in resp["results"]] == ["2", "1"]
 
     def test_open_ended_from_or_to(self):
         """只传一边时，另一边不限制"""

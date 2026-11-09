@@ -174,6 +174,15 @@ def calc_task_start_time(status_info: dict) -> str:
     return format_sops_time(start) if start else ""
 
 
+def calc_task_start_timestamp(status_info: dict) -> Optional[float]:
+    """任务开始时间戳（epoch 秒）：与 calc_task_start_time 使用同一套开始时间解析。
+
+    用于把实际开始时间物化到 TicketNode，供执行记录筛选/排序使用；无法解析时返回 None。
+    """
+    start = parse_sops_time(_resolve_task_start_raw(status_info or {}))
+    return start.timestamp() if start else None
+
+
 def extract_attempt_records(status_info: dict, retried_node_ids: Optional[Set[str]] = None) -> list:
     """从 SOPS 状态中提取子节点尝试记录（重试快照与执行记录详情共用同一形状）
 

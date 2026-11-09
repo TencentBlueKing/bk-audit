@@ -65,6 +65,7 @@ from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.utils import (
     build_pa_constants,
     calc_task_duration,
+    calc_task_start_timestamp,
     is_user_input_constant,
 )
 from services.web.strategy_v2.constants import StrategyType
@@ -379,17 +380,22 @@ class RiskFlowBaseHandler:
                 f"[RecordHistory] Skip duplicated node, risk_id={self.risk.risk_id}, action={self.__class__.__name__}"
             )
             return None
+        action = self.__class__.__name__
         create_params = {
             "risk_id": self.risk.risk_id,
             "operator": self.operator,
             "current_operator": self.risk.current_operator,
-            "action": self.__class__.__name__,
+            "action": action,
             "timestamp": datetime.datetime.now().timestamp(),
             "time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
             "process_result": process_result,
             "duration": process_result.get("duration"),
             "extra": extra,
         }
+        if action == AutoProcess.__name__:
+            create_params["sops_start_time"] = (
+                calc_task_start_timestamp(process_result.get("status") or {}) or create_params["timestamp"]
+            )
         create_params.update(fields)
         return TicketNode.objects.create(**create_params)
 
@@ -1148,6 +1154,14 @@ class AutoProcess(RiskFlowBaseHandler):
                 if "duration" in process_result:
                     node.duration = process_result["duration"]
                     update_fields.append("duration")
+            # 实际开始时间落库（初次同步可能仅有状态没有开始时间，后续刷新到再补）
+            start_ts = calc_task_start_timestamp(current_status)
+            if start_ts is not None and node.sops_start_time != start_ts:
+                node.sops_start_time = start_ts
+                update_fields.append("sops_start_time")
+            elif node.sops_start_time is None:
+                node.sops_start_time = node.timestamp
+                update_fields.append("sops_start_time")
             if update_fields:
                 node.save(update_fields=update_fields)
 

@@ -66,6 +66,7 @@ from services.web.risk.serializers import (
 from services.web.risk.utils import (
     build_pa_constants,
     calc_task_duration,
+    calc_task_start_timestamp,
     fill_failure_info,
 )
 from services.web.strategy_v2.models import Strategy
@@ -223,6 +224,7 @@ class SendTestTicket(TicketResourceMeta):
             current_operator=[],
             action="AutoProcess",
             timestamp=datetime.datetime.now().timestamp(),
+            sops_start_time=calc_task_start_timestamp(status) or datetime.datetime.now().timestamp(),
             time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
             process_result={
                 "task": result,
@@ -330,8 +332,12 @@ class GetTaskStatus(TicketResourceMeta):
                     duration = calc_task_duration(status)
                     node.process_result["duration"] = duration
                     node.duration = duration
+                    start_ts = calc_task_start_timestamp(status)
+                    node.sops_start_time = (
+                        start_ts if start_ts is not None else (node.sops_start_time or node.timestamp)
+                    )
                     node.status = TicketNodeStatus.FINISHED
-                    node.save(update_fields=["process_result", "status", "duration"])
+                    node.save(update_fields=["process_result", "status", "duration", "sops_start_time"])
         return result
 
     @staticmethod
