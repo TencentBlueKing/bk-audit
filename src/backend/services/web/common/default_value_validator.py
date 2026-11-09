@@ -420,7 +420,7 @@ class DefaultValueValidator:
             # 参数未声明，fail closed
             if var_config is None:
                 raise ValidationError(
-                    gettext("参数 %(var_name)s 未在工具中声明") % {"var_name": raw_name},
+                    message=gettext("参数 %(var_name)s 未在工具中声明") % {"var_name": raw_name},
                     code="400",
                 )
 
@@ -443,6 +443,6 @@ class DefaultValueValidator:
 
             if not is_valid:
                 raise ValidationError(
-                    gettext("参数 %(var_name)s 不可见，不可临时修改") % {"var_name": raw_name},
+                    message=gettext("参数 %(var_name)s 不可见，不可临时修改") % {"var_name": raw_name},
                     code="400",
                 )
