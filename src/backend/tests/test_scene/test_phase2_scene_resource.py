@@ -1031,6 +1031,78 @@ class TestRiskRuleSceneFilter:
         assert rule_in.priority_index == 1
         assert rule_in.is_enabled is True
 
+    @pytest.mark.django_db
+    def test_batch_update_skips_auto_rule(self, scene):
+        """BKSEC 自动规则不参与批量调整，但不应阻塞普通规则更新"""
+        from services.web.risk.bksec.constants import BKSEC_RULE_PRIORITY_BASE
+        from services.web.risk.resources.rule import BatchUpdateRiskRulePriorityIndex
+
+        manual = RiskRule.objects.create(
+            name="批量更新普通规则",
+            scope=[],
+            version=1,
+            rule_id=93003,
+            priority_index=1,
+            is_enabled=True,
+        )
+        auto = RiskRule.objects.create(
+            name="自动发单规则",
+            scope=[],
+            version=1,
+            rule_id=93004,
+            priority_index=BKSEC_RULE_PRIORITY_BASE,
+            is_enabled=True,
+            auto_strategy_id=1,
+        )
+        _bind_resource_to_scene(manual.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
+        _bind_resource_to_scene(auto.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
+
+        BatchUpdateRiskRulePriorityIndex().request(
+            {
+                "scene_id": scene.scene_id,
+                "config": [
+                    {"rule_id": manual.rule_id, "priority_index": 10, "is_enabled": False},
+                    {"rule_id": auto.rule_id, "priority_index": 99999, "is_enabled": False},
+                ],
+            }
+        )
+
+        manual.refresh_from_db()
+        auto.refresh_from_db()
+        assert manual.priority_index == 10
+        assert manual.is_enabled is False
+        assert auto.priority_index == BKSEC_RULE_PRIORITY_BASE
+        assert auto.is_enabled is True
+
+    @pytest.mark.django_db
+    def test_batch_update_rejects_manual_priority_in_reserved_band(self, scene):
+        """普通规则优先级不得进入 BKSEC 自动规则保留段"""
+        from services.web.risk.bksec.constants import BKSEC_RULE_PRIORITY_BASE
+        from services.web.risk.resources.rule import BatchUpdateRiskRulePriorityIndex
+
+        rule = RiskRule.objects.create(
+            name="保留段校验规则",
+            scope=[],
+            version=1,
+            rule_id=93005,
+            priority_index=1,
+            is_enabled=True,
+        )
+        _bind_resource_to_scene(rule.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
+
+        with pytest.raises(Exception):
+            BatchUpdateRiskRulePriorityIndex().request(
+                {
+                    "scene_id": scene.scene_id,
+                    "config": [
+                        {"rule_id": rule.rule_id, "priority_index": BKSEC_RULE_PRIORITY_BASE, "is_enabled": True}
+                    ],
+                }
+            )
+
+        rule.refresh_from_db()
+        assert rule.priority_index == 1
+
 
 class TestRiskSceneFilter:
     """风险场景过滤测试（基于策略绑定）"""

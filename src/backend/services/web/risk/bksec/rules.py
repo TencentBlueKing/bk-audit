@@ -43,7 +43,15 @@ logger = logging.getLogger("celery")
 
 
 class BkSecPluginSyncError(Exception):
-    """插件没有接受本次 BKSEC 配置。规则事务已回滚，调用方只需回退 bksec_config。"""
+    """插件没有接受本次 BKSEC 配置。规则事务已回滚，调用方只需回退 bksec_config。
+
+    下游诊断原文只落服务端日志（diagnosis），异常文本使用面向调用方的通用提示，
+    避免把插件响应、内部地址或凭证相关细节透传给客户端。
+    """
+
+    def __init__(self, diagnosis: str = ""):
+        self.diagnosis = str(diagnosis or "")
+        super().__init__(gettext("插件配置同步失败，请稍后重试；若持续失败请联系管理员"))
 
 
 class BkSecPresetNotReady(serializers.ValidationError):
@@ -104,6 +112,55 @@ def _build_rule_fields(strategy: Strategy, config: BkSecConfig, pa_id: int) -> d
         # 关单后新事件按聚合规则生成新风险单 → 新任务 → 首次发单，不再需要"工单办结后重新开单"。
         "auto_close_risk": True,
     }
+
+
+def _ensure_scene_strategy(strategy: Strategy) -> bool:
+    """BKSEC 自动规则只支持场景策略：平台策略跳过并告警。"""
+    from services.web.scene.constants import BindingType
+    from services.web.scene.models import ResourceBinding
+
+    is_platform = ResourceBinding.objects.filter(
+        resource_type=ResourceVisibilityType.STRATEGY,
+        resource_id=str(strategy.strategy_id),
+        binding_type=BindingType.PLATFORM_BINDING,
+    ).exists()
+    if is_platform:
+        logger.warning(
+            "[BkSecRule] Platform strategy is out of BKSEC scope, skip rule sync, strategy_id=%s",
+            strategy.strategy_id,
+        )
+        return False
+    return True
+
+
+def _require_preset_pa(strategy: Strategy):
+    """按模板 ID 补齐内置套餐；仍缺失则报错，避免策略显示已启用却没有自动规则。"""
+    from services.web.risk.bksec.service import ensure_preset_pa
+
+    pa = ensure_preset_pa()
+    if pa is None:
+        logger.warning(
+            "[BkSecRule] Preset process application missing (BKSEC_SOPS_TEMPLATE_ID unset?), strategy_id=%s",
+            strategy.strategy_id,
+        )
+        raise BkSecPresetNotReady(gettext("BKSEC 内置发单套餐未就绪：请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID"))
+    return pa
+
+
+def prepare_bksec_rule_for_enable(strategy: Strategy) -> None:
+    """
+    策略启用前的发单配置预检：校验配置/内置套餐并同步插件 Config，但不创建或启用规则。
+
+    规则必须等策略被 BKBase 确认启动（RUNNING）后再激活，避免控制器尚未确认时
+    新规则对风险可见；同步失败时直接拒绝启用，策略保持关闭。
+    """
+    config = load_bksec_config(strategy)
+    if not (config and config.enabled):
+        return
+    if not _ensure_scene_strategy(strategy):
+        return
+    _require_preset_pa(strategy)
+    _ensure_plugin_config_synced(strategy, config)
 
 
 def _create_rule_version(strategy: Strategy, fields: dict, rule_id: Optional[int] = None) -> RiskRule:
@@ -215,30 +272,10 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         _toggle_rule(latest, is_enabled=False)
         return None
     # 启用 → 平台策略不支持，跳过并告警
-    from services.web.scene.constants import BindingType
-    from services.web.scene.models import ResourceBinding
-
-    is_platform = ResourceBinding.objects.filter(
-        resource_type=ResourceVisibilityType.STRATEGY,
-        resource_id=str(strategy.strategy_id),
-        binding_type=BindingType.PLATFORM_BINDING,
-    ).exists()
-    if is_platform:
-        logger.warning(
-            "[BkSecRule] Platform strategy is out of BKSEC scope, skip rule sync, strategy_id=%s",
-            strategy.strategy_id,
-        )
+    if not _ensure_scene_strategy(strategy):
         return None
     # 启用 → 按模板 ID 补齐内置套餐。仍没有则报错，避免策略显示已启用却没有自动规则。
-    from services.web.risk.bksec.service import ensure_preset_pa
-
-    pa = ensure_preset_pa()
-    if pa is None:
-        logger.warning(
-            "[BkSecRule] Preset process application missing (BKSEC_SOPS_TEMPLATE_ID unset?), strategy_id=%s",
-            strategy.strategy_id,
-        )
-        raise BkSecPresetNotReady(gettext("BKSEC 内置发单套餐未就绪：请配置 BKAPP_BKSEC_SOPS_TEMPLATE_ID"))
+    pa = _require_preset_pa(strategy)
     fields = _build_rule_fields(strategy, config, pa.id)
     # 幂等：内容一致 → 仅原地确保启用
     if latest and all(getattr(latest, k) == v for k, v in fields.items()):
@@ -262,11 +299,33 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
     return instance
 
 
+def prepare_bksec_rule_or_keep_strategy(strategy: Strategy) -> None:
+    """部署前预检 BKSEC 配置。同步失败时抛出校验错误，由调用方事务回滚本次保存。"""
+    try:
+        prepare_bksec_rule_for_enable(strategy)
+    except BkSecPluginSyncError as err:
+        logger.error(
+            "[BkSecRule] Plugin config sync failed, strategy_id=%s diagnosis=%s",
+            strategy.strategy_id,
+            err.diagnosis,
+        )
+        raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
+    except BkSecPresetNotReady as err:
+        raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
+
+
 def sync_bksec_rule_or_keep_strategy(strategy: Strategy, strategy_alive: Optional[bool] = None) -> None:
     """同步发单规则。启用配置同步失败时抛出校验错误，由调用方事务回滚本次保存。"""
     try:
         sync_bksec_rule(strategy, strategy_alive=strategy_alive)
-    except (BkSecPluginSyncError, BkSecPresetNotReady) as err:
+    except BkSecPluginSyncError as err:
+        logger.error(
+            "[BkSecRule] Plugin config sync failed, strategy_id=%s diagnosis=%s",
+            strategy.strategy_id,
+            err.diagnosis,
+        )
+        raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
+    except BkSecPresetNotReady as err:
         raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
 
 
@@ -401,4 +460,11 @@ def _ensure_plugin_config_synced(strategy: Strategy, config: BkSecConfig) -> Non
             return
         if attempt < max_retries - 1:
             time.sleep(1)  # 重试间隔
+    # 下游诊断原文只留在服务端日志，异常文本使用通用提示返回调用方
+    logger.error(
+        "[BkSecPluginConfig] Sync failed after %s attempts, strategy_id=%s diagnosis=%s",
+        max_retries,
+        strategy.strategy_id,
+        message,
+    )
     raise BkSecPluginSyncError(message)

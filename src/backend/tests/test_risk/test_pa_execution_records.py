@@ -117,6 +117,47 @@ class TestListPAExecutionRecords:
         assert records[0]["result"] == "success"
         assert records[0]["risk_title"] == (risk_a.title or "")
 
+    def test_duration_sort_running_first_then_duration(self):
+        """执行中的记录始终在前；组内按开始时间，已完成的按 duration 排序。"""
+        from services.web.risk.constants import TicketNodeStatus
+
+        pa_a, _, risk_a, _ = self._prepare()
+
+        def _node(state, task_id, duration, timestamp, status):
+            node = _create_node(risk_a.risk_id, state, task_id=task_id, pa_id=pa_a.id)
+            node.duration = duration
+            node.timestamp = timestamp
+            node.status = status
+            node.save(update_fields=["duration", "timestamp", "status"])
+            return node
+
+        # 即使执行中节点带着脏 duration，也不能影响“执行中在前”和组内开始时间排序
+        base = time.time() - 1000
+        running_new = _node(SOPSTaskStatus.RUNNING.value, 1, 999, base + 200, TicketNodeStatus.RUNNING)
+        running_old = _node(SOPSTaskStatus.RUNNING.value, 2, 1, base + 100, TicketNodeStatus.RUNNING)
+        finished_short = _node(SOPSTaskStatus.FINISHED.value, 3, 20, base + 50, TicketNodeStatus.FINISHED)
+        finished_long = _node(SOPSTaskStatus.FINISHED.value, 4, 100, base + 60, TicketNodeStatus.FINISHED)
+        finished_unknown = _node(SOPSTaskStatus.FINISHED.value, 5, None, base + 70, TicketNodeStatus.FINISHED)
+
+        def _ids(order_by):
+            resp = resource.risk.list_pa_execution_records.perform_request({"order_by": order_by})
+            return [str(record["id"]) for record in resp["results"]]
+
+        assert _ids("duration") == [
+            str(running_new.id),
+            str(running_old.id),
+            str(finished_short.id),
+            str(finished_long.id),
+            str(finished_unknown.id),
+        ]
+        assert _ids("-duration") == [
+            str(running_old.id),
+            str(running_new.id),
+            str(finished_long.id),
+            str(finished_short.id),
+            str(finished_unknown.id),
+        ]
+
     def test_scene_filter_limits_risk_scene_and_empty_pa_returns_nothing(self):
         """场景筛选按风险所属场景收窄；指定了条件但没有候选套餐时返回空，而不是全部记录。"""
         from services.web.scene.constants import (
@@ -857,6 +898,77 @@ class TestSopsTimeFormat:
         assert format_sops_time("bad-value") == "bad-value"  # 解析失败原样返回，不吞数据
         assert format_sops_time("") == ""
         assert format_sops_time(None) == ""
+
+    def test_calc_task_duration_running_ignores_finished_children(self):
+        """任务非终态时，即使子节点已结束也不能提前算出耗时。"""
+        from services.web.risk.utils import calc_task_duration
+
+        status = {
+            "state": SOPSTaskStatus.RUNNING.value,
+            "start_time": "2026-10-22 11:42:48",
+            "children": {
+                "node1": {
+                    "state": SOPSTaskStatus.FINISHED.value,
+                    "start_time": "2026-10-22 11:42:48",
+                    "finish_time": "2026-10-22 11:50:00",
+                },
+                "node2": {
+                    "state": SOPSTaskStatus.RUNNING.value,
+                    "start_time": "2026-10-22 11:50:00",
+                    "finish_time": "",
+                },
+            },
+        }
+        assert calc_task_duration(status) is None
+
+    def test_calc_task_duration_failed_terminal_uses_failed_node_finish(self):
+        """失败终态优先取失败节点（含嵌套）结束时间，而不是其他更晚结束的子节点。"""
+        from services.web.risk.utils import calc_task_duration
+
+        status = {
+            "state": SOPSTaskStatus.FAILED.value,
+            "start_time": "2026-10-22 11:42:48",
+            "children": {
+                "node1": {
+                    "state": SOPSTaskStatus.FINISHED.value,
+                    "start_time": "2026-10-22 11:42:48",
+                    "finish_time": "2026-10-22 11:52:00",
+                },
+                "subflow": {
+                    "state": SOPSTaskStatus.RUNNING.value,
+                    "children": {
+                        "node2": {
+                            "state": SOPSTaskStatus.FAILED.value,
+                            "start_time": "2026-10-22 11:42:48",
+                            "finish_time": "2026-10-22 11:51:54",
+                        }
+                    },
+                },
+            },
+        }
+        # 11:51:54 - 11:42:48 = 546 秒
+        assert calc_task_duration(status) == 546
+
+    def test_calc_task_finish_time_matches_duration_for_failed_terminal(self):
+        """失败终态的 finish_time 与 duration 使用同一个结束时间点。"""
+        from services.web.risk.utils import calc_task_duration, calc_task_finish_time
+
+        status = {
+            "state": SOPSTaskStatus.FAILED.value,
+            "start_time": "2026-10-22 11:42:48",
+            "children": {
+                "node1": {
+                    "state": SOPSTaskStatus.FINISHED.value,
+                    "finish_time": "2026-10-22 11:52:00",
+                },
+                "node2": {
+                    "state": SOPSTaskStatus.FAILED.value,
+                    "finish_time": "2026-10-22 11:51:54",
+                },
+            },
+        }
+        assert calc_task_finish_time(status) == "2026-10-22 11:51:54"
+        assert calc_task_duration(status) == 546
 
     def test_calc_task_finish_time_normalized(self):
         from services.web.risk.utils import calc_task_finish_time

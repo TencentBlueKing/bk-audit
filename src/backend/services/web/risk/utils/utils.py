@@ -106,51 +106,66 @@ def format_sops_time(value) -> str:
     return parsed.strftime(api_settings.DATETIME_FORMAT)
 
 
+def _resolve_task_start_raw(status_info: dict) -> Optional[str]:
+    """任务开始时间：优先任务级 start_time，缺失时取所有节点最早开始时间。"""
+    raw = status_info.get("start_time")
+    if raw:
+        return raw
+    parsed = [
+        (parse_sops_time(node.get("start_time")), node.get("start_time"))
+        for node in iter_status_nodes(status_info)
+    ]
+    candidates = [item for item in parsed if item[0]]
+    return min(candidates, key=lambda item: item[0])[1] if candidates else None
+
+
+def _resolve_task_finish_raw(status_info: dict) -> Optional[str]:
+    """任务结束时间：优先任务级 finish_time，缺失时按终态选择节点结束时间。
+
+    失败终态优先取失败节点的 finish_time（流程在失败节点处停止）；
+    其他情况取所有节点最晚的 finish_time，保证耗时和结束时间展示同源。
+    """
+    raw = status_info.get("finish_time")
+    if raw:
+        return raw
+    nodes = list(iter_status_nodes(status_info))
+    failed_nodes = [
+        node
+        for node in nodes
+        if node.get("state") in SOPSTaskStatus.get_failed_status() and node.get("finish_time")
+    ]
+    if status_info.get("state") in SOPSTaskStatus.get_failed_status() and failed_nodes:
+        candidates = failed_nodes
+    else:
+        candidates = [node for node in nodes if node.get("finish_time")]
+    parsed = [(parse_sops_time(node.get("finish_time")), node.get("finish_time")) for node in candidates]
+    valid = [item for item in parsed if item[0]]
+    return max(valid, key=lambda item: item[0])[1] if valid else None
+
+
 def calc_task_duration(status_info: dict) -> Optional[int]:
     """耗时（秒）：SOPS 任务实际 start_time/finish_time 之差；未结束/缺失返回 None
 
-    部分场景（SOPS 版本差异/任务未回填任务级时间）下任务级 start_time/finish_time 为空，
-    此时退化为取所有子节点的最早开始时间与最晚结束时间，避免耗时恒为 None。
+    只有任务到达终态才计算耗时：执行中的任务即使已有子节点结束，也不能提前算出耗时，
+    否则会带着非空 duration 参与已完成记录排序。
     """
     status_info = status_info or {}
-    start = parse_sops_time(status_info.get("start_time"))
-    finish = parse_sops_time(status_info.get("finish_time"))
-    if not (start and finish):
-        children = status_info.get("children") or {}
-        child_times = [
-            (parse_sops_time(child.get("start_time")), parse_sops_time(child.get("finish_time")))
-            for child in children.values()
-            if isinstance(child, dict)
-        ]
-        starts = [item[0] for item in child_times if item[0]]
-        finishes = [item[1] for item in child_times if item[1]]
-        start = start or (min(starts) if starts else None)
-        finish = finish or (max(finishes) if finishes else None)
+    if status_info.get("state") not in SOPSTaskStatus.get_finished_status():
+        return None
+    start = parse_sops_time(_resolve_task_start_raw(status_info))
+    finish = parse_sops_time(_resolve_task_finish_raw(status_info))
     if start and finish:
         return int((finish - start).total_seconds())
     return None
 
 
 def calc_task_finish_time(status_info: dict) -> str:
-    """任务结束时间：优先任务级 finish_time，缺失时退化为子节点最晚结束时间
+    """任务结束时间：与 calc_task_duration 使用同一套终态结束时间解析。
 
-    与 calc_task_duration 同源：部分任务 SOPS 不回填任务级 finish_time，
-    仅用任务级字段会让终态记录的结束时间展示为空。
     展示输出统一为本地 %Y-%m-%d %H:%M:%S（SOPS 原始串的时区偏移不透传）。
     """
-    status_info = status_info or {}
-    raw = status_info.get("finish_time")
-    if raw:
-        return format_sops_time(raw)
-    children = status_info.get("children") or {}
-    candidates = [
-        child.get("finish_time") for child in children.values() if isinstance(child, dict) and child.get("finish_time")
-    ]
-    if not candidates:
-        return ""
-    parsed = [(parse_sops_time(value), value) for value in candidates]
-    latest = max((item for item in parsed if item[0]), default=None)
-    return format_sops_time(latest[1] if latest else candidates[-1])
+    finish = _resolve_task_finish_raw(status_info or {})
+    return format_sops_time(finish) if finish else ""
 
 
 def extract_attempt_records(status_info: dict, retried_node_ids: Optional[Set[str]] = None) -> list:

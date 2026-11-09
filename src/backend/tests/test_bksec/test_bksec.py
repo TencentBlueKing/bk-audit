@@ -677,10 +677,22 @@ class TestBkSecRules:
         assert latest.rule_id == rule.rule_id
         assert latest.is_enabled is False
 
-    def _toggle(self, strategy, toggle, sync_side_effect):
+    def _toggle(
+        self,
+        strategy,
+        toggle,
+        prepare_side_effect=None,
+        sync_side_effect=None,
+        controller_side_effect=None,
+    ):
         from services.web.strategy_v2.resources import ToggleStrategy
 
         calls = []
+
+        def prepare(*args, **kwargs):
+            calls.append(("prepare",))
+            if isinstance(prepare_side_effect, Exception):
+                raise prepare_side_effect
 
         def sync(*args, **kwargs):
             calls.append(("sync", kwargs.get("strategy_alive")))
@@ -688,22 +700,24 @@ class TestBkSecRules:
                 raise sync_side_effect
             return sync_side_effect
 
+        def controller(*args, **kwargs):
+            calls.append(("controller", args[0]))
+            if isinstance(controller_side_effect, Exception):
+                raise controller_side_effect
+
         with mock.patch.object(ToggleStrategy, "ensure_active_scene_binding_or_404"), mock.patch.object(
             ToggleStrategy, "add_audit_instance_to_context"
-        ), mock.patch(
-            "services.web.strategy_v2.resources.call_controller",
-            side_effect=lambda *args, **kwargs: calls.append(("controller", args[0])),
-        ), mock.patch(
-            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=sync
-        ):
+        ), mock.patch("services.web.strategy_v2.resources.call_controller", side_effect=controller), mock.patch(
+            "services.web.risk.bksec.rules.prepare_bksec_rule_for_enable", side_effect=prepare
+        ), mock.patch("services.web.risk.bksec.rules.sync_bksec_rule", side_effect=sync):
             ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": toggle})
         return calls
 
-    def test_toggle_enable_syncs_before_controller(self):
-        """启用时先同步规则，成功后才投递控制器。"""
+    def test_toggle_enable_prepares_before_controller_without_activating_rule(self):
+        """启用时只做配置预检，规则等状态确认 RUNNING 后再激活。"""
         strategy = self._strategy(BKSEC_CONFIG_DATA)
-        calls = self._toggle(strategy, True, None)
-        assert calls == [("sync", True), ("controller", "enable")]
+        calls = self._toggle(strategy, True)
+        assert calls == [("prepare",), ("controller", "enable")]
 
     def test_toggle_enable_keeps_strategy_off_when_plugin_sync_fails(self):
         """插件同步失败时不投递启用，接口返回校验错误。"""
@@ -714,17 +728,114 @@ class TestBkSecRules:
         with mock.patch.object(ToggleStrategy, "ensure_active_scene_binding_or_404"), mock.patch.object(
             ToggleStrategy, "add_audit_instance_to_context"
         ), mock.patch("services.web.strategy_v2.resources.call_controller") as controller, mock.patch(
-            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=BkSecPluginSyncError("plugin down")
+            "services.web.risk.bksec.rules.prepare_bksec_rule_for_enable",
+            side_effect=BkSecPluginSyncError("plugin down"),
         ):
             with pytest.raises(serializers.ValidationError, match="策略未启用"):
                 ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": True})
         controller.assert_not_called()
 
-    def test_toggle_disable_stops_controller_before_rule(self):
-        """停用仍先停策略，再停规则。停用路径不经过插件同步。"""
+    def test_toggle_enable_controller_failure_keeps_rule_disabled(self, settings):
+        """控制器同步启用失败时不留下启用的发单规则。"""
+        from services.web.strategy_v2.resources import ToggleStrategy
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
         strategy = self._strategy(BKSEC_CONFIG_DATA)
-        calls = self._toggle(strategy, False, None)
+        with mock.patch.object(ToggleStrategy, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            ToggleStrategy, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller", side_effect=RuntimeError("controller down")
+        ):
+            with pytest.raises(RuntimeError, match="controller down"):
+                ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": True})
+        assert not RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id, is_enabled=True).exists()
+
+    def test_toggle_disable_stops_controller_before_rule(self):
+        """停用仍先停策略，再停规则。停用路径不经过插件预检。"""
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        calls = self._toggle(strategy, False)
         assert calls == [("controller", "disabled"), ("sync", False)]
+
+    def test_toggle_enable_does_not_create_rule_before_start_confirmed(self, settings):
+        """控制器返回后仍是 STARTING：规则不可见，等状态检查确认 RUNNING 后才创建并启用。"""
+        from services.web.analyze.tasks import check_flow_status
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.resources import ToggleStrategy
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        strategy.status = StrategyStatusChoices.DISABLED.value
+        strategy.backend_data = {"flow_id": 123}
+        strategy.save(update_fields=["status", "backend_data"])
+
+        with mock.patch.object(ToggleStrategy, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            ToggleStrategy, "add_audit_instance_to_context"
+        ), mock.patch("services.web.strategy_v2.resources.call_controller") as controller:
+            ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": True})
+        controller.assert_called_once()
+        # 控制器尚未确认启动：不能提前落可见规则
+        assert not RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id, is_enabled=True).exists()
+
+        with mock.patch(
+            "services.web.analyze.tasks.api.bk_base.get_flow_deploy_data", return_value={"status": "success"}
+        ):
+            check_flow_status(
+                strategy.strategy_id,
+                success_status=StrategyStatusChoices.RUNNING.value,
+                failed_status=StrategyStatusChoices.START_FAILED.value,
+                other_status=StrategyStatusChoices.STARTING.value,
+            )
+
+        strategy.refresh_from_db()
+        assert strategy.status == StrategyStatusChoices.RUNNING.value
+        rule = RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).order_by("-version").first()
+        assert rule is not None and rule.is_enabled
+
+    def test_check_flow_status_failure_disables_auto_rule(self, settings):
+        """异步启动失败：状态检查置为 START_FAILED 时同步停用发单规则。"""
+        from services.web.analyze.tasks import check_flow_status
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        strategy.status = StrategyStatusChoices.RUNNING.value
+        strategy.save(update_fields=["status"])
+        rule = sync_bksec_rule(strategy)
+        assert rule.is_enabled
+
+        strategy.status = StrategyStatusChoices.STARTING.value
+        strategy.backend_data = {"flow_id": 123}
+        strategy.save(update_fields=["status", "backend_data"])
+        with mock.patch(
+            "services.web.analyze.tasks.api.bk_base.get_flow_deploy_data",
+            return_value={"status": "failure", "logs": []},
+        ), mock.patch("services.web.analyze.tasks.ErrorMsgHandler"):
+            check_flow_status(
+                strategy.strategy_id,
+                success_status=StrategyStatusChoices.RUNNING.value,
+                failed_status=StrategyStatusChoices.START_FAILED.value,
+                other_status=StrategyStatusChoices.STARTING.value,
+            )
+
+        strategy.refresh_from_db()
+        assert strategy.status == StrategyStatusChoices.START_FAILED.value
+        latest = RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).order_by("-version").first()
+        assert latest is not None and not latest.is_enabled
 
     def test_auto_rule_edit_guard(self):
         """自动规则禁人工维护：Update/Toggle/Delete/批量调整一律拒绝"""
@@ -745,6 +856,17 @@ class TestBkSecRules:
         # 守卫生效：规则未被人工改动
         latest = RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).order_by("-version").first()
         assert latest.is_enabled and latest.version == rule.version
+
+    def test_plugin_sync_error_hides_downstream_diagnosis(self):
+        """下游原始诊断（如 HTTP 502 响应）只保留在服务端 diagnosis，不进入异常文本。"""
+        from services.web.risk.bksec.rules import BkSecPluginSyncError
+
+        raw = 'HTTP 502 Bad Gateway: upstream connect error {"message": "internal detail"}'
+        err = BkSecPluginSyncError(raw)
+        assert err.diagnosis == raw
+        assert "HTTP 502" not in str(err)
+        assert "internal detail" not in str(err)
+        assert "插件配置同步失败，请稍后重试" in str(err)
 
     def test_sync_rule_without_preset_pa(self, settings):
         from rest_framework import serializers
@@ -914,8 +1036,8 @@ class TestBkSecRules:
         strategy.status = StrategyStatusChoices.RUNNING.value
         strategy.save(update_fields=["status"])
 
-    def test_draft_submit_syncs_bksec_rule_as_alive(self):
-        """草稿以 is_draft=False 提交时，在部署前按启用态同步发单规则"""
+    def test_draft_submit_prepares_bksec_rule_before_deploy(self):
+        """草稿以 is_draft=False 提交时，部署前只预检，不提前启用规则"""
         from services.web.strategy_v2.constants import StrategyStatusChoices
         from services.web.strategy_v2.models import Strategy
         from services.web.strategy_v2.resources import UpdateStrategy
@@ -937,6 +1059,8 @@ class TestBkSecRules:
             "services.web.strategy_v2.resources.StrategyInfoSerializer",
             return_value=mock.Mock(data={}),
         ), mock.patch(
+            "services.web.risk.bksec.rules.prepare_bksec_rule_or_keep_strategy"
+        ) as prepare, mock.patch(
             "services.web.risk.bksec.rules.sync_bksec_rule"
         ) as sync:
             updater.perform_request(
@@ -946,15 +1070,15 @@ class TestBkSecRules:
                     "is_draft": False,
                 }
             )
-        sync.assert_called_once()
-        assert sync.call_args.args[0].strategy_id == strategy.strategy_id
-        assert sync.call_args.args[0].status == StrategyStatusChoices.DRAFT.value
-        assert sync.call_args.kwargs["strategy_alive"] is True
+        prepare.assert_called_once()
+        assert prepare.call_args.args[0].strategy_id == strategy.strategy_id
+        assert prepare.call_args.args[0].status == StrategyStatusChoices.DRAFT.value
+        sync.assert_not_called()
         update_db.assert_called_once()
         controller.assert_called_once()
 
-    def test_running_update_derives_bksec_alive_from_status(self):
-        """已提交策略的普通更新不覆盖启用态，仍按当前状态推导"""
+    def test_running_update_without_remote_deploy_syncs_bksec_rule(self):
+        """已运行且不重建 flow 的更新，保存后立即同步 BKSEC 规则"""
         from services.web.strategy_v2.constants import StrategyStatusChoices
         from services.web.strategy_v2.models import Strategy
         from services.web.strategy_v2.resources import UpdateStrategy
@@ -980,7 +1104,67 @@ class TestBkSecRules:
         ) as sync:
             updater.perform_request({"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type})
         sync.assert_called_once()
-        assert sync.call_args.kwargs["strategy_alive"] is None
+        assert sync.call_args.kwargs["strategy_alive"] is True
+        controller.assert_not_called()
+
+    def test_running_update_with_remote_deploy_prepares_without_activation(self):
+        """已运行但需要重建 flow 的更新，规则等状态确认 RUNNING 后再激活"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="bksec_running_deploy",
+            status=StrategyStatusChoices.RUNNING.value,
+            bksec_config=BKSEC_CONFIG_DATA,
+        )
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", return_value=True), mock.patch.object(
+            updater, "update_remote"
+        ) as update_remote, mock.patch.object(updater, "add_audit_instance_to_context"), mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.prepare_bksec_rule_or_keep_strategy"
+        ) as prepare, mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule"
+        ) as sync:
+            updater.perform_request({"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type})
+        prepare.assert_called_once()
+        sync.assert_not_called()
+        update_remote.assert_called_once()
+
+    def test_failed_strategy_update_keeps_bksec_rule_disabled(self):
+        """非运行态且不部署的更新，规则必须保持关闭"""
+        from services.web.strategy_v2.constants import StrategyStatusChoices
+        from services.web.strategy_v2.models import Strategy
+        from services.web.strategy_v2.resources import UpdateStrategy
+
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="bksec_failed_update",
+            status=StrategyStatusChoices.START_FAILED.value,
+            bksec_config=BKSEC_CONFIG_DATA,
+        )
+        updater = UpdateStrategy()
+        with mock.patch.object(updater, "ensure_active_scene_binding_or_404"), mock.patch.object(
+            updater, "_check_source_type"
+        ), mock.patch.object(updater, "update_db", return_value=False), mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
+            "services.web.strategy_v2.resources.call_controller"
+        ) as controller, mock.patch(
+            "services.web.strategy_v2.resources.StrategyInfoSerializer",
+            return_value=mock.Mock(data={}),
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule"
+        ) as sync:
+            updater.perform_request({"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type})
+        sync.assert_called_once()
+        assert sync.call_args.kwargs["strategy_alive"] is False
         controller.assert_not_called()
 
     def test_plugin_sync_failure_rolls_back_strategy_save(self, settings):
@@ -1030,8 +1214,10 @@ class TestBkSecRules:
         assert updated.bksec_config == previous
         assert not RiskRule.objects.filter(auto_strategy_id=updated.strategy_id).exists()
         assert "BKSEC 工单配置同步失败" in str(created_err.value.detail)
-        assert "plugin down" in str(created_err.value.detail)
+        assert "插件配置同步失败，请稍后重试" in str(created_err.value.detail)
+        assert "plugin down" not in str(created_err.value.detail)
         assert "BKSEC 工单配置同步失败" in str(updated_err.value.detail)
+        assert "plugin down" not in str(updated_err.value.detail)
 
     def test_update_fails_when_plugin_sync_fails(self):
         """更新接口在插件同步失败后回滚本次字段变更，且不继续部署。"""
@@ -1066,7 +1252,8 @@ class TestBkSecRules:
             "services.web.strategy_v2.resources.StrategyInfoSerializer",
             return_value=mock.Mock(data={}),
         ), mock.patch(
-            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=BkSecPluginSyncError("plugin down")
+            "services.web.risk.bksec.rules.prepare_bksec_rule_for_enable",
+            side_effect=BkSecPluginSyncError("plugin down"),
         ):
             with pytest.raises(serializers.ValidationError) as err:
                 updater.perform_request({"strategy_id": strategy.strategy_id, "strategy_type": strategy.strategy_type})
@@ -1076,7 +1263,8 @@ class TestBkSecRules:
         assert strategy.description != "other-field-saved"
         assert strategy.bksec_config == previous
         assert "BKSEC 工单配置同步失败" in str(err.value.detail)
-        assert "plugin down" in str(err.value.detail)
+        assert "插件配置同步失败，请稍后重试" in str(err.value.detail)
+        assert "plugin down" not in str(err.value.detail)
         update_remote.assert_not_called()
 
     def test_missing_preset_pa_fails_update(self, settings):

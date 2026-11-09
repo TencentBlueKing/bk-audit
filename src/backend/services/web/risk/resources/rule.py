@@ -240,16 +240,25 @@ class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
         if invalid_rule_ids:
             raise ValidationError(gettext_lazy("规则[%s]不属于场景[%s]") % (",".join(sorted(invalid_rule_ids)), scene_id))
 
-        # 自动规则不参与批量调整（优先级保留段与启停均由策略派生）
+        # 自动规则不参与批量调整（优先级保留段与启停均由策略派生），直接跳过而不是拒绝整单
+        configs = []
         for item in validated_request_data["config"]:
-            self._reject_auto_rule_edit(RiskRule.objects.filter(rule_id=item["rule_id"]).order_by("-version").first())
-        self._update_rules(validated_request_data["config"])
+            rule = RiskRule.objects.filter(rule_id=item["rule_id"]).order_by("-version").first()
+            if rule is None or rule.auto_strategy_id:
+                continue
+            if item["priority_index"] >= BKSEC_RULE_PRIORITY_BASE:
+                raise ValidationError(
+                    gettext_lazy("普通规则优先级必须小于 %s，%s 及以上为 BKSEC 自动发单规则保留段")
+                    % (BKSEC_RULE_PRIORITY_BASE, BKSEC_RULE_PRIORITY_BASE)
+                )
+            configs.append(item)
+        self._update_rules(configs)
 
     @transaction.atomic
     def _update_rules(self, configs):
         for config in configs:
             rule = RiskRule.objects.filter(rule_id=config["rule_id"]).order_by("-version").first()
-            if not rule:
+            if not rule or rule.auto_strategy_id:
                 continue
             origin_data = RiskRuleInfoSerializer(rule).data
             RiskRule._objects.filter(rule_id=rule.rule_id).update(
