@@ -1,13 +1,13 @@
 import datetime
 import time
 from collections import defaultdict
-from typing import Dict, Iterable, List, Set, Type
+from typing import Dict, Iterable, List, Set
 
 import redis
-from bk_resource import resource
 from django.conf import settings
-from django.db import models, transaction
+from django.db import transaction
 
+from apps.meta.handlers.tag_binding import sync_resource_tags
 from core.utils.data import unique_id
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy, StrategyTool
@@ -82,36 +82,6 @@ def _create_bkvision_tool(tool: Tool, config_data: dict, updated_time: datetime)
         defaults={"id": unique_id(), "name": f"Tool-{tool.uid}"},
     )
     BkVisionToolConfig.objects.create(tool=tool, panel=panel, updated_time=updated_time)
-
-
-def sync_resource_tags(
-    relation_resource_field: str,
-    resource_uid: str,
-    tag_names: List[str],
-    relation_model: Type[models.Model],
-) -> None:
-    """
-    同步资源标签关联
-
-    参数:
-        relation_resource_field: 关联表中关联资源的字段名，
-        resource_uid: 资源唯一标识
-        tag_names: 标签名列表
-        relation_model: 关联表模型类
-    """
-    with transaction.atomic():
-        # 删除旧关联
-        filter_kwargs = {relation_resource_field: resource_uid}
-        relation_model.objects.filter(**filter_kwargs).delete()
-
-        if not tag_names:
-            return
-
-        # 批量保存标签
-        tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
-        # 批量创建关联
-        objs = [relation_model(**{relation_resource_field: resource_uid, "tag_id": t["tag_id"]}) for t in tags]
-        relation_model.objects.bulk_create(objs)
 
 
 def get_blocking_strategy_names(tool_uid: str) -> List[str]:

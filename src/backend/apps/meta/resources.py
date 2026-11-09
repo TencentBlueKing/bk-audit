@@ -60,6 +60,7 @@ from apps.meta.exceptions import (
     SystemHasExist,
 )
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
+from apps.meta.handlers.tag_binding import TagBindingHandler
 from apps.meta.mcp_tools.schemas import (
     GetAuditSystemDetailRequest,
     ListAuditSystemsRequest,
@@ -153,6 +154,7 @@ from apps.meta.serializers import (
     SystemRoleSerializer,
     SystemSearchBaseSerialzier,
     SystemSerializer,
+    TagBindingRequestSerializer,
     UpdateCustomFieldResponseSerializer,
     UpdateGeneralConfigSerializer,
     UpdateResourceTypeSerializer,
@@ -1071,6 +1073,21 @@ class SaveTags(Meta, Resource):
         Tag.objects.bulk_create([Tag(tag_name=t) for t in tag_names], ignore_conflicts=True)
         tags = Tag.objects.filter(tag_name__in=tag_names)
         return tags
+
+
+class SaveTagBindings(Meta, Resource):
+    name = gettext_lazy("保存标签绑定")
+    RequestSerializer = TagBindingRequestSerializer
+    ResponseSerializer = SaveTagResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        return TagBindingHandler.save(
+            namespace=validated_request_data["namespace"],
+            resource_type=validated_request_data["resource_type"],
+            resource_id=validated_request_data["resource_id"],
+            tags=validated_request_data["tags"],
+        )
 
 
 class GetAssetPullInfo(Meta, Resource):
