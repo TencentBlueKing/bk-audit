@@ -42,7 +42,6 @@ from services.web.risk.bksec.service import (
     fetch_risk_access_items,
     parse_bksec_config,
     prepare_test_constants,
-    validate_bksec_test_target,
 )
 from services.web.risk.constants import BkSecPushStatus, TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
@@ -190,8 +189,6 @@ class SendTestTicket(TicketResourceMeta):
             raise serializers.ValidationError(gettext_lazy("该风险单未关联策略，无法发送测试工单"))
         # 配置来源：前端当前配置（支持未保存配置测试）
         config = parse_bksec_config(validated_request_data["bksec_config"])
-        # 回调隔离守卫（插件 Callback 表按风险单复用）
-        validate_bksec_test_target(risk)
         # 测试发送前置（一次性）：必填校验 → 插件 Config 同步（{id}_test）→ 渲染终值入参
         constants = prepare_test_constants(strategy, config, risk, validated_request_data["test_receivers"])
         # 按当前模板 ID 补齐内置套餐；环境变量未配置时无法补齐

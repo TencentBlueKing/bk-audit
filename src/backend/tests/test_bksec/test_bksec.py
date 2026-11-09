@@ -38,10 +38,7 @@ from services.web.risk.bksec.contract import (
     build_plugin_constants,
 )
 from services.web.risk.bksec.render import build_render_context, render_value
-from services.web.risk.bksec.service import (
-    has_bksec_ticket_sent,
-    validate_bksec_test_target,
-)
+from services.web.risk.bksec.service import has_bksec_ticket_sent
 from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, RiskRule, TicketNode
 from services.web.risk.permissions import (
@@ -1467,15 +1464,20 @@ class TestBkSecResources:
                 )
         create_task.assert_not_called()
 
-    def test_send_test_ticket_blocked_by_formal_dispatch(self, settings):
-        """回调隔离守卫：风险存在正式派单历史时拒绝测试发送（防插件回调复用污染/静默拦截）"""
+    def test_send_test_ticket_allowed_after_formal_dispatch(self, settings):
+        """测试单不写正式 Callback、不参与正式派单，已有正式派单历史的风险仍可作为测试样例"""
         import time as _time
 
         from services.web.risk.models import TicketNode
         from services.web.strategy_v2.models import Strategy
+        from tests.test_risk.test_tickets.constants import SOPS_FLOW_INFO
 
         config = BkSecConfig.model_validate(BKSEC_CONFIG_DATA)
         settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        ProcessApplication.objects.filter(is_builtin=True).delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_builtin=True
+        )
         with RiskContext() as risk:
             strategy = Strategy.objects.get(strategy_id=risk.strategy_id)
             strategy.bksec_config = config.model_dump()
@@ -1489,17 +1491,27 @@ class TestBkSecResources:
                 process_result={"task": {"task_id": 1}},
                 extra={},
             )
-            with mock.patch("services.web.risk.resources.bksec.api.bk_sops.create_task") as create_task:
-                with pytest.raises(Exception) as err:
-                    resource.risk.send_test_ticket.perform_request(
-                        {
-                            "test_receivers": ["tester"],
-                            "risk_id": risk.risk_id,
-                            "bksec_config": config.model_dump(),
-                        }
-                    )
-            create_task.assert_not_called()
-            assert "正式派单" in str(err.value.args)
+            with mock.patch(
+                "services.web.risk.bksec.rules.sync_plugin_config", mock.Mock(return_value=(True, "ok"))
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.create_task", mock.Mock(return_value=SOPS_FLOW_INFO)
+            ) as create_task, mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.start_task", mock.Mock(return_value=None)
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
+                mock.Mock(return_value={"state": "RUNNING"}),
+            ), mock.patch(
+                "services.web.risk.resources.bksec.api.bk_sops.get_template_info",
+                mock.Mock(return_value=BKSEC_SOPS_TEMPLATE_INFO),
+            ):
+                resource.risk.send_test_ticket.perform_request(
+                    {
+                        "test_receivers": ["tester"],
+                        "risk_id": risk.risk_id,
+                        "bksec_config": config.model_dump(),
+                    }
+                )
+            create_task.assert_called_once()
 
     def test_preview_permission_binds_sample_risk_strategy(self):
         """预览按请求体里的样例风险做策略编辑和风险查看鉴权，查询参数不参与。"""
@@ -1696,21 +1708,6 @@ class TestBkSecPushStatus:
             )
             assert second["updated"] is False
             assert has_bksec_ticket_sent(risk) is True
-
-    def test_test_send_blocked_when_already_pushed(self):
-        """已推送成功的风险单不允许测试发送：回调/轮询节点长驻 RUNNING 不再被误判为「未发单」"""
-        from services.web.risk.constants import BkSecPushStatus
-
-        with RiskContext() as risk:
-            risk.bksec_push_status = BkSecPushStatus.SUCCESS
-            risk.save(update_fields=["bksec_push_status"])
-            with pytest.raises(serializers.ValidationError):
-                validate_bksec_test_target(risk)
-
-    def test_test_send_allowed_without_any_dispatch(self):
-        """未推送过的风险单允许测试发送"""
-        with RiskContext() as risk:
-            validate_bksec_test_target(risk)
 
     def test_push_failure_only_for_builtin_pa_and_keeps_success(self):
         """只有内置发单套餐失败才记推送失败，已成功不被其他套餐失败盖掉。"""
