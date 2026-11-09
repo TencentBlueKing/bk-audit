@@ -703,6 +703,13 @@ class TicketNode(models.Model):
         db_index=True,
         help_text=gettext_lazy("处理耗时（秒），用于执行记录排序；未结束/缺失为 null"),
     )
+    sops_start_time = models.FloatField(
+        gettext_lazy("SOps Start Time"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("SOPS 实际开始时间（epoch 秒），用于执行记录筛选/排序；历史记录为空"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Ticket History")

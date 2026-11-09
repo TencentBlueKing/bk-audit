@@ -337,9 +337,7 @@ def prepare_test_constants(strategy: Strategy, config: BkSecConfig, risk: Risk, 
             strategy.strategy_id,
             message,
         )
-        raise serializers.ValidationError(
-            gettext_lazy("测试前插件配置同步失败，请稍后重试；若持续失败请联系管理员")
-        )
+        raise serializers.ValidationError(gettext_lazy("测试前插件配置同步失败，请稍后重试；若持续失败请联系管理员"))
     try:
         return build_plugin_constants(config, risk=risk, test_operator=receivers[0])
     except Exception as err:  # NOCC:broad-except(测试发送即时报错，便于定位配置问题)

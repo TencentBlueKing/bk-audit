@@ -226,6 +226,11 @@ class TestAutoProcessBkSecRender:
             assert risk.risk_id in constants["${target}"]
             # operator 兜底模板已渲染（json.loads 校验通过，数组串契约）
             assert constants["${operator}"] == '["admin"]'
+            # 实际开始时间已物化到 TicketNode，供执行记录筛选/排序使用
+            from services.web.risk.models import TicketNode
+
+            node = TicketNode.objects.filter(risk_id=risk.risk_id, action="AutoProcess", is_test=False).first()
+            assert node is not None and node.sops_start_time is not None
 
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)

@@ -99,7 +99,11 @@ from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
-from services.web.risk.utils import calc_task_duration, fill_failure_info
+from services.web.risk.utils import (
+    calc_task_duration,
+    calc_task_start_timestamp,
+    fill_failure_info,
+)
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy, StrategyRule
 
@@ -708,6 +712,11 @@ def sync_auto_result(node_id: str = None):
                         # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
                         node.process_result["duration"] = calc_task_duration(status)
                         node.duration = node.process_result["duration"]
+                        # 实际开始时间物化到独立字段，供执行记录筛选/排序；缺失时回退记录创建时间
+                        start_ts = calc_task_start_timestamp(status)
+                        node.sops_start_time = (
+                            start_ts if start_ts is not None else (node.sops_start_time or node.timestamp)
+                        )
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
@@ -732,7 +741,7 @@ def sync_auto_result(node_id: str = None):
                         risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
-                node.save(update_fields=["process_result", "status", "duration"])
+                node.save(update_fields=["process_result", "status", "duration", "sops_start_time"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 

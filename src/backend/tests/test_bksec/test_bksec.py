@@ -709,7 +709,9 @@ class TestBkSecRules:
             ToggleStrategy, "add_audit_instance_to_context"
         ), mock.patch("services.web.strategy_v2.resources.call_controller", side_effect=controller), mock.patch(
             "services.web.risk.bksec.rules.prepare_bksec_rule_for_enable", side_effect=prepare
-        ), mock.patch("services.web.risk.bksec.rules.sync_bksec_rule", side_effect=sync):
+        ), mock.patch(
+            "services.web.risk.bksec.rules.sync_bksec_rule", side_effect=sync
+        ):
             ToggleStrategy().perform_request({"strategy_id": strategy.strategy_id, "toggle": toggle})
         return calls
 
@@ -1124,7 +1126,9 @@ class TestBkSecRules:
             updater, "_check_source_type"
         ), mock.patch.object(updater, "update_db", return_value=True), mock.patch.object(
             updater, "update_remote"
-        ) as update_remote, mock.patch.object(updater, "add_audit_instance_to_context"), mock.patch(
+        ) as update_remote, mock.patch.object(
+            updater, "add_audit_instance_to_context"
+        ), mock.patch(
             "services.web.strategy_v2.resources.StrategyInfoSerializer",
             return_value=mock.Mock(data={}),
         ), mock.patch(

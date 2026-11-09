@@ -1611,7 +1611,8 @@ class ListRuleByPAReqSerializer(serializers.Serializer):
 class TicketNodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketNode
-        exclude = ["extra"]
+        # sops_start_time 为执行记录筛选/排序的内部物化字段，不属于流转历史接口返回契约
+        exclude = ["extra", "sops_start_time"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

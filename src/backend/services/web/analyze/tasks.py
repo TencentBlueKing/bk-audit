@@ -80,7 +80,11 @@ def _sync_bksec_rule_after_status_change(strategy: Strategy) -> None:
 
         if strategy.status == StrategyStatusChoices.RUNNING.value:
             sync_bksec_rule(strategy, strategy_alive=True)
-        elif strategy.status == StrategyStatusChoices.START_FAILED.value:
+        elif strategy.status in (
+            StrategyStatusChoices.START_FAILED.value,
+            StrategyStatusChoices.UPDATE_FAILED.value,
+        ):
+            # 启动/更新异步失败：停用发单规则，避免失败态下规则仍对风险生效
             sync_bksec_rule(strategy, strategy_alive=False)
     except Exception:  # NOCC:broad-except(规则同步失败不得影响策略状态收敛)
         logger_celery.exception(

@@ -112,8 +112,7 @@ def _resolve_task_start_raw(status_info: dict) -> Optional[str]:
     if raw:
         return raw
     parsed = [
-        (parse_sops_time(node.get("start_time")), node.get("start_time"))
-        for node in iter_status_nodes(status_info)
+        (parse_sops_time(node.get("start_time")), node.get("start_time")) for node in iter_status_nodes(status_info)
     ]
     candidates = [item for item in parsed if item[0]]
     return min(candidates, key=lambda item: item[0])[1] if candidates else None
@@ -130,9 +129,7 @@ def _resolve_task_finish_raw(status_info: dict) -> Optional[str]:
         return raw
     nodes = list(iter_status_nodes(status_info))
     failed_nodes = [
-        node
-        for node in nodes
-        if node.get("state") in SOPSTaskStatus.get_failed_status() and node.get("finish_time")
+        node for node in nodes if node.get("state") in SOPSTaskStatus.get_failed_status() and node.get("finish_time")
     ]
     if status_info.get("state") in SOPSTaskStatus.get_failed_status() and failed_nodes:
         candidates = failed_nodes
@@ -166,6 +163,24 @@ def calc_task_finish_time(status_info: dict) -> str:
     """
     finish = _resolve_task_finish_raw(status_info or {})
     return format_sops_time(finish) if finish else ""
+
+
+def calc_task_start_time(status_info: dict) -> str:
+    """任务开始时间：与 calc_task_duration 使用同一套开始时间解析。
+
+    展示输出统一为本地 %Y-%m-%d %H:%M:%S（SOPS 原始串的时区偏移不透传）。
+    """
+    start = _resolve_task_start_raw(status_info or {})
+    return format_sops_time(start) if start else ""
+
+
+def calc_task_start_timestamp(status_info: dict) -> Optional[float]:
+    """任务开始时间戳（epoch 秒）：与 calc_task_start_time 使用同一套开始时间解析。
+
+    用于把实际开始时间物化到 TicketNode，供执行记录筛选/排序使用；无法解析时返回 None。
+    """
+    start = parse_sops_time(_resolve_task_start_raw(status_info or {}))
+    return start.timestamp() if start else None
 
 
 def extract_attempt_records(status_info: dict, retried_node_ids: Optional[Set[str]] = None) -> list:
