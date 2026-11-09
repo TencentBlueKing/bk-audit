@@ -378,14 +378,11 @@ class DefaultValueValidator:
             1. 获取用户实际可访问的范围（用户权限 ∩ 资源授权）
             2. 收集允许的默认值和每个 raw_name 的覆盖状态
             3. 遍历工具变量，校验每个变量的值是否合法
-            4. 如果校验失败，直接抛出 ToolVariableValidateException
-
-        异常:
-            ToolVariableValidateException: 校验失败时抛出，错误码 400
+            4. 如果校验失败，直接抛出 ValidationError，返回码 400
         """
         from django.utils.translation import gettext
 
-        from core.exceptions import ToolVariableValidateException
+        from core.exceptions import ValidationError
 
         # 1. 获取可访问范围
         accessible_scenes, accessible_systems = self.get_accessible_scopes(
@@ -422,7 +419,10 @@ class DefaultValueValidator:
 
             # 参数未声明，fail closed
             if var_config is None:
-                raise ToolVariableValidateException(gettext("参数 %(var_name)s 未在工具中声明") % {"var_name": raw_name})
+                raise ValidationError(
+                    gettext("参数 %(var_name)s 未在工具中声明") % {"var_name": raw_name},
+                    code="400",
+                )
 
             # 跳过不需要校验的变量
             if self._should_skip_validation(raw_name, var_config):
@@ -442,4 +442,7 @@ class DefaultValueValidator:
             )
 
             if not is_valid:
-                raise ToolVariableValidateException(gettext("参数 %(var_name)s 不可见，不可临时修改") % {"var_name": raw_name})
+                raise ValidationError(
+                    gettext("参数 %(var_name)s 不可见，不可临时修改") % {"var_name": raw_name},
+                    code="400",
+                )
