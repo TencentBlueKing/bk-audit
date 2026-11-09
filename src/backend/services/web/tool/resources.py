@@ -37,6 +37,7 @@ from api.bk_base.constants import UserAuthActionEnum
 from api.bk_base.serializers import UserAuthCheckRespSerializer
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
+from apps.meta.handlers.tag_binding import sync_resource_tags
 from apps.meta.models import EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
@@ -138,7 +139,6 @@ from services.web.tool.tool import (
     create_tool_with_config,
     get_blocking_strategy_names,
     recent_tool_usage_manager,
-    sync_resource_tags,
 )
 
 
