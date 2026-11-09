@@ -658,6 +658,22 @@ class ForApprove(RiskFlowBaseHandler):
             form_data[key] = value
         return form_data
 
+    def _build_approve_options(self, ticket_info: dict) -> dict:
+        """构造发起审批单据所需的 options。
+
+        仅针对带有选项（下拉框、单选、多选等）的字段，将模板字段 choices 转为
+        ITSM V4 options 协议（[{key, name, parent}]），供表单回显与选项校验使用。
+        无选项的字段（choice 为空列表）不纳入。
+        """
+
+        options = {}
+        for field in ticket_info["fields"]:
+            choice = field.get("choice") or []
+            if not choice:
+                continue
+            options[field["key"]] = [{"key": item["key"], "name": item["name"], "parent": None} for item in choice]
+        return options
+
     def process(self, pa_config: dict = None, **kwargs) -> dict:
         """
         三种发起方式
@@ -697,11 +713,13 @@ class ForApprove(RiskFlowBaseHandler):
             id=self.process_application.approve_service_id, version=ItsmVersion.V4
         )
         form_data = self._build_approve_form_data(ticket_info)
+        options = self._build_approve_options(ticket_info)
 
         ticket = api.bk_itsm_v4.ticket_create(
             operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
             workflow_key=self.process_application.approve_service_id,
             form_data=form_data,
+            options=options,
             is_submit=True,
         )
         status = get_itsm_ticket_status(ticket["id"])
