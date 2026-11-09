@@ -20,7 +20,7 @@ import abc
 import datetime
 
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
@@ -36,6 +36,7 @@ from services.web.risk.constants import (
     PA_TRIGGER_KEYWORD_LABELS,
     ApproveTicketFields,
     RiskStatus,
+    TicketNodeStatus,
 )
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from services.web.risk.serializers import (
@@ -68,9 +69,8 @@ from services.web.scene.filters import (
 )
 from services.web.scene.models import ResourceBindingScene
 
-# 终态结果：只有终态才输出 finish_time / duration。
-# 未结束任务的 SOPS 时间会退化取到旧节点值（任务级时间缺失 → 取子节点最早/最晚），
-# 会出现"执行中却已有结束时间与耗时"的矛盾，重试后尤为明显
+# 终态结果：只有终态才输出 finish_time / duration；耗时计算本身也会拒绝非终态，
+# 避免执行中任务因 SOPS 子节点时间兜底而提前得到耗时。
 FINAL_RESULTS = ("success", "failed")
 
 
@@ -550,12 +550,31 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             "operator": "operator",
             "-operator": "-operator",
         }
-        # 耗时排序：未完成的记录 duration 为 null，统一置顶（nulls_first），
-        # 并以开始时间作为次键 —— 对未完成记录而言「已耗时 = now - start_time」，
-        # 同一时刻 now 相同，故组内按开始时间升序即等价于「已运行越久越靠前」
+        # 耗时排序：执行中的记录统一在前，已完成在后；不能只用 duration 是否为空判断，
+        # 因为终态任务也可能算不出耗时。执行中组内按开始时间排序：
+        # 正序时较早开始的在后，逆序时较早开始的在前。
+        running_first = Case(
+            When(status=TicketNodeStatus.RUNNING, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+        # 执行中的记录不参与 duration 排序，统一按开始时间处理，避免脏 duration 影响组内顺序
+        sort_duration = Case(
+            When(status=TicketNodeStatus.RUNNING, then=Value(None)),
+            default=F("duration"),
+            output_field=IntegerField(),
+        )
         duration_order_map = {
-            "duration": [F("duration").asc(nulls_first=True), "-timestamp"],
-            "-duration": [F("duration").desc(nulls_first=True), "timestamp"],
+            "duration": [
+                running_first,
+                sort_duration.asc(nulls_last=True),
+                "-timestamp",
+            ],
+            "-duration": [
+                running_first,
+                sort_duration.desc(nulls_last=True),
+                "timestamp",
+            ],
         }
         if order_by in duration_order_map:
             nodes = nodes.order_by(*duration_order_map[order_by])

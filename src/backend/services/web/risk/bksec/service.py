@@ -331,7 +331,15 @@ def prepare_test_constants(strategy: Strategy, config: BkSecConfig, risk: Risk, 
 
     success, message = sync_plugin_config(strategy, config, is_test=True)
     if not success:
-        raise serializers.ValidationError(gettext_lazy("测试前插件配置同步失败，无法发送测试工单：%s") % message)
+        # 下游诊断原文只落服务端日志，避免插件响应/内部地址透传给调用方
+        logger.error(
+            "[BkSecTestSend] Plugin config sync failed, strategy_id=%s diagnosis=%s",
+            strategy.strategy_id,
+            message,
+        )
+        raise serializers.ValidationError(
+            gettext_lazy("测试前插件配置同步失败，请稍后重试；若持续失败请联系管理员")
+        )
     try:
         return build_plugin_constants(config, risk=risk, test_operator=receivers[0])
     except Exception as err:  # NOCC:broad-except(测试发送即时报错，便于定位配置问题)

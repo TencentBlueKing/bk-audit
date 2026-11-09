@@ -50,6 +50,7 @@ from services.web.analyze.controls.auth import (
 from services.web.analyze.models import ControlVersion
 from services.web.common.monitor import LostSceneDetectedEvent
 from services.web.databus.models import CollectorPlugin, Snapshot
+from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
 
@@ -70,6 +71,23 @@ def call_controller(
         controller = Controller.get_typed_controller(strategy_id=strategy_id)
     controller_func = getattr(controller, func_name, None)
     controller_func(*args, **kwargs)
+
+
+def _sync_bksec_rule_after_status_change(strategy: Strategy) -> None:
+    """策略状态确认后同步 BKSEC 自动规则，保证规则只在启动成功后可见。"""
+    try:
+        from services.web.risk.bksec.rules import sync_bksec_rule
+
+        if strategy.status == StrategyStatusChoices.RUNNING.value:
+            sync_bksec_rule(strategy, strategy_alive=True)
+        elif strategy.status == StrategyStatusChoices.START_FAILED.value:
+            sync_bksec_rule(strategy, strategy_alive=False)
+    except Exception:  # NOCC:broad-except(规则同步失败不得影响策略状态收敛)
+        logger_celery.exception(
+            "[SyncBkSecRuleAfterStatusChangeFailed] strategy_id=%s status=%s",
+            strategy.strategy_id,
+            strategy.status,
+        )
 
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -108,6 +126,9 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
 
     # update status
     strategy.save(update_record=False, update_fields=["status"])
+
+    # 状态确认后再同步自动规则：启动成功才启用，启动失败则保持关闭
+    _sync_bksec_rule_after_status_change(strategy)
 
     # check re-run
     if strategy.status == other_status:
