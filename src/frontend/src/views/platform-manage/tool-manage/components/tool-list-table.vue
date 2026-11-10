@@ -45,7 +45,10 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import ToolManageService from '@service/tool-manage';
+
+  import useMessage from '@hooks/use-message';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
@@ -127,6 +130,7 @@
     (e: 'request-success', data: any): void;
     (e: 'status-counts', counts: { all: number; published: number; unpublished: number }): void;
     (e: 'filter-change', filters: Record<string, any>): void;
+    (e: 'tags-change'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -141,6 +145,7 @@
 
   const { t } = useI18n();
   const router = useRouter();
+  const { messageSuccess } = useMessage();
 
   const listRef = ref();
   const activeJumpPopoverUid = ref<string | null>(null);
@@ -183,10 +188,16 @@
     return String(value);
   };
 
+  // 保存标签后父组件重新拉取标签枚举前，用接口返回的新标签兜底展示
+  const savedTagNameMap = ref<Record<string, string>>({});
+
   const getTagName = (tagId: string) => props.tagsEnums
-    .find(item => String(item.tag_id) === String(tagId))?.tag_name || tagId;
+    .find(item => String(item.tag_id) === String(tagId))?.tag_name
+    || savedTagNameMap.value[String(tagId)]
+    || tagId;
 
   const editingTagUid = ref('');
+  const savingTagUid = ref('');
   const tagOptions = computed(() => filterVirtualToolTags(props.tagsEnums));
 
   const handleTagEdit = (row: ToolModel) => {
@@ -197,21 +208,41 @@
     editingTagUid.value = '';
   };
 
-  // TODO: 待后端标签绑定接口就绪后接入保存
-  const handleTagSave = () => {
-    editingTagUid.value = '';
+  const handleTagSave = (row: ToolModel, tags: string[]) => {
+    savingTagUid.value = row.uid;
+    MetaManageService.saveTagBindings({
+      resource_type: 'tool',
+      resource_id: row.uid,
+      tags,
+    }).then((result) => {
+      result.forEach((item) => {
+        savedTagNameMap.value[String(item.tag_id)] = item.tag_name;
+      });
+      const targetRow = listRef.value?.getListData()?.find((item: ToolModel) => item.uid === row.uid);
+      if (targetRow) {
+        targetRow.tags = result.map(item => String(item.tag_id));
+      }
+      editingTagUid.value = '';
+      messageSuccess(t('更新成功'));
+      emit('tags-change');
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        savingTagUid.value = '';
+      });
   };
 
   const renderTagsContent = (row: ToolModel) => (
     <InlineTag
       isEditing={editingTagUid.value === row.uid}
       key={row.uid}
+      saving={savingTagUid.value === row.uid}
       showCopy={false}
       tagList={tagOptions.value}
       tags={(row.tags || []).map(getTagName)}
       onCancel={handleTagEditCancel}
       onEdit={() => handleTagEdit(row)}
-      onSave={handleTagSave} />
+      onSave={(values: string[]) => handleTagSave(row, values)} />
   );
 
   const getStrategyName = (strategyId: number) => {

@@ -56,7 +56,8 @@
   <link-data-detail
     ref="detailRef"
     :edit-permission-map="editLinkTablePermissionMap"
-    :max-version-map="maxVersionMap" />
+    :max-version-map="maxVersionMap"
+    :tag-save="saveLinkTableTags" />
 </template>
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
@@ -67,6 +68,7 @@
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import LinkDataModel from '@model/link-data/link-data';
 
@@ -184,6 +186,8 @@
   const leftLabelFilterCondition = ref('');
   const maxVersionMap = ref<Record<string, number>>({});
 
+  const savingTagUid = ref('');
+
   const handleTagEdit = (data: LinkDataModel) => {
     editingTagUid.value = data.uid;
   };
@@ -192,9 +196,34 @@
     editingTagUid.value = '';
   };
 
-  // TODO: 待后端标签绑定接口就绪后接入保存
-  const handleTagSave = () => {
-    editingTagUid.value = '';
+  const saveLinkTableTags = (uid: string, tags: string[]) => MetaManageService.saveTagBindings({
+    resource_type: 'link_table',
+    resource_id: uid,
+    tags,
+  }).then((result) => {
+    result.forEach((item) => {
+      strategyTagMap.value[item.tag_id] = item.tag_name;
+    });
+    const tagIds = result.map(item => String(item.tag_id));
+    const targetRow = listRef.value?.getListData()?.find((item: LinkDataModel) => item.uid === uid);
+    if (targetRow) {
+      targetRow.tags = tagIds;
+    }
+    messageSuccess(t('更新成功'));
+    fetchLinkTableTags();
+    return result;
+  });
+
+  const handleTagSave = (data: LinkDataModel, tags: string[]) => {
+    savingTagUid.value = data.uid;
+    saveLinkTableTags(data.uid, tags)
+      .then(() => {
+        editingTagUid.value = '';
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        savingTagUid.value = '';
+      });
   };
 
   const tableColumn = ref([
@@ -218,11 +247,12 @@
             editable={Boolean(data.permission?.edit_link_table)}
             isEditing={editingTagUid.value === data.uid}
             key={data.id}
+            saving={savingTagUid.value === data.uid}
             tagList={linkDataLabelList.value}
             tags={tags}
             onCancel={handleTagEditCancel}
             onEdit={() => handleTagEdit(data)}
-            onSave={handleTagSave} />
+            onSave={(values: string[]) => handleTagSave(data, values)} />
         );
       },
     },
