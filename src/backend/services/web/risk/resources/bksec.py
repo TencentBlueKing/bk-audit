@@ -106,7 +106,7 @@ class ListBkSecProjects(BkSecResourceMeta):
             return []
         # 项目列表用户身份实时拉取、不缓存：用户的项目权限会变化，缓存会让已失效的项目继续可选
         projects = api.bk_sec.project_choices() or []
-        is_formal = validated_request_data.get("is_formal") or "true"
+        is_formal = validated_request_data.get("is_formal") or ""
         keyword = (validated_request_data.get("name__icontains") or "").strip().lower()
         result = []
         for project in projects:
