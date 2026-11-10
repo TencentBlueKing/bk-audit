@@ -32,6 +32,7 @@
               <inline-tag
                 :editable="tagEditable"
                 :is-editing="isTagEditing"
+                :saving="isTagSaving"
                 :tag-list="tagList"
                 :tags="data.tags?.map(item => strategyMap[item] || item) || []"
                 @cancel="isTagEditing = false"
@@ -175,21 +176,34 @@
     strategyMap: Record<string, string>,
     tagEditable?: boolean,
     tagList?: Array<{ tag_id: string | number, tag_name: string }>,
+    tagSave?: (tags: string[]) => Promise<unknown>,
   }
 
   const props = withDefaults(defineProps<Props>(), {
     tagEditable: false,
     tagList: () => [],
+    tagSave: undefined,
   });
   const { t } = useI18n();
   const route = useRoute();
   const isPlatformMode = computed(() => isPlatformStrategyRoute(route.name));
 
   const isTagEditing = ref(false);
+  const isTagSaving = ref(false);
 
-  // TODO: 待后端标签绑定接口就绪后接入保存
-  const handleTagSave = () => {
-    isTagEditing.value = false;
+  const handleTagSave = (tags: string[]) => {
+    if (!props.tagSave) {
+      return;
+    }
+    isTagSaving.value = true;
+    props.tagSave(tags)
+      .then(() => {
+        isTagEditing.value = false;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        isTagSaving.value = false;
+      });
   };
 
   const fetchStrategyTableList = (params: {

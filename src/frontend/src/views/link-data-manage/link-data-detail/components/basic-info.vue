@@ -26,6 +26,7 @@
         <inline-tag
           :editable="tagEditable"
           :is-editing="isTagEditing"
+          :saving="isTagSaving"
           :tag-list="tagList"
           :tags="(data.tags || []).map(item => strategyTagMap[item] || item)"
           @cancel="isTagEditing = false"
@@ -71,19 +72,32 @@
     strategyTagMap: Record<string, string>,
     tagEditable?: boolean,
     tagList?: Array<{ tag_id: string | number, tag_name: string }>,
+    tagSave?: (tags: string[]) => Promise<unknown>,
   }
 
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
     tagEditable: false,
     tagList: () => [],
+    tagSave: undefined,
   });
   const { t } = useI18n();
 
   const isTagEditing = ref(false);
+  const isTagSaving = ref(false);
 
-  // TODO: 待后端标签绑定接口就绪后接入保存
-  const handleTagSave = () => {
-    isTagEditing.value = false;
+  const handleTagSave = (tags: string[]) => {
+    if (!props.tagSave) {
+      return;
+    }
+    isTagSaving.value = true;
+    props.tagSave(tags)
+      .then(() => {
+        isTagEditing.value = false;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        isTagSaving.value = false;
+      });
   };
 </script>
 <style scoped lang="postcss">
