@@ -35,79 +35,86 @@
     </template>
     <template #headerCenter>
       <div class="main-navigation-left">
-        <router-link
+        <a
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditRiskManage'
           }"
-          :to="{ name:'handleManage', query: {} }">
+          :href="mainNavHref('handleManageList', 'auditRiskManage')"
+          @click="handleMainNavClick($event, 'handleManageList', 'auditRiskManage')">
           {{ t('风险') }}
-        </router-link>
+        </a>
 
-        <router-link
+        <a
           v-if="hasBkvision.enabled &&
             (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
           }"
-          :to="{ name:'statementManage', query: {} }">
+          :href="mainNavHref('statementManage', 'auditStatement')"
+          @click="handleMainNavClick($event, 'statementManage', 'auditStatement')">
           {{ t('报表') }}
-        </router-link>
-        <router-link
+        </a>
+        <a
           v-if="!userRole.includes('risk_handler') &&
             (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'toolsSquare'
           }"
-          :to="{ name:'toolsSquare', query: {} }">
+          :href="mainNavHref('toolsSquare', 'toolsSquare')"
+          @click="handleMainNavClick($event, 'toolsSquare', 'toolsSquare')">
           {{ t('工具广场') }}
-        </router-link>
-        <router-link
+        </a>
+        <a
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'secChat'
           }"
-          :to="{ name: 'secChat' }">
+          :href="mainNavHref('secChat', 'secChat')"
+          @click="handleMainNavClick($event, 'secChat', 'secChat')">
           {{ t('AI助手') }}
-        </router-link>
-        <router-link
+        </a>
+        <a
           v-if="userRolePermission.show_log_search"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditConfigurationManage'
           }"
-          :to="{ name:'analysisManage', query: {} }">
+          :href="mainNavHref('analysisList', 'auditConfigurationManage')"
+          @click="handleMainNavClick($event, 'analysisList', 'auditConfigurationManage')">
           {{ t('日志检索') }}
-        </router-link>
+        </a>
         <!-- 风险使用者、系统管理员要跳转到应到页 -->
-        <router-link
+        <a
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'sceneConfiguration'
           }"
-          :to="{ name: sceneConfigRouterName, query: {} }">
+          :href="mainNavHref(sceneConfigRouterName, 'sceneConfiguration')"
+          @click="handleMainNavClick($event, sceneConfigRouterName, 'sceneConfiguration')">
           {{ t('场景配置') }}
-        </router-link>
-        <router-link
+        </a>
+        <a
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'nweSystemManage'
           }"
-          :to="{ name: (isSystemListEmpty || !(userRole.includes('saas_admin') || userRole.includes('system_admin')))
-            ? 'systemLandingPage' : 'systemList' }">
+          :href="mainNavHref(systemHomeName, 'nweSystemManage')"
+          @click="handleMainNavClick($event, systemHomeName, 'nweSystemManage')">
           {{ t('系统接入') }}
-        </router-link>
-        <router-link
+        </a>
+        <a
           v-if="userRole.includes('saas_admin')"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'platformManage'
           }"
-          :to="{ name:'platformManage' }">
+          :href="mainNavHref('platformSceneConfig', 'platformManage')"
+          @click="handleMainNavClick($event, 'platformSceneConfig', 'platformManage')">
           {{ t('平台管理') }}
-        </router-link>
+        </a>
       </div>
     </template>
     <template #headerRight>
@@ -388,7 +395,7 @@
 
   const router = useRouter();
   const route = useRoute();
-  const { on, off } = useEventBus();
+  const { on, off, emit } = useEventBus();
   const platformConfig = usePlatformConfig();
   const { t } = useI18n();
 
@@ -432,6 +439,11 @@
   // const permissionCreateSystem = ref(false);
   // 系统列表是否为空（用于决定跳转引导页还是列表页）
   const isSystemListEmpty = ref(true);
+  const systemHomeName = computed(() => (
+    (isSystemListEmpty.value || !(userRole.includes('saas_admin') || userRole.includes('system_admin')))
+      ? 'systemLandingPage'
+      : 'systemList'
+  ));
 
   // const contentText = (stage: string | undefined) => {
   //   if (stage === 'permission_model') {
@@ -459,6 +471,80 @@
     }
     return 'landingPage';
   });
+
+  const pickSceneQuery = () => {
+    const query = route.query as Record<string, unknown>;
+    const scope: Record<string, string> = {};
+    ['scene_id', 'scope_id', 'scope_type'].forEach((key) => {
+      const value = query[key];
+      if (value === undefined || value === null || value === '') return;
+      scope[key] = Array.isArray(value) ? String(value[0]) : String(value);
+    });
+    return scope;
+  };
+
+  /**
+   * 顶栏点击的目标页。已经停在该菜单首页时返回 null。
+   * 不把 query 清成空对象，否则场景选择器会立刻把场景参数写回去，把这次跳转取消。
+   */
+  const resolveMainNavLocation = (homeName: string, navName: string) => {
+    const query = pickSceneQuery();
+    const alreadyInNav = curNavName.value === navName;
+    const currentName = String(route.name || '');
+
+    if (homeName === 'secChat') {
+      // 父路由会重定向到上次会话。已在该页时由导航重复错误吞掉，不另改成空白首页。
+      return { name: 'secChat' };
+    }
+
+    if (homeName === 'statementManage') {
+      if (!alreadyInNav) return { name: 'statementManage', query };
+      const firstId = menuData.value[0]?.id;
+      if (!firstId) {
+        return currentName === 'statementManage' ? null : { name: 'statementManage', query };
+      }
+      if (currentName === 'statementManageDetail' && String(route.params.id || '') === String(firstId)) {
+        return null;
+      }
+      return {
+        name: 'statementManageDetail',
+        params: { id: String(firstId) },
+        query,
+      };
+    }
+
+    if (homeName === 'toolsSquare' && alreadyInNav) {
+      return currentName === 'toolsSquare' ? null : { name: 'toolsSquare', query };
+    }
+
+    const homeAliases: Record<string, string[]> = {
+      handleManageList: ['handleManage', 'handleManageList'],
+      analysisList: ['analysisManage', 'analysisList'],
+      platformSceneConfig: ['platformManage', 'platformSceneConfig'],
+    };
+    const homeNames = homeAliases[homeName] || [homeName];
+    if (alreadyInNav && homeNames.includes(currentName)) return null;
+    return { name: homeName, query };
+  };
+
+  const mainNavHref = (homeName: string, navName: string) => {
+    const location = resolveMainNavLocation(homeName, navName)
+      || { name: homeName, query: pickSceneQuery() };
+    return router.resolve(location).href;
+  };
+
+  const handleMainNavClick = (event: MouseEvent, homeName: string, navName: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    // 工作台和广场共用页面实例。从本菜单或其他菜单进入时，都先回到广场列表，
+    // 已打开的工具留在「正在使用」里，不自动打开工作台。
+    if (homeName === 'toolsSquare') {
+      emit('tools-square:go-home');
+    }
+    const location = resolveMainNavLocation(homeName, navName);
+    if (!location) return;
+    router.push(location).catch(() => {});
+  };
   // // 获取新建权限
   // useRequest(IamManageService.check, {
   //   defaultParams: {
@@ -577,6 +663,15 @@
       // sessionStorage.setItem('systemProjectId', systemId.value || '');
       const routePath = router.resolve({ name: routerName }).href;
       window.open(routePath, '_blank');
+      return;
+    }
+    if (routerName === 'toolsSquare' && curNavName.value === 'toolsSquare') {
+      emit('tools-square:go-home');
+      if (route.name === 'toolsSquare') return;
+      router.push({
+        name: 'toolsSquare',
+        query: pickSceneQuery(),
+      }).catch(() => {});
       return;
     }
     router.push({
