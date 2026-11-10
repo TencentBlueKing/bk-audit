@@ -95,8 +95,8 @@ class RiskAccessList(BKSec):
         data = _load_mock_data()
         results = (data.get("data") or {}).get("results", [])
 
-        # is_formal 过滤（默认只返回正式类型，与真实 API 行为一致）
-        is_formal = validated_request_data.get("is_formal") or "true"
+        # is_formal 过滤
+        is_formal = validated_request_data.get("is_formal") or ""
         if is_formal == "true":
             results = [r for r in results if r.get("is_formal")]
         elif is_formal == "false":
