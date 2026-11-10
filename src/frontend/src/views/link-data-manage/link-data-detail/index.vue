@@ -40,7 +40,11 @@
                 :strategy-tag-map="strategyTagMap"
                 style="height: calc(100% - 50px)"
                 v-bind="active === 'basicInfo'
-                  ? { tagEditable: Boolean(editPermissionMap[linkDataDetail.uid]), tagList }
+                  ? {
+                    tagEditable: isTagEditable,
+                    tagList,
+                    tagSave: handleTagSave,
+                  }
                   : {}" />
             </scroll-faker>
           </bk-tab-panel>
@@ -69,10 +73,12 @@
   interface Props {
     maxVersionMap: Record<string, number>,
     editPermissionMap?: Record<string, boolean>,
+    tagSave?: (uid: string, tags: string[]) => Promise<Array<{ tag_id: string, tag_name: string }>>,
   }
 
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
     editPermissionMap: () => ({}),
+    tagSave: undefined,
   });
   const { t } = useI18n();
 
@@ -114,6 +120,21 @@
   } = useRequest(linkDataManageService.fetchLinkDataDetail, {
     defaultValue: new LinkDataDetailModel(),
   });
+
+  const isTagEditable = computed(() => props.tagSave !== undefined
+    && Boolean(props.editPermissionMap[linkDataDetail.value.uid]));
+
+  const handleTagSave = (tags: string[]) => {
+    if (!props.tagSave) {
+      return Promise.resolve();
+    }
+    return props.tagSave(linkDataDetail.value.uid, tags).then((result) => {
+      result.forEach((item) => {
+        strategyTagMap.value[item.tag_id] = item.tag_name;
+      });
+      linkDataDetail.value.tags = result.map(item => String(item.tag_id));
+    });
+  };
 
   defineExpose<Exposes>({
     show(uid: string, showLinkStrategy?: boolean) {

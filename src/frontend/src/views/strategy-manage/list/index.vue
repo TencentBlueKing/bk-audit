@@ -237,6 +237,7 @@
         :strategy-map="strategyTagMap"
         :tag-editable="isStrategyTagEditable(strategyItem)"
         :tag-list="strategyLabelList"
+        :tag-save="handleDetailTagSave"
         :user-group-list="userGroupList"
         @tab-change="handleDetailTabChange" />
     </div>
@@ -667,6 +668,7 @@
   const hasListLoadedOnce = ref(false);
   const strategyTagMap = ref<Record<string, string>>({});
   const editingTagStrategyId = ref<number | null>(null);
+  const savingTagStrategyId = ref<number | null>(null);
   const statusMap = ref<Record<string, string>>({});
   // 挂起的需要轮询的id列表
   const pendingStatusIdList = ref<Array<number>>([]);
@@ -982,10 +984,42 @@
     editingTagStrategyId.value = null;
   };
 
-  // TODO: 待后端标签绑定接口就绪后接入保存
-  const handleTagSave = () => {
-    editingTagStrategyId.value = null;
+  const saveStrategyTags = (strategy: StrategyModel, tags: string[]) => MetaManageService.saveTagBindings({
+    resource_type: 'strategy',
+    resource_id: String(strategy.strategy_id),
+    tags,
+  }).then((result) => {
+    result.forEach((item) => {
+      strategyTagMap.value[item.tag_id] = item.tag_name;
+    });
+    const tagIds = result.map(item => String(item.tag_id));
+    const targetRow = listRef.value?.getListData()
+      ?.find((item: StrategyModel) => item.strategy_id === strategy.strategy_id);
+    if (targetRow) {
+      targetRow.tags = tagIds;
+    }
+    if (strategyItem.value.strategy_id === strategy.strategy_id) {
+      strategyItem.value.tags = tagIds;
+    }
+    messageSuccess(t('更新成功'));
+    fetchStrategyTags(getStrategyListScopeParams(route)).then(() => {
+      refreshSearchData();
+    });
+  });
+
+  const handleTagSave = (data: StrategyModel, tags: string[]) => {
+    savingTagStrategyId.value = data.strategy_id;
+    saveStrategyTags(data, tags)
+      .then(() => {
+        editingTagStrategyId.value = null;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        savingTagStrategyId.value = null;
+      });
   };
+
+  const handleDetailTagSave = (tags: string[]) => saveStrategyTags(strategyItem.value, tags);
 
   const tableColumn = ref([
     {
@@ -1087,11 +1121,12 @@
             editable={isStrategyTagEditable(data)}
             isEditing={editingTagStrategyId.value === data.strategy_id}
             key={`tags-${data.strategy_id}-${tags.join('|')}`}
+            saving={savingTagStrategyId.value === data.strategy_id}
             tagList={strategyLabelList.value}
             tags={tags}
             onCancel={handleTagEditCancel}
             onEdit={() => handleTagEdit(data)}
-            onSave={handleTagSave}
+            onSave={(values: string[]) => handleTagSave(data, values)}
           />
         );
       },

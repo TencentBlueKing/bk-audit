@@ -38,7 +38,7 @@
               :detail-loading="detailLoading"
               :strategy-map="strategyMap"
               :user-group-list="userGroupList"
-              v-bind="item.name === 'riskDetection' ? { tagEditable, tagList } : {}" />
+              v-bind="item.name === 'riskDetection' ? { tagEditable, tagList, tagSave } : {}" />
           </div>
         </bk-tab-panel>
       </bk-tab>
@@ -71,12 +71,14 @@
     detailLoading?: boolean,
     tagEditable?: boolean,
     tagList?: Array<{ tag_id: string | number, tag_name: string }>,
+    tagSave?: (tags: string[]) => Promise<unknown>,
   }
 
   const props = withDefaults(defineProps<Props>(), {
     detailLoading: false,
     tagEditable: false,
     tagList: () => [],
+    tagSave: undefined,
   });
   const emits = defineEmits(['tab-change']);
   const { t } = useI18n();

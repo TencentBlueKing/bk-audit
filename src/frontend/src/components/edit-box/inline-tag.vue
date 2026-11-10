@@ -144,10 +144,16 @@
   };
 
   const handleCancel = () => {
+    if (props.saving) {
+      return;
+    }
     emit('cancel');
   };
 
   const handleConfirm = () => {
+    if (props.saving) {
+      return;
+    }
     const nextTags = [...editValue.value];
     if (!validateTags(nextTags)) {
       return;
