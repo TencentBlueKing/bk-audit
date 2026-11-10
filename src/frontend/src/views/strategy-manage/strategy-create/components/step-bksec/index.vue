@@ -204,8 +204,8 @@
             <span class="bksec-submit-text">
               <span>{{ primaryActionText }}</span>
               <span
-                class="bksec-submit-sizer"
-                aria-hidden="true">{{ t('完成创建') }}</span>
+                aria-hidden="true"
+                class="bksec-submit-sizer">{{ t('完成创建') }}</span>
             </span>
           </bk-button>
           <bk-button

@@ -123,7 +123,8 @@ const joinList = (value: unknown) => {
 const formatParamValue = (value: unknown): string => {
   if (value == null || value === '') return '';
   if (Array.isArray(value)) {
-    return value.map(item => formatParamValue(item)).filter(item => item !== '').join(', ');
+    return value.map(item => formatParamValue(item)).filter(item => item !== '')
+      .join(', ');
   }
   if (typeof value === 'object') {
     try {

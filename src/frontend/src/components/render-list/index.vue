@@ -655,7 +655,7 @@
     const tableHeaderHeight = 42;
     const paginationHeight = 60;
     const tableRowHeight = 42;
-    const layoutHeight = props.layoutHeight;
+    const { layoutHeight } = props;
     // 侧滑等容器传入总高度时，按容器计算，避免沿用窗口偏移把分页顶出可视区
     if (typeof layoutHeight === 'number' && layoutHeight > 0) {
       const tableRowTotalHeight = layoutHeight - tableHeaderHeight - paginationHeight - 8;

@@ -45,7 +45,8 @@ const LEVEL_LABEL: Record<string, string> = {
 
 const dash = (value: unknown) => {
   if (Array.isArray(value)) {
-    const text = value.map(item => String(item ?? '').trim()).filter(Boolean).join(', ');
+    const text = value.map(item => String(item ?? '').trim()).filter(Boolean)
+      .join(', ');
     return text || '--';
   }
   const text = value === undefined || value === null ? '' : String(value).trim();
