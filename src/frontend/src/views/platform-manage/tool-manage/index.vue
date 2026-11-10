@@ -105,6 +105,7 @@
           @filter-change="handleTableFilterChange"
           @preview="handlePreview"
           @request-success="handleRequestSuccess"
+          @tags-change="fetchTagsEnums"
           @toggle-status="handleToggleStatus" />
       </div>
     </div>
@@ -691,7 +692,9 @@
     });
   };
 
-  useRequest(MetaManageService.fetchTags, {
+  const {
+    run: fetchTagsEnums,
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {

@@ -98,6 +98,7 @@
           @filter-change="handleTableFilterChange"
           @preview="handlePreview"
           @request-success="handleRequestSuccess"
+          @tags-change="handleToolTagsChange"
           @toggle-status="handleToggleStatus" />
       </div>
     </div>
@@ -564,6 +565,10 @@
   const { on: onEvent, off } = useEventBus();
 
   // 刷新所有数据（场景切换时调用）
+  const handleToolTagsChange = () => {
+    fetchToolsTagsList(getSceneSystemParams());
+  };
+
   const refreshAllData = () => {
     const scopeParams = getSceneSystemParams();
     fetchToolsTagsList(scopeParams);
