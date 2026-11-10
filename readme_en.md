@@ -44,6 +44,8 @@ If you have good ideas or suggestions, please let us know by Issues or Pull Requ
 
 ### Agent collaboration
 
+The root [AGENTS.md](AGENTS.md) introduces the checkout and links to the frontend and backend guides.
+
 Developers and agents can start with the [Agent collaboration guide](agent/README.md) to find engineering conventions, tools, and task skills. Collaboration materials live under `agent/`: shared covers onboarding and capability selection, commits, and release preparation; backend holds domain skills and tools; frontend points to frontend engineering sources. Build, test, and check configurations stay with their respective projects.
 
 Agents can use [bk-audit-onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md) to diagnose the environment, select capabilities for the current task, and verify readiness. A checkout is needed for engineering operations, but not for an initial setup plan. See the [architecture and maintenance guide](agent/architecture.md) when adding or maintaining collaboration capabilities; follow the selected skill for task-specific operations.

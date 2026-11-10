@@ -5,6 +5,7 @@
 从本次目标和现有客户端开始，不要求先取得项目源码：
 
 - 记录用户需要前端、后端、版本准备或其他哪类任务，以及当前允许的动作。
+- 已有 checkout 按根/所需端内 AGENTS 定位任务能力；安装、发现故障或新 worktree 的核对见[技能使用与工作区要点](workspace.md)。日常任务直接复用已可用能力。
 - 从客户端已提供的能力列表、技能元数据及连接状态核实可用能力；区分未知、未安装、已安装待验收、已可用、权限不足。不要把未发现直接判成未安装。
 - 只检查选中能力的运行环境。可使用当前系统的只读版本/路径查询；没有终端或连接工具时，依据用户提供的信息注明待验收，不伪造执行结果。
 - 没有 checkout 时，先形成来源、前提、安装范围和验收计划。执行工程任务时再确认产品 Git 根、当前版本、适用 AGENTS 和下列工程源。
@@ -31,7 +32,7 @@
 | Git、终端及工程运行环境 | 产品 README、`src/backend/README.md`、`src/frontend/package.json` | 执行源码任务时再核对当前分支要求；前后端环境分别判断，不据旧版本号安装 |
 | 后端检查与标题工具 | `src/backend/docs/pre-commit.md`、`.pre-commit-config.yaml`（位于 `src/backend`）、`agent/backend/tools/commit-message` | 有后端提交任务时按项目环境验收；不改全局配置，不把安装 hook 作为只读分析前提 |
 | 前端构建、lint、类型与提交检查 | `src/frontend/package.json`、ESLint/Stylelint/TypeScript/commitlint 配置 | 核实声明与实际安装情况；部分 lint 带 `--fix`，运行前确认允许修改 |
-| skills CLI（可选分发工具） | [官方命令说明](https://github.com/vercel-labs/skills/blob/main/docs/commands.md)与[技能发现规则](https://github.com/vercel-labs/skills/blob/main/docs/creating-skills.md) | 用户选择此方式时核对工具版本要求、来源、目标 Agent 和项目/用户级范围；不是所有任务的必需依赖 |
+| skills CLI（技能维护入口） | [官方命令说明](https://github.com/vercel-labs/skills/blob/main/docs/commands.md)与[技能发现规则](https://github.com/vercel-labs/skills/blob/main/docs/creating-skills.md) | 需要安装、更新或卸载技能时统一使用 `npx skills`，核对来源、目标客户端和项目/用户级范围；直接读取已有技能无需重新安装 |
 
 skills CLI 支持选择单个技能、Git 来源和本地目录；采用已核实的命令，不假定仓库中的任何目录都能被默认发现。单个技能目录含 `SKILL.md` 时可作为明确来源，其他布局按所用版本的发现规则核验。`npx` 在缺少本地包时可能下载并执行包，不用未经确认的 `npx` 调用作无副作用的安装探测。安装前检查所选版本的运行环境要求，不能套用项目自身的 Node 最低版本。
 
