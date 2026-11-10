@@ -12,7 +12,7 @@
 
 ## 工具与运行环境
 
-Git、前后端工程工具、提交校验器和可选分发工具 skills CLI 的准备依据见 [工具清单](skills/bk-audit-onboarding/references/capabilities.md#工具与运行环境)。实际版本、命令及 hook 以当前 checkout 的工程源为准，不在此维护第二套规则。
+Git、前后端工程工具、提交校验器和技能维护工具 skills CLI 的准备依据见 [工具清单](skills/bk-audit-onboarding/references/capabilities.md#工具与运行环境)。实际版本、命令及 hook 以当前 checkout 的工程源为准，不在此维护第二套规则。
 
 ## MCP 接入
 
