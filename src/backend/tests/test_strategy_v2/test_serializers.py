@@ -211,6 +211,8 @@ class StrategySerializersTest(TestCase):
                     "risk_hazard": "",
                     "risk_guidance": "",
                     "risk_title": "risk",
+                    # 场景策略：处理人必填（全局策略由分派规则维护）
+                    "processor": [self.notice_group.group_id],
                 }
             ],
             "event_basic_field_configs": [
