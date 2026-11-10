@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
+from django.conf import settings
 from django.utils.translation import gettext
 
 from apps.feature.constants import FeatureStatusChoices
@@ -69,3 +70,41 @@ class BklogOtlpPlugin(BaseFeaturePlugin):
         self._feature.config = config
         # 响应状态
         return self._feature.status
+
+
+class BksecPlugin(BaseFeaturePlugin):
+    """
+    BKSEC 安全工单特性插件
+
+    特性开启需同时满足：
+      1. 必配环境变量齐全：
+         BKSEC_SOPS_TEMPLATE_ID（预置发单套餐模板）、
+         BKSEC_PLUGIN_CONFIG_API_URL（发单插件 Config 同步地址）；
+         （BKSEC_PROJECT_ID 已移除：项目由前端随策略配置选择，支持多项目）
+      2. 已存在内置处理套餐（ProcessApplication.is_builtin=True, sops_template_id=BKSEC_SOPS_TEMPLATE_ID）。
+         模板 ID 已配置但套餐还没有时，检查开关前会按该模板 ID 自动补齐，不改已有套餐。
+
+    """
+
+    # 必配环境变量
+    REQUIRED_ENV = ("BKSEC_SOPS_TEMPLATE_ID", "BKSEC_PLUGIN_CONFIG_API_URL")
+
+    def _update_status(self):
+        # 显式关闭时不做校验，保留关闭状态
+        if self.feature.status == FeatureStatusChoices.DENY.value:
+            return FeatureStatusChoices.DENY.value
+
+        from services.web.risk.bksec.service import ensure_preset_pa, find_preset_pa
+
+        # 检查必配环境变量与内置套餐。模板 ID 已有时先补齐套餐，再判断开关能否放开。
+        missing_env = [name for name in self.REQUIRED_ENV if not getattr(settings, name, None)]
+        if "BKSEC_SOPS_TEMPLATE_ID" not in missing_env:
+            ensure_preset_pa()
+        has_preset_pa = find_preset_pa() is not None
+        self._feature.config = {
+            "missing_env": missing_env,
+            "has_preset_pa": has_preset_pa,
+        }
+        if missing_env or not has_preset_pa:
+            return FeatureStatusChoices.DENY.value
+        return FeatureStatusChoices.AVAILABLE.value

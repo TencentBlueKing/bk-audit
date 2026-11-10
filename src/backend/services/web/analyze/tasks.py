@@ -50,6 +50,7 @@ from services.web.analyze.controls.auth import (
 from services.web.analyze.models import ControlVersion
 from services.web.common.monitor import LostSceneDetectedEvent
 from services.web.databus.models import CollectorPlugin, Snapshot
+from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
 
@@ -70,6 +71,102 @@ def call_controller(
         controller = Controller.get_typed_controller(strategy_id=strategy_id)
     controller_func = getattr(controller, func_name, None)
     controller_func(*args, **kwargs)
+
+
+BKSEC_RULE_SYNC_MAX_RETRIES = 3
+BKSEC_RULE_SYNC_RETRY_INTERVAL = 1
+
+
+def _report_bksec_rule_activation_failed(strategy: Strategy, error: Exception) -> None:
+    """策略状态已收敛，但发单规则同步失败：上报监控，避免静默不派单。"""
+    try:
+        from services.web.common.monitor import BkSecConfigSyncFailedEvent
+        from services.web.risk.bksec.constants import (
+            BkSecConfigSyncFailReason,
+            BkSecConfigSyncStage,
+        )
+
+        BkSecConfigSyncFailedEvent(
+            context={
+                "strategy_id": str(strategy.strategy_id),
+                "stage": BkSecConfigSyncStage.RULE_SYNC.value,
+                "fail_reason": BkSecConfigSyncFailReason.RULE_ACTIVATION_FAILED.value,
+            },
+            extra={"status": strategy.status, "error": str(error)},
+        ).report()
+    except Exception:  # NOCC:broad-except(告警失败不得影响策略状态收敛)
+        logger_celery.exception(
+            "[ReportBkSecRuleActivationFailed] strategy_id=%s status=%s",
+            strategy.strategy_id,
+            strategy.status,
+        )
+
+
+def _sync_bksec_rule_after_status_change(strategy: Strategy) -> None:
+    """策略状态确认后同步 BKSEC 自动规则，保证规则只在启动成功后可见。"""
+    if strategy.status == StrategyStatusChoices.RUNNING.value:
+        strategy_alive = True
+    elif strategy.status in (
+        StrategyStatusChoices.START_FAILED.value,
+        StrategyStatusChoices.UPDATE_FAILED.value,
+    ):
+        # 启动/更新异步失败：停用发单规则，避免失败态下规则仍对风险生效
+        strategy_alive = False
+    else:
+        return
+
+    from services.web.risk.bksec.rules import (
+        BkSecPluginSyncError,
+        BkSecPresetNotReady,
+        sync_bksec_rule,
+    )
+
+    last_error = None
+    for attempt in range(BKSEC_RULE_SYNC_MAX_RETRIES):
+        try:
+            sync_bksec_rule(strategy, strategy_alive=strategy_alive)
+            return
+        except (BkSecPluginSyncError, BkSecPresetNotReady) as err:
+            # 插件同步内部已有重试；套餐缺失需人工配置，重试无意义，直接告警
+            last_error = err
+            break
+        except Exception as err:  # NOCC:broad-except(规则同步失败需重试并告警)
+            last_error = err
+            if attempt < BKSEC_RULE_SYNC_MAX_RETRIES - 1:
+                time.sleep(BKSEC_RULE_SYNC_RETRY_INTERVAL)
+
+    if last_error is not None:
+        logger_celery.error(
+            "[SyncBkSecRuleAfterStatusChangeFailed] strategy_id=%s status=%s error=%s",
+            strategy.strategy_id,
+            strategy.status,
+            last_error,
+        )
+        _report_bksec_rule_activation_failed(strategy, last_error)
+
+
+@periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:reconcile_bksec_auto_rule")
+def reconcile_bksec_auto_rule():
+    """补偿策略 RUNNING 且启用 BKSEC 配置，但自动发单规则缺失/未启用的情况。"""
+    from services.web.risk.bksec.rules import sync_bksec_rule
+    from services.web.risk.models import RiskRule
+
+    strategies = Strategy.objects.filter(
+        status=StrategyStatusChoices.RUNNING.value,
+        bksec_config__enabled=True,
+    )
+    for strategy in strategies.iterator():
+        try:
+            latest_rule = RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).order_by("-version").first()
+            if latest_rule and latest_rule.is_enabled:
+                continue
+            logger_celery.warning(
+                "[ReconcileBkSecRule] Auto rule missing or disabled, strategy_id=%s", strategy.strategy_id
+            )
+            sync_bksec_rule(strategy, strategy_alive=True)
+        except Exception:  # NOCC:broad-except(单个策略补偿失败不影响其他策略)
+            logger_celery.exception("[ReconcileBkSecRuleFailed] strategy_id=%s", strategy.strategy_id)
 
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -108,6 +205,9 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
 
     # update status
     strategy.save(update_record=False, update_fields=["status"])
+
+    # 状态确认后再同步自动规则：启动成功才启用，启动失败则保持关闭
+    _sync_bksec_rule_after_status_change(strategy)
 
     # check re-run
     if strategy.status == other_status:

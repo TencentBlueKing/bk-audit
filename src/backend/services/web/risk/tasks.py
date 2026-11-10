@@ -99,6 +99,11 @@ from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
+from services.web.risk.utils import (
+    calc_task_duration,
+    calc_task_start_timestamp,
+    fill_failure_info,
+)
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy, StrategyRule
 
@@ -700,7 +705,18 @@ def sync_auto_result(node_id: str = None):
                     task_id = node.process_result.get("task", {}).get("task_id", "")
                     if task_id:
                         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                        # 失败时补全错误信息error_message和failure_hint
+                        if status.get("state") in SOPSTaskStatus.get_failed_status():
+                            node.process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
                         node.process_result["status"] = status
+                        # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
+                        node.process_result["duration"] = calc_task_duration(status)
+                        node.duration = node.process_result["duration"]
+                        # 实际开始时间物化到独立字段，供执行记录筛选/排序；缺失时回退记录创建时间
+                        start_ts = calc_task_start_timestamp(status)
+                        node.sops_start_time = (
+                            start_ts if start_ts is not None else (node.sops_start_time or node.timestamp)
+                        )
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
@@ -717,13 +733,15 @@ def sync_auto_result(node_id: str = None):
                 # 其他节点只需要判断不为最后一个，则关闭
                 # 或 该风险单已关闭，则关闭
                 else:
-                    last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
+                    last_node = (
+                        TicketNode.objects.filter(risk_id=node.risk_id, is_test=False).order_by("-timestamp").first()
+                    )
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
                         risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
-                node.save(update_fields=["process_result", "status"])
+                node.save(update_fields=["process_result", "status", "duration", "sops_start_time"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 
