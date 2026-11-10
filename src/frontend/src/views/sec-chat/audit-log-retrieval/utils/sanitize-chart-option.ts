@@ -41,6 +41,9 @@ const RESOURCE_KEYS = new Set([
   'color',
 ]);
 
+const FN_KEY = '__fn';
+const TOOLTIP_TEMPLATE_KEY = '__template';
+
 const FN_WHITELIST = new Set(['datetime', 'percent', 'number', 'bytes', 'truncate']);
 const TOOLTIP_TAGS = ['span', 'br', 'b', 'strong', 'div'];
 
@@ -62,6 +65,8 @@ interface WalkCtx {
 const isRecord = (value: unknown): value is Record<string, any> => (
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
+
+const isNil = (value: unknown): value is null | undefined => value === null || value === undefined;
 
 const escapeHtml = (text: string) => text
   .replace(/&/g, '&amp;')
@@ -87,14 +92,19 @@ const isDangerousResource = (value: string) => {
   return /[<>"';]/.test(trimmed);
 };
 
-const isFnSpec = (value: unknown): value is { __fn: string, options?: Record<string, unknown> } => (
-  isRecord(value) && typeof value.__fn === 'string'
+interface FnSpec {
+  [FN_KEY]: string;
+  options?: Record<string, unknown>;
+}
+
+const isFnSpec = (value: unknown): value is FnSpec => (
+  isRecord(value) && typeof value[FN_KEY] === 'string'
 );
 
 const emptyObject = (): Record<string, any> => ({});
 
 const formatDisplayValue = (value: unknown): string => {
-  if (value == null) return '';
+  if (isNil(value)) return '';
   if (Array.isArray(value)) return value.map(item => formatDisplayValue(item)).join(', ');
   if (typeof value === 'object') {
     if ('value' in (value as Record<string, unknown>)) {
@@ -110,12 +120,12 @@ const formatDisplayValue = (value: unknown): string => {
 };
 
 const pickFormatterRaw = (params: unknown): unknown => {
-  if (params == null) return '';
+  if (isNil(params)) return '';
   if (typeof params !== 'object') return params;
   const rec = params as Record<string, unknown>;
-  if (rec.value != null) return rec.value;
-  if (rec.name != null) return rec.name;
-  if (rec.data != null) return rec.data;
+  if (!isNil(rec.value)) return rec.value;
+  if (!isNil(rec.name)) return rec.name;
+  if (!isNil(rec.data)) return rec.data;
   return '';
 };
 
@@ -143,20 +153,21 @@ const unwrapIsoTDisplay = (raw: unknown): string | null => {
 const displayCategoryValue = (raw: unknown) => unwrapIsoTDisplay(raw) ?? formatDisplayValue(raw);
 
 const axisTooltipRaw = (param: Record<string, any>) => {
-  if (param.axisValue != null && param.axisValue !== '') return param.axisValue;
-  if (param.axisValueLabel != null && param.axisValueLabel !== '') return param.axisValueLabel;
+  if (!isNil(param.axisValue) && param.axisValue !== '') return param.axisValue;
+  if (!isNil(param.axisValueLabel) && param.axisValueLabel !== '') return param.axisValueLabel;
   return '';
 };
 
-const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> }) => {
-  if (!FN_WHITELIST.has(spec.__fn)) return null;
+const buildNamedFn = (spec: FnSpec) => {
+  const fnName = spec[FN_KEY];
+  if (!FN_WHITELIST.has(fnName)) return null;
   const options = isRecord(spec.options) ? spec.options : {};
 
-  if (spec.__fn === 'datetime') {
+  if (fnName === 'datetime') {
     return (params: unknown) => displayCategoryValue(pickFormatterRaw(params));
   }
 
-  if (spec.__fn === 'percent') {
+  if (fnName === 'percent') {
     const digits = Math.min(4, Math.max(0, Number.isFinite(Number(options.digits)) ? Number(options.digits) : 2));
     return (params: unknown) => {
       const raw = pickFormatterRaw(params);
@@ -165,7 +176,7 @@ const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> })
     };
   }
 
-  if (spec.__fn === 'number') {
+  if (fnName === 'number') {
     const unit = typeof options.unit === 'string' ? options.unit : '';
     return (params: unknown) => {
       const raw = pickFormatterRaw(params);
@@ -176,7 +187,7 @@ const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> })
     };
   }
 
-  if (spec.__fn === 'bytes') {
+  if (fnName === 'bytes') {
     return (params: unknown) => {
       const raw = pickFormatterRaw(params);
       const num = toFiniteNumber(raw);
@@ -203,7 +214,7 @@ const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> })
 
 const sanitizeValue = (value: unknown, ctx: WalkCtx): unknown => {
   if (ctx.depth > MAX_DEPTH) return undefined;
-  if (value == null) return value;
+  if (isNil(value)) return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -235,7 +246,7 @@ const sanitizeValue = (value: unknown, ctx: WalkCtx): unknown => {
     if (ctx.inTooltip) return undefined;
     if (isFnSpec(value)) {
       const spec = emptyObject();
-      spec.__fn = value.__fn;
+      spec[FN_KEY] = value[FN_KEY];
       if (isRecord(value.options)) {
         const options = sanitizeValue(value.options, {
           depth: ctx.depth + 1,
@@ -279,7 +290,7 @@ const ensureIsoCategoryDisplay = (axis: unknown) => {
     const categories = Array.isArray(host.data) ? host.data : [];
     if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
     if (!isRecord(host.axisLabel)) host.axisLabel = {};
-    if (host.axisLabel.formatter == null) {
+    if (isNil(host.axisLabel.formatter)) {
       host.axisLabel.formatter = (params: unknown) => displayCategoryValue(pickFormatterRaw(params));
     }
   });
@@ -318,7 +329,7 @@ const attachDataZoomLabels = (option: Record<string, any>) => {
     if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
 
     zoom.labelFormatter = (_value: unknown, valueStr: unknown) => {
-      const raw = valueStr != null && valueStr !== '' ? valueStr : _value;
+      const raw = !isNil(valueStr) && valueStr !== '' ? valueStr : _value;
       return displayCategoryValue(raw);
     };
 
@@ -331,12 +342,12 @@ const attachDataZoomLabels = (option: Record<string, any>) => {
     if (horizontal) {
       zoom.left = bumpEdge(zoom.left, inset);
       zoom.right = bumpEdge(zoom.right, inset);
-      if (zoom.width == null || zoom.width === 'ph') zoom.width = null;
+      if (isNil(zoom.width) || zoom.width === 'ph') zoom.width = null;
       return;
     }
     zoom.top = bumpEdge(zoom.top, inset);
     zoom.bottom = bumpEdge(zoom.bottom, inset);
-    if (zoom.height == null || zoom.height === 'ph') zoom.height = null;
+    if (isNil(zoom.height) || zoom.height === 'ph') zoom.height = null;
   });
 };
 /* eslint-enable no-param-reassign */
@@ -403,11 +414,16 @@ const renderTooltipTemplate = (template: string, param: Record<string, any>) => 
     .replace(/\{percent\}/g, percent);
 };
 
+const toParamList = (params: unknown): Record<string, any>[] => {
+  if (Array.isArray(params)) return params.filter(isRecord);
+  return isRecord(params) ? [params] : [];
+};
+
 export const createTooltipFormatter = (trigger: unknown, templateRaw: unknown) => {
   const resolvedTrigger = trigger === 'axis' ? 'axis' : 'item';
   const template = resolveTooltipTemplate(templateRaw, resolvedTrigger);
   return (params: unknown) => {
-    const list = Array.isArray(params) ? params.filter(isRecord) : isRecord(params) ? [params] : [];
+    const list = toParamList(params);
     if (!list.length) return '';
     if (resolvedTrigger === 'axis') {
       const title = escapeHtml(displayCategoryValue(axisTooltipRaw(list[0])));
@@ -422,9 +438,9 @@ const attachTooltipFormatters = (option: Record<string, any>) => {
   const apply = (host: unknown) => {
     if (!isRecord(host) || !isRecord(host.tooltip)) return;
     const { tooltip } = host;
-    const template = tooltip.__template;
+    const template = tooltip[TOOLTIP_TEMPLATE_KEY];
     delete tooltip.formatter;
-    delete tooltip.__template;
+    delete tooltip[TOOLTIP_TEMPLATE_KEY];
     tooltip.formatter = createTooltipFormatter(tooltip.trigger, template);
   };
 

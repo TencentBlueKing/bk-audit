@@ -1221,12 +1221,12 @@
     const isStats = isStatisticsAttachmentType(attachment.attachment_type);
     const hasModeSource = Object.prototype.hasOwnProperty.call(attachment, 'input_data')
       || Object.prototype.hasOwnProperty.call(attachment, 'output_data');
+    const loadingTitle = isStats ? t('数据统计中') : t('智能分析中');
+    const defaultTitle = isStats ? t('数据统计报告') : t('智能分析报告');
     return {
       id: attachment.uid,
       type: isStats ? 'statistics' : 'analyze',
-      title: status === 'loading'
-        ? (isStats ? t('数据统计中') : t('智能分析中'))
-        : (attachment.title || (isStats ? t('数据统计报告') : t('智能分析报告'))),
+      title: status === 'loading' ? loadingTitle : (attachment.title || defaultTitle),
       createdAt: attachmentDisplayTime(attachment),
       status,
       errorMessage: detail.error_message || '',

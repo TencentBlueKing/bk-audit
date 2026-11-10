@@ -823,7 +823,8 @@
   const collectLegendItems = (option: Record<string, any>): ChartLegendItem[] => {
     const legend = legendHost(option.legend);
 
-    const seriesList = (Array.isArray(option.series) ? option.series : option.series ? [option.series] : [])
+    const rawSeries = option.series ? [option.series] : [];
+    const seriesList = (Array.isArray(option.series) ? option.series : rawSeries)
       .filter(isPlainRecord);
     const palette = (Array.isArray(option.color) ? option.color : ECHARTS_PALETTE)
       .map(pickColor)
@@ -920,9 +921,9 @@
         const barLegend = card.kind === 'bar' && card.ratio?.length
           ? card.ratio.map(item => ({ name: item.name, color: item.color }))
           : null;
-        const lifted = barLegend
-          ? { items: barLegend }
-          : (option ? liftChartLegend(option) : { items: [] as ChartLegendItem[] });
+        let lifted: { items: ChartLegendItem[] } = { items: [] };
+        if (barLegend) lifted = { items: barLegend };
+        else if (option) lifted = liftChartLegend(option);
         const displayOption = option ? applyEntranceMotion(decorateLongLabels(option)) : null;
         return {
           ...card,
