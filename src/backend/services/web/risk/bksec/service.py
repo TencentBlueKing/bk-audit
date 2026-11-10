@@ -146,7 +146,7 @@ def _risk_access_cache_identity(as_platform: bool) -> str:
 
 
 def fetch_risk_access_items(
-    project_id: str = "", is_formal: str = "true", use_cache: bool = True, as_platform: bool = False
+    project_id: str = "", is_formal: str = "", use_cache: bool = True, as_platform: bool = False
 ) -> List[dict]:
     """
     拉取风险类型列表（循环翻页取全量）
@@ -174,7 +174,7 @@ def fetch_risk_access_items(
         BKSEC_RISK_TYPES_CACHE_KEY,
         _risk_access_cache_identity(as_platform),
         project_id or "_",
-        is_formal or "true",
+        is_formal or "_",
     )
     if use_cache:
         cached = cache.get(cache_key)
@@ -186,7 +186,7 @@ def fetch_risk_access_items(
         result = (
             fetcher(
                 project_id=project_id or "",
-                is_formal=is_formal or "true",
+                is_formal=is_formal or None,
                 ordering=BKSEC_RISK_ACCESS_ORDERING,
                 page=page,
                 page_size=BKSEC_RISK_ACCESS_PAGE_SIZE,
@@ -207,7 +207,7 @@ def fetch_risk_access_items(
         logger.warning(
             "[BkSec] risk_access 列表翻页达上限仍未取完, is_formal=%s pages=%s fetched=%s, "
             "结果不完整（下拉缺项 / token 漏匹配），请确认总量或调大 BKSEC_RISK_ACCESS_MAX_PAGES",
-            is_formal or "true",
+            is_formal or "_",
             BKSEC_RISK_ACCESS_MAX_PAGES,
             len(items),
         )
