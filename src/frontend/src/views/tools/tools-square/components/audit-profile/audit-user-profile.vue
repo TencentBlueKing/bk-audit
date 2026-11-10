@@ -189,6 +189,7 @@
     getExchangeRateValue,
     getIsTestAccountText,
     getLoginDays31Value,
+    isUnsetExchangeRate,
     PROFILE_FIELDS,
   } from '../game/game-field-keys';
 
@@ -883,8 +884,8 @@
   };
 
   // 复制 openid
-  const handleCopyOpenid = (openid: string) => {
-    execCopy(openid, t('复制成功'));
+  const handleCopyText = (text: string) => {
+    execCopy(text, t('复制成功'));
   };
 
   // 点击游戏名称 - 打开新工具tab，自动展示概览tab
@@ -921,9 +922,9 @@
   //   window.open(routeData.href, '_blank');
   // };
 
-  // 表格列配置：游戏名称 | 账号 | openid | 代币存量(¥) | 代币兑换比 | 累计充值(¥)
+  // 表格列配置：游戏名称 | 账号 | openid | 微信commid | 代币存量(¥) | 代币兑换比 | 累计充值(¥)
   // | 累计发放(¥) | 登录天数（31天） | 是否测试号 | 操作
-  // 代币字段已替换为元，null时醒目提示"未设代币兑换比例"
+  // 代币字段已替换为元，null时醒目提示"未设代币兑换比例"；代币兑换比为 -1 时同样提示
   const isEmptyCoinUnitValue = (val: unknown) => val === null || val === undefined || val === '';
   const COIN_UNIT_EMPTY_TEXT = () => t('未设代币兑换比例');
   const formatCoinUnitExportValue = (val: unknown): string | number => {
@@ -941,6 +942,33 @@
       );
     }
     return h('span', {}, val);
+  };
+  const getDisplayExchangeRate = (row: Record<string, any>) => {
+    const rate = getExchangeRateValue(row);
+    return isUnsetExchangeRate(rate) ? null : rate;
+  };
+  const renderCopyableCell = (val: unknown) => {
+    if (val === null || val === undefined || val === '') {
+      return h('span', {}, '--');
+    }
+    const text = String(val);
+    return h(
+      'span',
+      {
+        class: 'openid-cell',
+        style: 'display: inline-flex; align-items: center; gap: 4px;',
+      },
+      [
+        h('span', {}, text),
+        h('i', {
+          class: 'audit-icon audit-icon-copy hover-show-icon openid-copy-icon',
+          onClick: (e: Event) => {
+            e.stopPropagation();
+            handleCopyText(text);
+          },
+        }),
+      ],
+    );
   };
 
   const gameColumns: Array<Record<string, any>> = [
@@ -1002,36 +1030,22 @@
     {
       title: () => 'openid',
       colKey: 'openid',
-      minWidth: 320,
+      minWidth: 360,
       ellipsis: true,
-      cell: (_h: any, { row }: { row: Record<string, any> }) => {
-        if (row.openid === null || row.openid === undefined || row.openid === '') {
-          return h('span', {}, '--');
-        }
-        return h(
-          'span',
-          {
-            class: 'openid-cell',
-            style: 'display: inline-flex; align-items: center; gap: 4px;',
-          },
-          [
-            h('span', {}, row.openid),
-            h('i', {
-              class: 'audit-icon audit-icon-copy hover-show-icon openid-copy-icon',
-              onClick: (e: Event) => {
-                e.stopPropagation();
-                handleCopyOpenid(row.openid);
-              },
-            }),
-          ],
-        );
-      },
+      cell: (_h: any, { row }: { row: Record<string, any> }) => renderCopyableCell(row.openid),
+    },
+    {
+      title: () => t('微信commid'),
+      colKey: PROFILE_FIELDS.WECHAT_COMMID,
+      minWidth: 360,
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => renderCopyableCell(row[PROFILE_FIELDS.WECHAT_COMMID]),
     },
     {
       title: () => `${t('代币存量')} (¥)`,
       colKey: PROFILE_FIELDS.COIN_BALANCE_UNIT,
       sorter: true,
-      width: 250,
+      width: 180,
       cell: (_h: any, { row }: { row: Record<string, any> }) => renderCoinField(row, PROFILE_FIELDS.COIN_BALANCE_UNIT),
     },
     {
@@ -1040,7 +1054,7 @@
       sorter: true,
       width: 200,
       cell: (_h: any, { row }: { row: Record<string, any> }) => renderCoinField(
-        { [PROFILE_FIELDS.EXCHANGE_RATE]: getExchangeRateValue(row) },
+        { [PROFILE_FIELDS.EXCHANGE_RATE]: getDisplayExchangeRate(row) },
         PROFILE_FIELDS.EXCHANGE_RATE,
       ),
     },
@@ -1048,7 +1062,7 @@
       title: () => `${t('累计充值')} (¥)`,
       colKey: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT,
       sorter: true,
-      width: 300,
+      width: 180,
       cell: (_h: any, { row }: { row: Record<string, any> }) => (
         renderCoinField(row, PROFILE_FIELDS.TOTAL_RECHARGE_UNIT)
       ),
@@ -1057,7 +1071,7 @@
       title: () => `${t('累计发放')} (¥)`,
       colKey: PROFILE_FIELDS.TOTAL_ISSUE_YUAN,
       sorter: true,
-      width: 250,
+      width: 180,
       cell: (_h: any, { row }: { row: Record<string, any> }) => h('span', {}, row[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--'),
     },
     {
@@ -1276,6 +1290,7 @@
       fallbackField: 'platformAccount',
     },
     { id: 'openid', name: 'openid', field: 'openid', fallbackField: '' },
+    { id: 'wechatCommid', name: t('微信commid'), field: PROFILE_FIELDS.WECHAT_COMMID, fallbackField: '' },
     { id: 'coinBalance', name: `${t('代币存量')}(¥)`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
     { id: 'exchangeRate', name: t('代币兑换比'), field: PROFILE_FIELDS.EXCHANGE_RATE, fallbackField: 'exchangeRate' },
     { id: 'totalRecharge', name: `${t('累计充值')}(¥)`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
@@ -1346,7 +1361,7 @@
             return;
           }
           if (col.id === 'exchangeRate') {
-            row[col.name] = formatCoinUnitExportValue(getExchangeRateValue(game));
+            row[col.name] = formatCoinUnitExportValue(getDisplayExchangeRate(game));
             return;
           }
           if (col.id === 'isTestAccount') {
