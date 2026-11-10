@@ -350,9 +350,7 @@
     }, { resolving: true });
   };
 
-  // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
-  // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
-  // URL 同步在 onMounted 中执行（需等待 tool-info-panel 挂载）
+  // 打开广场地址时停在列表。已打开的工具不自动进入工作台，留在「正在使用」提示里。
 
   // 场景切换
   const getSceneKey = (item: SceneItem | null) => (item ? `${item.type}:${item.id}` : '');
@@ -676,15 +674,19 @@
     ContentCardRef.value?.getToolsList(tagId.value);
   };
 
+  const handleTopNavGoHome = () => {
+    if (!hasOpenedTools.value) return;
+    void handleGoHomePage();
+  };
+
   onMounted(() => {
     // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();
     });
-    if (activeToolUid.value && hasOpenedTools.value) {
-      if (!routeUid || (!isDrillDownRoute && !isRefreshRestore)) {
-        syncToolRouteToUrl(activeToolUid.value);
-      }
+    onEvent('tools-square:go-home', handleTopNavGoHome);
+    if (!routeUid && hasOpenedTools.value) {
+      goHome();
     }
   });
 
@@ -708,6 +710,7 @@
 
   onUnmounted(() => {
     off('scene:change');
+    off('tools-square:go-home', handleTopNavGoHome);
     if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
     if (restoreListScrollTimer) clearTimeout(restoreListScrollTimer);
   });

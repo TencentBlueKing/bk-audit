@@ -62,17 +62,17 @@
             src="@images/delete-circle.svg"
             @click.stop="handleTabClose(item.uid)">
         </div>
-        <!-- 新增工具按钮 -->
-        <add-tool-popover
+        <div
           v-if="toolList.length > 0"
-          :accessible-scene-ids="props.accessibleSceneIds"
-          :scene-name-map="props.sceneNameMap"
-          :scope-params="props.scopeParams"
-          :system-name-map="props.systemNameMap"
-          :tags-enums="tagsEnums"
-          :tool-list="toolList"
-          @add-tool="(tool, ctx) => emit('addTool', tool, ctx)"
-          @switch-tool="(tool) => emit('switchTab', tool.uid)" />
+          v-bk-tooltips="{ content: '返回工具广场', delay: [300, 0] }"
+          class="tab-add-btn"
+          role="button"
+          tabindex="0"
+          @click="handleGoHome"
+          @keydown.enter.prevent="handleGoHome"
+          @keydown.space.prevent="handleGoHome">
+          <audit-icon type="add" />
+        </div>
       </div>
     </div>
     <!-- 右键菜单 -->
@@ -181,8 +181,6 @@
   import GameDetail from '../components/game/game-detail.vue';
   import ToolContent from '../components/tool-content.vue';
 
-  import AddToolPopover from './add-tool-popover.vue';
-
   import {
     fetchGameDetailNameByOpenid,
     needsResolveGameDetailName,
@@ -241,6 +239,7 @@
   interface Props {
     toolList: ToolInfo[];
     activeUid: string;
+    // eslint-disable-next-line vue/no-unused-properties
     tagsEnums: TagItem[];
     // eslint-disable-next-line vue/no-unused-properties
     scopeParams?: {
@@ -1423,6 +1422,31 @@
   width: 21px;
   height: 24px;
   cursor: pointer;
+}
+
+.tab-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  font-size: 16px;
+  color: #979ba5;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all .15s;
+  flex: 0 0 auto;
+
+  &:hover {
+    color: #63656e;
+    background: #f0f1f5;
+  }
+
+  &:active {
+    color: #3a84ff;
+    background: #e1ecff;
+  }
 }
 
 .panel-tab-item {
