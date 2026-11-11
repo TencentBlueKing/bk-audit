@@ -25,3 +25,4 @@ from services.web.risk.resources.report import *  # noqa
 from services.web.risk.resources.risk import *  # noqa
 from services.web.risk.resources.rule import *  # noqa
 from services.web.risk.resources.subscription import *  # noqa
+from services.web.risk.resources.whitelist import *  # noqa

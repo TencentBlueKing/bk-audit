@@ -594,3 +594,32 @@ class RiskEventSubscriptionAdminViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.risk.query_risk_event_subscription, endpoint="preview"),
     ]
+
+
+class RiskWhitelistsViewSet(ResourceViewSet):
+    """风险白名单。"""
+
+    resource_routes = [
+        ResourceRoute("GET", resource.risk.list_risk_whitelists),
+        ResourceRoute("POST", resource.risk.create_risk_whitelist),
+        ResourceRoute("PUT", resource.risk.update_risk_whitelist, pk_field="id"),
+        ResourceRoute("DELETE", resource.risk.delete_risk_whitelist, pk_field="id"),
+        ResourceRoute("GET", resource.risk.list_whitelist_hit_records, pk_field="id", endpoint="hit_records"),
+        ResourceRoute("GET", resource.risk.fetch_whitelist_hit_event, pk_field="id", endpoint="hit_events"),
+        ResourceRoute("POST", resource.risk.approve_risk_whitelist, pk_field="id", endpoint="approve"),
+        ResourceRoute("POST", resource.risk.reject_risk_whitelist, pk_field="id", endpoint="reject"),
+        ResourceRoute("POST", resource.risk.enable_risk_whitelist, pk_field="id", endpoint="enable"),
+        ResourceRoute("POST", resource.risk.disable_risk_whitelist, pk_field="id", endpoint="disable"),
+        ResourceRoute("POST", resource.risk.renew_risk_whitelist, pk_field="id", endpoint="renew"),
+    ]
+
+
+class RiskWhitelistCallbackViewSet(APIGWViewSet):
+    """
+    ITSM 工单回调
+        POST /api/v1/risk_whitelist_callback/callback/
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.risk_whitelist_callback, endpoint="callback"),
+    ]
