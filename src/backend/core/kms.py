@@ -239,6 +239,7 @@ _INIT_ES_TEMPLATE = [
     {
         "namespace": "default",
         "cluster_name": "",
+        "display_name": "",
         "bkbase_cluster_en_name": "",
         "domain_name": "",
         "source_type": "",
