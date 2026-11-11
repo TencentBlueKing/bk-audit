@@ -22,7 +22,6 @@ import json
 from typing import Any, List, Optional
 
 from bk_resource import api, resource
-from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
@@ -1085,23 +1084,10 @@ class AutoProcess(RiskFlowBaseHandler):
         node, task_id = self._locate_open_task()
         if not task_id:
             return None
-        try:
-            status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-            process_result = {"status": status}
-        except APIRequestError as err:
-            # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
-            err_data = getattr(err, "data", {}) or {}
-            if "code" not in err_data:
-                # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
-                raise
-            logger.exception(
-                "[AutoProcess] get_task_status business error, risk_id=%s, task_id=%s, err=%s",
-                self.risk.risk_id,
-                task_id,
-                err,
-            )
-            process_result = {"status": {"state": SOPSTaskStatus.FAILED}}
-            status = process_result["status"]
+        # 查询状态是幂等操作。异常统一抛出，由 process_one_risk 计数并封顶转人工，
+        # 避免依赖不稳定的错误码/HTTP 状态码分类。
+        status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+        process_result = {"status": status}
         process_result = self._attach_failure_hint(process_result, task_id=task_id)
         # 状态写回任务所属节点，避免落到后来插入的人工处理节点上。
         self._reused_task_node = node

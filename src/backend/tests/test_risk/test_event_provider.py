@@ -10,6 +10,8 @@ from datetime import datetime
 from unittest import mock
 
 from bk_resource.exceptions import APIRequestError
+from django.conf import settings
+from django.test import override_settings
 from jinja2 import Environment, nodes
 
 from core.sql.constants import AggregateType, FieldType
@@ -398,6 +400,7 @@ class TestEventProviderMatch(TestCase):
         self.assertFalse(self.provider.match(node).matched)
 
 
+@override_settings(REPORT_PROVIDER_MAX_RETRIES=2, REPORT_PROVIDER_RETRY_DELAY=0)
 @mock.patch("apps.meta.models.GlobalMetaConfig.get")
 @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
 class TestEventProviderGet(TestCase):
@@ -479,13 +482,34 @@ class TestEventProviderGet(TestCase):
         self.assertIsNone(result)
         mock_query_sync.assert_not_called()
 
+    def test_get_retries_api_error_then_success(self, mock_query_sync, mock_global_config):
+        """测试 API 临时异常会在事件接口层重试"""
+        mock_global_config.return_value = "591_test_table"
+        mock_query_sync.side_effect = [APIRequestError(), {"list": [{"event_id": 1}]}]
+
+        result = self.provider.get(function="count", field_name="event_id")
+
+        self.assertEqual(result, 1)
+        self.assertEqual(mock_query_sync.call_count, 2)
+
     def test_get_api_error_returns_placeholder(self, mock_query_sync, mock_global_config):
-        """测试 API 异常返回占位符"""
+        """测试 API 异常重试耗尽后返回占位符"""
         mock_global_config.return_value = "591_test_table"
         mock_query_sync.side_effect = APIRequestError()
 
         result = self.provider.get(function="count", field_name="event_id")
         self.assertEqual(result, EVENT_QUERY_FAILED)
+        self.assertEqual(mock_query_sync.call_count, settings.REPORT_PROVIDER_MAX_RETRIES + 1)
+
+    def test_get_sql_build_error_is_not_retried(self, mock_query_sync, mock_global_config):
+        """测试本地 SQL 构建错误不触发接口重试"""
+        mock_global_config.return_value = "591_test_table"
+
+        with mock.patch.object(self.provider, "_build_sql", side_effect=ValueError("bad sql")):
+            result = self.provider.get(function="count", field_name="event_id")
+
+        self.assertEqual(result, EVENT_QUERY_FAILED)
+        mock_query_sync.assert_not_called()
 
     def test_get_unexpected_error_returns_placeholder(self, mock_query_sync, mock_global_config):
         """测试未预期异常返回占位符"""

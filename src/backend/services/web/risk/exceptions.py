@@ -47,6 +47,10 @@ class NL2RiskFilterServiceError(RiskException):
     ERROR_CODE = "003"
 
 
+class ReportConfigError(Exception):
+    """风险报告配置无法解析，属于确定性错误，重试整份报告无效。"""
+
+
 class AnalyseReportTitleGenerationError(RiskException):
     MESSAGE = gettext_lazy("AI 分析报告标题生成失败")
     STATUS_CODE = 500

@@ -7,6 +7,7 @@ from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from pydantic import ValidationError as PydanticValidationError
 
 from core.exceptions import ApiRequestError
 from services.web.common.monitor import RiskReportRenderFailedEvent
@@ -16,6 +17,7 @@ from services.web.risk.constants import (
     ContentQualityError,
     RiskReportStatus,
 )
+from services.web.risk.exceptions import ReportConfigError
 from services.web.risk.models import Risk, RiskReport
 from services.web.risk.report.quality import check_and_report_quality
 from services.web.risk.report.task_submitter import submit_render_task
@@ -183,8 +185,17 @@ class RiskReportHandler:
 
         使用 submit_render_task 提交渲染任务，同步等待结果
         """
-        # 解析报告配置
-        report_config = ReportConfig.model_validate(risk.strategy.report_config)
+        # 解析报告配置；配置非法属于确定性错误，不应重试整份报告
+        try:
+            report_config = ReportConfig.model_validate(risk.strategy.report_config)
+        except PydanticValidationError as exc:
+            logger.error(
+                "[RiskReportHandler] Invalid report config. risk_id=%s, task_id=%s, error=%s",
+                self.risk_id,
+                self.task_id,
+                exc,
+            )
+            raise ReportConfigError(str(exc)) from exc
 
         # 提交渲染任务并同步等待结果（后台事件触发，不使用缓存）
         async_result = submit_render_task(risk=risk, report_config=report_config, enable_cache=False)
@@ -217,11 +228,10 @@ class RiskReportHandler:
             logger.info("[RiskReportHandler] Report updated. risk_id=%s", self.risk_id)
 
     def _check_content_quality(self, content: str):
-        """检测报告内容质量，异常时上报监控事件并抛出异常触发重试
+        """检测报告内容质量，异常时上报监控事件并抛出 ContentQualityError
 
-        调用公共函数 check_and_report_quality() 执行检测和上报，
-        如果发现质量问题则抛出 ContentQualityError，
-        由 render_risk_report 任务的 except 块捕获并触发 self.retry()。
+        调用公共函数 check_and_report_quality() 执行检测和上报；
+        render_risk_report 会根据 ContentQualityError.retryable 决定是否重试。
         """
         issues = check_and_report_quality(
             content=content,

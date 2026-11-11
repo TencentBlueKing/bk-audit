@@ -498,6 +498,21 @@ class TestRenderTemplate(TestCase):
         # 验证AI变量渲染
         self.assertIn("2025年12月17日", result)
 
+    def test_render_propagates_agent_rate_limited(self):
+        """Agent 限流不能在渲染层被降级成错误文本。"""
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.report.providers import AIProvider
+
+        provider = AIProvider(
+            context={"risk_id": MOCK_RISK["risk_id"]},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=mock.Mock(side_effect=AgentRateLimited(AIAgentCode.AUDIT_REPORT)),
+        )
+
+        with self.assertRaises(AgentRateLimited):
+            _render_template(template="{{ ai.summary }}", providers=[provider], variables={})
+
     def test_render_provider_thread_pool_preserves_otel_context(self):
         """Provider 在线程池执行时应继承提交任务时的 OTel context。"""
 
