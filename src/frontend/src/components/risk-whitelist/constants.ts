@@ -64,7 +64,9 @@ export const DURATION_OPTIONS: Array<{ id: ValidityMode; name: string }> = [
   { id: 'custom', name: '自定义' },
 ];
 
-export const RENEW_DURATION_OPTIONS = DURATION_OPTIONS.filter(item => item.id !== 'permanent');
+export const RENEW_DURATION_OPTIONS = DURATION_OPTIONS.filter(
+  (item): item is { id: Exclude<ValidityMode, 'permanent'>; name: string } => item.id !== 'permanent',
+);
 
 export const OPERATOR_OPTIONS: Array<{ value: CompareOperator; label: string }> = [
   { value: 'eq', label: '=等于' },
