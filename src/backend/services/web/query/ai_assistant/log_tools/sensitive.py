@@ -1,7 +1,8 @@
 """日志工具共享的敏感字段访问校验。
 
-明细返回值和字段探索样本可复用 SearchDataParser 脱敏；查询条件和聚合结果
-无法依赖逐行脱敏，因此必须在查询前按当前用户、系统和字段路径完成权限校验。
+明细返回值和字段探索样本复用 SearchDataParser，按行判断敏感规则后再遮罩。
+原始日志列因此可以查询。条件和聚合结果无法事后补救，这些入口仍在查询前校验，
+并把原始日志视为可能携带敏感正文的字段。
 """
 
 from typing import Iterable, Protocol
@@ -49,19 +50,41 @@ class SensitiveLogFieldPermissionService:
 
     @classmethod
     def ensure_access(cls, *, username: str, system_id: str, fields: set[str]) -> None:
-        """拒绝命中私密字段、无权敏感字段或可能包含这些字段的原始日志。"""
+        """拒绝条件、排序和聚合中与无权或私密规则重叠的字段。
 
-        if not all(cls.get_access(username=username, system_id=system_id, fields=fields).values()):
+        这些入口的命中数和分组值无法靠返回行遮罩补救。原始日志用作这类入口时，
+        仍按系统上的敏感规则预拒绝。
+        """
+
+        if not all(
+            cls.get_access(
+                username=username,
+                system_id=system_id,
+                fields=fields,
+                include_raw_log=True,
+            ).values()
+        ):
             raise SensitiveFieldPermissionDenied()
 
     @classmethod
-    def get_access(cls, *, username: str, system_id: str, fields: set[str]) -> dict[str, bool]:
+    def get_access(
+        cls,
+        *,
+        username: str,
+        system_id: str,
+        fields: set[str],
+        include_raw_log: bool = False,
+    ) -> dict[str, bool]:
         """批量返回字段可读性，一次请求内共用规则和权限快照。
+
+        目录和明细返回不把原始日志整列预拒绝，返回值由按行脱敏处理。
+        ``include_raw_log`` 仅供条件和聚合入口使用。
 
         Args:
             username: 认证链取得的用户。
             system_id: 实际查询系统。
             fields: 完整字段路径集合，保留原始路径段。
+            include_raw_log: 为真时，原始日志与系统上的全部敏感规则重叠。
         Returns:
             每条请求路径的可读状态；私密规则无条件拒绝。
         """
@@ -78,7 +101,7 @@ class SensitiveLogFieldPermissionService:
             path: [
                 rule
                 for rule in sensitive_objects
-                if path == LOG.field_name
+                if (include_raw_log and path == LOG.field_name)
                 or any(
                     cls._field_paths_overlap(sensitive_path, path)
                     for sensitive_path in cls._sensitive_field_names(rule)

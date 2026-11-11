@@ -119,12 +119,30 @@ class TestStatisticsFieldPermissions(AIAssistantTestCase):
                 "extend_data": False,
                 "extend_data.allowed": True,
                 "extend_data.private": False,
-                "log": False,
+                # 原始日志不按系统上的其他敏感规则预拒绝；返回时再按行遮罩。
+                "log": True,
             },
         )
         self.assertEqual(rules_query.call_count, 1)
         self.assertEqual(permissions.call_count, 1)
         self.assertEqual(set(permissions.call_args.args[0]), {1, 2})
+
+    def test_raw_log_is_denied_only_when_a_rule_targets_the_log_path(self):
+        """原始日志列只在规则路径本身覆盖 log 时预拒绝。"""
+
+        rules = [
+            SensitiveObject(id=1, fields=[{"field_name": "log"}]),
+            SensitiveObject(id=2, is_private=True, fields=[{"field_name": "extend_data.private"}]),
+        ]
+        with mock.patch.object(SensitiveObject._objects, "filter", return_value=rules), mock.patch.object(
+            sensitive.PermissionService, "get_sensitive_object_permissions", return_value={"1": False}
+        ):
+            result = sensitive.SensitiveLogFieldPermissionService.get_access(
+                username=self.username,
+                system_id=self.target_system_id,
+                fields={"log", "username"},
+            )
+        self.assertEqual(result, {"log": False, "username": True})
 
 
 class TestLogFieldMetadataService(AIAssistantTestCase):
