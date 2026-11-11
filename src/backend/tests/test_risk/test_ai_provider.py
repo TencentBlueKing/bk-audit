@@ -6,6 +6,7 @@ AIProvider 缓存功能单元测试
 from datetime import timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from jinja2 import nodes
@@ -162,6 +163,39 @@ class TestAIProviderCache(TestCase):
         provider._execute_ai_agent("test prompt")
 
         self.assertEqual(mock_chat_completion.call_args.kwargs["user"], "admin")
+
+    @override_settings(REPORT_PROVIDER_MAX_RETRIES=2, REPORT_PROVIDER_RETRY_DELAY=0)
+    @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
+    def test_execute_ai_agent_retries_transient_error(self, mock_chat_completion):
+        mock_chat_completion.side_effect = [Exception("temporary"), "AI response"]
+        provider = AIProvider(context={"risk_id": self.risk.risk_id}, ai_variables_config=[])
+
+        result = provider._execute_ai_agent("test prompt")
+
+        self.assertEqual(result, "AI response")
+        self.assertEqual(mock_chat_completion.call_count, 2)
+
+    @override_settings(REPORT_PROVIDER_MAX_RETRIES=2, REPORT_PROVIDER_RETRY_DELAY=0)
+    @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
+    def test_execute_ai_agent_returns_error_after_retries(self, mock_chat_completion):
+        mock_chat_completion.side_effect = Exception("persistent")
+        provider = AIProvider(context={"risk_id": self.risk.risk_id}, ai_variables_config=[])
+
+        result = provider._execute_ai_agent("test prompt")
+
+        self.assertIn(AI_ERROR_PREFIX, result)
+        self.assertEqual(mock_chat_completion.call_count, settings.REPORT_PROVIDER_MAX_RETRIES + 1)
+
+    @override_settings(REPORT_PROVIDER_MAX_RETRIES=2, REPORT_PROVIDER_RETRY_DELAY=0)
+    @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
+    def test_execute_ai_agent_does_not_retry_rate_limited(self, mock_chat_completion):
+        mock_chat_completion.side_effect = AgentRateLimited(AIAgentCode.AUDIT_REPORT)
+        provider = AIProvider(context={"risk_id": self.risk.risk_id}, ai_variables_config=[])
+
+        with self.assertRaises(AgentRateLimited):
+            provider._execute_ai_agent("test prompt")
+
+        mock_chat_completion.assert_called_once()
 
     @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
     @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")

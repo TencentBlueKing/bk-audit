@@ -526,7 +526,8 @@ def _resolve_ai_agent_rate_limit(agent_code: AIAgentCode) -> str:
 
 # 每个 Agent 可通过 BKAPP_AI_<枚举名>_RATE_LIMIT 及对应 MAX_WAIT_SECONDS 独立覆盖；
 # 显式全局值优先于历史变量，均未配置时使用安全默认值。
-# AUDIT_REPORT 固定 client 默认保留单风险渲染的历史任务级限流；普通 AI 任务按请求显式启用全局限流。
+# AUDIT_REPORT 固定 client 默认启用全局限流，避免报告模板内多 AI 变量并发打满下游连接；
+# 普通 AI 任务同样默认启用，仍可通过 _enable_agent_rate_limit 为历史调用显式开启。
 AI_AGENT_RATE_LIMITS = {
     code.value: {
         "rate": _resolve_ai_agent_rate_limit(code),

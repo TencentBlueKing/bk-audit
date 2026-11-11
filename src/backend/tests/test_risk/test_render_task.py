@@ -4,11 +4,15 @@ from unittest import mock
 
 from django.core.cache import cache
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+from api.constants import AIAgentCode
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
     RISK_RENDER_LOCK_KEY,
+    ContentQualityError,
     RiskReportStatus,
 )
+from services.web.risk.exceptions import ReportConfigError
 from services.web.risk.handlers.report import RiskReportHandler
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk, RiskReport
@@ -255,6 +259,76 @@ class TestRiskRenderTask(TestCase):
         call_kwargs = mock_retry.call_args[1]
         assert call_kwargs["countdown"] == 10
         assert "exc" not in call_kwargs
+
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.tasks.render_risk_report.retry")
+    def test_render_task_does_not_retry_invalid_report_config(self, mock_retry, mock_report_event):
+        """报告配置无法解析是确定性错误，不重试整份报告。"""
+        self.strategy.report_config = {"template": "", "ai_variables": [{"name": "invalid_name"}]}
+        self.strategy.save()
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        with self.assertRaises(ReportConfigError):
+            render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        mock_retry.assert_not_called()
+        mock_report_event.assert_called_once()
+
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.tasks.render_risk_report.retry")
+    @mock.patch("services.web.risk.handlers.report.submit_render_task")
+    def test_render_task_does_not_retry_template_error(self, mock_submit, mock_retry, mock_report_event):
+        """模板渲染错误属于永久失败，不再重跑整份报告。"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.get.return_value = "[Render Error: invalid template] " * 2
+        mock_submit.return_value = mock_async_result
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        with self.assertRaises(ContentQualityError) as ctx:
+            render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        self.assertFalse(ctx.exception.retryable)
+        mock_retry.assert_not_called()
+        self.assertGreaterEqual(mock_report_event.call_count, 1)
+
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.tasks.render_risk_report.retry")
+    @mock.patch("services.web.risk.handlers.report.submit_render_task")
+    def test_render_task_does_not_retry_rate_limited(self, mock_submit, mock_retry, mock_report_event):
+        """Agent 限流由子任务重试，报告级不再重跑。"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.get.side_effect = AgentRateLimited(AIAgentCode.AUDIT_REPORT)
+        mock_submit.return_value = mock_async_result
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        with self.assertRaises(AgentRateLimited):
+            render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        mock_retry.assert_not_called()
+        mock_report_event.assert_called_once()
+
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.tasks.render_risk_report.retry")
+    @mock.patch("services.web.risk.handlers.report.submit_render_task")
+    def test_render_task_retries_content_generation_issue(self, mock_submit, mock_retry, mock_report_event):
+        """空内容等生成类质量问题仍允许报告级重试。"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.get.return_value = ""
+        mock_submit.return_value = mock_async_result
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        mock_retry.assert_called_once()
+        self.assertEqual(mock_report_event.call_count, 1)
 
     @mock.patch("core.monitor.api.bk_monitor.report_event")
     @mock.patch("services.web.risk.tasks.render_risk_report.retry")

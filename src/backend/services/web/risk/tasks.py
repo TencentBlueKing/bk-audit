@@ -67,11 +67,15 @@ from services.web.risk.constants import (
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
     AnalyseReportStatus,
+    ContentQualityError,
     ItsmVersion,
     RiskStatus,
     TicketNodeStatus,
 )
-from services.web.risk.exceptions import AnalyseReportTitleGenerationError
+from services.web.risk.exceptions import (
+    AnalyseReportTitleGenerationError,
+    ReportConfigError,
+)
 from services.web.risk.handlers import (
     BKMAlertSyncHandler,
     EventHandler,
@@ -164,6 +168,27 @@ def render_risk_report(self, risk_id: str, task_id: str):
     handler = RiskReportHandler(risk_id=risk_id, task_id=task_id)
     try:
         handler.run()
+    except AgentRateLimited as exc:
+        # 限流由 render_template 的 AIAgentTask 负责退避重投；报告级不再重跑整份报告。
+        logger_celery.warning("[RenderRiskReportRateLimited] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
+        handler.handle_max_retries_exceeded(exc)
+        raise
+    except ReportConfigError as exc:
+        # 配置无法解析是确定性错误，重试整份报告不会成功。
+        logger_celery.warning("[RenderRiskReportConfigError] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
+        handler.handle_max_retries_exceeded(exc)
+        raise
+    except ContentQualityError as exc:
+        logger_celery.info("[RenderRiskReportFailed] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
+        # 模板/接口等永久性质量问题不重试整份报告；只有内容生成类问题允许报告级重试。
+        if not exc.retryable:
+            handler.handle_max_retries_exceeded(exc)
+            raise
+        try:
+            self.retry(countdown=settings.RENDER_RETRY_DELAY)
+        except MaxRetriesExceededError:
+            handler.handle_max_retries_exceeded(exc)
+            raise
     except Exception as exc:
         logger_celery.info("[RenderRiskReportFailed] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
         # 注意：handler.run() 的 finally 块已经释放了锁，这里不需要再释放
@@ -581,6 +606,10 @@ def process_risk_ticket(*, risk_id: str = None, manual: bool = False):
             process_one_risk(risk_id=risk.risk_id)
 
 
+# 风险仍处于自动流转的状态；只有离开这些状态才清除失败计数
+_AUTO_FLOW_STATUSES = (RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS)
+
+
 @celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(
     lock_name="celery:process_one_risk",
@@ -611,13 +640,30 @@ def process_one_risk(*, risk_id: str):
         logger_celery.info("[ProcessRiskTicket] %s Start %s", process_class.__name__, risk.risk_id)
         # 处理
         process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run()
-        # 成功后移除缓存
-        cache.delete(key=cache_key)
+        # 成功：仍在自动流转则保留失败计数并续期，避免中间一次成功轮询把累计失败清零；
+        # 只有风险真正离开自动流转后才清除。
+        status = Risk.objects.filter(risk_id=risk.risk_id).values_list("status", flat=True).first()
+        if status in _AUTO_FLOW_STATUSES:
+            current = cache.get(key=cache_key)
+            if current:
+                cache.set(
+                    key=cache_key,
+                    value=current,
+                    timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+                )
+        else:
+            cache.delete(key=cache_key)
     except Exception as err:  # NOCC:broad-except(需要处理所有错误)
         # 获取失败次数
         retry_times = cache.get(key=cache_key, default=1)
-        # 异常通知
         logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
+        # 先落失败计数，再做通知等可能失败的副作用，避免通知异常导致计数不增长、无限重试
+        if retry_times < settings.PROCESS_RISK_MAX_RETRY:
+            cache.set(
+                key=cache_key,
+                value=retry_times + 1,
+                timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+            )
         title = gettext("Process Risk Ticket Failed")
         content = gettext("ProcessClass: %s\nRiskID: %s(%d/%d)\nError: %s") % (
             process_class.__name__,
@@ -626,20 +672,18 @@ def process_one_risk(*, risk_id: str):
             settings.PROCESS_RISK_MAX_RETRY,
             err,
         )
-        ErrorMsgHandler(title, content).send()
+        try:
+            ErrorMsgHandler(title, content).send()
+        except Exception:  # NOCC:broad-except(通知失败不能挡住计数和转人工)
+            logger_celery.exception("[ProcessRiskTicket] Notify failed %s", risk.risk_id)
         # 失败达到最大次数转人工
         if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
-            cache.delete(key=cache_key)
             TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
                 new_operators=TransOperator.load_security_person(),
                 description=gettext("风险自动流转失败，转为安全接口人处理"),
             )
-        else:
-            cache.set(
-                key=cache_key,
-                value=retry_times + 1,
-                timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
-            )
+            # 转人工成功后再删计数；失败时保留，下一轮仍封顶直接再转
+            cache.delete(key=cache_key)
     except BaseException as err:
         logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
         raise err

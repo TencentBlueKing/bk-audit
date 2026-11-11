@@ -870,15 +870,28 @@ class ContentQualityIssueType(TextChoices):
     EVENT_QUERY_FAILED = "event_query_failed", gettext_lazy("事件查询失败")
 
 
+# 只有内容生成类问题适合重试整份报告；模板、接口、事件查询等失败应在各自链路收敛。
+RETRYABLE_CONTENT_QUALITY_ISSUE_TYPES = frozenset(
+    {
+        ContentQualityIssueType.EMPTY,
+        ContentQualityIssueType.TOO_SHORT,
+        ContentQualityIssueType.AI_THINKING,
+    }
+)
+
+
 class ContentQualityError(Exception):
     """报告内容质量异常
 
-    当质量检测发现问题时抛出，用于触发 Celery 任务重试。
+    当质量检测发现问题时抛出；retryable 决定是否由报告级任务重试。
     issues 元素类型为 services.web.risk.report.quality.ContentQualityIssue
     """
 
     def __init__(self, issues: list):
         self.issues = issues
+        self.retryable = bool(issues) and all(
+            issue.issue_type in RETRYABLE_CONTENT_QUALITY_ISSUE_TYPES for issue in issues
+        )
         summary = "; ".join(f"{i.issue_type}(x{i.count}): {i.detail}" for i in issues)
         super().__init__(f"报告内容质量异常: {summary}")
 

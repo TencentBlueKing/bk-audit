@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from __future__ import annotations
 
 import abc
+import time
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any, Callable, Dict, Optional, Type
@@ -64,6 +65,33 @@ class ProviderMatchResult:
     provider: "Provider" = None  # 匹配到的Provider实例
     # 额外的调用参数，由Provider.match时填充，Provider.get时使用
     call_args: dict = field(default_factory=dict)
+
+
+def _call_with_provider_retry(func: Callable[..., Any], *args, **kwargs) -> Any:
+    """只重试外部接口调用；Agent 限流交给 AIAgentTask，本地错误不重试。"""
+
+    max_retries = max(0, int(getattr(settings, "REPORT_PROVIDER_MAX_RETRIES", 2)))
+    delay = max(0.0, float(getattr(settings, "REPORT_PROVIDER_RETRY_DELAY", 1)))
+    last_error: Optional[Exception] = None
+    for attempt in range(max_retries + 1):
+        try:
+            return func(*args, **kwargs)
+        except AgentRateLimited:
+            raise
+        except Exception as err:  # NOCC:broad-except(接口级重试后再交给上层收敛)
+            last_error = err
+            if attempt >= max_retries:
+                raise
+            logger.warning(
+                "[ProviderRetry] %s failed (%d/%d): %s",
+                getattr(func, "__name__", str(func)),
+                attempt + 1,
+                max_retries,
+                err,
+            )
+            if delay:
+                time.sleep(delay)
+    raise last_error
 
 
 class Provider(abc.ABC):
@@ -229,7 +257,8 @@ class AIProvider(Provider):
             }
             if self.enable_agent_rate_limit:
                 request_data["_enable_agent_rate_limit"] = True
-            result = api.bk_plugins_ai_audit_report.chat_completion(
+            result = _call_with_provider_retry(
+                api.bk_plugins_ai_audit_report.chat_completion,
                 **request_data,
             )
             return result or ""
@@ -551,7 +580,7 @@ class EventProvider(Provider):
             if not sql:
                 return EVENT_QUERY_FAILED
 
-            result = api.bk_base.query_sync(sql=sql)
+            result = _call_with_provider_retry(api.bk_base.query_sync, sql=sql)
             return self._parse_result(result, field_name, function)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
