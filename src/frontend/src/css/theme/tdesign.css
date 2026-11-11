@@ -136,9 +136,9 @@
   background-color: var(--bk-theme-table-row-hover);
 }
 
-.t-table .t-popup__content,
-.t-table__filter-pop,
-.t-table .t-table__filter-pop-content {
+/* 筛选浮层挂在表头旁。库默认把投影和四边 inset 细线叠在一起，圆角处会被表头盖成断边。
+   只保留卡片投影，画在内容盒上。 */
+.t-popup.t-table__filter-pop .t-popup__content {
   border-radius: var(--bk-theme-overlay-radius);
   box-shadow: var(--bk-theme-overlay-shadow);
 }

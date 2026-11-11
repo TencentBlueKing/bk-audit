@@ -327,7 +327,8 @@
 /* 第三方公共表单组件：与标准控件统一圆角/6 和边框语义。
    @blueking/date-picker 的触发器根节点只有 .__bk_date_picker__，没有 .date-picker。
    库内写死 2px 圆角和 #c4c6cc 描边，放在这里覆盖，不逐页改。
-   下拉面板里的快捷项、时区标签仍是面板自己的 2px，不跟输入框圆角走。 */
+   下拉面板里的快捷项、时区标签仍是面板自己的 2px，不跟输入框圆角走。
+   面板外壳跟浮层圆角。底部时区条用负边距铺满并自带底色，不裁切会把下圆角盖成直角。 */
 .__bk_date_picker__,
 .bk-user-selector .selection-trigger {
   border-radius: var(--bk-theme-control-radius);
@@ -350,6 +351,13 @@
 .__bk_date_picker__ .date-icon,
 .__bk_date_picker__ .date-content {
   border-radius: var(--bk-theme-control-radius);
+}
+
+.__bk-date-picker-popover__ .panel-wrapper {
+  overflow: hidden;
+  border-color: var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-overlay-radius);
+  box-shadow: var(--bk-theme-overlay-shadow);
 }
 
 /* 单选圆点尺寸。bkui 变量样式用 width/height: var(--line-height-base)，

@@ -294,7 +294,7 @@
 
   /* @scene overlay | 下拉 / Popover / PopConfirm 面板 | doc: §3.3 圆角12 Dropdown/Popover/PopConfirm | class: - | detect: overlay | status: active */
   --bk-theme-overlay-radius: var(--bk-theme-radius-12);
-  --bk-theme-overlay-shadow: var(--bk-theme-shadow-dropdown); /* P9 待确认：气泡阴影是否改为卡片阴影 */
+  --bk-theme-overlay-shadow: var(--bk-theme-card-shadow);
 
   /* @scene dialog | Dialog / 大 InfoBox / Notify | doc: §3.3 圆角16 | class: - | detect: dialog | status: active */
   --bk-theme-dialog-radius: var(--bk-theme-radius-16);
