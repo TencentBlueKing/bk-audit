@@ -90,56 +90,84 @@ def expire_at_from(is_permanent: bool, duration_days, base=None):
     base = base or timezone.now()
     if is_permanent:
         return None
-    return base + datetime.timedelta(days=int(duration_days or 0))
+    return (base + datetime.timedelta(days=int(duration_days or 0))).replace(microsecond=0)
+
+
+def _format_dt(value) -> str:
+    if not value:
+        return ""
+    return value.strftime(api_settings.DATETIME_FORMAT)
 
 
 def validity_text(rule: RiskWhitelist) -> str:
     if rule.is_permanent:
         return "永久"
-    return f"{rule.expire_at}"
+    return _format_dt(rule.expire_at)
 
 
-def _node_payload(rule: RiskWhitelist) -> dict:
-    """节点上保留申请内容。审批状态和审批人放在 process_result，取 ITSM 返回。"""
+def _kept(ticket: dict, previous: dict, key: str):
+    """工单这次没带回的字段，沿用节点上一次的值。"""
 
+    if key in (ticket or {}):
+        return (ticket or {}).get(key) or []
+    return (previous or {}).get(key) or []
+
+
+def _node_payload(rule: RiskWhitelist, ticket: dict = None, previous: dict = None) -> dict:
+    """节点上保留申请内容和 ITSM 单。状态、处理人、当前步骤取工单返回。"""
+
+    ticket = ticket or {}
+    previous = previous or {}
+    status, status_display = map_whitelist_status(ticket)
+    approved = ticket.get("approve_result")
     return {
-        "rule_id": str(rule.id),
         "match_scope": rule.match_scope,
         "applicant": rule.created_by or "",
         "whitelist_type": rule.whitelist_type,
         "validity_text": validity_text(rule),
         "reason": rule.reason,
-        "submitted_at": rule.created_at.strftime(api_settings.DATETIME_FORMAT) if rule.created_at else "",
+        "submitted_at": _format_dt(rule.created_at),
+        "itsm_ticket_id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
+        "itsm_sn": ticket.get("sn") or rule.itsm_sn or "",
+        "itsm_url": ticket.get("frontend_url") or rule.itsm_ticket_url or "",
+        "itsm_status": status,
+        "itsm_status_display": status_display,
+        "approve_result": approved,
+        "current_processors": _kept(ticket, previous, "current_processors"),
+        "current_steps": _kept(ticket, previous, "current_steps"),
     }
 
 
-def _itsm_processors(ticket: dict) -> list:
-    names = []
-    for item in (ticket or {}).get("current_processors") or []:
-        if isinstance(item, dict):
-            processor = item.get("processor")
-            if isinstance(processor, (list, tuple)):
-                names.extend(str(one) for one in processor if one)
-            elif processor:
-                names.append(str(processor))
-        elif item:
-            names.append(str(item))
-    return names
+def map_whitelist_status(ticket: dict) -> tuple:
+    """ITSM 工单状态对应到白名单状态。未结束仍是待审批。"""
+
+    status = (ticket or {}).get("status") or ""
+    approved = bool((ticket or {}).get("approve_result"))
+    if status == ITSMV4TicketStatus.FINISHED and approved:
+        mapped = WhitelistStatus.ACTIVE
+    elif status in {ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION}:
+        mapped = WhitelistStatus.REJECTED
+    else:
+        mapped = WhitelistStatus.PENDING
+    return mapped, str(WhitelistStatus(mapped).label)
 
 
-def _ticket_process_result(rule: RiskWhitelist, ticket: dict) -> dict:
+def _ticket_process_result(rule: RiskWhitelist, ticket: dict, previous: dict = None) -> dict:
     ticket = ticket or {}
+    previous = previous or {}
+    status, status_display = map_whitelist_status(ticket)
+    approved = ticket.get("approve_result")
     stored = {
         "id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
         "sn": ticket.get("sn") or rule.itsm_sn or "",
         "frontend_url": ticket.get("frontend_url") or rule.itsm_ticket_url or "",
-        "status": ticket.get("status") or "",
-        "status_display": ticket.get("status_display") or "",
-        "approve_result": ticket.get("approve_result"),
+        "status": status,
+        "status_display": status_display,
+        "approve_result": approved,
         "comment": ticket.get("comment") or "",
+        "current_processors": _kept(ticket, previous, "current_processors"),
+        "current_steps": _kept(ticket, previous, "current_steps"),
     }
-    if "current_processors" in ticket:
-        stored["current_processors"] = ticket.get("current_processors") or []
     return {"ticket": stored}
 
 
@@ -167,24 +195,17 @@ def refresh_whitelist_nodes(rule: RiskWhitelist, ticket: dict = None) -> None:
 
     if not rule.risk_id:
         return
-    payload = {"whitelist": _node_payload(rule)}
-    process_result = _ticket_process_result(rule, ticket)
-    processors = _itsm_processors(process_result["ticket"]) if "current_processors" in (ticket or {}) else None
+    ticket = ticket or {}
     nodes = TicketNode.objects.filter(risk_id=rule.risk_id, action=WHITELIST_NODE_ACTION)
     for node in nodes:
         current = ((node.extra or {}).get("whitelist") or {}).get("rule_id")
         if str(current) != str(rule.id):
             continue
         previous = (node.process_result or {}).get("ticket") or {}
-        if "current_processors" not in process_result["ticket"]:
-            process_result["ticket"]["current_processors"] = previous.get("current_processors") or []
-        node.extra = payload
+        process_result = _ticket_process_result(rule, ticket, previous)
+        node.extra = {"whitelist": _node_payload(rule, ticket, previous)}
         node.process_result = process_result
-        update_fields = ["extra", "process_result"]
-        if processors is not None:
-            node.current_operator = processors
-            update_fields.append("current_operator")
-        node.save(update_fields=update_fields)
+        node.save(update_fields=["extra", "process_result"])
 
 
 def ensure_same_strategy_scene(risks) -> None:
@@ -309,17 +330,16 @@ def operate_itsm(rule: RiskWhitelist, method: str, operator: str) -> None:
 def apply_whitelist_result(rule: RiskWhitelist, ticket: dict) -> RiskWhitelist:
     """终态才改状态。已经不是待审批时直接返回。"""
 
-    status = (ticket or {}).get("status") or ""
-    approved = bool((ticket or {}).get("approve_result"))
+    status, _display = map_whitelist_status(ticket)
     comment = (ticket or {}).get("comment") or ""
     with transaction.atomic():
         current = RiskWhitelist.objects.select_for_update().get(pk=rule.pk)
         if current.status != WhitelistStatus.PENDING:
             return current
-        if status == ITSMV4TicketStatus.FINISHED and approved:
+        if status == WhitelistStatus.ACTIVE:
             current.status = WhitelistStatus.ACTIVE
             current.reject_reason = ""
-        elif status in {ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION}:
+        elif status == WhitelistStatus.REJECTED:
             current.status = WhitelistStatus.REJECTED
             current.reject_reason = comment or current.reject_reason
         else:
@@ -332,6 +352,18 @@ def apply_whitelist_result(rule: RiskWhitelist, ticket: dict) -> RiskWhitelist:
     return current
 
 
+def _abort_whitelist(rule: RiskWhitelist) -> None:
+    from services.web.risk.models import TicketNode
+
+    if rule.risk_id:
+        nodes = TicketNode.objects.filter(risk_id=rule.risk_id, action=WHITELIST_NODE_ACTION)
+        for node in nodes:
+            current = ((node.extra or {}).get("whitelist") or {}).get("rule_id")
+            if str(current) == str(rule.id):
+                node.delete()
+    rule.delete()
+
+
 def create_itsm_ticket(rule_id: int) -> None:
     rule = RiskWhitelist.objects.filter(pk=rule_id).first()
     if rule is None or rule.itsm_ticket_id:
@@ -339,7 +371,8 @@ def create_itsm_ticket(rule_id: int) -> None:
     workflow_key = RISK_WHITELIST_WORKFLOW_KEY
     if not workflow_key:
         logger.error("[RiskWhitelist] RISK_WHITELIST_WORKFLOW_KEY 未配置, id=%s", rule.id)
-        return
+        _abort_whitelist(rule)
+        raise ValidationError(gettext("ITSM 审批流程未配置"))
     callback_url = RISK_WHITELIST_CALLBACK_URL
     form_data = {
         "ticket__title": f"【审计中心】风险白名单 {rule.id}",
@@ -361,12 +394,16 @@ def create_itsm_ticket(rule_id: int) -> None:
             callback_token=rule.callback_token,
             portal="DEFAULT",
         )
-    except Exception:
+    except Exception as exc:
         logger.exception("[RiskWhitelist] ticket_create failed, id=%s", rule.id)
-        return
+        _abort_whitelist(rule)
+        raise ValidationError(gettext("ITSM 工单创建失败")) from exc
     rule.itsm_ticket_id = str(ticket.get("id") or "")
     rule.itsm_sn = ticket.get("sn") or ""
     rule.itsm_ticket_url = ticket.get("frontend_url") or ""
+    if not rule.itsm_ticket_id:
+        _abort_whitelist(rule)
+        raise ValidationError(gettext("ITSM 工单创建失败"))
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     refresh_whitelist_nodes(rule, ticket)
     if rule.created_by and is_scene_admin(rule.created_by, rule.scene_id):
@@ -375,7 +412,19 @@ def create_itsm_ticket(rule_id: int) -> None:
         except Exception:
             logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
             return
-        apply_whitelist_result(rule, {"status": ITSMV4TicketStatus.FINISHED, "approve_result": True, "comment": ""})
+        apply_whitelist_result(
+            rule,
+            {
+                "id": rule.itsm_ticket_id,
+                "sn": rule.itsm_sn,
+                "frontend_url": rule.itsm_ticket_url,
+                "status": ITSMV4TicketStatus.FINISHED,
+                "approve_result": True,
+                "comment": "",
+                "current_processors": ticket.get("current_processors") or [],
+                "current_steps": ticket.get("current_steps") or [],
+            },
+        )
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:
@@ -490,21 +539,50 @@ def list_actions(rule: RiskWhitelist) -> list:
     return []
 
 
-def flow_of(rule: RiskWhitelist):
+def flow_of(rule: RiskWhitelist, ticket: dict = None):
     if rule.status not in FLOW_STATUS:
         return None
+    ticket = ticket or {}
     rejected = rule.status == WhitelistStatus.REJECTED
+    status, status_display = map_whitelist_status(ticket) if ticket.get("status") else ("", "")
     return {
-        "itsm_ticket_id": rule.itsm_ticket_id,
-        "itsm_sn": rule.itsm_sn,
-        "itsm_url": rule.itsm_ticket_url,
+        "itsm_ticket_id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
+        "itsm_sn": ticket.get("sn") or rule.itsm_sn or "",
+        "itsm_url": ticket.get("frontend_url") or rule.itsm_ticket_url or "",
+        "status": status,
+        "status_display": status_display,
+        "approve_result": ticket.get("approve_result"),
+        "comment": ticket.get("comment") or "",
+        "current_processors": ticket.get("current_processors") or [],
+        "current_steps": ticket.get("current_steps") or [],
         "rejector": rule.updated_by if rejected else "",
         "reject_reason": rule.reject_reason if rejected else "",
         "rejected_at": rule.updated_at.strftime(api_settings.DATETIME_FORMAT) if rejected and rule.updated_at else "",
     }
 
 
-def serialize_rule(rule: RiskWhitelist, hit_count: int = 0) -> dict:
+def progress_map(rules) -> dict:
+    """待审批、驳回直接读 ITSM 工单回显，不读风险节点，也不另存。"""
+
+    found = {}
+    for rule in rules:
+        if rule.status not in FLOW_STATUS or not rule.itsm_ticket_id:
+            continue
+        try:
+            detail = api.bk_itsm_v4.ticket_detail(id=rule.itsm_ticket_id) or {}
+        except Exception:
+            logger.exception("[RiskWhitelist] list ticket_detail failed, id=%s", rule.id)
+            found[str(rule.id)] = {}
+            continue
+        found[str(rule.id)] = detail
+    return found
+
+
+def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = None) -> dict:
+    if progress is None:
+        progress = getattr(rule, "_itsm_progress", None)
+    if progress is None and rule.status in FLOW_STATUS:
+        progress = progress_map([rule]).get(str(rule.id))
     return {
         "id": str(rule.id),
         "rule_code": str(rule.id),
@@ -523,7 +601,7 @@ def serialize_rule(rule: RiskWhitelist, hit_count: int = 0) -> dict:
         "itsm_ticket_id": rule.itsm_ticket_id or "",
         "itsm_sn": rule.itsm_sn or "",
         "itsm_url": rule.itsm_ticket_url or "",
-        "flow": flow_of(rule),
+        "flow": flow_of(rule, progress),
         "actions": list_actions(rule),
     }
 

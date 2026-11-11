@@ -15,10 +15,15 @@ from services.web.risk.whitelist.constants import (
 )
 from services.web.risk.whitelist.models import RiskWhitelist
 from services.web.risk.whitelist.service import (
+    _node_payload,
+    create_itsm_ticket,
     expire_at_from,
+    flow_of,
     intercept_whitelist,
+    progress_map,
     resolve_duration,
     submit_whitelist,
+    validity_text,
 )
 from services.web.scene.constants import ITSMV4TicketStatus
 
@@ -128,6 +133,29 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertEqual(write_nodes.call_count, 2)
         self.assertEqual(create_ticket.call_count, 2)
 
+
+class WhitelistTicketCreateTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service._abort_whitelist")
+    @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", side_effect=RuntimeError("boom"))
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter")
+    def test_ticket_create_failure_raises(self, query, ticket_create, abort):
+        rule = SimpleNamespace(
+            id=1,
+            itsm_ticket_id="",
+            created_by="alice",
+            scene_id=1,
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            reason="接受一段时间",
+            match_scope=_scope(),
+            risk_id="risk-1",
+            callback_token="token",
+        )
+        query.return_value.first.return_value = rule
+        with self.assertRaises(ValidationError):
+            create_itsm_ticket(1)
+        abort.assert_called_once_with(rule)
+
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [
             SimpleNamespace(strategy_id=9, raw_event_id="evt-1", risk_id="risk-1", scene_id=3),
@@ -197,6 +225,84 @@ class WhitelistDurationTests(SimpleTestCase):
         base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
         self.assertIsNone(expire_at_from(True, None, base))
         self.assertEqual(expire_at_from(False, 15, base), base + datetime.timedelta(days=15))
+        fractional = datetime.datetime(2026, 12, 11, 8, 33, 41, 289366, tzinfo=datetime.timezone.utc)
+        self.assertEqual(expire_at_from(False, 0, fractional), fractional.replace(microsecond=0))
+        rule = SimpleNamespace(is_permanent=False, expire_at=fractional)
+        self.assertEqual(validity_text(rule), "2026-12-11 08:33:41")
+
+    def test_node_keeps_ticket_after_approve(self):
+        expire = datetime.datetime(2026, 12, 11, 8, 33, 41, 289366, tzinfo=datetime.timezone.utc)
+        rule = SimpleNamespace(
+            id=1,
+            is_permanent=False,
+            expire_at=expire,
+            match_scope={},
+            created_by="admin",
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            reason="接受",
+            created_at=expire,
+            itsm_ticket_id="102026111108334100059701",
+            itsm_sn="DE2026111100000001",
+            itsm_ticket_url="http://itsm/1",
+        )
+        payload = _node_payload(
+            rule,
+            {
+                "status": ITSMV4TicketStatus.FINISHED,
+                "approve_result": True,
+                "current_processors": [{"processor": "admin"}],
+                "current_steps": [{"name": "审批"}],
+            },
+        )
+        self.assertEqual(payload["validity_text"], "2026-12-11 08:33:41")
+        self.assertEqual(payload["itsm_ticket_id"], "102026111108334100059701")
+        self.assertEqual(payload["itsm_sn"], "DE2026111100000001")
+        self.assertEqual(payload["itsm_status"], WhitelistStatus.ACTIVE)
+        self.assertEqual(payload["itsm_status_display"], "生效中")
+        rule.status = WhitelistStatus.PENDING
+        rule.itsm_ticket_url = "http://itsm/1"
+        rule.updated_by = ""
+        rule.reject_reason = ""
+        rule.updated_at = None
+        flow = flow_of(
+            rule,
+            {"current_processors": payload["current_processors"], "current_steps": payload["current_steps"]},
+        )
+        self.assertEqual(flow["itsm_sn"], "DE2026111100000001")
+        self.assertEqual(flow["current_processors"], [{"processor": "admin"}])
+        self.assertEqual(flow["current_steps"], [{"name": "审批"}])
+
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    def test_list_echoes_itsm_ticket(self, ticket_detail):
+        ticket_detail.return_value = {
+            "id": "102026111108334100059701",
+            "sn": "DE2026111100000001",
+            "frontend_url": "http://itsm/1",
+            "status": "running",
+            "status_display": "审批中",
+            "approve_result": None,
+            "current_processors": [],
+            "current_steps": [{"name": "审批"}],
+        }
+        rule = SimpleNamespace(
+            id=1,
+            status=WhitelistStatus.PENDING,
+            itsm_ticket_id="102026111108334100059701",
+            itsm_sn="",
+            itsm_ticket_url="",
+            updated_by="",
+            reject_reason="",
+            updated_at=None,
+        )
+        echoed = progress_map([rule])["1"]
+        flow = flow_of(rule, echoed)
+        ticket_detail.assert_called_once_with(id="102026111108334100059701")
+        self.assertEqual(flow["itsm_sn"], "DE2026111100000001")
+        self.assertEqual(flow["itsm_url"], "http://itsm/1")
+        self.assertEqual(flow["status"], WhitelistStatus.PENDING)
+        self.assertEqual(flow["status_display"], "待审批")
+        self.assertEqual(flow["current_processors"], [])
+        self.assertEqual(flow["current_steps"], [{"name": "审批"}])
 
     def test_risk_acceptance_cannot_be_permanent(self):
         with self.assertRaises(ValidationError):

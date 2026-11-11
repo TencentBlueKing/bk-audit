@@ -51,6 +51,7 @@ from services.web.risk.whitelist.service import (
     get_rule_for_admin,
     managed_scene_ids,
     operate_itsm,
+    progress_map,
     serialize_rule,
     submit_whitelist,
 )
@@ -98,11 +99,12 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                 (page - 1) * page_size : page * page_size
             ]
         )
+        snapshots = progress_map(rows)
         return {
             "page": page,
             "page_size": page_size,
             "total": total,
-            "results": [serialize_rule(row, getattr(row, "hit_count", 0)) for row in rows],
+            "results": [serialize_rule(row, getattr(row, "hit_count", 0), snapshots.get(str(row.id))) for row in rows],
         }
 
 
