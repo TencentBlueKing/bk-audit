@@ -846,6 +846,7 @@
     platformAccountType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
     totalRechargeYuan: row[PROFILE_FIELDS.TOTAL_RECHARGE_YUAN] || row.totalRechargeYuan || 0,
     accountNature: getAccountNatureValue(row),
+    wechatCommid: row[PROFILE_FIELDS.WECHAT_COMMID] || '',
     // 平台账号类型和平台账号（用于游戏详情顶栏动态展示微信/QQ）
     platType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
     platAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',

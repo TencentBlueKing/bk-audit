@@ -148,6 +148,7 @@ export const CHART_FIELDS = {
 export const EXPORT_USER_FIELDS = {
   GAME_NAME: '游戏名称',
   OPENID: 'openid',
+  WECHAT_COMMID: '微信commid',
   WECHAT: '微信',
   QQ: 'QQ',
   COIN_BALANCE: '代币存量',
