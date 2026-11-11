@@ -602,6 +602,7 @@ class RiskWhitelistsViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.risk.list_risk_whitelists),
         ResourceRoute("POST", resource.risk.create_risk_whitelist),
+        ResourceRoute("POST", resource.risk.batch_create_risk_whitelist, endpoint="batch"),
         ResourceRoute("PUT", resource.risk.update_risk_whitelist, pk_field="id"),
         ResourceRoute("DELETE", resource.risk.delete_risk_whitelist, pk_field="id"),
         ResourceRoute("GET", resource.risk.list_whitelist_hit_records, pk_field="id", endpoint="hit_records"),

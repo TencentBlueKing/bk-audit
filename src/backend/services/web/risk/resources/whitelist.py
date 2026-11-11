@@ -34,6 +34,7 @@ from services.web.risk.whitelist.constants import (
 from services.web.risk.whitelist.match import validate_match_scope
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.whitelist.serializers import (
+    BatchCreateRiskWhitelistReqSerializer,
     CreateRiskWhitelistReqSerializer,
     FetchWhitelistHitEventReqSerializer,
     ListRiskWhitelistReqSerializer,
@@ -109,52 +110,91 @@ class ListRiskWhitelists(RiskWhitelistMeta):
 
 
 class CreateRiskWhitelist(RiskWhitelistMeta):
-    """新建白名单。带风险单时从风险单取场景，否则使用 scene_id。创建不要求管理员。"""
+    """新建白名单。"""
 
     name = gettext_lazy("新建风险白名单")
     RequestSerializer = CreateRiskWhitelistReqSerializer
 
     def perform_request(self, validated_request_data):
         username = get_request_username()
-        risk_ids = list(validated_request_data.get("risk_ids") or [])
-        if validated_request_data.get("risk_id"):
-            risk_ids.append(validated_request_data["risk_id"])
-        risk_ids = list(dict.fromkeys(risk_ids))
+        risk_id = validated_request_data.get("risk_id") or ""
         risks = []
         scene_id = validated_request_data.get("scene_id")
-        if risk_ids:
-            risks = list(Risk.objects.filter(risk_id__in=risk_ids))
-            if len(risks) != len(risk_ids):
-                raise ValidationError(gettext("部分风险单不存在"))
-            ensure_same_strategy_scene(risks)
-            if validated_request_data.get("whitelist_type") == WhitelistType.FALSE_POSITIVE:
-                from services.web.risk.resources.risk import UpdateRiskLabel
-
-                for risk in risks:
-                    UpdateRiskLabel().request(
-                        {
-                            "risk_id": risk.risk_id,
-                            "risk_label": RiskLabel.MISREPORT,
-                            "description": validated_request_data.get("reason") or "",
-                        }
-                    )
-                risks = list(Risk.objects.filter(risk_id__in=risk_ids))
+        if risk_id:
+            risks = list(Risk.objects.filter(risk_id=risk_id))
+            if not risks:
+                raise ValidationError(gettext("风险单不存在"))
+            _misreport_for_whitelist(risks, validated_request_data)
+            risks = list(Risk.objects.filter(risk_id=risk_id))
             scene_id = risks[0].scene_id
         elif not scene_id:
             raise ValidationError(gettext("需要 scene_id"))
-        created = submit_whitelist(
-            scene_id=scene_id,
-            match_scope=validated_request_data["match_scope"],
-            whitelist_type=validated_request_data["whitelist_type"],
-            reason=validated_request_data["reason"],
-            is_permanent=validated_request_data.get("is_permanent"),
-            duration_days=validated_request_data.get("duration_days"),
+        return serialize_rule(
+            _submit_created(
+                validated_request_data,
+                scene_id=scene_id,
+                risks=risks,
+                username=username,
+            )
+        )
+
+
+class BatchCreateRiskWhitelist(RiskWhitelistMeta):
+    """批量新建白名单。选单方式和批量确认风险一样，每张风险各建一条。"""
+
+    name = gettext_lazy("批量新建风险白名单")
+    RequestSerializer = BatchCreateRiskWhitelistReqSerializer
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.resources.risk import (
+            BULK_ACTION_MAX_RISK_IDS,
+            _prepare_bulk_risks,
+        )
+
+        username = get_request_username()
+        risk_ids, risks, _risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        if len(risks) != len(risk_ids):
+            raise ValidationError(gettext("部分风险单不存在"))
+        ensure_same_strategy_scene(risks)
+        _misreport_for_whitelist(risks, validated_request_data)
+        risks = list(Risk.objects.filter(risk_id__in=risk_ids))
+        created = _submit_created(
+            validated_request_data,
+            scene_id=risks[0].scene_id,
             risks=risks,
             username=username,
         )
-        if isinstance(created, list):
-            return [serialize_rule(item) for item in created]
-        return serialize_rule(created)
+        if not isinstance(created, list):
+            created = [created]
+        return [serialize_rule(item) for item in created]
+
+
+def _misreport_for_whitelist(risks, validated_request_data) -> None:
+    if validated_request_data.get("whitelist_type") != WhitelistType.FALSE_POSITIVE:
+        return
+    from services.web.risk.resources.risk import UpdateRiskLabel
+
+    for risk in risks:
+        UpdateRiskLabel().request(
+            {
+                "risk_id": risk.risk_id,
+                "risk_label": RiskLabel.MISREPORT,
+                "description": validated_request_data.get("reason") or "",
+            }
+        )
+
+
+def _submit_created(validated_request_data, *, scene_id, risks, username):
+    return submit_whitelist(
+        scene_id=scene_id,
+        match_scope=validated_request_data["match_scope"],
+        whitelist_type=validated_request_data["whitelist_type"],
+        reason=validated_request_data["reason"],
+        is_permanent=validated_request_data.get("is_permanent"),
+        duration_days=validated_request_data.get("duration_days"),
+        risks=risks,
+        username=username,
+    )
 
 
 class UpdateRiskWhitelist(RiskWhitelistMeta):
@@ -241,7 +281,7 @@ class RenewRiskWhitelist(RiskWhitelistMeta):
             scene_id=rule.scene_id,
             match_scope=rule.match_scope,
             whitelist_type=rule.whitelist_type,
-            reason=rule.reason,
+            reason=validated_request_data.get("remark") or rule.reason,
             is_permanent=False,
             duration_days=validated_request_data["duration_days"],
             risks=[],

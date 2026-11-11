@@ -22,6 +22,7 @@ from services.web.risk.whitelist.service import (
     intercept_whitelist,
     progress_map,
     resolve_duration,
+    resolve_expire_at,
     submit_whitelist,
     validity_text,
 )
@@ -228,7 +229,7 @@ class WhitelistDurationTests(SimpleTestCase):
         fractional = datetime.datetime(2026, 12, 11, 8, 33, 41, 289366, tzinfo=datetime.timezone.utc)
         self.assertEqual(expire_at_from(False, 0, fractional), fractional.replace(microsecond=0))
         rule = SimpleNamespace(is_permanent=False, expire_at=fractional)
-        self.assertEqual(validity_text(rule), "2026-12-11 08:33:41")
+        self.assertEqual(validity_text(rule), "2026-12-11 16:33:41")
 
     def test_node_keeps_ticket_after_approve(self):
         expire = datetime.datetime(2026, 12, 11, 8, 33, 41, 289366, tzinfo=datetime.timezone.utc)
@@ -254,7 +255,7 @@ class WhitelistDurationTests(SimpleTestCase):
                 "current_steps": [{"name": "审批"}],
             },
         )
-        self.assertEqual(payload["validity_text"], "2026-12-11 08:33:41")
+        self.assertEqual(payload["validity_text"], "2026-12-11 16:33:41")
         self.assertEqual(payload["itsm_ticket_id"], "102026111108334100059701")
         self.assertEqual(payload["itsm_sn"], "DE2026111100000001")
         self.assertEqual(payload["itsm_status"], WhitelistStatus.ACTIVE)
@@ -303,6 +304,16 @@ class WhitelistDurationTests(SimpleTestCase):
         self.assertEqual(flow["status_display"], "待审批")
         self.assertEqual(flow["current_processors"], [])
         self.assertEqual(flow["current_steps"], [{"name": "审批"}])
+
+    def test_custom_time_is_the_expire_at(self):
+        from django.utils import timezone
+
+        text = "2026-12-31 18:00:00"
+        permanent, expire_at = resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days=text)
+        self.assertFalse(permanent)
+        self.assertEqual(timezone.localtime(expire_at).strftime("%Y-%m-%d %H:%M:%S"), text)
+        with self.assertRaises(ValidationError):
+            resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="2020-01-01 00:00:00")
 
     def test_risk_acceptance_cannot_be_permanent(self):
         with self.assertRaises(ValidationError):
@@ -433,17 +444,18 @@ class WhitelistFlowTests(SimpleTestCase):
             self.assertEqual(rule.itsm_ticket_id, "ticket-1")
             self.assertEqual(rule.itsm_sn, "SN1")
             self.assertEqual(rule.itsm_ticket_url, "http://itsm/ticket-1")
-            result = RiskWhitelistCallback().perform_request(
-                {
-                    "callback_token": rule.callback_token,
-                    "ticket": {
-                        "id": "ticket-1",
-                        "status": ITSMV4TicketStatus.FINISHED,
-                        "approve_result": True,
-                        "comment": "",
-                    },
-                }
-            )
+            with patch("services.web.risk.whitelist.service._close_source_risk"):
+                result = RiskWhitelistCallback().perform_request(
+                    {
+                        "callback_token": rule.callback_token,
+                        "ticket": {
+                            "id": "ticket-1",
+                            "status": ITSMV4TicketStatus.FINISHED,
+                            "approve_result": True,
+                            "comment": "",
+                        },
+                    }
+                )
             self.assertTrue(result["result"])
             self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
             self.assertIsNotNone(rule.expire_at)

@@ -65,6 +65,44 @@ def managed_scene_ids(username: str):
     )
 
 
+def coerce_duration_days(value):
+    """整数是有效天数，时间字符串是到期时间。空值返回 None。"""
+
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        raise ValidationError(gettext("有效天数必须是大于 0 的整数或到期时间"))
+    if isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, int):
+        if value < 1:
+            raise ValidationError(gettext("有效天数必须是大于 0 的整数"))
+        return value
+    text = str(value).strip()
+    if text.isdigit():
+        days = int(text)
+        if days < 1:
+            raise ValidationError(gettext("有效天数必须是大于 0 的整数"))
+        return days
+    parsed = None
+    if _looks_like_local_dt(text):
+        try:
+            parsed = datetime.datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            parsed = None
+    if parsed is None:
+        from django.utils.dateparse import parse_datetime
+
+        parsed = parse_datetime(text)
+    if parsed is None:
+        raise ValidationError(gettext("有效天数必须是大于 0 的整数或到期时间"))
+    return parsed
+
+
+def _looks_like_local_dt(text: str) -> bool:
+    return len(text) == 19 and text[10] == " "
+
+
 def resolve_duration(whitelist_type: str, is_permanent=None, duration_days=None) -> tuple:
     """返回 (是否永久, 天数)。天数由调用方传入，不限 7 天或整月。"""
 
@@ -86,6 +124,24 @@ def resolve_duration(whitelist_type: str, is_permanent=None, duration_days=None)
     return False, days
 
 
+def resolve_expire_at(whitelist_type: str, is_permanent=None, duration_days=None):
+    """返回 (是否永久, 到期时间)。duration_days 为时间时原样保存，为整数时从当前时间加天数。"""
+
+    duration_days = coerce_duration_days(duration_days)
+    if isinstance(duration_days, datetime.datetime):
+        if is_permanent is True:
+            raise ValidationError(gettext("永久规则不能填写到期时间"))
+        expire_at = duration_days
+        if timezone.is_naive(expire_at):
+            expire_at = timezone.make_aware(expire_at, timezone.get_current_timezone())
+        expire_at = expire_at.replace(microsecond=0)
+        if expire_at <= timezone.now():
+            raise ValidationError(gettext("到期时间必须晚于当前时间"))
+        return False, expire_at
+    permanent, days = resolve_duration(whitelist_type, is_permanent, duration_days)
+    return permanent, expire_at_from(permanent, days)
+
+
 def expire_at_from(is_permanent: bool, duration_days, base=None):
     base = base or timezone.now()
     if is_permanent:
@@ -99,10 +155,18 @@ def _format_dt(value) -> str:
     return value.strftime(api_settings.DATETIME_FORMAT)
 
 
+def _format_expire(value) -> str:
+    if not value:
+        return ""
+    if timezone.is_aware(value):
+        value = timezone.localtime(value)
+    return value.strftime(api_settings.DATETIME_FORMAT)
+
+
 def validity_text(rule: RiskWhitelist) -> str:
     if rule.is_permanent:
         return "永久"
-    return _format_dt(rule.expire_at)
+    return _format_expire(rule.expire_at)
 
 
 def _kept(ticket: dict, previous: dict, key: str):
@@ -290,7 +354,7 @@ def _create_whitelist(
         raise ValidationError(gettext("不支持的加白类型"))
     if not reason:
         raise ValidationError(gettext("加白原因不能为空"))
-    is_permanent, duration_days = resolve_duration(whitelist_type, is_permanent, duration_days)
+    is_permanent, expire_at = resolve_expire_at(whitelist_type, is_permanent, duration_days)
     if not Scene.objects.filter(pk=scene_id, is_deleted=False).exists():
         raise ValidationError(gettext("场景不存在"))
 
@@ -301,7 +365,7 @@ def _create_whitelist(
         match_scope=match_scope,
         reason=reason[:500],
         is_permanent=is_permanent,
-        expire_at=expire_at_from(is_permanent, duration_days),
+        expire_at=expire_at,
         status=WhitelistStatus.PENDING,
         callback_token=uuid.uuid4().hex,
         created_by=username,
@@ -349,7 +413,32 @@ def apply_whitelist_result(rule: RiskWhitelist, ticket: dict) -> RiskWhitelist:
         current.save(update_fields=["status", "reject_reason", "updated_at", "updated_by"])
     current.refresh_from_db()
     refresh_whitelist_nodes(current, ticket)
+    if current.status == WhitelistStatus.ACTIVE:
+        _close_source_risk(current)
     return current
+
+
+def _close_source_risk(rule: RiskWhitelist) -> None:
+    """审批通过后关闭来源风险单。已关单跳过，驳回不关。"""
+
+    if not rule.risk_id:
+        return
+    from services.web.risk.constants import RiskStatus
+    from services.web.risk.handlers.ticket import CloseRisk
+    from services.web.risk.models import Risk
+
+    risk = Risk.objects.filter(risk_id=rule.risk_id).first()
+    if risk is None or risk.status == RiskStatus.CLOSED:
+        return
+    if risk.status == RiskStatus.PENDING_CONFIRM:
+        risk.status = RiskStatus.AWAIT_PROCESS
+        risk.save(update_fields=["status"])
+    try:
+        CloseRisk(risk_id=risk.risk_id, operator=rule.updated_by or rule.created_by or "").run(
+            description=gettext("白名单审批通过，关闭风险单")
+        )
+    except Exception:
+        logger.exception("[RiskWhitelist] close risk failed, rule=%s risk=%s", rule.id, rule.risk_id)
 
 
 def _abort_whitelist(rule: RiskWhitelist) -> None:
@@ -590,7 +679,7 @@ def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = Non
         "risk_id": rule.risk_id,
         "match_scope": rule.match_scope,
         "whitelist_type": rule.whitelist_type,
-        "expire_at": rule.expire_at.strftime(api_settings.DATETIME_FORMAT) if rule.expire_at else None,
+        "expire_at": _format_expire(rule.expire_at) or None,
         "is_permanent": rule.is_permanent,
         "status": rule.status,
         "reason": rule.reason,
