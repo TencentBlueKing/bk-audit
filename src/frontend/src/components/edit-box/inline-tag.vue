@@ -260,4 +260,14 @@
   .audit-inline-tag:hover .audit-inline-tag__edit-icon {
     opacity: 100%;
   }
+
+  /* 主题给 bk-table 的 .cell 写死了行高并隐藏溢出，编辑态标签换行时需让行随内容撑高；
+     上下内边距收到 4px，单行时 32px 输入框刚好落在默认行高内不跳动 */
+  .bk-table .bk-table-body table tbody tr td:not(.empty-cell) .cell:has(.audit-inline-tag__editor) {
+    height: auto;
+    min-height: calc(var(--bk-theme-table-row-height) - 2px);
+    padding-top: var(--bk-theme-space-4);
+    padding-bottom: var(--bk-theme-space-4);
+    overflow: visible;
+  }
 </style>
