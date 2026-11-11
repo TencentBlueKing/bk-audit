@@ -38,6 +38,21 @@
               @click="handleCopy(gameData.openid)" />
           </span>
         </div>
+        <div
+          v-if="gameData.platType !== 'qq'"
+          class="info-item">
+          <span class="info-label">{{ t('微信commid') }}</span>
+          <span class="info-value">
+            <template v-if="gameData.wechatCommid">
+              {{ gameData.wechatCommid }}
+              <audit-icon
+                class="copy-icon"
+                type="copy"
+                @click="handleCopy(gameData.wechatCommid)" />
+            </template>
+            <template v-else>--</template>
+          </span>
+        </div>
         <div class="info-item">
           <span class="info-label">{{ gameData.platType === 'qq' ? 'QQ' : '微信' }}</span>
           <span class="info-value">
@@ -345,6 +360,7 @@
     totalIssue: number;
     exchangeRate?: string | number;
     accountNature?: string;
+    wechatCommid?: string;
   }
 
   interface Props {
@@ -375,6 +391,7 @@
       totalIssue: 0,
       exchangeRate: '',
       accountNature: '',
+      wechatCommid: '',
     }),
     initialTab: '',
     toolUid: '',
@@ -895,6 +912,7 @@
           ...(props.gameData.platType === 'qq' ? {
             [EXPORT_USER_FIELDS.QQ]: props.gameData.platAccount || props.gameData.wechat || '',
           } : {
+            [EXPORT_USER_FIELDS.WECHAT_COMMID]: props.gameData.wechatCommid || '',
             [EXPORT_USER_FIELDS.WECHAT]: props.gameData.platAccount || props.gameData.wechat || '',
           }),
           [EXPORT_USER_FIELDS.COIN_BALANCE]: props.gameData.coinBalance,
@@ -912,7 +930,9 @@
         const userHeaders = [
           EXPORT_USER_FIELDS.GAME_NAME, EXPORT_USER_FIELDS.OPENID,
           // 根据platType动态显示QQ或微信表头
-          ...(props.gameData.platType === 'qq' ? [EXPORT_USER_FIELDS.QQ] : [EXPORT_USER_FIELDS.WECHAT]),
+          ...(props.gameData.platType === 'qq'
+            ? [EXPORT_USER_FIELDS.QQ]
+            : [EXPORT_USER_FIELDS.WECHAT_COMMID, EXPORT_USER_FIELDS.WECHAT]),
           EXPORT_USER_FIELDS.COIN_BALANCE, EXPORT_USER_FIELDS.CURRENCY_EXCHANGE_RATIO,
           EXPORT_USER_FIELDS.TOTAL_RECHARGE,
           EXPORT_USER_FIELDS.TOTAL_GIFT, EXPORT_USER_FIELDS.TOTAL_ISSUE,

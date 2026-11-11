@@ -29,6 +29,7 @@ export const GAME_DETAIL_DISPLAY_ROUTE_KEYS = new Set([
   'total_recharge',
   'total_issue',
   'wecom',
+  'wechat_commid',
 ]);
 
 /** @deprecated 使用 GLOBAL_ROUTE_RESERVED_QUERY_KEYS */
@@ -404,6 +405,7 @@ export interface GameDetailRouteData {
   totalIssue: number;
   exchangeRate?: string | number;
   accountNature?: string;
+  wechatCommid?: string;
 }
 
 type ParsedGameDetailRoute = {
@@ -446,6 +448,9 @@ export const buildGameDetailRouteQuery = (
   if (gameData.accountNature) {
     query.account_nature = String(gameData.accountNature);
   }
+  if (gameData.wechatCommid) {
+    query.wechat_commid = String(gameData.wechatCommid);
+  }
   return query;
 };
 
@@ -476,6 +481,7 @@ export const parseGameDetailFromRoute = (
       totalIssue: toRouteNumber(getRouteQueryValue(routeQuery.total_issue)),
       exchangeRate: getRouteQueryValue(routeQuery.exchange_rate),
       accountNature: getRouteQueryValue(routeQuery.account_nature),
+      wechatCommid: getRouteQueryValue(routeQuery.wechat_commid),
     },
     toolUid,
     initialTab: getRouteQueryValue(routeQuery.initial_tab) || 'overview',

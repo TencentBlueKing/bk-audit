@@ -123,7 +123,10 @@ export const mapRemotePreview = (input: RemotePreviewInput): BksecTicketPreviewR
     {
       key: 'risk_type',
       label: '风险类型',
-      value: typeLabel(input.response?.risk_type_name || input.riskTypeName, input.response?.risk_type_id || input.riskTypeId),
+      value: typeLabel(
+        input.response?.risk_type_name || input.riskTypeName,
+        input.response?.risk_type_id || input.riskTypeId,
+      ),
     },
     { key: 'notice_users', label: '关注人', value: dash(attribute.notice_users) },
     { key: 'event_time', label: '风险发现时间', value: dash(attribute.event_time) },
