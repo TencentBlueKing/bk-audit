@@ -111,6 +111,8 @@
   }
 
   .analysis-row-popover {
+    /* width 是内容宽，和主题前一致。全局 border-box 会把内边距吃进宽度，时间列会被挤换行。 */
+    box-sizing: content-box;
     padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
     font-size: var(--bk-theme-font-size-sm);
     line-height: var(--bk-theme-line-height-sm);
@@ -123,11 +125,9 @@
       }
 
       .hover-table-title {
-        width: 84px;
         padding: var(--bk-theme-space-4) 0;
         color: var(--bk-theme-text-weak);
         text-align: right;
-        vertical-align: top;
         background-color: transparent;
       }
 
@@ -135,7 +135,8 @@
         position: relative;
         padding: var(--bk-theme-space-4) 0 var(--bk-theme-space-4) var(--bk-theme-space-8);
         color: var(--bk-theme-text-strong);
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
 
         a {
           color: var(--bk-theme-color-brand-2);
@@ -162,7 +163,21 @@
 
       .hover-table-content tr td {
         height: auto;
+        vertical-align: top;
         border: none;
+      }
+    }
+
+    /* 资源实例字段名来自接入 schema，84px 放不下「是否开启系统诊断推送」这类 10 字标签。
+       标签单行，值列至少放下完整时间，长 URL 在列内换行。 */
+    .instance-hover-table {
+      .hover-table-title {
+        white-space: nowrap;
+      }
+
+      .hover-table-value {
+        min-width: calc(var(--bk-theme-space-32) * 4);
+        max-width: calc(var(--bk-theme-space-32) * 8);
       }
     }
   }

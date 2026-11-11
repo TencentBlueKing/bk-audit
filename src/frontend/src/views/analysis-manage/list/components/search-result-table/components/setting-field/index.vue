@@ -58,13 +58,13 @@
 <style lang="postcss" scoped>
 .setting-filed {
   position: absolute;
-  top: 26px;
-  right: 25px;
+  top: var(--bk-theme-space-16);
+  right: var(--bk-theme-space-24);
   z-index: 3;
-  width: 40px;
-  height: 40px;
-  font-size: 14px;
-  line-height: 40px;
+  width: var(--bk-theme-table-row-height);
+  height: var(--bk-theme-table-row-height);
+  font-size: var(--bk-theme-font-size-base);
+  line-height: var(--bk-theme-table-row-height);
   color: var(--bk-theme-border-strong);
   text-align: center;
   cursor: pointer;
