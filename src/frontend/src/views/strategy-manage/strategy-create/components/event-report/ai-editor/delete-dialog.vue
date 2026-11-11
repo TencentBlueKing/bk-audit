@@ -35,9 +35,9 @@
     </div>
     <template #footer>
       <bk-button
-        class="mr8"
+       
         theme="danger"
-        @click="handleConfirm">
+        @click="handleConfirm" style="margin-right: var(--bk-theme-space-8)">
         {{ t('删除') }}
       </bk-button>
       <bk-button
@@ -83,33 +83,33 @@
 
 <style lang="postcss" scoped>
 .delete-dialog-title {
-  margin-bottom: 20px;
+  margin-bottom: var(--bk-theme-space-16);
   font-size: 16px;
   font-weight: 700;
   line-height: 24px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   text-align: center;
 }
 
 .delete-dialog-content {
-  padding: 0 20px;
+  padding: 0 var(--bk-theme-space-16);
 }
 
 .delete-dialog-name {
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 14px;
   line-height: 22px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .delete-dialog-warning {
   font-size: 12px;
   line-height: 20px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .mr8 {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
 }
 </style>
 

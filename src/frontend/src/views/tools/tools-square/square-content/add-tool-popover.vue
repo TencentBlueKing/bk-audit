@@ -80,6 +80,11 @@
                         alt="smart_page"
                         class="tool-group-item-icon"
                         :src="userProfileIcon">
+                      <img
+                        v-else-if="tool.tool_type === 'bk_vision'"
+                        alt="bk_vision"
+                        class="tool-group-item-icon"
+                        :src="toolTypeBkvision">
                       <audit-icon
                         v-else
                         class="tool-group-item-icon"
@@ -121,6 +126,11 @@
                   alt="smart_page"
                   class="tool-group-item-icon"
                   :src="userProfileIcon">
+                <img
+                  v-else-if="tool.tool_type === 'bk_vision'"
+                  alt="bk_vision"
+                  class="tool-group-item-icon"
+                  :src="toolTypeBkvision">
                 <audit-icon
                   v-else
                   class="tool-group-item-icon"
@@ -196,6 +206,11 @@
                             alt="smart_page"
                             class="tool-group-item-icon"
                             :src="userProfileIcon">
+                          <img
+                            v-else-if="tool.tool_type === 'bk_vision'"
+                            alt="bk_vision"
+                            class="tool-group-item-icon"
+                            :src="toolTypeBkvision">
                           <audit-icon
                             v-else
                             class="tool-group-item-icon"
@@ -232,6 +247,11 @@
                       alt="smart_page"
                       class="tool-group-item-icon"
                       :src="userProfileIcon">
+                    <img
+                      v-else-if="tool.tool_type === 'bk_vision'"
+                      alt="bk_vision"
+                      class="tool-group-item-icon"
+                      :src="toolTypeBkvision">
                     <audit-icon
                       v-else
                       class="tool-group-item-icon"
@@ -290,6 +310,11 @@
                             alt="smart_page"
                             class="tool-group-item-icon"
                             :src="userProfileIcon">
+                          <img
+                            v-else-if="tool.tool_type === 'bk_vision'"
+                            alt="bk_vision"
+                            class="tool-group-item-icon"
+                            :src="toolTypeBkvision">
                           <audit-icon
                             v-else
                             class="tool-group-item-icon"
@@ -326,6 +351,11 @@
                       alt="smart_page"
                       class="tool-group-item-icon"
                       :src="userProfileIcon">
+                    <img
+                      v-else-if="tool.tool_type === 'bk_vision'"
+                      alt="bk_vision"
+                      class="tool-group-item-icon"
+                      :src="toolTypeBkvision">
                     <audit-icon
                       v-else
                       class="tool-group-item-icon"
@@ -369,6 +399,7 @@
 
 
   import useRequest from '@/hooks/use-request';
+  import toolTypeBkvision from '@/images/tools-square/tool-type-bkvision.svg';
   import userProfileIcon from '@/images/user.svg';
   import { groupToolsByScene } from '@/views/tools/tools-square/utils/tool-scene-groups';
 
@@ -637,9 +668,9 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 16px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
   border-radius: 50%;
   transition: all .15s;
@@ -647,13 +678,13 @@
 }
 
 .tab-add-btn:hover {
-  color: #63656e;
-  background: #f0f1f5;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-muted);
 }
 
 .tab-add-btn:active {
-  color: #3a84ff;
-  background: #e1ecff;
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-fill-selected);
 }
 
 .add-tool-panel {
@@ -664,15 +695,15 @@
 
 .add-tool-search {
   display: flex;
-  padding-left: 10px;
-  border-bottom: 1px solid #dcdee5;
+  padding-left: var(--bk-theme-space-12);
+  border-bottom: 1px solid var(--bk-theme-border-default);
   align-items: center;
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
 }
 
 .search-icon {
   font-size: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   flex: 0 0 auto;
 }
 
@@ -681,7 +712,7 @@
   min-width: 0;
   font-size: 14px;
   line-height: 28px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   background: transparent;
   border: none;
   outline: none;
@@ -689,7 +720,7 @@
 }
 
 .search-input::placeholder {
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
 }
 
 .add-tool-body {
@@ -700,12 +731,12 @@
 
 .add-tool-left {
   min-width: 0;
-  padding: 4px 0;
+  padding: var(--bk-theme-space-4) 0;
   overflow-y: auto;
-  border-right: 1px solid #dcdee5;
+  border-right: 1px solid var(--bk-theme-border-default);
   flex: 1;
   scrollbar-width: thin;
-  scrollbar-color: #dcdee5 transparent;
+  scrollbar-color: var(--bk-theme-border-default) transparent;
 }
 
 .add-tool-left::-webkit-scrollbar {
@@ -717,12 +748,11 @@
 }
 
 .add-tool-left::-webkit-scrollbar-thumb {
-  background: #dcdee5;
-  border-radius: 999px;
+  background: var(--bk-theme-border-default);border-radius: 999px;
 }
 
 .add-tool-left::-webkit-scrollbar-thumb:hover {
-  background: #c4c6cc;
+  background: var(--bk-theme-border-strong);
 }
 
 .add-tool-right {
@@ -733,23 +763,23 @@
 }
 
 .tool-group {
-  margin-bottom: 4px;
+  margin-bottom: var(--bk-theme-space-4);
 }
 
 .tool-group-title {
   display: flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: var(--bk-theme-space-6) var(--bk-theme-space-12);
   font-size: 12px;
   font-weight: 700;
   line-height: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
   user-select: none;
 }
 
 .tool-group-title:hover {
-  background: #f5f7fa;
+  background: var(--bk-theme-surface-subtle);
 }
 
 .tool-group-title .is-collapsed {
@@ -758,23 +788,22 @@
 
 .tool-group-item {
   display: flex;
-  align-items: center;
-  padding: 6px 12px 6px 20px;
+  align-items: center;padding: var(--bk-theme-space-6) var(--bk-theme-space-12) var(--bk-theme-space-6) var(--bk-theme-space-16);
   cursor: pointer;
   transition: background .15s;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 .tool-group-item:hover {
-  background: #f0f5ff;
+  background: var(--bk-theme-select-banner-bg);
 }
 
 .tool-group-item.is-added {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .tool-group-item.is-added .tool-group-item-name {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .tool-group-item-icon {
@@ -789,7 +818,7 @@
   overflow: hidden;
   font-size: 12px;
   line-height: 20px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -800,25 +829,25 @@
   justify-content: center;
   width: 14px;
   height: 14px;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 14px;
   flex: 0 0 14px;
 }
 
 .right-tab-header {
   display: flex;
-  padding: 0 12px;
-  border-bottom: 1px solid #dcdee5;
+  padding: 0 var(--bk-theme-space-12);
+  border-bottom: 1px solid var(--bk-theme-border-default);
   justify-content: space-around;
 }
 
 .right-tab-item {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all .15s;
@@ -828,8 +857,8 @@
   display: block;
   width: 14px;
   height: 14px;
-  margin-right: 4px;
-  background-color: #63656e;
+  margin-right: var(--bk-theme-space-4);
+  background-color: var(--bk-theme-text-default);
   transition: background-color .15s;
   flex: 0 0 auto;
 }
@@ -843,29 +872,29 @@
 }
 
 .right-tab-item:hover {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .right-tab-item:hover .right-tab-icon {
-  background-color: #3a84ff;
+  background-color: var(--bk-theme-color-brand-2);
 }
 
 .right-tab-item.active {
   font-weight: 500;
-  color: #3a84ff;
-  border-bottom-color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
+  border-bottom-color: var(--bk-theme-color-brand-2);
 }
 
 .right-tab-item.active .right-tab-icon {
-  background-color: #3a84ff;
+  background-color: var(--bk-theme-color-brand-2);
 }
 
 .right-tab-content {
-  padding: 4px 0;
+  padding: var(--bk-theme-space-4) 0;
   overflow-y: auto;
   flex: 1;
   scrollbar-width: thin;
-  scrollbar-color: #dcdee5 transparent;
+  scrollbar-color: var(--bk-theme-border-default) transparent;
 }
 
 .right-tab-content::-webkit-scrollbar {
@@ -877,15 +906,14 @@
 }
 
 .right-tab-content::-webkit-scrollbar-thumb {
-  background: #dcdee5;
-  border-radius: 999px;
+  background: var(--bk-theme-border-default);border-radius: 999px;
 }
 
 .right-tab-content::-webkit-scrollbar-thumb:hover {
-  background: #c4c6cc;
+  background: var(--bk-theme-border-strong);
 }
 
 .no-data {
-  padding: 40px 0;
+  padding: var(--bk-theme-space-32) 0;
 }
 </style>

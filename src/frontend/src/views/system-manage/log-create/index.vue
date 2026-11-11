@@ -127,6 +127,6 @@
   .collector-create-header {
     display: flex;
     justify-content: center;
-    padding: 4px 0 24px;
+    padding: var(--bk-theme-space-4) 0 var(--bk-theme-space-24);
   }
 </style>

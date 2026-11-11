@@ -62,7 +62,7 @@
 
   .info-label {
     min-width: 60px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: right;
     flex: 0 0 60px;
     word-break: break-all;
@@ -70,8 +70,8 @@
   }
 
   .info-value {
-    padding-left: 14px;
-    color: #313238;
+    padding-left: var(--bk-theme-space-12);
+    color: var(--bk-theme-text-strong);
     flex: 1;
   }
 }

@@ -4,7 +4,7 @@
 -->
 <template>
   <bk-loading :loading="pageLoading">
-    <div class="confirm-manage-detail-wrap mb12">
+    <div class="confirm-manage-detail-wrap">
       <div class="left">
         <base-info
           :data="detailData"
@@ -331,13 +331,14 @@
 
 <style scoped lang="postcss">
 .confirm-manage-detail-wrap {
+  margin-bottom: var(--bk-theme-space-12);
   .left {
     width: 100%;
     padding-right: 0;
   }
 
   .risk-detail-tab {
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
     overflow: visible;
 
     :deep(.bk-tab-content) {
@@ -348,7 +349,7 @@
     }
 
     &.risk-detail-tab--hide-panel-header {
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
 
       :deep(.bk-tab-header) {
         display: none;

@@ -25,10 +25,10 @@
     <div class="edit-event-report-content">
       <bk-button
         v-if="reportEnabled"
-        class="mb16"
+       
         outline
         theme="primary"
-        @click="handleGenerateReport">
+        @click="handleGenerateReport" style="margin-bottom: var(--bk-theme-space-16)">
         {{ t('使用模版生成') }}
       </bk-button>
       <span
@@ -66,8 +66,8 @@
         {{ reportContent ? t('保存') : t('创建') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="closeDialog">
+       
+        @click="closeDialog" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -745,33 +745,31 @@
 
 <style lang="postcss" scoped>
 .edit-event-report-content {
-  padding: 28px 40px;
-  background-color: #f5f7fa;
+  padding: var(--bk-theme-space-32) var(--bk-theme-space-32);
+  background-color: var(--bk-theme-surface-subtle);
 
   .template-generate-tip {
-    margin-left: 8px;
+    margin-left: var(--bk-theme-space-8);
     font-size: 12px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   .edit-event-report-editor {
-    background-color: #fff;
+    background-color: var(--bk-theme-surface-default);
 
     :deep(.bk-loading-title) {
-      margin-left: -50px !important;
+      margin-left: -var(--bk-theme-space-32) !important;
     }
 
     :deep(.ql-toolbar.ql-snow) {
-      background: #fafbfd;
-      border: 1px solid #dcdee5;
-      border-radius: 2px 2px 0 0;
+      background: var(--bk-theme-table-header-bg);
+      border: 1px solid var(--bk-theme-border-default);border-radius: var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0 0;
     }
 
     :deep(.ql-container.ql-snow) {
-      background: #fff;
-      border: 1px solid #dcdee5;
-      border-top: 0;
-      border-radius: 0 0 2px 2px;
+      background: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-border-default);
+      border-top: 0;border-radius: 0 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius);
     }
   }
 }
@@ -790,22 +788,21 @@
 :deep(.ai-agent-block) {
   display: flex;
   width: 100%;
-  min-height: auto;
-  padding: 2px 10px;
+  min-height: auto;padding: var(--bk-theme-space-2) var(--bk-theme-space-8);
   margin: 0;
-  background: #f5f7fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: var(--bk-theme-surface-subtle);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-message-radius);
   align-items: flex-start;
 }
 
 :deep(.ai-agent-content) {
   display: flex;
-  padding: 4px 0;
-  margin-left: 35px;
+  padding: var(--bk-theme-space-4) 0;
+  margin-left: var(--bk-theme-space-32);
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
 }
 
 :deep(.ai-agent-label) {
@@ -814,7 +811,7 @@
   font-weight: 700;
   line-height: 22px;
   letter-spacing: 0;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 :deep(.ai-agent-prompt) {
@@ -824,7 +821,7 @@
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
   text-align: justify;
   word-break: break-word;
 }
@@ -833,9 +830,9 @@
   top: 20px;
   right: 8px;
   display: flex;
-  margin-top: 6px;
+  margin-top: var(--bk-theme-space-6);
   align-self: flex-start;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 :deep(.ai-agent-edit),
@@ -856,7 +853,7 @@
 
 :deep(.ai-agent-ai) {
   position: absolute;
-  margin-top: 12px;
+  margin-top: var(--bk-theme-space-12);
 }
 
 /* 移除AI智能体块周围的默认间距 */
@@ -866,7 +863,7 @@
 }
 
 :deep(.ql-editor p) {
-  margin: 0 0 12px;
+  margin: 0 0 var(--bk-theme-space-12);
   line-height: 1.5;
 }
 
@@ -878,74 +875,73 @@
 :deep(.ql-editor h6),
 :deep(.ql-editor ul),
 :deep(.ql-editor ol) {
-  margin: 0 0 12px;
+  margin: 0 0 var(--bk-theme-space-12);
 }
 
 :deep(.ql-editor ul),
 :deep(.ql-editor ol) {
-  padding-left: 20px;
+  padding-left: var(--bk-theme-space-16);
 }
 
 :deep(.ql-editor li) {
-  margin-bottom: 4px;
+  margin-bottom: var(--bk-theme-space-4);
 }
 
 :deep(.ql-editor .report-blockquote) {
-  padding: 8px 12px;
-  margin: 0 0 12px;
-  color: #313238;
-  background: #f5f7fa;
-  border-left: 4px solid #dcdee5;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  margin: 0 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-subtle);
+  border-left: 4px solid var(--bk-theme-border-default);
 }
 
 :deep(.ql-editor code) {
-  padding: 2px 4px;
+  padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
   font-family: Consolas, Monaco, monospace;
   font-size: .9em;
-  background: #f0f1f5;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-muted);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 :deep(.ql-editor hr) {
-  margin: 16px 0;
+  margin: var(--bk-theme-space-16) 0;
   border: 0;
-  border-top: 1px solid #dcdee5;
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 :deep(.ql-editor .ql-report-table) {
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
 }
 
 :deep(.ql-editor table) {
   width: 100%;
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
   font-size: 14px;
   border-collapse: collapse;
   table-layout: auto;
 }
 
 :deep(.ql-editor th),
-:deep(.ql-editor td) {
-  padding: 10px 12px;
-  color: #313238;
+:deep(.ql-editor td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  color: var(--bk-theme-text-strong);
   text-align: left;
   vertical-align: top;
-  border: 1px solid #dcdee5;
+  border: 1px solid var(--bk-theme-border-default);
 }
 
 :deep(.ql-editor thead th) {
   font-weight: 600;
-  color: #313238;
-  background: #f5f7fa;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-subtle);
 }
 
 :deep(.ql-toolbar .ql-table) {
   width: auto !important;
-  padding: 0 8px !important;
-  margin: 0 4px;
+  padding: 0 var(--bk-theme-space-8) !important;
+  margin: 0 var(--bk-theme-space-4);
   font-size: 14px !important;
   line-height: 24px !important;
-  color: #3a84ff !important;
+  color: var(--bk-theme-color-brand-2) !important;
   cursor: pointer;
   background: transparent !important;
   border: none !important;
@@ -956,4 +952,5 @@
 :deep(.ql-toolbar .ql-table:hover) {
   opacity: 80%;
 }
+
 </style>

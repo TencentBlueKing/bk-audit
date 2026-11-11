@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="permissions-page">
+  <div class="permissions-page bk-theme-form--inline">
     <div class="permissions-page-container">
       <!-- 左侧插图 -->
       <div class="landing-illustration">
@@ -481,8 +481,8 @@
   align-items: center;
   justify-content: center;
   min-height: calc(100vh - 104px);
-  padding: 56px 40px;
-  background: linear-gradient(180deg, #f5f7fa 0%, #fafbfd 100%);
+  padding: var(--bk-theme-space-32) var(--bk-theme-space-32);
+  background: linear-gradient(180deg, var(--bk-theme-surface-subtle) 0%, var(--bk-theme-table-header-bg) 100%);
 }
 
 .permissions-page-container {
@@ -516,34 +516,32 @@
 }
 
 .landing-title {
-  margin: 0 0 12px;
+  margin: 0 0 var(--bk-theme-space-12);
   font-size: 36px;
   font-weight: 700;
-  line-height: 1.3;
-  color: #21293b;
+  line-height: 1.3;color: var(--bk-theme-text-strong);
 }
 
-.landing-content {
-  padding: 24px 28px 20px;
-  background-color: #fff;
-  border-radius: 12px;
+.landing-content {padding: var(--bk-theme-space-24) var(--bk-theme-space-32) var(--bk-theme-space-16);
+  background-color: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-card-radius);
   box-shadow: 0 2px 16px rgb(59 126 255 / 8%);
 }
 
 .section-header {
   display: flex;
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
   font-size: 13px;
   line-height: 1.5;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 }
 
 .scene-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
   max-height: 456px;
   overflow-y: auto;
 
@@ -552,8 +550,8 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #c4c6cc;
-    border-radius: 2px;
+    background: var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   &::-webkit-scrollbar-track {
@@ -562,17 +560,16 @@
 }
 
 .scene-item {
-  display: flex;
-  padding: 14px 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  display: flex;padding: var(--bk-theme-space-16) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-message-radius);
   transition: all .2s;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--bk-theme-space-16);
 
   &:hover {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 }
 
@@ -584,29 +581,27 @@
 .scene-name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: var(--bk-theme-space-6);
+  margin-bottom: var(--bk-theme-space-4);
 
   .scene-name {
     font-size: 14px;
-    font-weight: 600;
-    color: #21293b;
+    font-weight: 600;color: var(--bk-theme-text-strong);
   }
 
   .admin-icon {
-    font-size: 13px;
-    color: #3b7eff;
+    font-size: 13px;color: var(--bk-theme-color-brand-2);
   }
 
   .admin-name {
     font-size: 12px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   .admin-more {
     font-size: 12px;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     text-decoration: underline;
     text-decoration-style: dashed;
     text-underline-offset: 2px;
@@ -619,7 +614,7 @@
   overflow: hidden;
   font-size: 12px;
   line-height: 1.5;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -628,28 +623,28 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 16px;
+  gap: var(--bk-theme-space-16);
 }
 
 .apply-btn {
-  min-width: 64px;
   height: 26px;
-  padding: 0 16px;
+  min-width: 64px;
+  padding: 0 var(--bk-theme-space-16);
   font-size: 14px;
   line-height: 24px;
-  color: #63656e;
-  background: #fff;
-  border-color: #c4c6cc;
-  border-radius: 2px;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-border-strong);
+  border-radius: var(--bk-theme-control-radius);
 }
 
 .enter-btn {
-  min-width: 64px;
   height: 26px;
-  padding: 0 16px;
+  min-width: 64px;
+  padding: 0 var(--bk-theme-space-16);
   font-size: 14px;
   line-height: 24px;
-  border-radius: 2px;
+  border-radius: var(--bk-theme-control-radius);
 }
 
 .status-applying,
@@ -657,7 +652,7 @@
 .status-passed {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
   font-size: 12px;
   line-height: 20px;
   cursor: default;
@@ -668,20 +663,20 @@
 }
 
 .status-applying {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .status-rejected {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 
   .status-icon {
     font-size: 14px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
 
     :deep(svg),
     :deep(svg path) {
-      fill: #ea3636;
+      fill: var(--bk-theme-color-danger-2);
     }
   }
 
@@ -689,20 +684,20 @@
     text-decoration: underline;
     text-decoration-style: dashed;
     text-underline-offset: 3px;
-    text-decoration-color: #c4c6cc;
+    text-decoration-color: var(--bk-theme-border-strong);
   }
 }
 
 .status-passed {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 
   .status-icon {
-    color: #2dcb56;
+    color: var(--bk-theme-color-success-2);
 
     :deep(svg),
     :deep(svg path) {
-      fill: #2dcb56;
+      fill: var(--bk-theme-color-success-2);
     }
   }
 
@@ -710,22 +705,22 @@
     text-decoration: underline;
     text-decoration-style: dashed;
     text-underline-offset: 3px;
-    text-decoration-color: #c4c6cc;
+    text-decoration-color: var(--bk-theme-border-strong);
   }
 }
 
 .itsm-link {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
   font-size: 12px;
   line-height: 20px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   text-decoration: none;
   cursor: pointer;
 
   &:hover {
-    color: #699df4;
+    color: var(--bk-theme-color-brand-3);
   }
 
   .link-icon {
@@ -735,13 +730,13 @@
 
 .status-tip {
   max-width: 240px;
-  padding: 4px 0;
+  padding: var(--bk-theme-space-4) 0;
 
   .status-tip-reason {
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 12px;
     line-height: 20px;
-    color: #fff;
+    color: var(--bk-theme-surface-default);
     word-break: break-all;
 
     &:last-child {
@@ -750,10 +745,10 @@
   }
 
   .itsm-link {
-    color: #699df4;
+    color: var(--bk-theme-color-brand-3);
 
     &:hover {
-      color: #a3c5fd;
+      color: var(--bk-theme-color-brand-4);
     }
   }
 }
@@ -774,52 +769,49 @@
 
 /* 申请权限区域 */
 .apply-section {
-  margin-top: 20px;
+  margin-top: var(--bk-theme-space-16);
 }
 
 .reason-section {
-  margin-top: 16px;
+  margin-top: var(--bk-theme-space-16);
 
   :deep(.bk-form-item) {
-    margin-bottom: 0;
   }
 }
 
 .apply-label {
-  margin-bottom: 10px;
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 14px;
-  font-weight: 600;
-  color: #21293b;
+  font-weight: 600;color: var(--bk-theme-text-strong);
 }
 
 .permission-options {
   display: flex;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
 
   .option-card {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px 16px;
+    gap: var(--bk-theme-space-8);padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
     font-size: 14px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 4px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-card-radius);
     transition: all .2s;
 
     &:hover {
-      color: #3a84ff;
-      border-color: #3b7eff;
+      color: var(--bk-theme-color-brand-2);
+      border-color: var(--bk-theme-color-brand-2);
     }
 
     &.active {
-      color: #3a84ff;
-      background-color: #ecf2fe;
-      border-color: #3b7eff;
+      color: var(--bk-theme-color-brand-2);
+      background-color: var(--bk-theme-color-brand-7);
+      border-color: var(--bk-theme-color-brand-2);
     }
   }
 }
@@ -827,20 +819,20 @@
 .perm-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--bk-theme-space-6);
+  margin-top: var(--bk-theme-space-12);
   font-size: 13px;
   line-height: 1.5;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 
   .hint-icon {
     flex-shrink: 0;
     font-size: 15px;
-    color: #ff9c01;
+    color: var(--bk-theme-color-warn-2);
   }
 }
 
 .submit-btn {
-  margin-top: 24px;
+  margin-top: var(--bk-theme-space-24);
 }
 </style>

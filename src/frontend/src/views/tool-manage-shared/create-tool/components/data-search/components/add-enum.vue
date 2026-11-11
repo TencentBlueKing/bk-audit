@@ -16,7 +16,7 @@
 -->
 <template>
   <bk-dialog
-    class="ip-selector-dialog"
+    class="ip-selector-dialog bk-theme-form--inline"
     :is-show="isShow"
     :title="t('配置选项')"
     width="640"
@@ -184,33 +184,33 @@
 .render-field {
   display: flex;
   overflow: hidden;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
   user-select: none;
   flex-direction: column;
   flex: 1;
 
   .field-operation {
     width: 100px;
-    padding-left: 16px;
-    background: #fafbfd;
-    border-left: 1px solid #dcdee5;
+    padding-left: var(--bk-theme-space-16);
+    background: var(--bk-theme-table-header-bg);
+    border-left: 1px solid var(--bk-theme-border-default);
 
     .icon-group {
       font-size: 16px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
 
       .icon-item {
-        margin-right: 10px;
+        margin-right: var(--bk-theme-space-12);
         cursor: pointer;
 
         &:hover:not(.delete-icon-disabled) {
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
       }
 
       .delete-icon-disabled {
-        color: #dcdee5;
+        color: var(--bk-theme-border-default);
         cursor: not-allowed;
       }
     }
@@ -220,18 +220,16 @@
     display: flex;
     flex: 1;
     overflow: hidden;
-    border-left: 1px solid #dcdee5;
+    border-left: 1px solid var(--bk-theme-border-default);
     align-items: center;
 
     .bk-form-item.is-error {
-      .bk-input--text {
-        background-color: #ffebeb;
+      .bk-input--text {background-color: var(--bk-theme-fill-danger);
       }
     }
 
     .bk-form-item {
       width: 100%;
-      margin-bottom: 0;
 
       .bk-input {
         height: 42px;
@@ -239,9 +237,9 @@
       }
 
       .bk-input.is-focused:not(.is-readonly) {
-        border: 1px solid #3a84ff;
+        border: 1px solid var(--bk-theme-color-brand-2);
         outline: 0;
-        box-shadow: 0 0 3px #a3c5fd;
+       
       }
 
       .bk-form-error-tips {
@@ -255,23 +253,23 @@
     height: 42px;
     font-size: 12px;
     line-height: 40px;
-    color: #313238;
-    background: #f0f1f5;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-muted);
 
     .field-value {
-      padding-left: 8px;
+      padding-left: var(--bk-theme-space-8);
     }
 
     .field-value.is-required {
       &::after {
-        margin-left: 4px;
+        margin-left: var(--bk-theme-space-4);
         color: red;
         content: '*';
       }
     }
 
     .field-operation {
-      background: #f0f1f5;
+      background: var(--bk-theme-surface-muted);
     }
   }
 
@@ -280,8 +278,8 @@
     overflow: hidden;
     font-size: 12px;
     line-height: 42px;
-    color: #63656e;
-    border-top: 1px solid #dcdee5;
+    color: var(--bk-theme-text-default);
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 }
 </style>

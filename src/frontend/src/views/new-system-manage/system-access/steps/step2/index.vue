@@ -207,7 +207,7 @@
 <style scoped lang="postcss">
 .step2 {
   max-height: 90vh;
-  padding-bottom: 60px;
+  padding-bottom: var(--bk-theme-space-32);
   overflow: auto;
 
   &.with-sidebar {
@@ -223,54 +223,52 @@
     z-index: 999;
     width: 100%;
     height: 48px;
-    background: #fff;
-    border-top: 1px solid #eceef2;
-    box-shadow: 0 2px 4px 0 #1919290d;
+    background: var(--bk-theme-surface-default);border-top: 1px solid var(--bk-theme-border-weak);
+    box-shadow: var(--bk-theme-card-shadow);
 
     .step2-header-box {
       /* height: 22px; */
       top: 20px;
-      padding-top: 14px;
-      padding-left: 24px;
+      padding-top: var(--bk-theme-space-12);
+      padding-left: var(--bk-theme-space-24);
 
       .step2-header-title {
         font-size: 14px;
         font-weight: 700;
         letter-spacing: 0;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
       }
 
       .step2-header-right {
         font-size: 12px;
         letter-spacing: 0;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
       }
     }
 
     .info-fill {
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .step2-popover {
-      padding: 3px 5px;
-      margin-right: 5px;
-      margin-left: 5px;
-      color: #1768ef;
-      background-color: #e1ecff;
+      padding: var(--bk-theme-space-4) var(--bk-theme-space-4);
+      margin-right: var(--bk-theme-space-4);
+      margin-left: var(--bk-theme-space-4);
+      color: var(--bk-theme-color-brand-1);
+      background-color: var(--bk-theme-fill-selected);
     }
   }
 
-  .step2-list {
-    padding: 20px 24px;
-    margin-top: 40px;
+  .step2-list {padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+    margin-top: var(--bk-theme-space-32);
   }
 
   .step2-list-with-sidebar {
-    margin-top: 40px;
+    margin-top: var(--bk-theme-space-32);
   }
 
   .angle-line-down {
-    color: #1768ef;
+    color: var(--bk-theme-color-brand-1);
   }
 }
 </style>

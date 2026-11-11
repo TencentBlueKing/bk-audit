@@ -39,7 +39,7 @@
         :disabled="!bizId"
         @click="handleShowDialog">
         <audit-icon
-          class="mr8"
+          class="add-target-icon"
           type="add" />
         {{ t('添加目标') }}
       </bk-button>
@@ -132,17 +132,17 @@
     .ip-selector-result {
       display: flex;
       height: 32px;
-      padding: 0 10px 0 5px;
-      font-size: 12px;
-      color: #7a7c85;
+      padding: 0 var(--bk-theme-space-12) 0 var(--bk-theme-space-4);
+      font-size: 12px;color: var(--bk-theme-text-weak);
       cursor: pointer;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
       justify-content: center;
 
       &:hover {
-        background: #f5f7fa;
+        background: var(--bk-theme-surface-subtle);
       }
     }
   }
+  .add-target-icon { margin-right: var(--bk-theme-space-8); }
 </style>

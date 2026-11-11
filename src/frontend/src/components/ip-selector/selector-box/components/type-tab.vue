@@ -97,25 +97,25 @@
 <style lang="postcss" scoped>
   .type-tab {
     display: flex;
-    background: #fafbfd;
-    border-bottom: 1px solid #dcdee5;
+    background: var(--bk-theme-table-header-bg);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     user-select: none;
 
     .tab-item {
       height: 42px;
       min-width: 105px;
-      padding: 0 10px;
+      padding: 0 var(--bk-theme-space-12);
       line-height: 42px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: center;
       cursor: pointer;
-      border-right: 1px solid #dcdee5;
+      border-right: 1px solid var(--bk-theme-border-default);
 
       &.active {
         position: relative;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
         cursor: default;
-        background: #fff;
+        background: var(--bk-theme-surface-default);
 
         &::after {
           position: absolute;
@@ -123,13 +123,13 @@
           left: 0;
           width: 100%;
           height: 3px;
-          background: #fff;
+          background: var(--bk-theme-surface-default);
           content: '';
         }
       }
 
       &.disabled {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: not-allowed;
       }
     }

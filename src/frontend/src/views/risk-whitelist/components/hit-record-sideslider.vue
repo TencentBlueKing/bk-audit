@@ -112,10 +112,12 @@
         if (row.action === 'suppress_new' || !row.risk_id) return '-';
         if (!row.risk_url) return row.risk_id;
         return (
-          <a class="risk-link" href={row.risk_url} target="_blank" rel="noopener noreferrer">
-            {row.risk_id}
-            <audit-icon class="risk-link-icon" type="jump-link" />
-          </a>
+          <span class="risk-cell">
+            <span class="risk-text">{row.risk_id}</span>
+            <a class="risk-link" href={row.risk_url} target="_blank" rel="noopener noreferrer">
+              <audit-icon class="risk-link-icon" type="jump-link" />
+            </a>
+          </span>
         );
       },
     },
@@ -163,24 +165,29 @@
 <style lang="postcss" scoped>
   .hit-header {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
   }
 
   .hit-split {
     width: 1px;
     height: 14px;
-    background: var(--audit-neutral-border-01);
+    background: var(--bk-theme-border-default);
   }
 
   .hit-body {
-    padding: 16px 24px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
   }
 
   .hit-search {
     display: block;
     width: 100%;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
+  }
+
+  :deep(td:has(.scope-cell)) {
+    height: auto;
+    padding: var(--bk-theme-space-8);
   }
 
   :deep(.scope-cell) {
@@ -189,16 +196,27 @@
     overflow: hidden;
   }
 
+  :deep(.risk-cell) {
+    display: inline-flex;
+    gap: var(--bk-theme-space-4);
+    align-items: center;
+    max-width: 100%;
+  }
+
+  :deep(.risk-text) {
+    color: var(--bk-theme-text-strong);
+  }
+
   :deep(.risk-link) {
-    color: var(--audit-brand-02);
+    display: inline-flex;
+    color: var(--bk-theme-color-brand-2);
   }
 
   :deep(.risk-link-icon) {
-    margin-left: 4px;
     visibility: hidden;
   }
 
-  :deep(.risk-link:hover .risk-link-icon) {
+  :deep(tr:hover .risk-link-icon) {
     visibility: visible;
   }
 </style>

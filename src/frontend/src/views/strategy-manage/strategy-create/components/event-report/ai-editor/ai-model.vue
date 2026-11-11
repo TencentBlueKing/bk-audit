@@ -95,14 +95,14 @@
         <div class="ai-agent-drawer-footer">
           <div
             v-if="canSave"
-            class="ai-agent-insert-btn mr8"
+            class="ai-agent-insert-btn"
             @click="handleConfirm">
             {{ primaryButtonText }}
           </div>
           <div
             v-else
             v-bk-tooltips="{ content: t('内容无变化') }"
-            class="ai-disabled-btn mr8">
+            class="ai-disabled-btn">
             {{ primaryButtonText }}
           </div>
           <bk-button
@@ -111,11 +111,11 @@
               disabled: formData.risk_id !== '',
               content: t('请选择关联审计风险单'),
             }"
-            class="mr8"
+           
             :disabled="formData.risk_id === '' || isPreviewing"
             outline
             theme="primary"
-            @click="handlePreview">
+            @click="handlePreview" style="margin-right: var(--bk-theme-space-8)">
             {{ t('预览') }}
           </bk-button>
           <bk-button
@@ -570,7 +570,7 @@
 .ai-agent-drawer-content,
 .ai-agent-drawer-content-preview {
   width: calc(100% - 100px);
-  margin-left: 50px;
+  margin-left: var(--bk-theme-space-32);
   overflow: hidden;
   transition: height .4s cubic-bezier(.4, 0, .2, 1);
 }
@@ -587,25 +587,25 @@
   display: flex;
   width: 100%;
   height: 32px;
-  margin-top: 28px;
+  margin-top: var(--bk-theme-space-32);
   font-size: 12px;
   line-height: 32px;
-  color: #4d4f56;
-  background: #f0f5ff;
-  border: 1px solid #a3c5fd;
-  border-radius: 2px;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-select-banner-bg);
+  border: 1px solid var(--bk-theme-color-brand-4);
+  border-radius: var(--bk-theme-tag-radius);
 
   .info-fill-icon {
-    margin-right: 9px;
-    margin-left: 9px;
+    margin-right: var(--bk-theme-space-8);
+    margin-left: var(--bk-theme-space-8);
     font-size: 14px;
     line-height: 32px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
 .example {
-  margin-top: 20px;
+  margin-top: var(--bk-theme-space-16);
   transition: opacity .3s ease;
 }
 
@@ -614,30 +614,32 @@
   display: flex;
 
   .ai-agent-insert-btn {
+    margin-right: var(--bk-theme-space-8);
     width: 88px;
     height: 32px;
     font-size: 14px;
     line-height: 32px;
-    color: #fff;
+    color: var(--bk-theme-surface-default);
     text-align: center;
     cursor: pointer;
     background: linear-gradient(117deg, #235dfa 26%, #eb8cec 100%);
     border: none;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
   }
 
   .ai-disabled-btn {
+    margin-right: var(--bk-theme-space-8);
     width: 88px;
     height: 32px;
     font-size: 14px;
     line-height: 32px;
-    color: #fff;
+    color: var(--bk-theme-surface-default);
     text-align: center;
     cursor: pointer;
-    background-color: #dcdee5;
+    background-color: var(--bk-theme-border-default);
     border: none;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
   }
 }
@@ -646,13 +648,13 @@
   position: relative;
   width: 765px;
   height: 55vh;
-  margin-left: -25px;
+  margin-left: -var(--bk-theme-space-24);
 }
 
 .preview {
   width: 700px;
   height: 48px;
-  margin-left: 20px;
+  margin-left: var(--bk-theme-space-16);
   line-height: 48px;
   cursor: pointer;
   border-top: 1px solid #dde4eb;
@@ -672,29 +674,29 @@
   }
 
   .preview-title {
-    margin-left: 15px;
+    margin-left: var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: 700;
     letter-spacing: 0;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 }
 
 .preview-div {
   width: 765px;
   height: 20px;
-  margin-left: -25px;
-  background-color: #fff;
+  margin-left: -var(--bk-theme-space-24);
+  background-color: var(--bk-theme-surface-default);
 }
 
 .preview-concent {
   position: relative;
   width: 765px;
   height: calc(55vh - 68px);
-  padding-bottom: 20px;
-  margin-left: -25px;
+  padding-bottom: var(--bk-theme-space-16);
+  margin-left: -var(--bk-theme-space-24);
   overflow: hidden;
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
 
   :deep(.bk-loading),
   :deep(.bk-loading-wrapper) {
@@ -710,7 +712,7 @@
   transform: translateX(-50%);
 
   :deep(.bk-loading-title) {
-    margin-left: -50px !important;
+    margin-left: -var(--bk-theme-space-32) !important;
   }
 }
 
@@ -718,9 +720,9 @@
   width: 740px;
   height: auto;
   max-height: calc(55vh - 68px);
-  padding: 0 40px;
-  padding-bottom: 20px;
-  margin-left: 25px;
+  padding: 0 var(--bk-theme-space-32);
+  padding-bottom: var(--bk-theme-space-16);
+  margin-left: var(--bk-theme-space-24);
   overflow: hidden auto;
   word-break: break-word;
   white-space: pre-wrap;
@@ -734,35 +736,35 @@
   :deep(p),
   :deep(ul),
   :deep(ol) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
   }
 
   :deep(ul),
   :deep(ol) {
-    padding-left: 20px;
+    padding-left: var(--bk-theme-space-16);
   }
 
   :deep(li) {
-    margin-bottom: 4px;
+    margin-bottom: var(--bk-theme-space-4);
   }
 
   :deep(table) {
     width: 100%;
-    margin: 8px 0 12px;
+    margin: var(--bk-theme-space-8) 0 var(--bk-theme-space-12);
     border-collapse: collapse;
   }
 
   :deep(th),
   :deep(td) {
-    padding: 8px 12px;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
     word-break: break-word;
     vertical-align: top;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(thead th) {
     font-weight: 600;
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 }
 
@@ -774,7 +776,7 @@
   cursor: pointer;
 
   &:hover {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
@@ -792,19 +794,19 @@
 .ai-agent-drawer {
   :deep(.bk-modal-body) {
     position: relative;
-    padding-bottom: 52px; /* 为底部 preview 预留空间 */
-    background-color: #f5f7fa;
+    padding-bottom: var(--bk-theme-space-32); /* 为底部 preview 预留空间 */
+    background-color: var(--bk-theme-surface-subtle);
   }
 
 
   :deep(.bk-modal-footer) {
     height: 52px;
-    margin-top: -5px;
-    background-color: #fff ;
+    margin-top: -var(--bk-theme-space-4);
+    background-color: var(--bk-theme-surface-default) ;
 
     .bk-sideslider-footer {
-      margin-top: -5px;
-      background-color: #fff ;
+      margin-top: -var(--bk-theme-space-4);
+      background-color: var(--bk-theme-surface-default) ;
     }
   }
 }
@@ -813,8 +815,8 @@
   position: absolute;
   width: 100%;
   height: 52px;
-  margin-left: -25px;
-  background-color: #f5f7fa;
+  margin-left: -var(--bk-theme-space-24);
+  background-color: var(--bk-theme-surface-subtle);
 }
 
 :deep(.ai-prompt-textarea.bk-textarea > textarea) {
@@ -826,13 +828,13 @@
   top: -30px;
   right: 0;
   font-size: 12px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 
   .preview-angle-jump-link {
-    margin-left: 5px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
   }
 }

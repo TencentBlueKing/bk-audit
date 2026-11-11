@@ -56,7 +56,7 @@
   .condition-tag-item.is-readonly-system {
     cursor: default;
     user-select: none;
-    padding-right: 12px;
+    padding-right: var(--bk-theme-space-12);
 
     &:hover {
       .tag-value-wrapper {

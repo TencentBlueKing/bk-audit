@@ -219,12 +219,12 @@
 </script>
 <style lang="postcss">
   .system-manage-detail-header {
-    background: #fff;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+    background: var(--bk-theme-surface-default);
+    box-shadow: var(--bk-theme-card-shadow);
   }
 
   .system-manage-detail-tab {
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
 
     .bk-tab-header-item {
       height: 54px;
@@ -234,22 +234,22 @@
         line-height: 22px;
 
         .label-name {
-          margin-left: 5px;
+          margin-left: var(--bk-theme-space-4);
 
           .count {
             width: 23px;
             height: 16px;
-            margin-left: 5px;
+            margin-left: var(--bk-theme-space-4);
             line-height: 16px;
             text-align: center;
-            background: #f0f1f5;
-            border-radius: 8px;
+            background: var(--bk-theme-surface-muted);
+            border-radius: var(--bk-theme-message-radius);
           }
 
           .label-describe {
             font-size: 12px;
             line-height: 16px;
-            color: #c4c6cc;
+            color: var(--bk-theme-border-strong);
           }
         }
       }
@@ -262,6 +262,6 @@
   }
 
   .system-manage-detail-tab-content {
-    background: #fff;
+    background: var(--bk-theme-surface-default);
   }
 </style>

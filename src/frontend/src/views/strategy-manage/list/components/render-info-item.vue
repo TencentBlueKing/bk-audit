@@ -55,15 +55,15 @@
 
     .info-label {
       min-width: 80px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       text-align: right;
       flex: 0 0 80px;
     }
 
     .info-value {
-      padding-left: 14px;
+      padding-left: var(--bk-theme-space-12);
       overflow: hidden;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       flex: 1;
     }

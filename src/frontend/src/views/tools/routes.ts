@@ -32,7 +32,9 @@ export default {
       name: 'toolsSquare',
       meta: {
         title: '工具广场',
-        nodeSideContent: true,
+        // 列表铺满主内容区。挂在侧栏槽时，页面包未挂载前会先露出空白白侧栏
+        hideSidebar: true,
+        nodeSideContent: false,
         // 广场与详情共用缓存实例，返回时保留列表滚动位置
         keepAlive: true,
         keepAliveKey: 'toolsSquarePage',
@@ -44,7 +46,8 @@ export default {
       name: 'toolDetail',
       meta: {
         title: '工具详情',
-        nodeSideContent: true,
+        hideSidebar: true,
+        nodeSideContent: false,
         keepAlive: true,
         keepAliveKey: 'toolsSquarePage',
       },

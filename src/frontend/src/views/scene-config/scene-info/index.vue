@@ -15,30 +15,28 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isSkeletonLoading"
-    name="storageList">
-    <div class="scene-info-page">
-      <!-- 顶部统计卡片 -->
-      <stat-cards
-        :scene-data="statCardsData"
-        @go-risk="handleGoRisk"
-        @go-strategy="handleGoStrategy" />
+  <div class="scene-info-page">
+    <!-- 顶部统计卡片 -->
+    <stat-cards
+      :loading="isSkeletonLoading"
+      :scene-data="statCardsData"
+      @go-risk="handleGoRisk"
+      @go-strategy="handleGoStrategy" />
 
-      <!-- 基础信息 -->
-      <base-info
-        :can-edit="canEdit"
-        :saving-field="savingField"
-        :scene-data="sceneData"
-        @update:scene-data="handleUpdateSceneData" />
+    <!-- 基础信息 -->
+    <base-info
+      :can-edit="canEdit"
+      :loading="isSkeletonLoading"
+      :saving-field="savingField"
+      :scene-data="sceneData"
+      @update:scene-data="handleUpdateSceneData" />
 
-      <!-- 关联系统 -->
-      <scene-table
-        :columns="systemColumns"
-        :data="systemTableData"
-        enable-search
-        :loading="systemDetailLoading"
+    <!-- 关联系统 -->
+    <scene-table
+      :columns="systemColumns"
+      :data="systemTableData"
+      enable-search
+      :loading="isSkeletonLoading || systemDetailLoading"
         resizable
         :search-data="systemSearchData"
         :search-loading="!systemAllLoaded"
@@ -54,7 +52,7 @@
         :columns="dataTableColumns"
         :data="dataTableData"
         enable-search
-        :loading="dataTableDetailLoading"
+        :loading="isSkeletonLoading || dataTableDetailLoading"
         resizable
         :search-data="dataTableSearchData"
         :search-loading="!dataTableAllLoaded"
@@ -65,8 +63,7 @@
         :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
           + configData.platform_admin_users.join(',')"
         :total="dataTableTotal" />
-    </div>
-  </skeleton-loading>
+  </div>
 </template>
 
 <script setup lang="tsx">

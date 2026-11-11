@@ -55,11 +55,11 @@
         :show-image-preview="false"
         :support-fullscreen="false" />
 
-      <div class="mt16">
+      <div style="margin-top: var(--bk-theme-space-16)">
         <bk-button
-          class="mr8"
+         
           :loading="loading"
-          style="height: 32px;"
+          style="height: 32px; margin-right: var(--bk-theme-space-8)"
           theme="primary"
           @click="handleSubmit">
           {{ t('提交') }}
@@ -208,8 +208,7 @@
   });
 </script>
 <style scoped lang="postcss">
-.risk-summary-editor-wrap {
-  padding: 24px 40px;
+.risk-summary-editor-wrap {padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
 }
 
 .risk-summary-rich-editor,

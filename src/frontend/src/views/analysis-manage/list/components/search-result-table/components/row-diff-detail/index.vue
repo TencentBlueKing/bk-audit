@@ -19,10 +19,10 @@
     class="diff-detail">
     <bk-button
       v-bk-tooltips="t('查看变更的Diff')"
-      class="mr8"
+     
       text
       theme="primary"
-      @click.stop="handleDiffDetail">
+      @click.stop="handleDiffDetail" style="margin-right: var(--bk-theme-space-8)">
       <audit-icon type="diff" />
     </bk-button>
     <audit-sideslider
@@ -63,5 +63,4 @@
   position: absolute;
   left: -16px;
 }
-
 </style>

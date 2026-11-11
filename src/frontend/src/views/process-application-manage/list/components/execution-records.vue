@@ -30,7 +30,7 @@
           v-model="timeRange"
           class="execution-time-range"
           data-testid="execution-records-time-range"
-          @update:model-value="search" />
+          @update:model-value="searchByTime" />
         <bk-search-select
           v-model="searchKey"
           class="execution-search"
@@ -48,14 +48,37 @@
         class="execution-table"
         :columns="columns"
         :data-source="dataSource"
-        hide-filter-row-when-empty
+        :hide-filter-row-when-empty="true"
         :persist-table-filters="false"
+        :table-max-height="tableMaxHeight"
         row-key="task_id"
         :search-params="linkedSearchParams"
-        :table-max-height="tableMaxHeight"
         use-skeleton
         @clear-search="handleClearFilter"
-        @filter-change="handleTableFilterChange" />
+        @filter-change="handleTableFilterChange">
+        <template #empty>
+          <bk-exception
+            class="execution-search-empty"
+            scene="part"
+            type="search-empty">
+            <div class="execution-search-empty-text">
+              <div>{{ t('搜索结果为空') }}</div>
+              <div class="execution-search-empty-tip">
+                {{ t('可以尝试调整关键词') }}
+                <template v-if="hasSearchCondition">
+                  {{ t('或') }}
+                  <bk-button
+                    text
+                    theme="primary"
+                    @click="handleClearFilter">
+                    {{ t('清空搜索条件') }}
+                  </bk-button>
+                </template>
+              </div>
+            </div>
+          </bk-exception>
+        </template>
+      </tdesign-list>
     </div>
   </audit-sideslider>
   <execution-detail
@@ -197,10 +220,7 @@
     run: fetchUserList,
   } = useRequest(MetaManageService.fetchUserList, {
     defaultParams: { page: 1, page_size: 30 },
-    defaultValue: { count: 0, results: [] } as {
-      count: number;
-      results: Array<{ username: string; display_name: string }>;
-    },
+    defaultValue: { count: 0, results: [] } as { count: number; results: Array<{ username: string; display_name: string }> },
     manual: true,
   });
 
@@ -277,8 +297,7 @@
 
   const fieldValue = (id: string) => {
     const item = searchKey.value.find(key => key.id === id);
-    return (item?.values || []).map(value => value.id).filter(Boolean)
-      .join(',');
+    return (item?.values || []).map(value => value.id).filter(Boolean).join(',');
   };
 
   const keywordValue = () => {
@@ -289,6 +308,15 @@
       .filter(Boolean)
       .join(',');
   };
+
+  const chipHasValue = (item: SearchKey) => {
+    const values = (item.values || []).map(value => String(value.id || '').trim()).filter(Boolean);
+    if (values.length) return true;
+    const known = searchData.value.some(field => field.id === item.id);
+    if (!known || item.type === 'text') return Boolean((item.name || '').trim());
+    return false;
+  };
+  const hasSearchCondition = computed(() => searchKey.value.some(chipHasValue));
 
   const linkedFilterIds = ['application_name', 'trigger_type', 'status'];
   const linkedSearchParams = computed(() => ({
@@ -534,8 +562,8 @@
     {
       title: () => t('触发方式'),
       colKey: 'trigger_type',
-      width: 104,
-      minWidth: 104,
+      width: 128,
+      minWidth: 128,
       filter: enumFilter(t('触发方式'), [
         { label: t('手动'), value: 'manual' },
         { label: t('自动'), value: 'auto' },
@@ -628,6 +656,18 @@
   };
 
   const search = () => {
+    if (syncingTableFilter) return;
+    // 条件还没选完时不请求，避免空结果样式先闪出来
+    if (searchKey.value.some(item => !chipHasValue(item))) return;
+    nextTick(() => {
+      listRef.value?.fetchData({
+        page: 1,
+        ...linkedSearchParams.value,
+      });
+    });
+  };
+
+  const searchByTime = () => {
     if (syncingTableFilter) return;
     nextTick(() => {
       listRef.value?.fetchData({
@@ -747,7 +787,7 @@
 /* 时间范围弹层挂在 body 上，默认层级低于侧滑 */
 .__bk-date-picker-popover__.__bk-date-picker-popover__execution-records-range {
   z-index: 10060 !important;
-  margin-left: 32px !important;
+  margin-left: var(--bk-theme-space-32) !important;
 }
 </style>
 <style lang="postcss" scoped>
@@ -757,7 +797,7 @@
   flex-direction: column;
   height: calc(100vh - 52px);
   min-height: 0;
-  padding: var(--audit-space-24);
+  padding: var(--bk-theme-space-24);
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -765,7 +805,7 @@
 .execution-toolbar {
   display: flex;
   flex-shrink: 0;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
   align-items: center;
   width: 100%;
 }
@@ -793,9 +833,13 @@
   flex: 1;
   width: 100%;
   min-height: 0;
-  margin-top: var(--audit-space-16);
+  margin-top: var(--bk-theme-space-16);
   overflow: hidden;
   border: 0;
+
+  :deep(.t-table__th-trigger_type .t-table__th-cell-inner) {
+    white-space: nowrap;
+  }
 
   :deep(.audit-tdesign-list),
   :deep(.bk-nested-loading) {
@@ -827,6 +871,8 @@
     height: var(--execution-table-height, 360px);
     max-height: var(--execution-table-height, 360px);
     overflow: auto;
+    container-type: inline-size;
+    container-name: execution-table;
   }
 
   :deep(.t-table table) {
@@ -843,19 +889,43 @@
     padding: 0;
   }
 
+  :deep(.is-loading .t-table__empty) {
+    visibility: hidden;
+  }
+
   :deep(.t-table__empty) {
+    position: sticky;
+    left: 0;
+    box-sizing: border-box;
+    width: 100cqi !important;
+    max-width: 100cqi !important;
     height: 100%;
   }
 
   :deep(.t-table__empty .bk-exception) {
     display: flex !important;
-    width: 100% !important;
+    width: auto !important;
+    max-width: 100%;
     height: 100% !important;
     min-height: 0 !important;
     padding-top: 0 !important;
     box-sizing: border-box;
     align-items: center;
     justify-content: center;
+  }
+
+  .execution-search-empty-text {
+    width: max-content;
+    max-width: 100%;
+    color: var(--bk-theme-text-default);
+    line-height: 22px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .execution-search-empty-tip {
+    margin-top: var(--bk-theme-space-8);
+    color: var(--bk-theme-text-disabled);
   }
 
   :deep(.tdesign-list-pagination) {
@@ -873,7 +943,7 @@
 
   :deep(.t-table thead tr),
   :deep(.t-table thead th) {
-    background-color: var(--audit-neutral-bg-02);
+    background-color: var(--bk-theme-table-header-bg);
   }
 
   :deep(.t-table thead th) {
@@ -887,7 +957,7 @@
 :deep(.copy-cell) {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   width: 100%;
   min-width: 0;
 }
@@ -920,7 +990,7 @@
 }
 
 :deep(.task-link) {
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -929,7 +999,7 @@
   flex: 0 0 auto;
   padding: 0;
   font-size: 16px;
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -941,7 +1011,7 @@
 }
 
 :deep(.status-failed-text) {
-  border-bottom: 1px dashed var(--audit-neutral-text-02);
+  border-bottom: 1px dashed var(--bk-theme-text-default);
   cursor: pointer;
 }
 
@@ -950,7 +1020,7 @@
   padding: 0;
   font-size: 16px;
   line-height: 1;
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -964,10 +1034,10 @@
 :deep(.record-status) {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: var(--audit-font-size-sm);
+  gap: var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
   line-height: 20px;
-  color: var(--audit-neutral-text-02);
+  color: var(--bk-theme-text-default);
   white-space: nowrap;
 }
 
@@ -1003,7 +1073,7 @@
 }
 
 :deep(.status-dot.is-failed .status-dot-inner) {
-  background: var(--audit-danger-02);
+  background: var(--bk-theme-color-danger-2);
 }
 
 :deep(.status-dot.is-success .status-dot-outer) {
@@ -1011,7 +1081,7 @@
 }
 
 :deep(.status-dot.is-success .status-dot-inner) {
-  background: var(--audit-success-02);
+  background: var(--bk-theme-color-success-2);
 }
 
 :deep(.status-loading) {
@@ -1028,8 +1098,8 @@
 
 .execution-error-tip-body {
   max-height: 240px;
-  margin-right: -10px;
-  padding-right: 8px;
+  margin-right: -var(--bk-theme-space-12);
+  padding-right: var(--bk-theme-space-8);
   overflow-x: hidden;
   overflow-y: auto;
   word-break: break-all;
@@ -1044,7 +1114,7 @@
 
 .execution-error-tip-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.45);
-  border-radius: 3px;
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .execution-error-tip-body::-webkit-scrollbar-track {

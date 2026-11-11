@@ -135,12 +135,10 @@
   .query-string-description {
     max-width: 264px;
     font-size: 12px;
-    line-height: 18px;
-    color: rgb(99 101 110);
+    line-height: 18px;color: var(--bk-theme-text-default);
     word-break: keep-all;
 
-    h1 {
-      margin: 10px 0 4px;
+    h1 {margin: var(--bk-theme-space-8) 0 var(--bk-theme-space-4);
       font-size: 12px;
       font-weight: 600;
     }

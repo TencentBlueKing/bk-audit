@@ -46,9 +46,9 @@
                   @click="isHide = !isHide" />
                 <audit-icon
                   v-bk-tooltips="t('复制')"
-                  class="ml8"
+                 
                   type="copy"
-                  @click="execCopy(data.token, t('复制成功'))" />
+                  @click="execCopy(data.token, t('复制成功'))" style="margin-left: var(--bk-theme-space-8)" />
               </div>
             </div>
             <div class="auth-field">
@@ -174,7 +174,7 @@
 </script>
 <style lang="postcss" scoped>
 .log-collection-detail-box {
-  margin-bottom: 24px;
+  margin-bottom: var(--bk-theme-space-24);
 
   :deep(.base-content) {
     .render-info-block {
@@ -193,20 +193,20 @@
   }
 
   .title {
-    padding-bottom: 16px;
+    padding-bottom: var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: bold;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .auth-wrapper {
     .auth-field {
       display: flex;
-      padding: 8px 12px;
-      margin-bottom: 12px;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+      margin-bottom: var(--bk-theme-space-12);
       font-size: 12px;
-      background-color: #f5f7fa;
-      border-radius: 2px;
+      background-color: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
 
       &:last-child {
@@ -215,7 +215,7 @@
 
       .auth-label {
         min-width: 70px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
 
       .auth-value {
@@ -229,17 +229,17 @@
         display: inline-block;
         width: 5px;
         height: 5px;
-        margin-right: 5px;
-        background-color: #63656e;
+        margin-right: var(--bk-theme-space-4);
+        background-color: var(--bk-theme-text-default);
         border-radius: 50%;
       }
 
       .auth-icons {
         display: none;
-        gap: 8px;
-        margin-left: 12px;
+        gap: var(--bk-theme-space-8);
+        margin-left: var(--bk-theme-space-12);
         font-size: 14px;
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: pointer;
       }
 
@@ -247,9 +247,9 @@
         flex: 1;
 
         .endpoint-item {
-          margin-bottom: 4px;
+          margin-bottom: var(--bk-theme-space-4);
           line-height: 20px;
-          color: #313238;
+          color: var(--bk-theme-text-strong);
 
           &:last-child {
             margin-bottom: 0;

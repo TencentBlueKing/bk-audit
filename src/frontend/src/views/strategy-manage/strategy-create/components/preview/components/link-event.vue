@@ -45,8 +45,8 @@
           <render-info-block
             v-for="(basicArr, basicIndex) in basicInfo"
             :key="basicIndex"
-            class="flex mt16"
-            style="margin-bottom: 12px;">
+            class="flex"
+            style="margin-bottom: 12px; margin-top: var(--bk-theme-space-16)">
             <render-info-item
               v-for="(basicItem, itemIndex) in basicArr"
               :key="itemIndex"
@@ -55,9 +55,9 @@
               {{ basicItem.map_config?.target_value || ('以实际内容为准') }}
               <bk-button
                 v-if="basicItem.drill_config?.tool?.uid"
-                class="ml8"
+               
                 text
-                theme="primary">
+                theme="primary" style="margin-left: var(--bk-theme-space-8)">
                 {{ t('查看') }}
               </bk-button>
             </render-info-item>
@@ -75,7 +75,7 @@
             <render-info-block
               v-for="(keyArr, keyIndex) in eventData"
               :key="keyIndex"
-              class="flex mt16">
+              class="flex" style="margin-top: var(--bk-theme-space-16)">
               <render-info-item
                 v-for="(key, index) in keyArr"
                 :key="index"
@@ -180,12 +180,12 @@
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .body {
     display: flex;
-    margin-top: 14px;
+    margin-top: var(--bk-theme-space-12);
 
     .list {
       display: inline-block;
@@ -193,8 +193,8 @@
       min-width: 164px;
       overflow: hidden;
       text-align: center;
-      background: #f5f7fa;
-      border-radius: 4px;
+      background: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-tag-radius);
 
       .list-item {
         height: 32px;
@@ -202,33 +202,33 @@
         cursor: pointer;
 
         &:hover {
-          background-color: #eaebf0;
+          background-color: var(--bk-theme-border-weak);
         }
       }
 
       .active {
-        color: #3a84ff !important;
-        background: #e1ecff;
-        border-left: 2px solid #3a84ff;
+        color: var(--bk-theme-color-brand-2) !important;
+        background: var(--bk-theme-fill-selected);
+        border-left: 2px solid var(--bk-theme-color-brand-2);
 
         &:hover {
-          background: #e1ecff !important;
+          background: var(--bk-theme-fill-selected) !important;
         }
       }
     }
 
     .list-item-detail {
       width: calc(100% - 164px);
-      padding-left: 12px;
+      padding-left: var(--bk-theme-space-12);
 
       .important-information {
-        padding: 12px 0;
-        margin-bottom: 24px;
-        background-color: #fafbfd;
+        padding: var(--bk-theme-space-12) 0;
+        margin-bottom: var(--bk-theme-space-24);
+        background-color: var(--bk-theme-table-header-bg);
 
         .title {
-          padding-left: 10px;
-          border-left: 3px solid #3a84ff;
+          padding-left: var(--bk-theme-space-12);
+          border-left: 3px solid var(--bk-theme-color-brand-2);
         }
 
         .render-info-item {
@@ -242,8 +242,8 @@
       }
 
       .base-info {
-        padding: 0 24px;
-        margin-bottom: 24px;
+        padding: 0 var(--bk-theme-space-24);
+        margin-bottom: var(--bk-theme-space-24);
 
         .render-info-item {
           width: 50%;
@@ -256,9 +256,9 @@
       }
 
       .data-info {
-        margin: 16px 0 24px;
+        margin: var(--bk-theme-space-16) 0 var(--bk-theme-space-24);
 
-        /* border: 1px solid #ecedf1; */
+        /* border: 1px solid var(--bk-theme-border-weak); */
 
         .data-info-row:last-child {
           .data-info-item-key,
@@ -280,14 +280,14 @@
           .data-info-item-value {
             display: flex;
             align-items: center;
-            padding: 6px 12px;
-            border-right: 1px solid #ecedf1;
-            border-bottom: 1px solid #ecedf1;
+            padding: var(--bk-theme-space-6) var(--bk-theme-space-12);
+            border-right: 1px solid var(--bk-theme-border-weak);
+            border-bottom: 1px solid var(--bk-theme-border-weak);
           }
 
           .data-info-item-key {
             width: 160px;
-            background-color: #fafbfd;
+            background-color: var(--bk-theme-table-header-bg);
             justify-self: flex-end;
 
             & > span {
@@ -307,7 +307,7 @@
       .evidence-info {
         display: flex;
         max-width: 1000px;
-        border-left: 1px solid #ecedf1;
+        border-left: 1px solid var(--bk-theme-border-weak);
 
         .evidence-info-value-wrap {
           display: flex;
@@ -322,10 +322,10 @@
 
           & > div {
             height: 32px;
-            padding: 0 12px;
+            padding: 0 var(--bk-theme-space-12);
             line-height: 32px;
-            border-right: 1px solid #ecedf1;
-            border-bottom: 1px solid #ecedf1;
+            border-right: 1px solid var(--bk-theme-border-weak);
+            border-bottom: 1px solid var(--bk-theme-border-weak);
 
             .evidence-info-item-text {
               width: 100%;
@@ -345,7 +345,7 @@
         .evidence-info-key {
           min-width: 160px;
           text-align: right;
-          background-color: #fafbfd;
+          background-color: var(--bk-theme-table-header-bg);
         }
       }
     }

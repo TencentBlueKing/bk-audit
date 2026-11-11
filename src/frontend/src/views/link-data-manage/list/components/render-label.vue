@@ -180,34 +180,35 @@
 <style lang="postcss" scoped>
 .render-label-box {
   position: relative;
-  height: calc(100vh - 144px);
-  background-color: #f5f7fa;
+  height: 100%;
+  min-height: 0;
+  background-color: var(--bk-theme-surface-subtle);
 
   .render-label {
     position: relative;
     min-width: 240px;
-    padding: 20px 0;
-    color: #63656e;
+    padding: var(--bk-theme-space-16) 0;
+    color: var(--bk-theme-text-default);
     transition: all .8s;
 
     .active {
-      color: #3a84ff !important;
-      background: #e1ecff;
+      color: var(--bk-theme-color-brand-2) !important;
+      background: var(--bk-theme-fill-selected);
 
       &:hover {
-        background: #e1ecff !important;
+        background: var(--bk-theme-fill-selected) !important;
       }
     }
 
     .label-item.final {
-      border-bottom: 1px solid #eaebf0;
+      border-bottom: 1px solid var(--bk-theme-border-weak);
     }
 
     .label-item {
       display: flex;
       width: 240px;
       height: 40px;
-      padding: 0 16px;
+      padding: 0 var(--bk-theme-space-16);
       font-size: 14px;
       line-height: 40px;
       cursor: pointer;
@@ -226,13 +227,13 @@
       }
 
       &:hover {
-        background: #eaebf0;
+        background: var(--bk-theme-border-weak);
       }
 
       .tag-icon {
-        margin-right: 5px;
+        margin-right: var(--bk-theme-space-4);
         font-size: 16px;
-        color: #dcdee5;
+        color: var(--bk-theme-border-default);
       }
     }
   }
@@ -260,7 +261,7 @@
     line-height: 61px;
     color: white;
     cursor: pointer;
-    background: #dcdee5;
+    background: var(--bk-theme-border-default);
     border-radius: 0 4px 4px 0;
 
     .operation-icon {

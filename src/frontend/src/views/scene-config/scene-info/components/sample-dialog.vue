@@ -90,15 +90,15 @@
   .sample-dialog-title {
     font-size: 20px;
     font-weight: 700;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .sample-dialog-subtitle {
-    padding-left: 12px;
-    margin-left: 12px;
+    padding-left: var(--bk-theme-space-12);
+    margin-left: var(--bk-theme-space-12);
     font-size: 14px;
-    color: #979ba5;
-    border-left: 1px solid #dcdee5;
+    color: var(--bk-theme-text-weak);
+    border-left: 1px solid var(--bk-theme-border-default);
   }
 
   .sample-dialog-body {

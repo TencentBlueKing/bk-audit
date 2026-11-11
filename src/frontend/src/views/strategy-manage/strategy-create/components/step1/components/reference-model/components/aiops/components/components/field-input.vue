@@ -102,9 +102,9 @@
     height: 42px;
 
     .is-focused:not(.is-readonly) {
-      border: 1px solid #3a84ff !important;
+      border: 1px solid var(--bk-theme-color-brand-2) !important;
       outline: 0;
-      box-shadow: 0 0 3px #a3c5fd;
+     
     }
   }
 
@@ -114,15 +114,14 @@
 
   .err-tip {
     font-size: 16px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 
-.is-errored {
-  background-color: #fee;
+.is-errored {background-color: var(--bk-theme-fill-danger);
 
   .bk-input {
-    border-color: #ea3636 !important;
+    border-color: var(--bk-theme-color-danger-2) !important;
   }
 }
 </style>

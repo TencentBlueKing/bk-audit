@@ -76,7 +76,7 @@
 
   .info-label {
     min-width: 60px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: right;
     flex: 0 0 60px;
     word-break: break-all;
@@ -85,13 +85,13 @@
 
   .info-colon {
     flex-shrink: 0;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .info-value {
     min-width: 0;
-    padding-left: 14px;
-    color: #313238;
+    padding-left: var(--bk-theme-space-12);
+    color: var(--bk-theme-text-strong);
     flex: 1;
     word-break: break-all;
     word-wrap: break-word;
@@ -102,14 +102,14 @@
 .info-field-rows {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
   width: 100%;
 }
 
 .info-field-row {
   display: flex;
   flex-flow: row nowrap;
-  gap: 24px;
+  gap: var(--bk-theme-space-24);
   align-items: flex-start;
   width: 100%;
 }
@@ -131,7 +131,7 @@
 
 .fields-section-divider {
   height: 1px;
-  margin: 4px 0;
-  background: #dcdee5;
+  margin: var(--bk-theme-space-4) 0;
+  background: var(--bk-theme-border-default);
 }
 </style>

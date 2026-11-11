@@ -36,14 +36,14 @@
 
     .info-label {
       width: 80px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       text-align: right;
       flex: 0 0 80px;
     }
 
     .info-value {
-      padding-left: 14px;
-      color: #63656e;
+      padding-left: var(--bk-theme-space-12);
+      color: var(--bk-theme-text-default);
       flex: 1;
     }
   }

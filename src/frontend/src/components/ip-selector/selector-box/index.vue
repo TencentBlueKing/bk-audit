@@ -54,7 +54,7 @@
     </bk-loading>
     <template #footer>
       <bk-button
-        class="mr8"
+        class="selector-submit"
         theme="primary"
         @click="handleSubmit">
         {{ t('确定(OK)') }}
@@ -255,28 +255,28 @@
 <style lang="postcss">
   .ip-selector-dialog {
     .bk-modal-footer {
-      background: #fff !important;
+      background: var(--bk-theme-surface-default) !important;
       border-top: none !important;
     }
 
     .ip-selector-box {
       display: flex;
       min-height: 595px;
-      border: 1px solid #dcdee5;
+      border: 1px solid var(--bk-theme-border-default);
       border-radius: 2px 0 0;
 
       .left-selector-box {
         flex: 1 0 770px;
 
         .operation-container {
-          padding: 16px;
+          padding: var(--bk-theme-space-16);
         }
       }
 
       .left-preview-box {
         width: 280px;
-        background: #f5f7fa;
-        border-left: 1px solid #dcdee5;
+        background: var(--bk-theme-surface-subtle);
+        border-left: 1px solid var(--bk-theme-border-default);
       }
 
       table {
@@ -292,5 +292,5 @@
       }
     }
   }
-
+  .selector-submit { margin-right: var(--bk-theme-space-8); }
 </style>

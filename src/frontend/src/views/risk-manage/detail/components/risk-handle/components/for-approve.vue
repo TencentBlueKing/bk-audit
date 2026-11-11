@@ -20,8 +20,8 @@
       <div class="mis-title">
         <span style="color: #313238">{{ t('执行前审批') }}</span>
         <span
-          class="ml8"
-          style="color: #979ba5">
+         
+          style="color: #979ba5; margin-left: var(--bk-theme-space-8)">
           {{ forApproveData.process_result?.status?.update_at || forApproveData.time }}
         </span>
       </div>
@@ -39,9 +39,9 @@
           </div>
         </render-info-item>
         <render-info-item
-          class="mt8"
+         
           :label="t('关联单据')"
-          :label-width="labelWidth">
+          :label-width="labelWidth" style="margin-top: var(--bk-theme-space-8)">
           <a
             v-if="forApproveData.process_result?.ticket?.ticket_url"
             :href="forApproveData.process_result.ticket.ticket_url"
@@ -55,11 +55,11 @@
 
     <!-- 执行套餐 - AutoProcess -->
     <template v-if="data.action === 'AutoProcess'">
-      <div class="mis-title mt16">
+      <div class="mis-title" style="margin-top: var(--bk-theme-space-16)">
         <span style="color: #313238">{{ t('执行套餐动作') }}</span>
         <span
-          class="ml8"
-          style="color: #979ba5">{{ data.process_result?.status?.update_at || data.time }}</span>
+         
+          style="color: #979ba5; margin-left: var(--bk-theme-space-8)">{{ data.process_result?.status?.update_at || data.time }}</span>
       </div>
       <div class="mis-content">
         <render-info-item
@@ -80,9 +80,9 @@
             type="loading" />
         </render-info-item>
         <render-info-item
-          class="mt8"
+         
           :label="t('任务状态')"
-          :label-width="labelWidth">
+          :label-width="labelWidth" style="margin-top: var(--bk-theme-space-8)">
           <!-- 没有则展示执行中 -->
           <div style="display: flex;align-items: center;">
             <audit-icon
@@ -94,11 +94,11 @@
             <span>{{ autoProcessStatusCom.label }}</span>
             <bk-button
               v-if="data.process_result?.status?.state==='RUNNING'"
-              class="ml16"
+             
               :loading="forceLoading"
               text
               theme="primary"
-              @click="handleRevoke">
+              @click="handleRevoke" style="margin-left: var(--bk-theme-space-16)">
               <audit-icon
                 style="margin-right: 4px;"
                 type="stop-2" />
@@ -106,11 +106,11 @@
             </bk-button>
             <bk-button
               v-else-if="data.process_result?.status?.state==='FAILED'"
-              class="ml16"
+             
               :loading="retryLoading"
               text
               theme="primary"
-              @click="handleRetry">
+              @click="handleRetry" style="margin-left: var(--bk-theme-space-16)">
               <audit-icon
                 style="margin-right: 4px;"
                 type="redo" />
@@ -119,18 +119,18 @@
           </div>
         </render-info-item>
         <render-info-item
-          class="mt8"
+         
           :label="t('执行开始时间')"
-          :label-width="labelWidth">
+          :label-width="labelWidth" style="margin-top: var(--bk-theme-space-8)">
           <span v-if="data.process_result?.status?.start_time">
             {{ data.process_result.status.start_time || '--' }}
           </span>
           <span v-else>--</span>
         </render-info-item>
         <render-info-item
-          class="mt8"
+         
           :label="t('执行结束时间')"
-          :label-width="labelWidth">
+          :label-width="labelWidth" style="margin-top: var(--bk-theme-space-8)">
           <span v-if="data.process_result?.status?.finish_time">
             {{ data.process_result?.status.finish_time || '--' }}
           </span>
@@ -312,26 +312,26 @@
   };
 </script>
 <style scoped lang="postcss">
-.approve-wrap {
-  padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #eaebf0;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px 0 #0000000a;
+.approve-wrap {padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-weak);
+  border-radius: var(--bk-theme-control-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 
   .mis-title {
     font-size: 12px;
   }
 
   >.mis-content {
-    padding: 12px 0;
-    margin-top: 8px;
-    background: #f5f7fa;
-    border-radius: 4px;
+    padding: var(--bk-theme-space-12) 0;
+    margin-top: var(--bk-theme-space-8);
+    background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
 
     .render-info-item {
       align-items: flex-start;
     }
   }
 }
+
 </style>

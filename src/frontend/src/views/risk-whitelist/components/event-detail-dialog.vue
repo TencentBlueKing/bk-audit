@@ -90,23 +90,23 @@
   .event-table th,
   .event-table td {
     height: 42px;
-    padding: 0 16px;
-    font-family: var(--audit-font-family);
-    font-size: var(--audit-font-size-sm);
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-base);
+    padding: 0 var(--bk-theme-space-16);
+    font-family: var(--bk-theme-font-family);
+    font-size: var(--bk-theme-font-size-sm);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-base);
     text-align: left;
-    border-bottom: 1px solid var(--audit-neutral-border-02);
+    border-bottom: 1px solid var(--bk-theme-border-weak);
     box-sizing: border-box;
   }
 
   .event-table th {
-    color: var(--audit-neutral-text-01);
-    background: var(--audit-neutral-bg-03);
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
   }
 
   .event-table td {
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
   }
 
   :deep(.bk-dialog-footer) {

@@ -56,11 +56,11 @@
     </bk-loading>
     <template #footer>
       <bk-button
-        class="mr8"
+       
         :disabled="detailLoading || !isDetailReady"
         :loading="submitLoading"
         theme="primary"
-        @click="handleConfirm">
+        @click="handleConfirm" style="margin-right: var(--bk-theme-space-8)">
         {{ t('确定') }}
       </bk-button>
       <bk-button @click="handleCancel">
@@ -533,10 +533,10 @@
 
     .bk-modal-footer {
       flex-shrink: 0;
-      padding: 8px 24px !important;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-24) !important;
       text-align: right;
-      background: #fafbfd !important;
-      border-top: 1px solid #dcdee5 !important;
+      background: var(--bk-theme-table-header-bg) !important;
+      border-top: 1px solid var(--bk-theme-border-default) !important;
       box-shadow: none !important;
     }
 
@@ -565,7 +565,7 @@
       overflow: hidden auto;
       scrollbar-gutter: stable;
       scrollbar-width: thin;
-      scrollbar-color: #c4c6cc transparent;
+      scrollbar-color: var(--bk-theme-border-strong) transparent;
     }
 
     .edit-visibility-scroll::-webkit-scrollbar {
@@ -578,12 +578,12 @@
     }
 
     .edit-visibility-scroll::-webkit-scrollbar-thumb {
-      background-color: #c4c6cc;
-      border-radius: 2px;
+      background-color: var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .edit-visibility-scroll::-webkit-scrollbar-thumb:hover {
-      background-color: #979ba5;
+      background-color: var(--bk-theme-text-weak);
     }
 
     .edit-visibility-scroll::-webkit-scrollbar-button,
@@ -606,7 +606,7 @@
 
 <style lang="postcss" scoped>
   .edit-visibility-form {
-    padding: 16px 24px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
 
     .form-item {
       display: flex;
@@ -615,10 +615,10 @@
     }
 
     .form-label {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 14px;
       line-height: 22px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: left;
     }
 
@@ -629,6 +629,6 @@
   }
 
   .mr8 {
-    margin-right: 8px;
+    margin-right: var(--bk-theme-space-8);
   }
 </style>

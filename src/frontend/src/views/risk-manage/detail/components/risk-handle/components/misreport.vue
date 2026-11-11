@@ -114,16 +114,16 @@
 .reopen-mis-report-wrap {
   padding: 0;
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
 
   > .mis-content {
-    padding: 12px 8px 12px 12px;
-    background: #f5f7fa;
-    border-radius: 2px;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-8) var(--bk-theme-space-12) var(--bk-theme-space-12);
+    background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
 
     .render-info-item {
       align-items: flex-start;
@@ -141,7 +141,7 @@
 
       :deep(.info-value) {
         min-width: 0;
-        padding-left: 4px;
+        padding-left: var(--bk-theme-space-4);
         line-height: 20px;
         flex: 1;
       }
@@ -158,36 +158,35 @@
   white-space: normal;
 
   :deep(p) {
-    margin: 0 0 8px;
+    margin: 0 0 var(--bk-theme-space-8);
   }
 
   :deep(.ql-report-table) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
   }
 
   :deep(table),
   :deep(.report-table) {
     width: 100%;
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
     font-size: 12px;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
     border-collapse: collapse;
     table-layout: auto;
   }
 
   :deep(th),
-  :deep(td) {
-    padding: 8px 10px;
-    color: #313238;
+  :deep(td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+    color: var(--bk-theme-text-strong);
     text-align: left;
     vertical-align: top;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(thead th) {
     font-weight: 600;
-    color: #313238;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
   }
 
   :deep(img) {

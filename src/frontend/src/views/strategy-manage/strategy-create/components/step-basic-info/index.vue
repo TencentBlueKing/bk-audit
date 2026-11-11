@@ -16,7 +16,7 @@
 -->
 <template>
   <smart-action
-    class="create-strategy-page"
+    class="create-strategy-page bk-theme-form--inline"
     :offset-target="getSmartActionOffsetTarget">
     <div class="create-strategy-main">
       <audit-form
@@ -28,117 +28,117 @@
         <card-part-vue :title="t('基础信息')">
           <template #content>
             <div class="basic-info-fields">
-              <div class="basic-info-row flex-center">
+                <div class="basic-info-row flex-center">
+                  <bk-form-item
+                    class="is-required"
+                    :label="t('策略名称')"
+                    property="strategy_name"
+                    style="flex: 1; margin-right: var(--bk-theme-space-16)">
+                    <bk-input
+                      v-model.trim="formData.strategy_name"
+                      :maxlength="32"
+                      :placeholder="t('请输入')"
+                      style="width: 100%;" />
+                  </bk-form-item>
+                  <bk-form-item
+                    :label="t('标签')"
+                    property="tags"
+                    style="flex: 1;">
+                    <bk-loading
+                      :loading="tagLoading"
+                      style="width: 100%;">
+                      <bk-tag-input
+                        v-model="formData.tags"
+                        allow-create
+                        collapse-tags
+                        display-key="name"
+                        has-delete-icon
+                        :list="tagData"
+                        :placeholder="t('请输入并Enter结束')"
+                        save-key="id"
+                        search-key="name"
+                        trigger="focus" />
+                    </bk-loading>
+                  </bk-form-item>
+                </div>
                 <bk-form-item
-                  class="is-required mr16"
-                  :label="t('策略名称')"
-                  property="strategy_name"
-                  style="flex: 1;">
+                  class="basic-info-desc"
+                  :label="t('描述')"
+                  property="description">
                   <bk-input
-                    v-model.trim="formData.strategy_name"
-                    :maxlength="32"
+                    v-model.trim="formData.description"
+                    autosize
+                    :maxlength="2000"
                     :placeholder="t('请输入')"
-                    style="width: 100%;" />
-                </bk-form-item>
-                <bk-form-item
-                  :label="t('标签')"
-                  property="tags"
-                  style="flex: 1;">
-                  <bk-loading
-                    :loading="tagLoading"
-                    style="width: 100%;">
-                    <bk-tag-input
-                      v-model="formData.tags"
-                      allow-create
-                      collapse-tags
-                      display-key="name"
-                      has-delete-icon
-                      :list="tagData"
-                      :placeholder="t('请输入并Enter结束')"
-                      save-key="id"
-                      search-key="name"
-                      trigger="focus" />
-                  </bk-loading>
+                    :rows="2"
+                    show-word-limit
+                    style="width: 100%;"
+                    type="textarea" />
                 </bk-form-item>
               </div>
-              <bk-form-item
-                class="basic-info-desc"
-                :label="t('描述')"
-                property="description">
-                <bk-input
-                  v-model.trim="formData.description"
-                  autosize
-                  :maxlength="2000"
-                  :placeholder="t('请输入')"
-                  :rows="2"
-                  show-word-limit
-                  style="width: 100%;"
-                  type="textarea" />
-              </bk-form-item>
-            </div>
-          </template>
-        </card-part-vue>
+            </template>
+          </card-part-vue>
         <card-part-vue :title="t('方案')">
           <template #content>
             <div class="scheme-fields">
-              <bk-form-item
-                class="is-required"
-                :label="t('配置方式')"
-                property="strategy_type">
-                <strategy-way-selector
-                  :disabled="isStrategyWayDisabled"
-                  :model-value="formData.strategy_type"
-                  :options="strategyWayOptions"
-                  @change="handleStrategyWay" />
-              </bk-form-item>
-              <!-- 自定义规则审计、引入模型审计 -->
-              <component
-                :is="strategyWayComMap[formData.strategy_type]"
-                ref="comRef"
-                :edit-data="editData"
-                step-mode="basic"
-                @reset-hit-conditions="handleResetHitConditions"
-                @update-control-detail="updateControlDetail"
-                @update-form-data="updateFormData" />
-            </div>
-          </template>
-        </card-part-vue>
-      </audit-form>
+                <bk-form-item
+                  class="is-required"
+                  :label="t('配置方式')"
+                  property="strategy_type">
+                  <strategy-way-selector
+                    :disabled="isStrategyWayDisabled"
+                    :model-value="formData.strategy_type"
+                    :options="strategyWayOptions"
+                    @change="handleStrategyWay" />
+                </bk-form-item>
+                <!-- 自定义规则审计、引入模型审计 -->
+                <component
+                  :is="strategyWayComMap[formData.strategy_type]"
+                  ref="comRef"
+                  :edit-data="editData"
+                  step-mode="basic"
+                  @reset-hit-conditions="handleResetHitConditions"
+                  @update-control-detail="updateControlDetail"
+                  @update-form-data="updateFormData" />
+              </div>
+            </template>
+          </card-part-vue>
+        </audit-form>
 
-      <!-- 算法说明 -->
-      <control-description-vue
-        v-if="controlDetail !== null"
-        :data="controlDetail" />
-    </div>
-    <template #action>
-      <bk-button
-        v-bk-tooltips="{
-          content: typeTableLoading ? t('数据加载中，请稍等') : '',
-          disabled: !typeTableLoading,
-        }"
-        :disabled="typeTableLoading"
-        theme="primary"
-        @click="handleNext">
-        {{ t('下一步') }}
-      </bk-button>
-      <bk-button
-        v-if="showSaveDraftButton"
-        class="ml8"
-        @click="handleSaveDraft">
-        {{ t('保存草稿') }}
-      </bk-button>
-      <!-- <bk-button
-          v-if="isEditMode"
-          class="ml8"
+        <!-- 算法说明 -->
+        <control-description-vue
+          v-if="controlDetail !== null"
+          :data="controlDetail" />
+      </div>
+      <template #action>
+        <bk-button
+          v-bk-tooltips="{
+            content: typeTableLoading ? t('数据加载中，请稍等') : '',
+            disabled: !typeTableLoading,
+          }"
+          :disabled="typeTableLoading"
           theme="primary"
-          @click="handleSaveCurrentStep">
+          @click="handleNext">
+          {{ t('下一步') }}
+        </bk-button>
+        <bk-button
+          v-if="showSaveDraftButton"
+         
+          @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
+          {{ t('保存草稿') }}
+        </bk-button>
+        <!-- <bk-button
+          v-if="isEditMode"
+         
+          theme="primary"
+          @click="handleSaveCurrentStep" style="margin-left: var(--bk-theme-space-8)">
           {{ t('提交') }}
         </bk-button> -->
-      <bk-button
-        class="ml8"
-        @click="handleCancel">
-        {{ t('取消') }}
-      </bk-button>
+        <bk-button
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
+          {{ t('取消') }}
+        </bk-button>
     </template>
   </smart-action>
 </template>
@@ -458,7 +458,9 @@
   })));
   const controlDetail = ref<ControlModel | null>(null);
 
-  const typeTableLoading = computed(() => Boolean(comRef.value?.typeTableLoading || comRef.value?.isInitializing));
+  const typeTableLoading = computed(() => Boolean(
+    comRef.value?.typeTableLoading || comRef.value?.isInitializing,
+  ));
 
   // 编辑
   const setFormData = (editData: StrategyModel) => {
@@ -739,7 +741,7 @@
   .flex-center {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: var(--bk-theme-space-16);
   }
 
   .basic-info-fields {
@@ -757,6 +759,7 @@
   }
 
   .scheme-fields {
+    --bk-theme-form-item-gap: var(--bk-theme-space-24);
     width: 100%;
 
     :deep(.bk-form-content) {
@@ -779,7 +782,6 @@
     :deep(.schedule-period-row .bk-form-item),
     :deep(.schedule-period-row .bk-form-content) {
       width: auto;
-      margin-bottom: 0;
     }
   }
 
@@ -789,15 +791,14 @@
     :deep(.bk-form-item) {
       flex: 1;
       min-width: 0;
-      margin-bottom: var(--audit-space-24);
     }
   }
 
   .create-strategy-main {
     display: flex;
-    padding-top: 4px;
-    padding-bottom: 1px;
-    margin-bottom: 24px;
+    padding-top: var(--bk-theme-space-4);
+    padding-bottom: var(--bk-theme-space-2);
+    margin-bottom: var(--bk-theme-space-24);
 
     .strategt-form {
       flex: 1;
@@ -805,33 +806,31 @@
       overflow: visible;
 
       :deep(.bk-form-item) {
-        margin-bottom: var(--audit-space-24);
         overflow: visible;
       }
 
       :deep(.basic-info-desc.bk-form-item),
       :deep(.dispatch-section .bk-form-item) {
-        margin-bottom: 0;
       }
 
       :deep(.bk-form-label) {
         height: auto;
         padding-bottom: 0;
-        margin-bottom: 6px;
-        font-size: var(--audit-font-size-sm);
-        line-height: var(--audit-line-height-sm);
-        color: var(--audit-neutral-text-02);
+        margin-bottom: var(--bk-theme-space-6);
+        font-size: var(--bk-theme-font-size-sm);
+        line-height: var(--bk-theme-line-height-sm);
+        color: var(--bk-theme-text-default);
       }
 
       :deep(.bk-form-item.is-required .bk-form-label::after) {
-        color: var(--audit-danger-02);
+        color: var(--bk-theme-color-danger-2);
       }
 
       :deep(.data-source-form-item),
       :deep(.expected-result-form-item) {
         width: 624px;
         max-width: 100%;
-        margin-bottom: var(--audit-space-24);
+        margin-bottom: var(--bk-theme-space-24);
       }
 
       :deep(.data-source-form-item:has(+ .other-table-detail)),
@@ -841,8 +840,8 @@
 
       :deep(.other-table-detail),
       :deep(.link-data-detail) {
-        margin-top: var(--audit-space-8);
-        margin-bottom: var(--audit-space-24);
+        margin-top: var(--bk-theme-space-8);
+        margin-bottom: var(--bk-theme-space-24);
       }
 
       :deep(.expected-result-form-item) {
@@ -886,7 +885,7 @@
 
       :deep(.bk-button-group) {
         .bk-button {
-          padding: 0 35px;
+          padding: 0 var(--bk-theme-space-32);
           font-size: 12px;
         }
       }
@@ -895,36 +894,36 @@
         :deep(.bk-button-group) {
           .bk-button {
             &:first-child:hover:not(.is-disabled, .is-selected) {
-              color: #ea3636;
-              border-color: #ea3636;
+              color: var(--bk-theme-color-danger-2);
+              border-color: var(--bk-theme-color-danger-2);
             }
 
             &:first-child.is-selected {
-              color: #fff;
-              background-color: #ea3636;
-              border-color: #ea3636;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-color-danger-2);
+              border-color: var(--bk-theme-color-danger-2);
             }
 
             &:nth-child(2):hover:not(.is-disabled, .is-selected) {
-              color: #ff9c01;
-              border-color: #ff9c01;
+              color: var(--bk-theme-color-warn-2);
+              border-color: var(--bk-theme-color-warn-2);
             }
 
             &:nth-child(2).is-selected {
-              color: #fff;
-              background-color: #ff9c01;
-              border-color: #ff9c01;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-color-warn-2);
+              border-color: var(--bk-theme-color-warn-2);
             }
 
             &:hover:not(.is-disabled, .is-selected) {
-              color: #979ba5;
-              border-color: #979ba5;
+              color: var(--bk-theme-text-weak);
+              border-color: var(--bk-theme-text-weak);
             }
 
             &.is-selected {
-              color: #fff;
-              background-color: #979ba5;
-              border-color: #979ba5;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-text-weak);
+              border-color: var(--bk-theme-text-weak);
             }
           }
         }
@@ -941,7 +940,7 @@
   }
 
   :deep(.tag-list .remove-tag) {
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .content {
@@ -953,14 +952,14 @@
 }
 
 .create_notice_group {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .refresh {
-  padding: 0 12px;
-  color: #979ba5;
+  padding: 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
 }
 
 .is-disabled {

@@ -48,6 +48,11 @@
             alt="smart_page"
             class="tab-tool-icon"
             :src="userProfileIcon">
+          <img
+            v-else-if="item.tool_type === 'bk_vision'"
+            alt="bk_vision"
+            class="tab-tool-icon"
+            :src="toolTypeBkvision">
           <audit-icon
             v-else
             class="tab-tool-icon"
@@ -190,6 +195,7 @@
 
   import useRequest from '@/hooks/use-request';
   import useToolTabs from '@/hooks/use-tool-tabs';
+  import toolTypeBkvision from '@/images/tools-square/tool-type-bkvision.svg';
   import userProfileIcon from '@/images/user.svg';
   import {
     getToolDetailScopeQuery,
@@ -851,16 +857,21 @@
       return;
     }
 
-    const urlApplied = applyUrlParamsToSearchList(searchListMap.value[uid], urlParams);
+    const previousList = searchListMap.value[uid];
+    const urlApplied = applyUrlParamsToSearchList(previousList, urlParams);
     if (!urlApplied.hasApplied) {
       markRouteQueryApplied(uid);
       return;
     }
+    const valuesChanged = urlApplied.list.some((item, index) => (
+      JSON.stringify(item.value) !== JSON.stringify(previousList[index]?.value)
+    ));
 
     searchListMap.value[uid] = urlApplied.list;
     syncSearchListToStorage();
     markUrlParamsOwner(uid);
     markRouteQueryApplied(uid);
+    if (!valuesChanged) return;
 
     nextTick(() => {
       const ref = toolContentRefs.value[uid];
@@ -1379,7 +1390,7 @@
   width: 100%;
   height: 100%;
   flex-direction: column;
-  background: #f5f7fa;
+  background: var(--bk-theme-surface-page);
 }
 
 .panel-tab {
@@ -1388,15 +1399,15 @@
   align-items: center;
   height: 52px;
   overflow: visible;
-  background: #fff;
-  border-bottom: 1px solid #dcdee5;
+  background: var(--bk-theme-surface-default);
+  border-bottom: 1px solid var(--bk-theme-border-default);
 }
 
 .tab-box {
   display: flex;
   height: 100%;
   min-width: 0;
-  padding-right: 4px;
+  padding-right: var(--bk-theme-space-4);
   overflow: hidden;
   white-space: nowrap;
   align-items: center;
@@ -1406,18 +1417,18 @@
   display: flex;
   width: 100%;
   height: 100%;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
-  background-color: #fafbfd;
-  border-right: 1px solid #dcdee5;
+  background-color: var(--bk-theme-table-header-bg);
+  border-right: 1px solid var(--bk-theme-border-default);
   transition: all .15s;
   align-items: center;
   justify-content: center;
 }
 
 .tab-icon:hover {
-  color: #3a84ff;
-  background: #f0f1f5;
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-surface-muted);
 }
 
 .home-icon {
@@ -1433,19 +1444,19 @@
   height: 100%;
   max-width: 280px;
   min-width: 40px;
-  padding: 0 8px;
+  padding: 0 var(--bk-theme-space-8);
   cursor: pointer;
-  background: #fafbfd;
-  border-right: 1px solid #dcdee5;
+  background: var(--bk-theme-table-header-bg);
+  border-right: 1px solid var(--bk-theme-border-default);
   transition: all .15s;
   align-items: center;
   flex: 1 1 auto;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 
 }
 
 .panel-tab-item:hover {
-  background: #f0f1f5;
+  background: var(--bk-theme-surface-muted);
 }
 
 
@@ -1460,12 +1471,12 @@
 }
 
 .panel-tab-item.active {
-  background: #fff;
+  background: var(--bk-theme-surface-default);
 }
 
 .panel-tab-item.active .tab-text {
   font-weight: 500;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .panel-tab-item.active .delete-fill {
@@ -1476,7 +1487,7 @@
   flex: 1;
   overflow: hidden;
   font-size: 14px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: color .15s;
@@ -1486,7 +1497,7 @@
   display: block;
   width: 15px;
   height: 15px;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   cursor: pointer;
   opacity: 0%;
   transition: all .15s;
@@ -1502,9 +1513,9 @@
   /* flex:1 填满 tab 之外的所有空间，内容溢出时可滚动 */
   flex: 1;
   min-height: 0;
-  padding: 16px 24px;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
   overflow-y: auto;
-  background: #f5f7fa;
+  background: var(--bk-theme-surface-page);
 }
 
 .panel-content::-webkit-scrollbar {
@@ -1516,26 +1527,25 @@
 }
 
 .panel-content::-webkit-scrollbar-thumb {
-  background: #dcdee5;
-  border-radius: 999px;
+  background: var(--bk-theme-border-default);border-radius: 999px;
 }
 
 .panel-content::-webkit-scrollbar-thumb:hover {
-  background: #c4c6cc;
+  background: var(--bk-theme-border-strong);
 }
 
 .rename-form {
-  padding: 8px 0;
+  padding: var(--bk-theme-space-8) 0;
 }
 
 .rename-label {
-  margin-bottom: 8px;
+  margin-bottom: var(--bk-theme-space-8);
   font-size: 14px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .rename-required {
-  color: #ea3636;
+  color: var(--bk-theme-color-danger-2);
 }
 
 </style>
@@ -1545,29 +1555,29 @@
   position: fixed;
   z-index: 9999;
   min-width: 80px;
-  padding: 4px 0;
-  background: #fff;
-  border-radius: 4px;
+  padding: var(--bk-theme-space-4) 0;
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
   box-shadow: 0 2px 12px 0 rgb(0 0 0 / 15%);
 }
 
 .tab-context-menu .context-menu-divider {
   height: 1px;
-  margin: 4px 0;
-  background: #dcdee5;
+  margin: var(--bk-theme-space-4) 0;
+  background: var(--bk-theme-border-default);
 }
 
 .tab-context-menu .context-menu-item {
-  padding: 8px 16px;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
   font-size: 12px;
   line-height: 20px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
   transition: background .15s;
 }
 
 .tab-context-menu .context-menu-item:hover {
-  color: #3a84ff;
-  background: #f0f5ff;
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-select-banner-bg);
 }
 </style>

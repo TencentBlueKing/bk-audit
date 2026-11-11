@@ -4,10 +4,10 @@
 -->
 <template>
   <smart-action
-    class="create-strategy-page assign-rules-page"
+    class="create-strategy-page assign-rules-page bk-theme-form--inline"
     :offset-target="getSmartActionOffsetTarget">
     <div class="create-strategy-main">
-      <div class="assign-rules-card">
+      <div class="assign-rules-card bk-theme-card bk-theme-card--flush">
         <div class="assign-rules-header">
           <div class="assign-rules-title-row">
             <span class="assign-rules-title">{{ t('风险分派规则') }}</span>
@@ -41,7 +41,7 @@
                   @click="() => toggleCollapse(index)">
                   <span
                     class="rule-drag-handle"
-                    title="拖拽排序"
+                    v-bk-tooltips="t('拖拽排序')"
                     @click.stop>
                     <audit-icon type="move" />
                   </span>
@@ -157,20 +157,20 @@
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         theme="primary"
-        @click="submit">
+        @click="submit" style="margin-left: var(--bk-theme-space-8)">
         {{ t('提交') }}
       </bk-button>
       <bk-button
         v-if="showSaveDraftButton"
-        class="ml8"
-        @click="handleSaveDraft">
+       
+        @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
         {{ t('保存草稿') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -722,48 +722,41 @@
 <style lang="postcss" scoped>
 .assign-rules-page {
   .create-strategy-main {
-    padding-top: 4px;
-    margin-bottom: 24px;
+    padding-top: var(--bk-theme-space-4);
+    margin-bottom: var(--bk-theme-space-24);
   }
 
-  .assign-rules-card {
-    background: var(--audit-neutral-bg-04);
-    border-radius: var(--audit-radius-container);
-    box-shadow: var(--audit-shadow-card);
-  }
-
-  .assign-rules-header {
-    padding: 12px var(--audit-space-24) 0;
-    border-bottom: 1px solid var(--audit-neutral-border-02);
+  .assign-rules-header {padding: var(--bk-theme-space-12) var(--bk-theme-space-24) 0;
+    border-bottom: 1px solid var(--bk-theme-border-weak);
   }
 
   .assign-rules-title {
-    font-size: var(--audit-font-size-base);
-    font-weight: var(--audit-font-weight-bold);
-    line-height: var(--audit-line-height-base);
-    color: var(--audit-neutral-text-01);
+    font-size: var(--bk-theme-font-size-base);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-strong);
   }
 
   .assign-rules-tip {
-    margin: 8px 0 16px;
+    margin: var(--bk-theme-space-8) 0 var(--bk-theme-space-16);
     font-size: 12px;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   .add-assign-rule-btn {
-    margin-bottom: 16px;
-    color: #3a84ff;
-    border-color: #3a84ff;
+    margin-bottom: var(--bk-theme-space-16);
+    color: var(--bk-theme-color-brand-2);
+    border-color: var(--bk-theme-color-brand-2);
 
     .add-icon {
-      margin-right: 4px;
-      color: #3a84ff;
+      margin-right: var(--bk-theme-space-4);
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .assign-rule-list {
-    padding: 0 24px 24px;
+    padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-24);
   }
 
   .assign-rule-draggable {
@@ -774,17 +767,17 @@
 
   .assign-rule-item-ghost {
     opacity: 0.5;
-    background: #f0f5ff;
+    background: var(--bk-theme-select-banner-bg);
   }
 
   .assign-rule-item {
-    margin-bottom: 8px;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    margin-bottom: var(--bk-theme-space-8);
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     &.default-rule.has-assign-rules {
-      margin-top: 8px;
+      margin-top: var(--bk-theme-space-8);
     }
 
     &:last-child {
@@ -795,15 +788,15 @@
       display: flex;
       align-items: center;
       height: 48px;
-      padding: 0 16px;
+      padding: 0 var(--bk-theme-space-16);
       cursor: pointer;
-      background: #f5f6fa;
-      border-bottom: 1px solid #dcdee5;
-      gap: 8px;
+      background: var(--bk-theme-surface-subtle);
+      border-bottom: 1px solid var(--bk-theme-border-default);
+      gap: var(--bk-theme-space-8);
 
       .rule-drag-handle {
         font-size: 14px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: grab;
         flex-shrink: 0;
 
@@ -814,7 +807,7 @@
 
       .collapse-icon {
         font-size: 14px;
-        color: var(--audit-neutral-text-02);
+        color: var(--bk-theme-text-default);
         cursor: pointer;
         transition: transform 0.2s ease;
 
@@ -826,7 +819,7 @@
       .rule-name-wrap {
         display: flex;
         flex: 1;
-        gap: 8px;
+        gap: var(--bk-theme-space-8);
         align-items: center;
         min-width: 0;
       }
@@ -836,7 +829,7 @@
         overflow: hidden;
         font-size: 14px;
         font-weight: 600;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -845,42 +838,42 @@
         flex: 1;
         min-width: 0;
         height: 28px;
-        padding: 0 8px;
+        padding: 0 var(--bk-theme-space-8);
         font-size: 14px;
-        color: #313238;
-        background: #fff;
-        border: 1px solid #3a84ff;
-        border-radius: 2px;
+        color: var(--bk-theme-text-strong);
+        background: var(--bk-theme-surface-default);
+        border: 1px solid var(--bk-theme-color-brand-2);
+        border-radius: var(--bk-theme-tag-radius);
         outline: none;
       }
 
       .rule-name-edit-icon {
         font-size: 14px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         cursor: pointer;
         flex-shrink: 0;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
       .header-actions {
         display: flex;
-        gap: 12px;
+        gap: var(--bk-theme-space-12);
         margin-left: auto;
 
         .action-icon {
           font-size: 16px;
-          color: #63656e;
+          color: var(--bk-theme-text-default);
           cursor: pointer;
 
           &:hover {
-            color: #3a84ff;
+            color: var(--bk-theme-color-brand-2);
           }
 
           &.action-delete:hover {
-            color: #ea3636;
+            color: var(--bk-theme-color-danger-2);
           }
         }
       }
@@ -890,37 +883,35 @@
       border-bottom: none;
     }
 
-    .assign-rule-item-content {
-      padding: 20px 24px 24px;
-      background: #fafbfd;
+    .assign-rule-item-content {padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+      background: var(--bk-theme-table-header-bg);
     }
 
     .form-section {
-      margin-bottom: 20px;
+      margin-bottom: var(--bk-theme-space-16);
     }
 
     .assign-hit-condition-form {
       :deep(.bk-form-item) {
-        margin-bottom: 0;
       }
     }
 
     .form-label {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
 
       &.is-required::before {
         display: inline-block;
         width: 8px;
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
         text-align: center;
         content: '*';
       }
 
       .form-label-tip {
         cursor: pointer;
-        border-bottom: 1px dashed #979ba5;
+        border-bottom: 1px dashed var(--bk-theme-text-weak);
       }
     }
   }

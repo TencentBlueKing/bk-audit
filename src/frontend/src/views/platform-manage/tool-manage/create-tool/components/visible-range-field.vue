@@ -934,25 +934,25 @@
     width: 100%;
     min-height: 32px;
     /* 与 bk-select 一致：左 10px，右侧留给箭头 */
-    padding: 0 28px 0 10px;
+    padding: 0 var(--bk-theme-space-32) 0 var(--bk-theme-space-12);
     cursor: pointer;
-    border: 1px solid #c4c6cc;
-    border-radius: 2px;
+    border: 1px solid var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
     box-sizing: border-box;
     transition: border-color .2s;
 
     &:hover {
-      border-color: #3a84ff;
+      border-color: var(--bk-theme-color-brand-2);
     }
 
     &.is-focus {
-      border-color: #3a84ff;
+      border-color: var(--bk-theme-color-brand-2);
       outline: none;
     }
   }
 
   .bk-form-item.is-error .visible-range-selector {
-    border-color: #ea3636;
+    border-color: var(--bk-theme-color-danger-2);
     transition: all .15s;
   }
 
@@ -960,7 +960,7 @@
     display: flex;
     flex: 1;
     flex-wrap: nowrap;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
     min-width: 0;
     overflow: hidden;
@@ -968,7 +968,7 @@
 
   .selected-tag {
     flex-shrink: 0;
-    margin: 2px 0;
+    margin: var(--bk-theme-space-2) 0;
   }
 
   .overflow-count {
@@ -977,20 +977,20 @@
     align-items: center;
     justify-content: center;
     height: 22px;
-    padding: 0 6px;
+    padding: 0 var(--bk-theme-space-6);
     font-size: 12px;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: default;
-    background-color: #f0f1f5;
-    border-radius: 2px;
+    background-color: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
     user-select: none;
   }
 
   .placeholder {
     font-size: 12px;
     line-height: 28px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     flex-shrink: 0;
   }
 
@@ -1004,7 +1004,7 @@
     width: 20px;
     height: 100%;
     font-size: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     transition: transform .3s cubic-bezier(.4, 0, .2, 1);
 
     &.is-open {
@@ -1022,7 +1022,7 @@
     white-space: nowrap;
     pointer-events: none;
     visibility: hidden;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
   }
 </style>
@@ -1034,9 +1034,9 @@
     z-index: 2100;
     width: 640px;
     overflow: hidden auto;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 4px 16px 0 rgb(25 25 41 / 10%);
     box-sizing: border-box;
   }
@@ -1050,26 +1050,25 @@
       max-height: 200px;
     }
 
-    .all-visible-row {
-      padding: 10px 12px;
+    .all-visible-row {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
     }
 
     .range-columns {
-      padding: 8px 0 8px 8px;
+      padding: var(--bk-theme-space-8) 0 var(--bk-theme-space-8) var(--bk-theme-space-8);
     }
   }
 
   /* 顶部搜索 */
   .visible-range-popover .range-search {
     display: flex;
-    padding: 4px 0 0;
-    margin: 0 12px;
-    background: #fff;
-    border-bottom: 1px solid #dcdee5;
+    padding: var(--bk-theme-space-4) 0 0;
+    margin: 0 var(--bk-theme-space-12);
+    background: var(--bk-theme-surface-default);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     align-items: center;
 
     .bk-input {
-      background: #fff !important;
+      background: var(--bk-theme-surface-default) !important;
       border: none !important;
       box-shadow: none !important;
       flex: 1;
@@ -1079,34 +1078,34 @@
     .bk-input--default,
     .bk-input-text,
     input {
-      background: #fff !important;
-      background-color: #fff !important;
+      background: var(--bk-theme-surface-default) !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
 
     .bk-input--suffix-icon {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
 
     .bk-input.is-simplicity:hover:not(.is-disabled) {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
       border-color: transparent !important;
-      border-bottom-color: #dcdee5 !important;
+      border-bottom-color: var(--bk-theme-border-default) !important;
       box-shadow: none !important;
     }
 
     .bk-input.is-simplicity:hover:not(.is-disabled) .bk-input--text,
     .bk-input.is-simplicity:hover:not(.is-disabled) .bk-input--suffix-icon {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
 
     .bk-input.is-focused:not(.is-readonly).is-simplicity .bk-input--text,
     .bk-input.is-focused:not(.is-readonly).is-simplicity .bk-input--suffix-icon {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
 
     .bk-input--suffix-icon:hover {
-      color: #979ba5 !important;
-      background-color: #fff !important;
+      color: var(--bk-theme-text-weak) !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
   }
 
@@ -1115,32 +1114,32 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    margin-right: 4px;
+    margin-right: var(--bk-theme-space-4);
     background: transparent;
 
     .search-prefix {
       font-size: 18px;
       line-height: 1;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 
   /* ALL 全部可见 */
   .all-visible-row {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
-    padding: 13px 15px;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
     cursor: pointer;
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--bk-theme-border-default);
 
     &:hover {
-      color: #3a84ff;
-      background-color: #f5f7fa;
+      color: var(--bk-theme-color-brand-2);
+      background-color: var(--bk-theme-surface-subtle);
     }
 
     &.is-active {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
 
     .all-icon {
@@ -1158,20 +1157,20 @@
     .all-text {
       flex: 1;
       font-size: 12px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .check-icon {
       flex-shrink: 0;
       font-size: 18px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   /* 两列布局 */
   .range-columns {
     display: flex;
-    padding: 12px 0 12px 12px;
+    padding: var(--bk-theme-space-12) 0 var(--bk-theme-space-12) var(--bk-theme-space-12);
   }
 
   .range-columns-loading {
@@ -1183,17 +1182,17 @@
     min-width: 0;
 
     & + & {
-      padding-left: 12px;
-      border-left: 1px solid #dcdee5;
+      padding-left: var(--bk-theme-space-12);
+      border-left: 1px solid var(--bk-theme-border-default);
     }
   }
 
   .column-title {
-    padding-top: 4px;
-    margin-bottom: 8px;
+    padding-top: var(--bk-theme-space-4);
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 12px;
     font-weight: 500;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   /* 每列独立滚动 */
@@ -1207,11 +1206,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: #c4c6cc;
-      border-radius: 2px;
+      background-color: var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
 
       &:hover {
-        background-color: #979ba5;
+        background-color: var(--bk-theme-text-weak);
       }
     }
 
@@ -1223,26 +1222,26 @@
   /* 复选项行 */
   .checkbox-item {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
     height: 36px;
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     font-size: 12px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     user-select: none;
 
     &:hover:not(.is-disabled) {
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
     }
 
     &.is-checked {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
 
     &.is-disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
       opacity: 60%;
 
@@ -1270,7 +1269,7 @@
       flex-shrink: 0;
       margin-left: auto;
       font-size: 18px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 </style>

@@ -389,8 +389,7 @@
 .schedule-input {
   /* display: block; */
   width: 340px;
-  border-right: 0;
-  border-radius: 2px 0 0 2px;
+  border-right: 0;border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
 
   .bk-input--text {
     display: flex;
@@ -400,8 +399,7 @@
 }
 
 .schedule-select .bk-input {
-  display: block;
-  border-radius: 0 2px 2px 0;
+  display: block;border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
 
   .bk-input--text {
     display: flex;
@@ -415,7 +413,7 @@
     position: absolute;
     width: 14px;
     line-height: 32px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
     text-align: center;
     content: '*';
   }
@@ -429,7 +427,7 @@
   }
 
   .dispatch-wrap {
-    padding: 16px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
     .flex-center {
       display: flex;

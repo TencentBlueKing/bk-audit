@@ -44,7 +44,7 @@ export const RISK_STATUS_TAG_MAP: Record<string, RiskStatusMapItem> = {
   whitelist_approving: {
     tag: 'info',
     icon: 'loading',
-    color: 'var(--audit-brand-02)',
+    color: 'var(--bk-theme-color-brand-2)',
   },
   processing: {
     tag: 'info',
@@ -92,7 +92,7 @@ export const RISK_STATUS_THEME_MAP: Record<string, RiskStatusThemeItem> = {
   whitelist_approving: {
     theme: 'info',
     icon: 'loading',
-    color: 'var(--audit-brand-02)',
+    color: 'var(--bk-theme-color-brand-2)',
   },
   processing: {
     theme: 'info',

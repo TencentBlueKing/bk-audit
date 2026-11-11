@@ -68,33 +68,33 @@
     position: relative;
     display: flex;
     min-height: 32px;
-    padding: 6px 8px;
+    padding: var(--bk-theme-space-6) var(--bk-theme-space-8);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
 
     &:hover,
     &.is-active {
-      background: #e1ecff;
+      background: var(--bk-theme-fill-selected);
 
       .conv-title {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
     &.is-active {
-      background: #e1ecff;
+      background: var(--bk-theme-fill-selected);
     }
 
     &.is-indent {
-      padding-left: 16px;
+      padding-left: var(--bk-theme-space-16);
     }
 
     .conv-dot {
       width: 4px;
       height: 4px;
-      background: #c4c6cc;
+      background: var(--bk-theme-border-strong);
       border-radius: 50%;
       flex-shrink: 0;
     }
@@ -103,7 +103,7 @@
       overflow: hidden;
       font-size: 13px;
       line-height: 20px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
       text-overflow: ellipsis;
       white-space: nowrap;
       flex: 1;
@@ -112,7 +112,7 @@
     .conv-actions {
       display: flex;
       align-items: center;
-      gap: 2px;
+      gap: var(--bk-theme-space-2);
       flex-shrink: 0;
 
       .action-btn {
@@ -120,12 +120,12 @@
         width: 20px;
         height: 20px;
         padding: 0;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         align-items: center;
         justify-content: center;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
     }
@@ -133,26 +133,25 @@
 
   .conv-menu {
     min-width: 100px;
-    padding: 4px 0;
+    padding: var(--bk-theme-space-4) 0;
 
     .menu-item {
       display: flex;
-      padding: 6px 12px;
+      padding: var(--bk-theme-space-6) var(--bk-theme-space-12);
       font-size: 13px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       cursor: pointer;
       align-items: center;
-      gap: 6px;
+      gap: var(--bk-theme-space-6);
 
       &:hover {
-        background: #f0f1f5;
+        background: var(--bk-theme-surface-muted);
       }
 
       &.danger {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
 
-        &:hover {
-          background: #fff1f1;
+        &:hover {background: var(--bk-theme-fill-danger);
         }
       }
     }

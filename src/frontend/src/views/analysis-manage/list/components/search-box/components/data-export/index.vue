@@ -157,11 +157,11 @@
     </template>
     <template #footer>
       <bk-button
-        class="mr8"
+       
         :disabled="!selectedItems.length && exportRange === 'specified'"
         :loading="createQueryTaskLoading"
         theme="primary"
-        @click="handleConfirmSearch">
+        @click="handleConfirmSearch" style="margin-right: var(--bk-theme-space-8)">
         {{ t('确定') }}
       </bk-button>
       <bk-button @click="handleClosed">
@@ -449,9 +449,9 @@
 <style lang="postcss" scoped>
 .export-data-overview {
   display: flex;
-  padding: 15px 0;
-  margin: 20px 0;
-  background-color: #f5f7fa;
+  padding: var(--bk-theme-space-16) 0;
+  margin: var(--bk-theme-space-16) 0;
+  background-color: var(--bk-theme-surface-subtle);
   justify-content: space-around;
 
   .export-data-overview-item {
@@ -469,12 +469,12 @@
 }
 
 .export-data-range {
-  margin-bottom: 10px;
+  margin-bottom: var(--bk-theme-space-12);
   font-weight: 700;
 }
 
 :deep(.export-data-range-radio) {
-  margin-bottom: 15px;
+  margin-bottom: var(--bk-theme-space-16);
 
   .bk-radio-input {
     width: 14px;

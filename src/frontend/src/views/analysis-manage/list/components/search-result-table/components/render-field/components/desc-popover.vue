@@ -72,6 +72,9 @@
         offset: [0, 8],
         zIndex: 99999,
         hideOnClick: false,
+        onCreate(instance) {
+          instance.popper.classList.add('analysis-desc-popper');
+        },
         onShow() {
           emits('afterShow');
         },
@@ -91,27 +94,52 @@
   });
 </script>
 <style lang="postcss">
+  .analysis-desc-popper .tippy-box[data-theme~='light'] {
+    color: var(--bk-theme-text-strong);
+    background-color: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-overlay-radius);
+    box-shadow: var(--bk-theme-card-shadow);
+  }
+
+  .analysis-desc-popper .tippy-box[data-theme~='light'] > .tippy-arrow::before {
+    border-right-color: var(--bk-theme-surface-default);
+    border-left-color: var(--bk-theme-surface-default);
+  }
+
+  .analysis-desc-popper .tippy-content {
+    padding: 0;
+  }
+
   .analysis-row-popover {
-    font-size: 12px;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
 
     .hover-table {
-      padding: 11px 2px;
+      padding: 0;
 
       .hover-table-content {
         width: 100%;
       }
 
       .hover-table-title {
-        color: #979ba5;
-        text-align: center;
-        background-color: #fafbfd;
+        width: 84px;
+        padding: var(--bk-theme-space-4) 0;
+        color: var(--bk-theme-text-weak);
+        text-align: right;
+        vertical-align: top;
+        background-color: transparent;
       }
 
       .hover-table-value {
         position: relative;
-        padding: 5px 12px;
-        color: #63656e;
+        padding: var(--bk-theme-space-4) 0 var(--bk-theme-space-4) var(--bk-theme-space-8);
+        color: var(--bk-theme-text-strong);
         word-break: break-all;
+
+        a {
+          color: var(--bk-theme-color-brand-2);
+        }
 
         .max-line-clamp {
           display: -webkit-box;
@@ -122,33 +150,19 @@
 
         .copy-btn {
           position: absolute;
-          right: 12px;
-          bottom: 5px;
+          right: 0;
+          bottom: var(--bk-theme-space-4);
           cursor: pointer;
 
           &:hover {
-            color: #3a84ff;
+            color: var(--bk-theme-color-brand-2);
           }
         }
       }
 
       .hover-table-content tr td {
-        height: 36px;
-        border-top: 1px solid #dcdee5;
-        border-right: 1px solid #dcdee5;
-        border-left: 1px solid #dcdee5;
-      }
-
-      .hover-table-content tr .border-left-none {
-        border-left: none;
-      }
-
-      .hover-table-content tr .border-bottom {
-        border-bottom: 1px solid #dcdee5;
-      }
-
-      .hover-table-content tr:last-child td {
-        border-bottom: 1px solid #dcdee5;
+        height: auto;
+        border: none;
       }
     }
   }

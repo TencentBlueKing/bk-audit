@@ -202,16 +202,15 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    overflow: visible;
-    padding: 20px 24px 24px;
+    overflow: visible;padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
     font-size: 14px;
     font-weight: 400;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     letter-spacing: 0;
     text-align: left;
-    background: #fff;
-    border-radius: 16px;
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-dialog-radius);
     box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
   }
@@ -225,33 +224,32 @@
 
   .card-tip {
     display: flex;
-    margin: 0 0 16px;
+    margin: 0 0 var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: 400;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     letter-spacing: 0;
     text-align: left;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
 
     .tip-icon {
       display: block;
       width: 18px;
       height: 18px;
-      margin-top: 2px;
+      margin-top: var(--bk-theme-space-2);
       flex-shrink: 0;
     }
 
-    .tip-extra {
-      color: #9ea1aa;
+    .tip-extra {color: var(--bk-theme-text-weak);
     }
   }
 
   .field-block {
     display: flex;
     width: 100%;
-    margin: 0 0 16px;
+    margin: 0 0 var(--bk-theme-space-16);
     padding: 0;
     overflow: visible;
     flex-direction: column;
@@ -260,12 +258,12 @@
   .field-label {
     display: block;
     width: 100%;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     padding: 0;
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     letter-spacing: 0;
     text-align: left;
     flex-shrink: 0;
@@ -303,7 +301,7 @@
 
   .field-control :deep(.bk-select-trigger) {
     width: 100%;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
   }
 
   .field-control :deep(.bk-input),
@@ -313,24 +311,24 @@
     margin: 0;
     font-family: inherit;
     font-size: 14px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     letter-spacing: 0;
-    border: 1px solid #c4c6cc;
-    border-radius: 2px;
-    background: #fff;
+    border: 1px solid var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
+    background: var(--bk-theme-surface-default);
     box-shadow: none;
     box-sizing: border-box;
   }
 
   .field-control :deep(.bk-input:hover) {
-    border-color: #979ba5;
+    border-color: var(--bk-theme-text-weak);
   }
 
   .field-control :deep(.is-focus > .bk-input),
   .field-control :deep(.bk-select.is-focus .bk-input) {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
     box-shadow: none;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
   }
 
   .field-control :deep(.bk-input--text),
@@ -338,7 +336,7 @@
   .field-control :deep(input) {
     font-family: inherit;
     font-size: 14px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     letter-spacing: 0;
     background: transparent;
     background-color: transparent;
@@ -348,12 +346,12 @@
   .field-control :deep(input::placeholder) {
     font-family: inherit;
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     letter-spacing: 0;
   }
 
   .field-control :deep(.bk-input--suffix-icon) {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     background: transparent;
   }
 
@@ -369,18 +367,18 @@
   .card-actions {
     display: flex;
     justify-content: flex-start;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
 
     :deep(.bk-button) {
       min-width: 88px;
       height: 32px;
-      padding: 0 16px;
+      padding: 0 var(--bk-theme-space-16);
       font-family: inherit;
       font-size: 14px;
       font-weight: 400;
       line-height: 32px;
       letter-spacing: 0;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 </style>

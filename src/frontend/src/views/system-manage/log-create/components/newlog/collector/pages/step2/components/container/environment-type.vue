@@ -29,7 +29,7 @@
           <span
             v-for="item in physics"
             :key="item.id"
-            class="type-item ml8"
+            class="type-item"
             :class="{
               disabled: readonly,
               active: item.id===active,
@@ -38,12 +38,12 @@
             <img
               class="type-image"
               :src="getAssetsFile(`${item.image}.svg`)">
-            <span class="ml8">{{ item.name }}</span>
+            <span style="margin-left: var(--bk-theme-space-8)">{{ item.name }}</span>
           </span>
         </div>
       </div>
       <div
-        class="ml8">
+        style="margin-left: var(--bk-theme-space-8)">
         <span class="type-lable">
           {{ t('容器环境') }}
         </span>
@@ -52,7 +52,7 @@
           <span
             v-for="item in globalsData.bcs_log_type"
             :key="item.id"
-            class="type-item ml8"
+            class="type-item"
             :class="{
               active: item.id===active,
               disabled: readonly,
@@ -61,7 +61,7 @@
             <img
               class="type-image"
               :src="getAssetsFile(`${item.id}.svg`)">
-            <span class="ml8">{{ t(item.name) }}</span>
+            <span style="margin-left: var(--bk-theme-space-8)">{{ t(item.name) }}</span>
           </span>
         </div>
       </div>
@@ -133,7 +133,7 @@
   display: flex;
 
   .type-lable {
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .type-item:first-child {
@@ -141,16 +141,17 @@
   }
 
   .type-item {
+    margin-left: var(--bk-theme-space-8);
     display: inline-block;
     display: inline-flex;
     width: 100px;
     height: 32px;
-    padding: 5px;
-    color: #313238;
+    padding: var(--bk-theme-space-4);
+    color: var(--bk-theme-text-strong);
     cursor: pointer;
-    background: #fff;
-    border: 1px solid #c4c6cc;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
 
     .type-image {
@@ -160,25 +161,25 @@
   }
 
   .active {
-    color: #3a84ff;
-    background: #e1ecff;
-    border: 1px solid #3a84ff;
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-fill-selected);
+    border: 1px solid var(--bk-theme-color-brand-2);
   }
 
   .active:hover {
-    color: #3a84ff;
-    border: 1px solid #3a84ff;
+    color: var(--bk-theme-color-brand-2);
+    border: 1px solid var(--bk-theme-color-brand-2);
   }
 
   .disabled:not(.active) {
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: not-allowed;
-    border-color: #dcdee5;
+    border-color: var(--bk-theme-border-default);
   }
 
   .type-item:not(.disabled):hover {
-    color: #3a84ff;
-    border: 1px solid #3a84ff;
+    color: var(--bk-theme-color-brand-2);
+    border: 1px solid var(--bk-theme-color-brand-2);
   }
 }
 </style>

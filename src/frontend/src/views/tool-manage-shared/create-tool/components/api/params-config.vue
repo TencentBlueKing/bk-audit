@@ -16,7 +16,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="params-box">
+  <div class="params-box bk-theme-form--inline">
     <bk-form-item
       label-width="160">
       <div class="render-field">
@@ -772,10 +772,9 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 .render-field {
   display: flex;
   min-width: 640px;
-  border-top: 1px solid #dcdee5;
-  border-right: 1px solid #dcdee5;
-  border-bottom: 1px solid #dcdee5;
-  border-radius: 2px 2px 0 0;
+  border-top: 1px solid var(--bk-theme-border-default);
+  border-right: 1px solid var(--bk-theme-border-default);
+  border-bottom: 1px solid var(--bk-theme-border-default);border-radius: var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0 0;
   user-select: none;
   flex-direction: column;
   flex: 1;
@@ -783,14 +782,14 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   .field-select {
     width: 40px;
     text-align: center;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 
   .field-operation {
     width: 170px;
-    padding-left: 16px;
-    background: #fafbfd;
-    border-left: 1px solid #dcdee5;
+    padding-left: var(--bk-theme-space-16);
+    background: var(--bk-theme-table-header-bg);
+    border-left: 1px solid var(--bk-theme-border-default);
   }
 
 
@@ -801,12 +800,12 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   flex: 1;
 
   /* width: 180px; */
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
   align-items: center;
 
   .field-value-div {
     display: flex;
-    padding: 0 8px;
+    padding: 0 var(--bk-theme-space-8);
     cursor: pointer;
     align-items: center;
 
@@ -823,11 +822,11 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       z-index: 1;
       display: none;
       font-size: 12px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       transition: all .15s;
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       &.is-popconfirm-visible {
@@ -844,19 +843,17 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       position: absolute;
       right: 8px;
       font-size: 14px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .bk-form-item.is-error {
-    .bk-input--text {
-      background-color: #ffebeb;
+    .bk-input--text {background-color: var(--bk-theme-fill-danger);
     }
   }
 
   .bk-form-item {
     width: 100%;
-    margin-bottom: 0;
 
     .bk-input,
     .bk-date-picker-editor,
@@ -872,9 +869,9 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     }
 
     .bk-input.is-focused:not(.is-readonly) {
-      border: 1px solid #3a84ff;
+      border: 1px solid var(--bk-theme-color-brand-2);
       outline: 0;
-      box-shadow: 0 0 3px #a3c5fd;
+     
     }
 
     .bk-form-error-tips {
@@ -889,16 +886,16 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   height: 42px;
   font-size: 12px;
   line-height: 40px;
-  color: #313238;
-  background: #f0f1f5;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-muted);
 
   .field-value {
-    padding-left: 8px;
+    padding-left: var(--bk-theme-space-8);
   }
 
   .field-value.is-required {
     &::after {
-      margin-left: 4px;
+      margin-left: var(--bk-theme-space-4);
       color: red;
       content: '*';
     }
@@ -906,7 +903,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 
   .field-select,
   .field-operation {
-    background: #f0f1f5;
+    background: var(--bk-theme-surface-muted);
   }
 }
 
@@ -914,16 +911,16 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   display: flex;
   font-size: 12px;
   line-height: 42px;
-  color: #63656e;
-  border: 1px solid #dcdee5;
+  color: var(--bk-theme-text-default);
+  border: 1px solid var(--bk-theme-border-default);
   border-top: none;
   border-left: none;
 }
 
 .field-icon {
-  margin-left: 16px;
+  margin-left: var(--bk-theme-space-16);
   font-size: 14px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
 }
 
 .var-name-rules {
@@ -942,14 +939,13 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   display: flex;
 
   &:first-child {
-    border-bottom: 1px solid  #dcdee5;
+    border-bottom: 1px solid  var(--bk-theme-border-default);
   }
 
 }
 
 .params-box {
   :deep(.bk-form-item) {
-    margin-bottom: 0;
   }
 }
 
@@ -967,33 +963,33 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   top: 50%;
   right: 10px;
   z-index: 1000;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   transform: translateY(-50%);
 
   &:hover {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
 .underline-dashed {
   text-decoration: underline;
   text-decoration-style: dashed;
-  text-decoration-color: #c4c6cc;
+  text-decoration-color: var(--bk-theme-border-strong);
   text-underline-offset: 5px;
   cursor: pointer;
 }
 
 /* 时间范围选择器tag样式 */
 .var-split span {
-  margin-top: 4px;
-  margin-right: 10px;
+  margin-top: var(--bk-theme-space-4);
+  margin-right: var(--bk-theme-space-12);
 }
 
 .var-split .bk-tag.bk-tag-info,
 .var-split .bk-tag.bk-tag-warning {
   width: 50px;
   height: 16px;
-  padding: 0 4px;
+  padding: 0 var(--bk-theme-space-4);
   font-size: 10px;
   line-height: 16px;
 }

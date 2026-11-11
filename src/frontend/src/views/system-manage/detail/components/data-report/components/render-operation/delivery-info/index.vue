@@ -246,49 +246,49 @@
 </script>
 <style lang="postcss">
   .collection-delivery-info {
-    background: #fff;
+    background: var(--bk-theme-surface-default);
 
     .title {
-      padding-bottom: 16px;
+      padding-bottom: var(--bk-theme-space-16);
       font-size: 14px;
       font-weight: bold;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
 
       .title-info {
         font-size: 12px;
         font-weight: 500;
         font-weight: normal;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
 
     .status-operation-box {
       display: flex;
-      margin: 16px 0;
+      margin: var(--bk-theme-space-16) 0;
       user-select: none;
     }
 
     .status-tab {
       display: flex;
-      padding: 3px;
+      padding: var(--bk-theme-space-4);
       font-size: 12px;
-      color: #63656e;
-      background: #f0f1f5;
-      border-radius: 2px;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .status-tab-item {
       display: flex;
       height: 26px;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       cursor: pointer;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
       justify-content: center;
       transition: all .15s;
 
       &.active {
-        background: #fff;
+        background: var(--bk-theme-surface-default);
         box-shadow: 0 1px 2px 0 rgb(0 0 0 / 8%);
       }
     }

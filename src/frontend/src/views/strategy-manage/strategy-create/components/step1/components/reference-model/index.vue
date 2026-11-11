@@ -422,7 +422,7 @@
   }
 
   .upgrade-tip {
-    margin-left: 13px;
+    margin-left: var(--bk-theme-space-12);
     font-size: 12px;
     font-weight: 400;
 
@@ -430,17 +430,17 @@
       display: inline-block;
       width: 8px;
       height: 8px;
-      margin-right: 6px;
-      background: #ea3636;
+      margin-right: var(--bk-theme-space-6);
+      background: var(--bk-theme-color-danger-2);
       border-radius: 50%;
     }
 
     .content {
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
     .btn {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
     }
   }
@@ -449,13 +449,12 @@
     position: absolute;
     top: 50%;
     right: 30px;
-    padding: 3px 10px;
+    padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
     font-size: 12px;
     font-weight: normal;
     line-height: normal;
-    color: #3a84ff;
-    background: #edf4ff;
-    border-radius: 2px;
+    color: var(--bk-theme-color-brand-2);background: var(--bk-theme-fill-selected);
+    border-radius: var(--bk-theme-tag-radius);
     transform: translateY(-50%);
   }
 }

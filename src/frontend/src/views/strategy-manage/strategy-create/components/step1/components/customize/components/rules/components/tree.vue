@@ -597,7 +597,7 @@
 .field-list-loading {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
   align-items: center;
   justify-content: center;
   height: 340px;
@@ -606,7 +606,7 @@
 
 .field-list-loading-text {
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .field-list-empty {
@@ -616,7 +616,7 @@
   height: 340px;
   min-height: 200px;
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .field {
@@ -624,7 +624,7 @@
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  padding-right: 10px;
+  padding-right: var(--bk-theme-space-12);
   min-height: 32px;
 
   .field-left {
@@ -635,7 +635,7 @@
 
     .field-type-icon {
       flex-shrink: 0;
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
       font-size: 14px;
       line-height: 1;
     }
@@ -643,7 +643,7 @@
     .field-type-span {
       font-size: 12px;
       line-height: 20px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 
@@ -651,28 +651,27 @@
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    margin-left: 10px;
+    margin-left: var(--bk-theme-space-12);
   }
 
   .field-type-span {
     font-size: 12px;
-    line-height: 20px;
-    color: #49bb07;
+    line-height: 20px;color: var(--bk-theme-color-success-2);
   }
 }
 
 .field:hover {
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
 }
 
 .field-edit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   justify-content: space-between;
 
   :hover {
-    background-color: #fff;
+    background-color: var(--bk-theme-surface-default);
   }
 
   .field-edit-left {
@@ -685,7 +684,7 @@
 
       .field-type-icon {
         flex-shrink: 0;
-        margin-right: 4px;
+        margin-right: var(--bk-theme-space-4);
         font-size: 14px;
         line-height: 1;
       }
@@ -693,13 +692,13 @@
       .field-type-span {
         font-size: 12px;
         line-height: 20px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
     }
 
     .edit-input {
       width: 100px;
-      margin-left: 5px;
+      margin-left: var(--bk-theme-space-4);
     }
   }
 }
@@ -716,11 +715,10 @@
   justify-content: center;
   width: 10px;
   height: 16px;
-  margin-right: 5px;
-  margin-left: 5px;
-  vertical-align: middle;
-  background-color: #e3ecfd;
-  border-radius: 2px;
+  margin-right: var(--bk-theme-space-4);
+  margin-left: var(--bk-theme-space-4);
+  vertical-align: middle;background-color: var(--bk-theme-fill-selected);
+  border-radius: var(--bk-theme-tag-radius);
 }
 </style>
 <style lang="postcss">

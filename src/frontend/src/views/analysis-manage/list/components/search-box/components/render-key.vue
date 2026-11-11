@@ -85,23 +85,23 @@
       <BkCheckbox>查询敏感数据</BkCheckbox>
     </div> -->
     <div
-      class="mt16"
-      style="display: flex;">
+     
+      style="display: flex; margin-top: var(--bk-theme-space-16)">
       <bk-button
-        class="mr8"
+       
         :loading="isQueryLoading"
         theme="primary"
-        @click="handleSubmit">
+        @click="handleSubmit" style="margin-right: var(--bk-theme-space-8)">
         {{ t('查询') }}
       </bk-button>
       <bk-button
-        class="mr8"
-        @click="handleResetClick">
+       
+        @click="handleResetClick" style="margin-right: var(--bk-theme-space-8)">
         {{ t('重置') }}
       </bk-button>
       <bk-button
-        class="mr8"
-        @click="() => isShowDataExport = !isShowDataExport">
+       
+        @click="() => isShowDataExport = !isShowDataExport" style="margin-right: var(--bk-theme-space-8)">
         {{ t('导出') }}
       </bk-button>
       <bk-popover
@@ -112,8 +112,8 @@
         trigger="click"
         @after-hidden="handleAfterHidden">
         <bk-button
-          class="mr8"
-          @click="handleFavouriteQuery">
+         
+          @click="handleFavouriteQuery" style="margin-right: var(--bk-theme-space-8)">
           {{ t('收藏此条件') }}
         </bk-button>
         <template #content>
@@ -126,10 +126,10 @@
           </div>
           <div class="favourite-query-pop-bth">
             <bk-button
-              class="mr8"
+             
               size="small"
               theme="primary"
-              @click="handleSubmitFavourite">
+              @click="handleSubmitFavourite" style="margin-right: var(--bk-theme-space-8)">
               {{ t('确定') }}
             </bk-button>
             <bk-button
@@ -801,13 +801,13 @@
 <style lang="postcss">
   .render-form-serach-key {
     position: relative;
-    padding: 16px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
     .box-row {
       display: grid;
-      margin-bottom: 12px;
+      margin-bottom: var(--bk-theme-space-12);
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px 16px;
+      gap: var(--bk-theme-space-16) var(--bk-theme-space-16);
 
       .box-column {
         display: inline-block;
@@ -816,7 +816,7 @@
 
     .show-more-condition-btn {
       display: inline-block;
-      margin-top: 35px;
+      margin-top: var(--bk-theme-space-32);
 
       .active {
         transform: rotateZ(-180deg);
@@ -828,7 +828,7 @@
   .favourite-query-name {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
   }
 
   .favourite-query-pop-bth {

@@ -54,9 +54,9 @@
               :user-group="variableList"
               :user-group-name="t('可使用变量')" />
             <bk-alert
-              class="form-item-common mt8"
+              class="form-item-common"
               theme="info"
-              :title="t('处理套餐中使用了电话语音通知，拨打的顺序是按通知对象顺序依次拨打，用户组内无法保证顺序')" />
+              :title="t('处理套餐中使用了电话语音通知，拨打的顺序是按通知对象顺序依次拨打，用户组内无法保证顺序')" style="margin-top: var(--bk-theme-space-8)" />
           </bk-form-item>
           <bk-form-item
             class="is-required"
@@ -119,8 +119,8 @@
           {{ isEditMode?t('保存'):t('提交') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="closeDialog">
+         
+          @click="closeDialog" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -324,7 +324,7 @@
 </script>
 <style lang="postcss" scoped>
 .create-notice-group {
-  padding: 24px;
+  padding: var(--bk-theme-space-24);
   background-color: white;
 
   :deep(.bk-select .bk-select-trigger .bk-select-tag-input) {
@@ -340,7 +340,7 @@
   }
 
   .ml15 {
-    margin-left: 15px;
+    margin-left: var(--bk-theme-space-16);
   }
 
   .notice-table-content {
@@ -353,44 +353,39 @@
   }
 
   .level-1 {
-    padding: 0 8px;
-    color: #eb3635;
-    border-left: 5px solid #eb3635;
+    padding: 0 var(--bk-theme-space-8);color: var(--bk-theme-color-danger-2);border-left: 5px solid var(--bk-theme-color-danger-2);
   }
 
   .level-2 {
-    padding: 0 8px;
-    color: #ff9c00;
-    border-left: 5px solid #ff9c00;
+    padding: 0 var(--bk-theme-space-8);color: var(--bk-theme-color-warn-2);border-left: 5px solid var(--bk-theme-color-warn-2);
   }
 
   .level-3 {
-    padding: 0 8px;
-    color: #3a84ff;
-    border-left: 5px solid #3a84ff;
+    padding: 0 var(--bk-theme-space-8);
+    color: var(--bk-theme-color-brand-2);
+    border-left: 5px solid var(--bk-theme-color-brand-2);
   }
 
   .notice-table-title {
     height: 42px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: center;
-    background-color: #fafbfd;
+    background-color: var(--bk-theme-table-header-bg);
   }
 
-  .notice-table-value {
-    padding: 5px 12px;
-    color: #63656e;
+  .notice-table-value {padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
+    color: var(--bk-theme-text-default);
     word-break: break-all;
   }
 
   .notice-table-content tr td {
-    border-top: 1px solid #dcdee5;
-    border-right: 1px solid #dcdee5;
-    border-left: 1px solid #dcdee5;
+    border-top: 1px solid var(--bk-theme-border-default);
+    border-right: 1px solid var(--bk-theme-border-default);
+    border-left: 1px solid var(--bk-theme-border-default);
   }
 
   .notice-table-content .notice-table-value td {
-    padding: 10px;
+    padding: var(--bk-theme-space-12);
   }
 
   .notice-table-content tr .border-left-none {
@@ -398,11 +393,11 @@
   }
 
   .notice-table-content tr .border-bottom {
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 
   .notice-table-content tr:last-child td {
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 }
 </style>

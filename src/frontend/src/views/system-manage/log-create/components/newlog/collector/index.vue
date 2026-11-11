@@ -183,23 +183,23 @@
 <style scoped lang="postcss">
 .log-create-collector {
   min-height: calc(100vh - 200px);
-  background: #fff;
-  border: 1px solid #dcdee5;
-  box-shadow: 0 2px 4px 0 #1919290d;
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  box-shadow: var(--bk-theme-card-shadow);
 }
 
 .log-create-collector-container {
   display: flex;
-  gap: 24px;
+  gap: var(--bk-theme-space-24);
   min-height: calc(100vh - 202px);
 }
 
 .log-create-collector-steps {
   width: 200px;
   flex-shrink: 0;
-  padding: 24px;
-  background-color: #fafbfd;
-  border-right: 1px solid #dcdee5;
+  padding: var(--bk-theme-space-24);
+  background-color: var(--bk-theme-table-header-bg);
+  border-right: 1px solid var(--bk-theme-border-default);
 
   .steps-vertical {
     max-height: 800px;
@@ -220,7 +220,7 @@
           width: 0;
           height: 0;
           border-top: 8px solid transparent;
-          border-right: 8px solid #dcdee5;
+          border-right: 8px solid var(--bk-theme-border-default);
           border-bottom: 8px solid transparent;
           content: '';
         }
@@ -232,7 +232,7 @@
           width: 0;
           height: 0;
           border-top: 8px solid transparent;
-          border-right: 8px solid #fff;
+          border-right: 8px solid var(--bk-theme-surface-default);
           border-bottom: 8px solid transparent;
           content: '';
         }
@@ -243,14 +243,14 @@
       position: relative;
       font-size: 14px;
       font-weight: 600;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     :deep(.bk-step-description) {
       max-width: 120px;
-      margin-top: 4px;
+      margin-top: var(--bk-theme-space-4);
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 }
@@ -258,10 +258,10 @@
 .log-create-collector-content {
   display: flex;
   width: calc(100% - 200px);
-  padding: 24px;
+  padding: var(--bk-theme-space-24);
   padding-left: 0;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--bk-theme-space-24);
 }
 
 

@@ -30,9 +30,9 @@
 
       <!-- 右侧表格 -->
       <div
-        class="strategy-manage-list"
+        class="strategy-manage-list bk-theme-card bk-theme-card--flush"
         :style="styles">
-        <div class="action-header">
+        <div class="action-header bk-theme-list-toolbar">
           <auth-button
             action-id="create_strategy_v2"
             class="w88"
@@ -63,7 +63,7 @@
           :data-source="dataSource"
           :row-class="() => 'hover-highlight'"
           :settings="settings"
-          :use-skeleton="!isPlatformList"
+          use-skeleton
           @clear-search="handleClearSearch"
           @column-filter="handleColumnFilter"
           @mouseleave="handleRiskCountRowLeave"
@@ -149,7 +149,7 @@
                 || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="create_strategy_v2"
-            class="ml8"
+           
             :class="{
               'is-disabled': isSceneGlobalStrategy(strategyItem)
                 || strategyItem.isPending
@@ -158,7 +158,7 @@
             }"
             :permission="permissionCheckData"
             resource-is-scene
-            style="width: 64px;"
+            style="width: 64px; margin-left: var(--bk-theme-space-8)"
             @click="handleClone(strategyItem)">
             {{ t('克隆') }}
           </auth-button>
@@ -171,7 +171,7 @@
                 ? globalStrategyDisabledTip()
                 : t('处理中，不能删除'),
             }"
-            class="is-disabled ml8">
+            class="is-disabled" style="margin-left: var(--bk-theme-space-8)">
             {{ t('删除') }}
           </bk-button>
           <auth-component
@@ -180,16 +180,16 @@
             :permission="resolveStrategyPermission(strategyItem.permission?.delete_strategy)"
             :resource="strategyItem.strategy_id">
             <bk-button
-              class="ml8"
-              style="width: 64px;"
+             
+              style="width: 64px; margin-left: var(--bk-theme-space-8)"
               @click="handleDelete(strategyItem)">
               {{ t('删除') }}
             </bk-button>
           </auth-component>
           <span v-if="!strategyItem.isDraft">
             <span
-              class="mr8"
-              style="margin-left: 24px;font-size: 14px;color: #63656e;">
+             
+              style="margin-left: 24px;font-size: 14px;color: #63656e; margin-right: var(--bk-theme-space-8)">
               {{ t('启/停') }}
             </span>
             <auth-switch
@@ -215,12 +215,12 @@
               :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
               :resource="strategyItem.strategy_id">
               <audit-popconfirm
-                class="ml8"
+               
                 :confirm-handler="() => handleChange(strategyItem)"
                 :content="t(strategyItem.status === 'running'
                   ? '策略停用后对应风险可能无法及时发现，请确认是否停用'
                   : '策略启动后会开始检测并可能输出审计事件，请确认是否启动')"
-                :title="t(strategyItem.status === 'running' ? '停用策略确认' : '启动策略确认')">
+                :title="t(strategyItem.status === 'running' ? '停用策略确认' : '启动策略确认')" style="margin-left: var(--bk-theme-space-8)">
                 <bk-switcher
                   :model-value="strategyItem.status === 'running'"
                   theme="primary" />
@@ -285,10 +285,10 @@
       :placeholder="t('请输入待删除的策略名称')" />
     <template #footer>
       <bk-button
-        class="mr8"
+       
         :disabled="deleteInputName !== deleteName"
         theme="danger"
-        @click="handleDeleteConfirm">
+        @click="handleDeleteConfirm" style="margin-right: var(--bk-theme-space-8)">
         {{ t('删除') }}
       </bk-button>
       <bk-button
@@ -2588,7 +2588,7 @@
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
   max-width: 100%;
   min-width: 0;
   vertical-align: top;
@@ -2612,25 +2612,25 @@
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   flex-shrink: 0;
 }
 
 :deep(.strategy-name-global-tag.bk-tag) {
   flex-shrink: 0;
   margin: 0;
-  color: #63656e;
-  background-color: #f0f1f5;
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-muted);
   border: none;
 
   &:hover {
-    color: #63656e;
-    background-color: #f0f1f5;
+    color: var(--bk-theme-text-default);
+    background-color: var(--bk-theme-surface-muted);
   }
 }
 
 .mr4 {
-  margin-right: 4px;
+  margin-right: var(--bk-theme-space-4);
 }
 
 .bk-popper {
@@ -2661,7 +2661,7 @@
     border-right-color: transparent;
   }
 
-  /* 悬停只消掉上边和右边的白线，下边 #dcdee5 分隔线保留 */
+  /* 悬停只消掉上边和右边的白线，下边 var(--bk-theme-border-default) 分隔线保留 */
   .audit-highlight-table .bk-table .bk-table-body table tbody tr.hover-highlight:hover td:not(.empty-cell) {
     border-top-color: transparent;
     border-right-color: transparent;
@@ -2682,8 +2682,8 @@
     right: 0;
     z-index: 4;
     border-radius: 0;
-    background-color: #fafbfd;
-    box-shadow: -6px 0 0 0 #fafbfd;
+    background-color: var(--bk-theme-table-header-bg);
+    box-shadow: -6px 0 0 0 var(--bk-theme-table-header-bg);
   }
 
   .edit-badge {
@@ -2693,7 +2693,7 @@
   }
 
   .strategy-enable-switch {
-    margin-left: 5px;
+    margin-left: var(--bk-theme-space-4);
   }
 
   .strategy-manage-list {
@@ -2703,15 +2703,12 @@
     bottom: 0;
     display: flex;
     flex-direction: column;
-    padding: 24px;
+    padding: var(--bk-theme-space-24);
     overflow: hidden;
-    background-color: white;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
 
     .action-header {
       display: flex;
       flex-shrink: 0;
-      margin-bottom: 20px;
 
       .search-input {
         width: 720px;
@@ -2726,34 +2723,34 @@
     }
 
     .bk-button.is-disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
     }
 
     .label-box {
       display: inline-block;
       height: 23px;
-      padding: 0 10px;
-      margin-right: 4px;
+      padding: 0 var(--bk-theme-space-12);
+      margin-right: var(--bk-theme-space-4);
       line-height: 22px;
       text-align: center;
-      background-color: #f0f1f5;
-      border-radius: 2px;
+      background-color: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .notice-box .bk-tag {
       height: 23px;
       max-width: 220px;
-      padding: 0 10px;
-      margin-right: 4px;
+      padding: 0 var(--bk-theme-space-12);
+      margin-right: var(--bk-theme-space-4);
       overflow: hidden;
       line-height: 22px;
       text-align: center;
       text-overflow: ellipsis;
       white-space: nowrap;
-      background: #fafbfd;
+      background: var(--bk-theme-table-header-bg);
       border: 1px solid rgb(151 155 165 / 30%);
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 }
@@ -2761,8 +2758,8 @@
 .operation-records {
   display: none;
   flex: none;
-  margin-left: 4px;
-  color: #3a84ff;
+  margin-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -2770,9 +2767,9 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  gap: 4px;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
+  gap: var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
   white-space: nowrap;
 }
 
@@ -2784,8 +2781,8 @@
 }
 
 .strategy-status-text.is-dashed {
-  line-height: var(--audit-line-height-sm);
-  border-bottom: 1px dashed var(--audit-neutral-text-02);
+  line-height: var(--bk-theme-line-height-sm);
+  border-bottom: 1px dashed var(--bk-theme-text-default);
   cursor: pointer;
 }
 
@@ -2795,14 +2792,14 @@
   padding: 0;
   font-size: 16px;
   line-height: 1;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
 }
 
 .strategy-status-retry.is-disabled {
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: not-allowed;
 }
 
@@ -2815,8 +2812,8 @@
 
 .strategy-status-tip-body {
   max-height: 240px;
-  margin-right: -10px;
-  padding-right: 8px;
+  margin-right: -var(--bk-theme-space-12);
+  padding-right: var(--bk-theme-space-8);
   overflow-x: hidden;
   overflow-y: auto;
   word-break: break-all;
@@ -2831,7 +2828,7 @@
 
 .strategy-status-tip-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.45);
-  border-radius: 3px;
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .strategy-status-tip-body::-webkit-scrollbar-track {
@@ -2864,19 +2861,19 @@
 .strategy-risk-count-link {
   display: inline-flex;
   align-items: center;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
 .strategy-risk-count-cell {
   display: inline-flex;
   align-items: center;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   cursor: default;
 }
 
 .strategy-risk-count-text {
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .strategy-risk-count-text.is-clickable {
@@ -2892,14 +2889,14 @@
   display: inline-flex;
   align-items: center;
   width: 18px;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   cursor: pointer;
   visibility: hidden;
 }
 
 .strategy-risk-count-jump-icon {
   font-size: 14px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .strategy-risk-count-cell:hover .strategy-risk-count-jump,
@@ -2938,11 +2935,11 @@
 }
 
 .strategy-delete-title {
-  margin-top: 20px;
+  margin-top: var(--bk-theme-space-16);
   font-size: 20px;
   line-height: 32px;
   letter-spacing: 0;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   text-align: center;
 }
 
@@ -2950,17 +2947,17 @@
   width: 416px;
   height: 46px;
   margin: 0 auto;
-  margin-top: 20px;
-  margin-bottom: 20px;
+  margin-top: var(--bk-theme-space-16);
+  margin-bottom: var(--bk-theme-space-16);
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   text-align: center;
   overflow-wrap: break-word;
-  background: #f5f6fa;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-tag-radius);
 
   .red-text {
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 
@@ -2971,9 +2968,8 @@
 
 .strategy-manage-content {
   width: 416px;
-  padding-bottom: 10px;
-  font-size: 14px;
-  color: #333;
+  padding-bottom: var(--bk-theme-space-12);
+  font-size: 14px;color: var(--bk-theme-text-strong);
   text-align: center;
 
   .strategy-manage-content-text {
@@ -2989,7 +2985,7 @@
   overflow: hidden;
   flex: 1;
   flex-direction: column;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
 
   .strategy-detail {
     flex: 1;
@@ -3021,6 +3017,5 @@
   flex: 1;
   flex-direction: column;
 }
-
 </style>
 

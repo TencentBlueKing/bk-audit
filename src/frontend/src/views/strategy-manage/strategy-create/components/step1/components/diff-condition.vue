@@ -69,10 +69,10 @@
           style="width: 800px;" />
       </auth-collapse-panel>
       <auth-collapse-panel
-        class="mt12"
+       
         :is-active="isActive"
         :label="t('节点管理')"
-        style="width: 800px;margin-top: 12px;">
+        style="width: 800px;margin-top: 12px; margin-top: var(--bk-theme-space-12)">
         <bk-table
           ref="resultTable"
           :border="['outer', 'col']"
@@ -197,20 +197,20 @@
 <style lang="postcss">
 .diff-condition {
   .bk-table .bk-table-head table th .cell {
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .params-type {
     display: inline-block;
-    padding: 0 10px;
+    padding: 0 var(--bk-theme-space-12);
     line-height: 21px;
-    color: #3a84ff;
-    background: #e1ecff;
-    border-radius: 10px;
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-fill-selected);
+    border-radius: var(--bk-theme-message-radius);
   }
 
   .strategy-create-select-item {
-    margin: 0 -15px;
+    margin: 0 -var(--bk-theme-space-16);
     border-bottom: 0;
 
     .bk-input {

@@ -27,10 +27,10 @@
     position: relative;
     display: flex;
     height: 44px;
-    margin-top: 13px;
-    color: #63656e;
-    background: #f5f7fa;
-    border: 1px solid #eaebf0;
+    margin-top: var(--bk-theme-space-12);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-subtle);
+    border: 1px solid var(--bk-theme-border-weak);
     align-items: center;
 
     &::before {
@@ -39,8 +39,8 @@
       left: 42px;
       width: 8px;
       height: 8px;
-      background: #f5f7fa;
-      border: 1px solid #eaebf0;
+      background: var(--bk-theme-surface-subtle);
+      border: 1px solid var(--bk-theme-border-weak);
       border-bottom: none;
       border-left: none;
       content: '';

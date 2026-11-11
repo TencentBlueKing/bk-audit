@@ -36,7 +36,7 @@
     :title="logType==='logWhole'? t('完整日志') : t('原始日志')"
     :width="640">
     <template #header>
-      <div class="flex mr24">
+      <div class="flex">
         <div>{{ logType==='logWhole'? t('完整日志') : t('原始日志') }}</div>
         <div
           class="log-operation">
@@ -60,8 +60,8 @@
           </div>
           <div class="log-btns">
             <div
-              class="cursor mr24"
-              @click="handleCopyLog">
+              class="cursor"
+              @click="handleCopyLog" style="margin-right: var(--bk-theme-space-24)">
               <audit-icon
                 style="color: #979ba5;"
                 type="copy" />
@@ -186,6 +186,7 @@
 <style lang="postcss">
   .analysis-log-dialog {
     .flex {
+      margin-right: var(--bk-theme-space-24);
       align-items: center;
       width: 100%;
     }
@@ -194,19 +195,19 @@
       display: flex;
       margin-left: auto;
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
 
     .log-tab {
       display: flex;
       height: 32px;
-      padding: 3px;
+      padding: var(--bk-theme-space-4);
       margin: auto;
-      margin-right: 32px;
+      margin-right: var(--bk-theme-space-32);
       font-size: 12px;
-      color: #63656e;
-      background: #f0f1f5;
-      border-radius: 2px;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .log-btns {
@@ -217,16 +218,16 @@
     .log-tab-item {
       display: flex;
       height: 26px;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       cursor: pointer;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
       justify-content: center;
       transition: all .15s;
 
       &.active {
-        color: #3a84ff;
-        background: #fff;
+        color: var(--bk-theme-color-brand-2);
+        background: var(--bk-theme-surface-default);
         box-shadow: 0 1px 2px 0 rgb(0 0 0 / 8%);
       }
     }

@@ -42,11 +42,11 @@ export const WHITELIST_STATUS_TEXT: Record<WhitelistStatus, string> = {
 };
 
 export const STATUS_DOT_TOKEN: Record<WhitelistStatus, string> = {
-  pending: 'var(--audit-warn-02)',
-  active: 'var(--audit-success-02)',
-  disabled: 'var(--audit-neutral-text-03)',
-  expired: 'var(--audit-warn-02)',
-  rejected: 'var(--audit-danger-02)',
+  pending: 'var(--bk-theme-color-warn-2)',
+  active: 'var(--bk-theme-color-success-2)',
+  disabled: 'var(--bk-theme-text-weak)',
+  expired: 'var(--bk-theme-color-warn-2)',
+  rejected: 'var(--bk-theme-color-danger-2)',
 };
 
 export const INTERCEPT_ACTION_TEXT = {

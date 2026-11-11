@@ -195,9 +195,9 @@
 </script>
 <style lang="postcss" scoped>
 .match-scope-text {
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-01);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-strong);
 }
 
 .match-scope-text:not(.is-inline) .match-scope-text__line {
@@ -208,7 +208,7 @@
 .match-scope-text.is-inline {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 4px;
+  gap: 0 var(--bk-theme-space-4);
   align-items: center;
 }
 
@@ -217,14 +217,14 @@
 }
 
 .match-scope-text__op {
-  margin-right: 4px;
-  font-weight: var(--audit-font-weight-bold);
-  color: var(--audit-warn-02);
+  margin-right: var(--bk-theme-space-4);
+  font-weight: var(--bk-theme-font-weight-bold);
+  color: var(--bk-theme-color-warn-2);
 }
 
 .match-scope-tag {
   display: flex;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   align-items: stretch;
   width: 100%;
   max-width: 100%;
@@ -233,16 +233,16 @@
 }
 
 .match-scope-tag.is-multi {
-  padding-left: 14px;
+  padding-left: var(--bk-theme-space-16);
 }
 
 .match-scope-tag__rail {
   position: relative;
   flex-shrink: 0;
   width: 16px;
-  border: 1px dashed var(--audit-neutral-border-01);
+  border: 1px dashed var(--bk-theme-border-default);
   border-right: 0;
-  border-radius: 4px 0 0 4px;
+  border-radius: var(--bk-theme-tag-radius) 0 0 var(--bk-theme-tag-radius);
 }
 
 .match-scope-tag__group-op {
@@ -250,11 +250,11 @@
   top: 50%;
   left: 0;
   z-index: 1;
-  padding: 0 4px;
-  color: var(--audit-warn-02);
-  background: var(--audit-neutral-bg-04);
-  border: 1px solid var(--audit-warn-02);
-  border-radius: var(--audit-radius-control);
+  padding: 0 var(--bk-theme-space-4);
+  color: var(--bk-theme-color-warn-2);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-color-warn-2);
+  border-radius: var(--bk-theme-control-radius);
   transform: translate(-50%, -50%);
 }
 
@@ -262,7 +262,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   min-width: 0;
   overflow: hidden;
 }
@@ -270,7 +270,7 @@
 .match-scope-tag__row {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   align-items: center;
   min-width: 0;
   overflow: hidden;
@@ -284,10 +284,10 @@
   flex-shrink: 0;
   align-items: center;
   height: 22px;
-  padding: 0 4px;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  border-radius: var(--audit-radius-control);
+  padding: 0 var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  border-radius: var(--bk-theme-control-radius);
 }
 
 .match-scope-tag__chip.is-field,
@@ -304,35 +304,35 @@
 }
 
 .match-scope-tag__chip.is-field {
-  color: var(--audit-success-02);
-  background: var(--audit-success-06);
+  color: var(--bk-theme-color-success-2);
+  background: var(--bk-theme-color-success-6);
 }
 
 .match-scope-tag__chip.is-value {
-  color: var(--audit-neutral-text-02);
-  background: var(--audit-neutral-bg-01);
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-muted);
 }
 
 .match-scope-tag__op-chip {
-  color: var(--audit-warn-02);
-  background: var(--audit-warn-06);
+  color: var(--bk-theme-color-warn-2);
+  background: var(--bk-theme-color-warn-6);
 }
 
 .match-scope-tag__op {
-  color: var(--audit-warn-02);
-  background: var(--audit-neutral-bg-04);
-  border: 1px solid var(--audit-warn-02);
+  color: var(--bk-theme-color-warn-2);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-color-warn-2);
 }
 
 .match-scope-tag__toggle {
   display: inline-flex;
   flex-shrink: 0;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
   align-items: center;
   height: 22px;
   padding: 0;
-  font-size: var(--audit-font-size-sm);
-  color: var(--audit-brand-02);
+  font-size: var(--bk-theme-font-size-sm);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;

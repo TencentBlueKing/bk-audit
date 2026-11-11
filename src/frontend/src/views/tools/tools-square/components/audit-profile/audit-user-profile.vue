@@ -210,8 +210,6 @@
     findPortraitUsageDenial,
   } from '@/utils/tool/portrait-account-restriction';
 
-  import '@blueking/tdesign-ui/vue3/index.css';
-
   import qqSvg from '@/images/qq.svg';
   import wechatSvg from '@/images/wechat.svg';
 
@@ -1474,48 +1472,46 @@
   /* 分割线 */
   .section-divider {
     height: 1px;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
 
     &::before {
       display: block;
       height: 1px;
-      margin: 0 24px;
-      background: #eaebf0;
+      margin: 0 var(--bk-theme-space-24);
+      background: var(--bk-theme-border-weak);
       content: '';
     }
   }
 
   /* 关联游戏列表 */
   .game-list-section {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
   }
 }
 
 /* 用户信息 loading 容器 */
 .user-info-loading-wrapper {
   min-height: 120px;
-  margin-top: 12px;
-  background: #fff;
+  margin-top: var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-default);
 }
 
 /* 用户信息 loading 占位 */
 .user-info-loading-placeholder {
-  height: 120px;
-  padding: 16px 24px 22px;
-  background: #fff;
+  height: 120px;padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 }
 
 /* 游戏列表 loading 容器 */
 .game-list-loading-wrapper {
   min-height: 200px;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
 }
 
 /* 游戏列表 loading 占位 */
 .game-list-loading-placeholder {
-  height: 200px;
-  padding: 16px 24px 22px;
-  background: #fff;
+  height: 200px;padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 }
 
 /* 游戏列表为空 */
@@ -1530,23 +1526,22 @@
 .profile-all-empty {
   display: flex;
   min-height: 360px;
-  margin-top: 12px;
-  background: #fff;
+  margin-top: var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-default);
   align-items: center;
   justify-content: center
 }
 
-.top-search {
-  padding: 16px 24px 22px;
-  background: #fff;
+.top-search {padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 
   .top-search-title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     align-items: center;
   }
 }
@@ -1555,7 +1550,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
 
   .top-search-title {
     margin-bottom: 0;
@@ -1564,7 +1559,7 @@
 
 .game-list-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
   align-items: center;
 
   .game-search-input {
@@ -1577,28 +1572,28 @@
   padding: 0;
 
   .export-popover-body {
-    padding: 16px 16px 0;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-16) 0;
   }
 
   .export-popover-title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 16px;
     font-weight: 700;
     line-height: 24px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .export-form-item {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
 
     .export-form-label {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 14px;
       line-height: 22px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
 
       .required-star {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
     }
   }
@@ -1606,9 +1601,9 @@
   .export-checkbox-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px 24px;
+    gap: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
-    /* bkui-vue 默认给 .bk-checkbox 设置 justify-self: center 和 ~ 选择器加 margin-left: 24px，
+    /* bkui-vue 默认给 .bk-checkbox 设置 justify-self: center 和 ~ 选择器加 margin-left: var(--bk-theme-space-24)，
        会导致 grid 单元格内复选框居中且偏移，必须强制覆盖以保证严格左对齐 */
     :deep(.bk-checkbox) {
       margin-right: 0 !important;
@@ -1623,17 +1618,17 @@
 
   .export-popover-footer {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     justify-content: flex-end;
-    padding: 12px 16px;
-    margin-top: 8px;
-    background: #fafbfd;
-    border-top: 1px solid #dcdee5;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-8);
+    background: var(--bk-theme-table-header-bg);
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 }
 
 .game-list-pagination {
-  padding-top: 12px;
+  padding-top: var(--bk-theme-space-12);
 
   :deep(.bk-pagination) {
     display: flex;
@@ -1657,7 +1652,7 @@
   .t-table--header-wrapper,
   .t-table__header,
   .t-table th {
-    background-color: #f0f1f5 !important;
+    background-color: var(--bk-theme-surface-muted) !important;
   }
 
   .t-table--striped .t-table__body tr:nth-child(even) td {
@@ -1674,16 +1669,16 @@
 
 /* openid 复制图标样式 */
 :deep(.openid-copy-icon) {
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 
   &:hover {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
 /* 责任单数跳转图标样式 */
 :deep(.responsibility-jump-icon) {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 /* 鼠标移入表格行时显示图标 */
@@ -1701,9 +1696,9 @@
 
   /* 是否测试号筛选弹窗：去掉 TDesign 默认内边距，与画像页其它是否类筛选项一致 */
   .t-table__filter-pop.audit-profile-enum-filter-pop {
-    padding: 5px 0 0;
+    padding: var(--bk-theme-space-4) 0 0;
     overflow: hidden;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
 
     .t-table__filter-pop-content,
     .t-table__filter-pop-content-inner {

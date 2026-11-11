@@ -300,44 +300,44 @@
 .group-box {
   display: flex;
   font-size: 12px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .group {
-  margin-left: 10px;
+  margin-left: var(--bk-theme-space-12);
 }
 
 .info-fill {
-  margin-left: 10px;
+  margin-left: var(--bk-theme-space-12);
   font-size: 14px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .info-fill-tex {
-  margin-left: 10px;
+  margin-left: var(--bk-theme-space-12);
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .group-button {
-  margin-left: 10px;
+  margin-left: var(--bk-theme-space-12);
   font-size: 12px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
 .plus-circle {
-  margin-left: 10px;
+  margin-left: var(--bk-theme-space-12);
   font-size: 14px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 
 }
 
 .plus-circle-tex {
-  margin-left: 5px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 12px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -345,8 +345,8 @@
   display: inline-block;
   width: 1px;
   height: 16px;
-  margin-left: 10px;
+  margin-left: var(--bk-theme-space-12);
   vertical-align: middle;
-  background: #dcdee5;
+  background: var(--bk-theme-border-default);
 }
 </style>

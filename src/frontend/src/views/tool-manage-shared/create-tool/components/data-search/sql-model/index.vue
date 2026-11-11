@@ -18,7 +18,7 @@
   <bk-form-item
     :label="t('配置SQL')"
     label-width="160">
-    <div class="sql-editor">
+    <div class="sql-editor bk-theme-form--inline">
       <div class="title">
         <span style="margin-left: auto;">
           <audit-icon
@@ -28,9 +28,9 @@
             @click.stop="handleCopy" />
           <audit-icon
             v-bk-tooltips="t('全屏')"
-            class="ml16 icon"
+            class="icon"
             type="full-screen"
-            @click.stop="handleToggleFullScreen" />
+            @click.stop="handleToggleFullScreen" style="margin-left: var(--bk-theme-space-16)" />
         </span>
       </div>
       <div
@@ -40,7 +40,7 @@
         <audit-icon
           v-if="showExit"
           v-bk-tooltips="t('退出全屏')"
-          class="ml16 exit-icon"
+          class="exit-icon"
           type="un-full-screen-2"
           @click="handleExitFullScreen" />
         <bk-button
@@ -91,7 +91,7 @@
   <bk-form-item
     :label="t('查询输入设置')"
     label-width="160">
-    <div class="render-field">
+    <div class="render-field bk-theme-form--inline">
       <div class="field-header-row">
         <div class="field-value">
           {{ t('变量名') }}
@@ -329,7 +329,7 @@
   <bk-form-item
     :label="t('查询结果设置')"
     label-width="160">
-    <div class="render-field">
+    <div class="render-field bk-theme-form--inline">
       <div class="field-header-row">
         <div class="field-value">
           {{ t('字段名') }}
@@ -472,11 +472,11 @@
                     <!-- 删除 -->
                     <audit-popconfirm
                       :ref="(el: any) => drillPopconfirmRefs[index] = el"
-                      class="ml8"
+                     
                       :confirm-handler="() => handleRemove(index)"
                       :content="t('移除操作无法撤回，请谨慎操作！')"
                       :title="t('确认移除以下工具？')"
-                      @hide="() => handleDrillPopconfirmHide(index)">
+                      @hide="() => handleDrillPopconfirmHide(index)" style="margin-left: var(--bk-theme-space-8)">
                       <audit-icon
                         class="remove-btn"
                         :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[index] }"
@@ -1130,9 +1130,9 @@
   .title {
     display: flex;
     height: 40px;
-    padding: 0 25px;
+    padding: 0 var(--bk-theme-space-24);
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     background: #fbfbfc;
 
     .icon {
@@ -1153,12 +1153,13 @@
     }
 
     .exit-icon {
+      margin-left: var(--bk-theme-space-16);
       position: absolute;
       top: 10px;
       right: 20px;
       z-index: 11111;
       font-size: 20px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
     }
   }
@@ -1169,12 +1170,12 @@
 
   /* grid-template-columns: 1fr 50px; */
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--bk-theme-space-12);
+  margin-bottom: var(--bk-theme-space-12);
 
   .info {
     flex: 1;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
   }
 }
 
@@ -1182,8 +1183,8 @@
   display: flex;
   min-width: 640px;
   overflow: hidden;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
   user-select: none;
   flex-direction: column;
   flex: 1;
@@ -1191,14 +1192,14 @@
   .field-select {
     width: 40px;
     text-align: center;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 
   .field-operation {
     width: 170px;
-    padding-left: 16px;
-    background: #fafbfd;
-    border-left: 1px solid #dcdee5;
+    padding-left: var(--bk-theme-space-16);
+    background: var(--bk-theme-table-header-bg);
+    border-left: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(.field-value) {
@@ -1207,12 +1208,12 @@
 
     /* width: 180px; */
     overflow: hidden;
-    border-left: 1px solid #dcdee5;
+    border-left: 1px solid var(--bk-theme-border-default);
     align-items: center;
 
     .field-value-div {
       display: flex;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       cursor: pointer;
       align-items: center;
 
@@ -1229,11 +1230,11 @@
         z-index: 1;
         display: none;
         font-size: 12px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         transition: all .15s;
 
         &:hover {
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
         }
 
         &.is-popconfirm-visible {
@@ -1250,26 +1251,27 @@
         position: absolute;
         right: 8px;
         font-size: 14px;
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
     .bk-form-item.is-error {
-      .bk-input--text {
-        background-color: #ffebeb;
+      .bk-input--text {background-color: var(--bk-theme-fill-danger);
       }
     }
 
     .bk-form-item {
       width: 100%;
-      margin-bottom: 0;
+
+      .bk-form-label {
+        display: none;
+      }
 
       .bk-input,
       .bk-date-picker-editor,
       .bk-select-trigger,
       .bk-select-tag,
       .date-picker {
-        height: 42px !important;
         border: none;
       }
 
@@ -1278,9 +1280,9 @@
       }
 
       .bk-input.is-focused:not(.is-readonly) {
-        border: 1px solid #3a84ff;
+        border: 1px solid var(--bk-theme-color-brand-2);
         outline: 0;
-        box-shadow: 0 0 3px #a3c5fd;
+       
       }
 
       .bk-form-error-tips {
@@ -1302,16 +1304,16 @@
     height: 42px;
     font-size: 12px;
     line-height: 40px;
-    color: #313238;
-    background: #f0f1f5;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-muted);
 
     .field-value {
-      padding-left: 8px;
+      padding-left: var(--bk-theme-space-8);
     }
 
     .field-value.is-required {
       &::after {
-        margin-left: 4px;
+        margin-left: var(--bk-theme-space-4);
         color: red;
         content: '*';
       }
@@ -1319,7 +1321,7 @@
 
     .field-select,
     .field-operation {
-      background: #f0f1f5;
+      background: var(--bk-theme-surface-muted);
     }
   }
 
@@ -1328,8 +1330,8 @@
     overflow: hidden;
     font-size: 12px;
     line-height: 42px;
-    color: #63656e;
-    border-top: 1px solid #dcdee5;
+    color: var(--bk-theme-text-default);
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 }
 </style>
@@ -1337,22 +1339,22 @@
 .underline-dashed {
   text-decoration: underline;
   text-decoration-style: dashed;
-  text-decoration-color: #c4c6cc;
+  text-decoration-color: var(--bk-theme-border-strong);
   text-underline-offset: 5px;
   cursor: pointer;
 }
 </style>
 <style lang="postcss">
 .field-required-pop {
-  padding: 5px 0 !important;
+  padding: var(--bk-theme-space-4) 0 !important;
 
   .field-required-item {
     position: relative;
     display: flex;
     min-height: 32px;
-    padding: 0 12px;
+    padding: 0 var(--bk-theme-space-12);
     overflow: hidden;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1361,7 +1363,7 @@
     align-items: center;
 
     &:hover {
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
     }
   }
 }

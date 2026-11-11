@@ -46,14 +46,14 @@
 
     .info-label {
       min-width: 60px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       text-align: right;
       flex: 0 0 60px;
     }
 
     .info-value {
-      padding-left: 12px;
-      color: #313238;
+      padding-left: var(--bk-theme-space-12);
+      color: var(--bk-theme-text-strong);
       flex: 1;
     }
   }

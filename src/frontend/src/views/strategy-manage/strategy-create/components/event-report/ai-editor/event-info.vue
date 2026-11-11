@@ -249,30 +249,28 @@
     display: flex;
     width: 880px;
     height: 32px;
-    padding: 0 9px;
-    margin: 24px 0 0 40px;
+    padding: 0 var(--bk-theme-space-8);margin: var(--bk-theme-space-24) 0 0 var(--bk-theme-space-32);
     line-height: 32px;
-    background: #f0f5ff;
-    border: 1px solid #a3c5fd;
-    border-radius: 2px;
+    background: var(--bk-theme-select-banner-bg);
+    border: 1px solid var(--bk-theme-color-brand-4);
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
 
     .info-icon {
       font-size: 14px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
 
     .tips-text {
       font-size: 12px;
       line-height: 20px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
   }
 
   .search-input-box {
     position: relative;
-    width: 880px;
-    margin: 12px 0 0 40px;
+    width: 880px;margin: var(--bk-theme-space-12) 0 0 var(--bk-theme-space-32);
   }
 
   .search-input-suffix {
@@ -282,7 +280,7 @@
     bottom: 0;
     display: flex;
     font-size: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     align-items: center;
     justify-content: center;
   }
@@ -291,21 +289,20 @@
     width: 100%;
   }
 
-  .event-info-table {
-    margin: 24px 40px;
-    background: #fff;
-    border-bottom: 1px solid #dcdee5;
-    border-radius: 2px;
+  .event-info-table {margin: var(--bk-theme-space-24) var(--bk-theme-space-32);
+    background: var(--bk-theme-surface-default);
+    border-bottom: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     .table-header {
       display: flex;
-      background: #f0f1f5;
-      border-bottom: 1px solid #dcdee5;
+      background: var(--bk-theme-surface-muted);
+      border-bottom: 1px solid var(--bk-theme-border-default);
     }
 
     .table-row {
       display: flex;
-      border-bottom: 1px solid #dcdee5;
+      border-bottom: 1px solid var(--bk-theme-border-default);
       transition: background-color .2s;
 
       &:last-child {
@@ -313,16 +310,16 @@
       }
 
       &:hover {
-        background: #f5f7fa;
+        background: var(--bk-theme-surface-subtle);
       }
     }
 
     .table-cell {
       display: flex;
       height: 42px;
-      padding-left: 16px;
+      padding-left: var(--bk-theme-space-16);
       font-size: 12px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
       align-items: center;
 
       .table-cell-text {
@@ -337,11 +334,11 @@
 
       &.header-cell {
         font-weight: 500;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       &.table-cell-right-border {
-        border-right: 1px solid #dcdee5;
+        border-right: 1px solid var(--bk-theme-border-default);
       }
 
       &.w1 {
@@ -372,20 +369,20 @@
       }
 
       .copy-icon {
-        margin-left: 5px;
-        color: #4d4f56;
+        margin-left: var(--bk-theme-space-4);
+        color: var(--bk-theme-text-default);
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
       .expand-icon {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       .insert-link {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: pointer;
         transition: opacity .2s;
 
@@ -400,11 +397,11 @@
     .reference-cell {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
 
       .copy-icon {
         font-size: 14px;
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: pointer;
         transition: opacity .2s;
 
@@ -415,7 +412,7 @@
     }
 
     .insert-link {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
       transition: opacity .2s;
 
@@ -426,15 +423,14 @@
   }
 
   .footer-tips {
-    padding-top: 16px;
-    margin-top: 16px;
-    border-top: 1px solid #e8e8e8;
+    padding-top: var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-16);border-top: 1px solid var(--bk-theme-border-weak);
 
     .tip-item {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 12px;
       line-height: 20px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
 
       &:last-child {
         margin-bottom: 0;
@@ -444,9 +440,9 @@
 }
 
 .empty-text {
-  padding: 20px;
+  padding: var(--bk-theme-space-16);
   font-size: 14px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 

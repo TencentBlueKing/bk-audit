@@ -190,15 +190,15 @@
 </script>
 <style scoped lang="postcss">
 .risk-dispatch-rules {
-  padding-top: 24px;
-  background: #fff;
+  padding-top: var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 
   .rule-item-card {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
     overflow: hidden;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     &:last-child {
       margin-bottom: 0;
@@ -209,26 +209,25 @@
     display: flex;
     align-items: center;
     height: 40px;
-    padding: 0 16px;
-    background: #f0f1f5;
-    border-bottom: 1px solid #dcdee5;
+    padding: 0 var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-muted);
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 
   .rule-name {
     font-size: 14px;
     font-weight: 600;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
-  .rule-item-content {
-    padding: 16px 24px 20px;
-    background: #fff;
+  .rule-item-content {padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-default);
   }
 
   .rule-field-row {
     display: flex;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     line-height: 22px;
 
     &:last-child {
@@ -239,14 +238,14 @@
   .rule-field-label {
     flex: 0 0 100px;
     min-width: 100px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     text-align: right;
   }
 
   .rule-field-value {
     flex: 1;
-    padding-left: 14px;
-    color: #63656e;
+    padding-left: var(--bk-theme-space-12);
+    color: var(--bk-theme-text-default);
     word-break: break-all;
   }
 
@@ -257,7 +256,7 @@
   }
 
   .notice-group-tag {
-    margin: 0 4px 4px 0;
+    margin: 0 var(--bk-theme-space-4) var(--bk-theme-space-4) 0;
   }
 
   .risk-dispatch-rules-empty {

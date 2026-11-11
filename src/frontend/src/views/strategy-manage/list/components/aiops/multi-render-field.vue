@@ -128,7 +128,7 @@
     display: flex;
     min-width: 640px;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     user-select: none;
     flex-direction: column;
     flex: 1;
@@ -143,8 +143,8 @@
       height: 42px;
       font-size: 12px;
       line-height: 40px;
-      color: #313238;
-      background: #fafbfd;
+      color: var(--bk-theme-text-strong);
+      background: var(--bk-theme-table-header-bg);
     }
 
     .field-row {
@@ -152,48 +152,48 @@
       overflow: hidden;
       font-size: 12px;
       line-height: 42px;
-      color: #63656e;
-      background: #fff;
-      border-top: 1px solid #dcdee5;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-default);
+      border-top: 1px solid var(--bk-theme-border-default);
     }
 
     .field-key {
       position: relative;
       display: flex;
       height: 40px;
-      padding-left: 16px;
+      padding-left: var(--bk-theme-space-16);
       align-items: center;
       flex: 1 0 340px;
 
       .field-type {
         display: inline-block;
-        padding: 0 10px;
-        margin-right: 4px;
+        padding: 0 var(--bk-theme-space-12);
+        margin-right: var(--bk-theme-space-4);
         line-height: 21px;
-        color: #3a84ff;
-        background: #e1ecff;
-        border-radius: 10px;
+        color: var(--bk-theme-color-brand-2);
+        background: var(--bk-theme-fill-selected);
+        border-radius: var(--bk-theme-message-radius);
       }
 
       .field-type-icon {
         width: 46px;
-        margin-right: 6px;
+        margin-right: var(--bk-theme-space-6);
       }
 
       .field-required {
-        margin-right: 10px;
+        margin-right: var(--bk-theme-space-12);
         margin-left: auto;
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
     }
 
     .field-type-row {
       flex: 1 1 80px;
-      padding-left: 16px;
+      padding-left: var(--bk-theme-space-16);
     }
 
     .field-value {
-      padding-left: 16px;
+      padding-left: var(--bk-theme-space-16);
       overflow: hidden;
       flex: 1 1 320px;
     }

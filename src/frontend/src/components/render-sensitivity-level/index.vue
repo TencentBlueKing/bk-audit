@@ -47,9 +47,7 @@
     width: 20px;
     height: 16px;
     font-weight: bold;
-    line-height: 16px;
-    color: #fff;
-    text-align: center;
-    border-radius: 2px;
+    line-height: 16px;color: var(--bk-theme-surface-default);
+    text-align: center;border-radius: var(--bk-theme-control-radius);
   }
 </style>

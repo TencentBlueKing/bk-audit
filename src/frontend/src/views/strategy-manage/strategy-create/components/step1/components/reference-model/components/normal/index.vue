@@ -153,8 +153,8 @@
             <div
               v-if="formData.configs.agg_condition.length > 1"
               v-bk-tooltips="t('删除(Remove)')"
-              class="ml8"
-              @click="handleRemoveCondition(index)">
+             
+              @click="handleRemoveCondition(index)" style="margin-left: var(--bk-theme-space-8)">
               <audit-icon type="reduce-fill" />
             </div>
           </div>
@@ -268,9 +268,9 @@
               </span>
             </bk-form-item>
             <bk-form-item
-              class="mb0 ml8"
+              class="mb0"
               label=""
-              label-width="0">
+              label-width="0" style="margin-left: var(--bk-theme-space-8)">
               <bk-select
                 v-model="timeType"
                 class="bk-select"
@@ -316,10 +316,10 @@
               </bk-select>
             </bk-form-item>
             <bk-form-item
-              class="mb0 ml8"
+              class="mb0"
               label=""
               label-width="0"
-              property="configs.algorithms.threshold">
+              property="configs.algorithms.threshold" style="margin-left: var(--bk-theme-space-8)">
               <bk-input
                 v-model="formData.configs.algorithms.threshold"
                 :min="0"
@@ -621,7 +621,7 @@
 <style lang="postcss" scoped>
 .custom-footer {
   display: flex;
-  padding: 10px 20px;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
 }
 
 .bk-select.not-select-close-btn {
@@ -636,7 +636,7 @@
 }
 
 .filter-conditon {
-  padding: 16px 0;
+  padding: var(--bk-theme-space-16) 0;
 
   .flex-center {
     display: flex;
@@ -651,7 +651,7 @@
     display: none;
     font-size: 16px;
     line-height: 1;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 
   .info-tip.active {
@@ -661,14 +661,14 @@
   .form-item-title-required {
     position: relative;
     font-weight: 400;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .form-item-title-required::after {
     position: absolute;
     top: 0;
     width: 14px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
     text-align: center;
     content: '*';
   }
@@ -676,7 +676,7 @@
   .rule-item {
     display: flex;
     align-items: center;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
 
     :deep(.bk-form-label::after) {
       width: 0;
@@ -697,12 +697,12 @@
 
     :deep(.bk-input,.bk-select,) {
       border-color: transparent;
-      border-bottom-color: #c4c6cc;
+      border-bottom-color: var(--bk-theme-border-strong);
     }
 
     :deep(.bk-date-picker-rel .bk-date-picker-editor) {
       border-color: transparent;
-      border-bottom-color: #c4c6cc;
+      border-bottom-color: var(--bk-theme-border-strong);
     }
 
     :deep(.bk-input--number-control) {
@@ -718,8 +718,8 @@
     display: flex;
 
     /* grid-template-columns: repeat(4, auto);
-    gap: 8px; */
-    margin-bottom: 8px;
+    gap: var(--bk-theme-space-8); */
+    margin-bottom: var(--bk-theme-space-8);
     justify-content: space-between;
 
     :deep(.bk-form-error) {
@@ -748,16 +748,16 @@
       width: 120px;
       height: 32px;
 
-      /* margin: 0 8px; */
+      /* margin: 0 var(--bk-theme-space-8); */
 
       /* font-weight: bold; */
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       text-align: center;
-      background: #fff;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
 
       :deep(.bk-input--text) {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
@@ -772,9 +772,9 @@
 
     .condition-icon {
       display: flex;
-      margin-left: 8px;
+      margin-left: var(--bk-theme-space-8);
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
     }
 
@@ -786,11 +786,11 @@
       position: absolute;
       top: 10px;
       right: 8px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
     :deep(.bk-form-item.is-error .bk-tag-input-trigger) {
-      border-color: #ea3636;
+      border-color: var(--bk-theme-color-danger-2);
     }
   }
 

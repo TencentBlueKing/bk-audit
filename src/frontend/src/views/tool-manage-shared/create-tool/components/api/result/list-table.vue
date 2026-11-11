@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="list-table">
+  <div class="list-table bk-theme-form--inline">
     <div class="list-table-head">
       <audit-icon
         class="move"
@@ -35,8 +35,8 @@
       <div class="list-info">
         <bk-input
           v-model="listInfo.name"
-          class="mb8"
-          style="width: 400px;"
+         
+          style="width: 400px; margin-bottom: var(--bk-theme-space-8)"
           @change="handleListInfoChange">
           <template #prefix>
             <span class="info-prefix">{{ t('表格显示名') }} </span>
@@ -44,8 +44,8 @@
         </bk-input>
         <bk-input
           v-model="listInfo.desc"
-          class="mb8"
-          style="width: 100%;margin-left: 20px;"
+         
+          style="width: 100%;margin-left: 20px; margin-bottom: var(--bk-theme-space-8)"
           @change="handleListInfoChange">
           <template #prefix>
             <span class="info-prefix">{{ t('表格说明') }} </span>
@@ -185,11 +185,11 @@
                             <!-- 删除 -->
                             <audit-popconfirm
                               :ref="(el: any) => drillPopconfirmRefs[index] = el"
-                              class="ml8"
+                             
                               :confirm-handler="() => handleRemove(index)"
                               :content="t('移除操作无法撤回，请谨慎操作！')"
                               :title="t('确认移除以下工具？')"
-                              @hide="() => handleDrillPopconfirmHide(index)">
+                              @hide="() => handleDrillPopconfirmHide(index)" style="margin-left: var(--bk-theme-space-8)">
                               <audit-icon
                                 class="remove-btn"
                                 :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[index] }"
@@ -698,67 +698,66 @@
 <style lang="postcss" scoped>
 .list-table {
   position: relative;
-  margin-top: 6px;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  margin-top: var(--bk-theme-space-6);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
 
   .list-table-head {
     display: flex;
     height: 31px;
-    background: #f0f1f5;
-    box-shadow: 0 1px 0 0 #dcdee5;
+    background: var(--bk-theme-surface-muted);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     align-items: center;
 
     .move {
-      margin-left: 5px;
-      color: #c4c6cc;
+      margin-left: var(--bk-theme-space-4);
+      color: var(--bk-theme-border-strong);
       cursor: move;
     }
 
     .head-text {
-      margin-left: 5px;
+      margin-left: var(--bk-theme-space-4);
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 0;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .close {
       position: absolute;
       right: 5px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       cursor: pointer;
     }
   }
 
   .list-info {
     display: flex;
-    padding: 20px 10px 0;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-12) 0;
   }
 
   .info-prefix {
     display: inline-block;
     height: 31px;
-    padding-right: 5px;
-    padding-left: 5px;
+    padding-right: var(--bk-theme-space-4);
+    padding-left: var(--bk-theme-space-4);
     line-height: 31px;
     text-align: center;
-    background: #fafbfd;
-    border-right: .5px solid #c4c6cc;
-    border-radius: 2px 0 0 2px;
+    background: var(--bk-theme-table-header-bg);
+    border-right: .5px solid var(--bk-theme-border-strong);border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
   }
 
   .list-content {
-    padding: 10px;
+    padding: var(--bk-theme-space-12);
 
     .content-title {
       font-size: 12px;
       letter-spacing: 0;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .content {
-      padding-top: 10px;
+      padding-top: var(--bk-theme-space-12);
     }
   }
 }
@@ -768,8 +767,8 @@
   min-width: 640px;
   overflow: hidden;
 
-  /* border: 1px solid #dcdee5; */
-  border-radius: 2px;
+  /* border: 1px solid var(--bk-theme-border-default); */
+  border-radius: var(--bk-theme-tag-radius);
   user-select: none;
   flex-direction: column;
   flex: 1;
@@ -777,14 +776,14 @@
   .field-select {
     width: 40px;
     text-align: center;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 
   .field-operation {
     width: 170px;
-    padding-left: 16px;
-    background: #fafbfd;
-    border-left: 1px solid #dcdee5;
+    padding-left: var(--bk-theme-space-16);
+    background: var(--bk-theme-table-header-bg);
+    border-left: 1px solid var(--bk-theme-border-default);
   }
 
 
@@ -796,12 +795,12 @@
 
   /* width: 180px; */
   overflow: hidden;
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
   align-items: center;
 
   .field-value-div {
     display: flex;
-    padding: 0 8px;
+    padding: 0 var(--bk-theme-space-8);
     cursor: pointer;
     align-items: center;
 
@@ -818,7 +817,7 @@
       z-index: 1;
       display: none;
       font-size: 12px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       transition: all .15s;
 
       &.is-popconfirm-visible {
@@ -835,19 +834,17 @@
       position: absolute;
       right: 8px;
       font-size: 14px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .bk-form-item.is-error {
-    .bk-input--text {
-      background-color: #ffebeb;
+    .bk-input--text {background-color: var(--bk-theme-fill-danger);
     }
   }
 
   .bk-form-item {
     width: 100%;
-    margin-bottom: 0;
 
     .bk-input,
     .bk-date-picker-editor,
@@ -863,9 +860,9 @@
     }
 
     .bk-input.is-focused:not(.is-readonly) {
-      border: 1px solid #3a84ff;
+      border: 1px solid var(--bk-theme-color-brand-2);
       outline: 0;
-      box-shadow: 0 0 3px #a3c5fd;
+     
     }
 
     .bk-form-error-tips {
@@ -879,16 +876,16 @@
   height: 42px;
   font-size: 12px;
   line-height: 40px;
-  color: #313238;
-  background: #f0f1f5;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-muted);
 
   .field-value {
-    padding-left: 8px;
+    padding-left: var(--bk-theme-space-8);
   }
 
   .field-value.is-required {
     &::after {
-      margin-left: 4px;
+      margin-left: var(--bk-theme-space-4);
       color: red;
       content: '*';
     }
@@ -896,7 +893,7 @@
 
   .field-select,
   .field-operation {
-    background: #f0f1f5;
+    background: var(--bk-theme-surface-muted);
   }
 }
 
@@ -905,20 +902,18 @@
   overflow: hidden;
   font-size: 12px;
   line-height: 42px;
-  color: #63656e;
-  border-right: 1px solid #dcdee5;
-  border-bottom: 1px solid #dcdee5;
+  color: var(--bk-theme-text-default);
+  border-right: 1px solid var(--bk-theme-border-default);
+  border-bottom: 1px solid var(--bk-theme-border-default);
   transition: background-color .2s;
 
   &:hover {
-    color: #313238;
-    background: #eff5ff;
+    color: var(--bk-theme-text-strong);background: var(--bk-theme-fill-selected);
   }
 }
 
 /* 行 hover 时，整行所有单元格一起高亮 */
-:deep(.field-row:hover .field-value) {
-  background: #eff5ff !important;
+:deep(.field-row:hover .field-value) {background: var(--bk-theme-fill-selected) !important;
 }
 
 /* 行 hover 时，输入类组件也跟随高亮 */
@@ -927,8 +922,7 @@
 :deep(.field-row:hover .bk-form-item .bk-select-trigger),
 :deep(.field-row:hover .bk-form-item .bk-select-tag),
 :deep(.field-row:hover .bk-form-item .date-picker) {
-  color: #313238 !important;
-  background: #eff5ff !important;
+  color: var(--bk-theme-text-strong) !important;background: var(--bk-theme-fill-selected) !important;
   border-color: transparent !important;
   transition: none !important;
 }
@@ -939,8 +933,7 @@
 :deep(.field-row:hover .bk-form-item .bk-input .bk-input--text input),
 :deep(.field-row:hover .bk-form-item .bk-input-wrapper),
 :deep(.field-row:hover .bk-form-item .bk-input-wrapper .bk-input--text) {
-  color: #313238 !important;
-  background: #eff5ff !important;
+  color: var(--bk-theme-text-strong) !important;background: var(--bk-theme-fill-selected) !important;
   border-color: transparent !important;
   transition: none !important;
 }
@@ -949,76 +942,76 @@
 :deep(.field-row:hover .bk-form-item .bk-input .bk-input--text::placeholder),
 :deep(.field-row:hover .bk-form-item .bk-input input::placeholder) {
   /* 使用略深的灰色，让“请输入”在浅蓝背景上仍然可见 */
-  color: #c4c6cc !important;
+  color: var(--bk-theme-border-strong) !important;
 }
 
 .field-icon {
-  margin-left: 16px;
+  margin-left: var(--bk-theme-space-16);
   font-size: 14px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: pointer;
 }
 
 .add-fill {
   &:hover {
     /* 新增 icon hover 加深一个色号 */
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
 .reduce-fill {
   &:hover {
     /* 删除 icon hover 变红色 */
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 
 
 .add-field {
-  margin-top: 10px;
+  margin-top: var(--bk-theme-space-12);
 }
 
 .plus-circle {
   font-size: 14px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
 .plus-circle-text {
   font-size: 12px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
 .field-span {
-  margin-left: 5px;
-  color: #c4c6cc;
+  margin-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-border-strong);
   cursor: pointer;
 }
 
 .underline-dashed {
   text-decoration: underline;
   text-decoration-style: dashed;
-  text-decoration-color: #c4c6cc;
+  text-decoration-color: var(--bk-theme-border-strong);
   text-underline-offset: 5px;
   cursor: pointer;
 }
 
 .field-value-move {
-  margin-left: 5px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 18px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: move;
 }
 
 .field-value-text {
-  margin-left: 5px;
-  color: #4d4f56;
+  margin-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-text-default);
 }
 
 .field-span-black {
-  margin-left: 5px;
-  color: #63656e;
+  margin-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 }
 
@@ -1028,6 +1021,6 @@
 }
 
 .list-table-body {
-  background-color: #fafbfd;
+  background-color: var(--bk-theme-table-header-bg);
 }
 </style>

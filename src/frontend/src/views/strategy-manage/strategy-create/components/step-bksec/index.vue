@@ -16,92 +16,92 @@
 -->
 <template>
   <div>
-    <smart-action
-      class="create-strategy-page"
-      :offset-target="getSmartActionOffsetTarget">
-      <div class="bksec-card">
-        <div class="bksec-title">
-          <button
-            class="bksec-collapse"
-            type="button"
-            @click="expanded = !expanded">
-            <audit-icon
-              class="bksec-collapse-icon"
-              :class="{ 'is-collapsed': !expanded }"
-              type="angle-line-down" />
-          </button>
-          <span class="bksec-title-text">{{ t('BKSEC安全工单') }}</span>
-          <bk-switcher
-            v-model="enabled"
-            data-testid="bksec-ticket-switch"
-            theme="primary"
-            @change="handleSwitcher" />
-          <div class="bksec-title-desc">
-            <audit-icon
-              class="bksec-info-icon"
-              type="tishi" />
-            <span>{{ t('启用后审计策略生成风险后，系统将调用处理套餐发送 BKSEC 安全工单') }}</span>
+  <smart-action
+    class="create-strategy-page"
+    :offset-target="getSmartActionOffsetTarget">
+    <div class="bksec-card bk-theme-card bk-theme-card--flush">
+      <div class="bksec-title">
+        <button
+          class="bksec-collapse"
+          type="button"
+          @click="expanded = !expanded">
+          <audit-icon
+            class="bksec-collapse-icon"
+            :class="{ 'is-collapsed': !expanded }"
+            type="angle-line-down" />
+        </button>
+        <span class="bksec-title-text">{{ t('BKSEC安全工单') }}</span>
+        <bk-switcher
+          v-model="enabled"
+          data-testid="bksec-ticket-switch"
+          theme="primary"
+          @change="handleSwitcher" />
+        <div class="bksec-title-desc">
+          <audit-icon
+            class="bksec-info-icon"
+            type="tishi" />
+          <span>{{ t('启用后审计策略生成风险后，系统将调用处理套餐发送 BKSEC 安全工单') }}</span>
+        </div>
+      </div>
+      <div
+        v-if="enabled && expanded"
+        class="bksec-body">
+        <div
+          ref="typeFieldRef"
+          class="bksec-type"
+          data-testid="bksec-risk-type">
+          <div class="bksec-label">
+            <span>{{ t('风险类型') }}</span>
+            <span class="is-required">*</span>
+          </div>
+          <bk-select
+            v-model="riskTypeId"
+            class="bksec-type-select"
+            :class="{ 'is-error': typeError }"
+            :filter-option="false"
+            filterable
+            :no-data-text="t('暂无匹配的风险类型')"
+            :no-match-text="t('暂无匹配的风险类型')"
+            :placeholder="t('请选择风险类型')"
+            :popover-options="riskTypePopoverOptions"
+            :remote-method="searchRiskTypes"
+            @change="handleTypeChange"
+            @toggle="handleTypeMenuToggle">
+            <bk-option-group
+              v-for="project in displayProjects"
+              :key="project.id"
+              :label="project.name">
+              <bk-option
+                v-for="item in project.riskTypes"
+                :id="item.id"
+                :key="`${project.id}-${item.id}`"
+                :name="item.label" />
+            </bk-option-group>
+            <div
+              v-if="keptRiskType && !selectedInList"
+              class="bksec-kept-option">
+              <bk-option
+                :id="keptRiskType.id"
+                :name="keptRiskType.label"
+                :ref="markKeptOption" />
+            </div>
+          </bk-select>
+          <div
+            v-if="typeError"
+            class="bksec-error"
+            data-testid="bksec-type-error">
+            {{ t('请选择风险类型') }}
+          </div>
+          <div
+            v-if="typeLoadError"
+            class="bksec-error"
+            data-testid="bksec-type-load-error">
+            {{ t('风险类型加载失败') }}
           </div>
         </div>
         <div
-          v-if="enabled && expanded"
-          class="bksec-body">
-          <div
-            ref="typeFieldRef"
-            class="bksec-type"
-            data-testid="bksec-risk-type">
-            <div class="bksec-label">
-              <span>{{ t('风险类型') }}</span>
-              <span class="is-required">*</span>
-            </div>
-            <bk-select
-              v-model="riskTypeId"
-              class="bksec-type-select"
-              :class="{ 'is-error': typeError }"
-              :filter-option="false"
-              filterable
-              :no-data-text="t('暂无匹配的风险类型')"
-              :no-match-text="t('暂无匹配的风险类型')"
-              :placeholder="t('请选择风险类型')"
-              :popover-options="riskTypePopoverOptions"
-              :remote-method="searchRiskTypes"
-              @change="handleTypeChange"
-              @toggle="handleTypeMenuToggle">
-              <bk-option-group
-                v-for="project in displayProjects"
-                :key="project.id"
-                :label="project.name">
-                <bk-option
-                  v-for="item in project.riskTypes"
-                  :id="item.id"
-                  :key="`${project.id}-${item.id}`"
-                  :name="item.label" />
-              </bk-option-group>
-              <div
-                v-if="keptRiskType && !selectedInList"
-                class="bksec-kept-option">
-                <bk-option
-                  :id="keptRiskType.id"
-                  :ref="markKeptOption"
-                  :name="keptRiskType.label" />
-              </div>
-            </bk-select>
-            <div
-              v-if="typeError"
-              class="bksec-error"
-              data-testid="bksec-type-error">
-              {{ t('请选择风险类型') }}
-            </div>
-            <div
-              v-if="typeLoadError"
-              class="bksec-error"
-              data-testid="bksec-type-load-error">
-              {{ t('风险类型加载失败') }}
-            </div>
-          </div>
-          <div
-            v-if="fields.length"
-            class="bksec-fields">
+          v-if="fields.length"
+          class="bksec-fields">
             <div class="bksec-fields-divider" />
             <div class="bksec-fields-title">
               {{ t('工单字段') }}
@@ -109,144 +109,144 @@
             <div
               class="bksec-field-grid"
               data-testid="bksec-field-grid">
-              <div
-                v-for="field in fields"
-                :key="field.id"
-                :ref="(el) => setFieldAnchorRef(field.id, el)"
-                class="bksec-field">
-                <div class="bksec-field-head">
-                  <div class="bksec-field-label">
-                    <span>{{ field.label }}</span>
-                    <span
-                      v-if="field.required"
-                      class="is-required">*</span>
-                    <audit-icon
-                      v-if="field.id === 'target'"
-                      v-bk-tooltips="t('填写资产标识信息，例如资产类型为 account 时，填写对应账号')"
-                      class="bksec-info-icon"
-                      type="tishi" />
-                  </div>
-                  <bk-popover
-                    :arrow="false"
-                    ext-cls="bksec-var-popover"
-                    placement="bottom-end"
-                    theme="light"
-                    trigger="click"
-                    width="350">
-                    <button
-                      class="bksec-var-trigger"
-                      type="button"
-                      @click="activateFieldEdit(field.id)">
-                      <audit-icon
-                        class="bksec-var-icon"
-                        type="bianliang" />
-                      {{ t('引用变量') }}
-                    </button>
-                    <template #content>
-                      <variable-popover
-                        :groups="variableGroups"
-                        @insert="insertToken" />
-                    </template>
-                  </bk-popover>
+            <div
+              v-for="field in fields"
+              :key="field.id"
+              :ref="(el) => setFieldAnchorRef(field.id, el)"
+              class="bksec-field">
+              <div class="bksec-field-head">
+                <div class="bksec-field-label">
+                  <span>{{ field.label }}</span>
+                  <span
+                    v-if="field.required"
+                    class="is-required">*</span>
+                  <audit-icon
+                    v-if="field.id === 'target'"
+                    v-bk-tooltips="t('填写资产标识信息，例如资产类型为 account 时，填写对应账号')"
+                    class="bksec-info-icon"
+                    type="tishi" />
                 </div>
-                <div
-                  class="bksec-input"
-                  :class="{ 'is-error': invalidFields.includes(field.id) }">
+                <bk-popover
+                  :arrow="false"
+                  ext-cls="bksec-var-popover"
+                  placement="bottom-end"
+                  theme="light"
+                  trigger="click"
+                  width="350">
                   <button
-                    v-if="!isFieldEditing(field.id)"
-                    v-bk-tooltips="fieldValueTip(field.id)"
-                    class="bksec-field-display"
+                    class="bksec-var-trigger"
                     type="button"
-                    @click="activateFieldEdit(field.id, $event)"
-                    @mouseenter="syncFieldOverflow($event, field.id)">
-                    <template
-                      v-for="(item, index) in parseDynamicFieldValue(fieldValues[field.id] || '')"
-                      :key="`${index}-${item.value}`">
-                      <span :class="{ 'is-variable': item.isVariable }">{{ item.value }}</span>
-                    </template>
-                    <span
-                      v-if="!fieldValues[field.id]"
-                      class="bksec-field-placeholder">
-                      {{ t('请输入{name}', { name: field.label }) }}
-                    </span>
+                    @click="activateFieldEdit(field.id)">
+                    <audit-icon
+                      class="bksec-var-icon"
+                      type="bianliang" />
+                    {{ t('引用变量') }}
                   </button>
-                  <input
-                    v-else
-                    :ref="(el) => setFieldInputRef(field.id, el)"
-                    class="bksec-native-input"
-                    :placeholder="t('请输入{name}', { name: field.label })"
-                    :value="fieldValues[field.id] || ''"
-                    @blur="finishFieldEdit(field.id, $event)"
-                    @click="rememberCaret(field.id, $event)"
-                    @input="updateField(field.id, $event)"
-                    @keyup="rememberCaret(field.id, $event)">
-                </div>
-                <div
-                  v-if="invalidFields.includes(field.id)"
-                  class="bksec-error">
-                  {{ t('请填写') }}{{ field.label }}
-                </div>
+                  <template #content>
+                    <variable-popover
+                      :groups="variableGroups"
+                      @insert="insertToken" />
+                  </template>
+                </bk-popover>
+              </div>
+              <div
+                class="bksec-input"
+                :class="{ 'is-error': invalidFields.includes(field.id) }">
+                <button
+                  v-if="!isFieldEditing(field.id)"
+                  v-bk-tooltips="fieldValueTip(field.id)"
+                  class="bksec-field-display"
+                  type="button"
+                  @click="activateFieldEdit(field.id, $event)"
+                  @mouseenter="syncFieldOverflow($event, field.id)">
+                  <template
+                    v-for="(item, index) in parseDynamicFieldValue(fieldValues[field.id] || '')"
+                    :key="`${index}-${item.value}`">
+                    <span :class="{ 'is-variable': item.isVariable }">{{ item.value }}</span>
+                  </template>
+                  <span
+                    v-if="!fieldValues[field.id]"
+                    class="bksec-field-placeholder">
+                    {{ t('请输入{name}', { name: field.label }) }}
+                  </span>
+                </button>
+                <input
+                  v-else
+                  :ref="(el) => setFieldInputRef(field.id, el)"
+                  class="bksec-native-input"
+                  :placeholder="t('请输入{name}', { name: field.label })"
+                  :value="fieldValues[field.id] || ''"
+                  @blur="finishFieldEdit(field.id, $event)"
+                  @click="rememberCaret(field.id, $event)"
+                  @keyup="rememberCaret(field.id, $event)"
+                  @input="updateField(field.id, $event)">
+              </div>
+              <div
+                v-if="invalidFields.includes(field.id)"
+                class="bksec-error">
+                {{ t('请填写') }}{{ field.label }}
               </div>
             </div>
           </div>
         </div>
       </div>
-      <template #action>
-        <div class="action-button">
-          <bk-button @click="handlePrevious">
-            {{ t('上一步') }}
-          </bk-button>
-          <bk-button
-            class="bksec-submit ml8"
-            data-testid="bksec-ticket-submit"
-            theme="primary"
-            @click="handleNext">
-            <span class="bksec-submit-text">
-              <span>{{ primaryActionText }}</span>
-              <span
-                aria-hidden="true"
-                class="bksec-submit-sizer">{{ t('完成创建') }}</span>
-            </span>
-          </bk-button>
-          <bk-button
-            v-if="showSaveDraftButton"
-            class="ml8"
-            data-testid="bksec-ticket-draft"
-            @click="handleSaveDraft">
-            {{ t('保存草稿') }}
-          </bk-button>
-          <bk-button
-            class="ml8"
-            @click="handleCancel">
-            {{ t('取消') }}
-          </bk-button>
-          <span
-            v-bk-tooltips="{
-              content: previewTip,
-              disabled: canPreview,
-            }">
-            <bk-button
-              class="ml8"
-              data-testid="bksec-ticket-preview"
-              :disabled="!canPreview"
-              @click="showPreview = true">
-              <audit-icon
-                style="margin-right: 4px;"
-                type="view" />
-              {{ t('工单预览') }}
-            </bk-button>
+    </div>
+    <template #action>
+      <div class="action-button">
+        <bk-button @click="handlePrevious">
+          {{ t('上一步') }}
+        </bk-button>
+        <bk-button
+          class="bksec-submit"
+          data-testid="bksec-ticket-submit"
+          theme="primary"
+          @click="handleNext" style="margin-left: var(--bk-theme-space-8)">
+          <span class="bksec-submit-text">
+            <span>{{ primaryActionText }}</span>
+            <span
+              class="bksec-submit-sizer"
+              aria-hidden="true">{{ t('完成创建') }}</span>
           </span>
-        </div>
-      </template>
-    </smart-action>
-    <preview-sideslider
-      v-model:is-show="showPreview"
-      :field-values="fieldValues"
-      :fields="previewFields"
-      :project-id="projectId"
-      :risk-type-id="riskTypeId"
-      :risk-type-name="riskTypeName"
-      :strategy-id="strategyId" />
+        </bk-button>
+        <bk-button
+          v-if="showSaveDraftButton"
+         
+          data-testid="bksec-ticket-draft"
+          @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
+          {{ t('保存草稿') }}
+        </bk-button>
+        <bk-button
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
+          {{ t('取消') }}
+        </bk-button>
+        <span
+          v-bk-tooltips="{
+            content: previewTip,
+            disabled: canPreview,
+          }">
+          <bk-button
+           
+            data-testid="bksec-ticket-preview"
+            :disabled="!canPreview"
+            @click="showPreview = true" style="margin-left: var(--bk-theme-space-8)">
+            <audit-icon
+              style="margin-right: 4px;"
+              type="view" />
+            {{ t('工单预览') }}
+          </bk-button>
+        </span>
+      </div>
+    </template>
+  </smart-action>
+  <preview-sideslider
+    v-model:is-show="showPreview"
+    :field-values="fieldValues"
+    :fields="previewFields"
+    :project-id="projectId"
+    :risk-type-id="riskTypeId"
+    :risk-type-name="riskTypeName"
+    :strategy-id="strategyId" />
   </div>
 </template>
 <script setup lang="ts">
@@ -304,10 +304,12 @@
 
   const enabled = ref(!!props.formData?.bksecEnabled);
   const expanded = ref(true);
-  const riskTypeId = ref<string | null>(props.formData?.bksecRiskTypeId
-    ? String(props.formData.bksecRiskTypeId)
-    : null);
-  const projectId = ref<string | null>(props.formData?.bksecProjectId ? String(props.formData.bksecProjectId) : null);
+  const riskTypeId = ref<string | null>(
+    props.formData?.bksecRiskTypeId ? String(props.formData.bksecRiskTypeId) : null,
+  );
+  const projectId = ref<string | null>(
+    props.formData?.bksecProjectId ? String(props.formData.bksecProjectId) : null,
+  );
   const riskTypeName = ref(props.formData?.bksecRiskTypeName || '');
   const fieldValues = ref<Record<string, string>>({ ...(props.formData?.bksecFieldValues || {}) });
   const fields = ref<BksecRiskTypeField[]>([]);
@@ -408,7 +410,6 @@
   };
 
   const markKeptOption = (option: { visible?: boolean } | null) => {
-    // eslint-disable-next-line no-param-reassign
     if (option) option.visible = false;
   };
 
@@ -759,20 +760,17 @@
 </script>
 <style lang="postcss" scoped>
 .bksec-card {
-  margin-bottom: var(--audit-space-16);
-  background: var(--audit-neutral-bg-04);
-  border-radius: var(--audit-radius-container);
-  box-shadow: var(--audit-shadow-card);
+  margin-bottom: var(--bk-theme-space-16);
 }
 
 .bksec-title {
   display: flex;
   height: auto;
-  padding: var(--audit-space-12) var(--audit-space-24) var(--audit-space-16);
-  font-size: var(--audit-font-size-base);
-  font-weight: var(--audit-font-weight-bold);
-  line-height: var(--audit-line-height-base);
-  color: var(--audit-neutral-text-02);
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-24) var(--bk-theme-space-16);
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-bold);
+  line-height: var(--bk-theme-line-height-base);
+  color: var(--bk-theme-text-default);
   align-items: center;
 }
 
@@ -781,8 +779,8 @@
   width: 16px;
   height: 16px;
   padding: 0;
-  margin-right: var(--audit-space-8);
-  color: var(--audit-neutral-text-02);
+  margin-right: var(--bk-theme-space-8);
+  color: var(--bk-theme-text-default);
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -791,7 +789,7 @@
 }
 
 .bksec-collapse-icon {
-  font-size: var(--audit-font-size-lg);
+  font-size: var(--bk-theme-font-size-lg);
 }
 
 .bksec-collapse-icon.is-collapsed {
@@ -812,28 +810,28 @@
 }
 
 .bksec-body {
-  padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
-  border-top: 1px solid var(--audit-neutral-border-01);
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .bksec-title-text {
-  margin-right: 13px;
+  margin-right: var(--bk-theme-space-12);
 }
 
 .bksec-title-desc {
   display: flex;
-  margin-left: 13px;
-  font-size: var(--audit-font-size-sm);
-  font-weight: var(--audit-font-weight-regular);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  margin-left: var(--bk-theme-space-12);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   align-items: center;
-  gap: var(--audit-space-4);
+  gap: var(--bk-theme-space-4);
 }
 
 .bksec-info-icon {
-  font-size: var(--audit-font-size-base);
-  color: var(--audit-brand-02);
+  font-size: var(--bk-theme-font-size-base);
+  color: var(--bk-theme-color-brand-2);
 }
 
 .bksec-field {
@@ -844,29 +842,29 @@
 .bksec-field-label {
   display: flex;
   min-width: 0;
-  font-size: var(--audit-font-size-sm);
-  font-weight: var(--audit-font-weight-regular);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   align-items: center;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
 }
 
 .bksec-label {
-  margin-bottom: 6px;
+  margin-bottom: var(--bk-theme-space-6);
 }
 
 .bksec-field-head {
   display: flex;
   height: 20px;
-  margin-bottom: 6px;
+  margin-bottom: var(--bk-theme-space-6);
   align-items: center;
   justify-content: space-between;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
 }
 
 .is-required {
-  color: var(--audit-danger-02);
+  color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-type-select {
@@ -878,54 +876,54 @@
 }
 
 .bksec-type-select :deep(.bk-select-trigger) {
-  border-color: var(--audit-neutral-text-04);
+  border-color: var(--bk-theme-border-strong);
 }
 
 .bksec-type-select :deep(.bk-input--text) {
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
 }
 
 .bksec-type-select :deep(.bk-input--text::placeholder) {
-  color: var(--audit-neutral-text-04);
+  color: var(--bk-theme-text-disabled);
 }
 
 .bksec-type-select.is-error :deep(.bk-select-trigger) {
-  border-color: var(--audit-danger-02);
+  border-color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-fields-divider {
-  margin: var(--audit-space-24) 0;
-  border-top: 1px solid var(--audit-neutral-border-01);
+  margin: var(--bk-theme-space-24) 0;
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .bksec-fields-title {
-  font-size: var(--audit-font-size-base);
-  font-weight: var(--audit-font-weight-bold);
-  line-height: var(--audit-line-height-base);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-bold);
+  line-height: var(--bk-theme-line-height-base);
+  color: var(--bk-theme-text-default);
 }
 
 .bksec-field-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  margin-top: var(--audit-space-12);
-  column-gap: var(--audit-space-24);
-  row-gap: var(--audit-space-24);
+  margin-top: var(--bk-theme-space-12);
+  column-gap: var(--bk-theme-space-24);
+  row-gap: var(--bk-theme-space-24);
 }
 
 .bksec-input {
   display: flex;
   height: 32px;
-  background: var(--audit-neutral-bg-04);
-  border: 1px solid var(--audit-neutral-text-04);
-  border-radius: var(--audit-radius-control);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-strong);
+  border-radius: var(--bk-theme-control-radius);
   align-items: center;
 }
 
 .bksec-input.is-error {
-  border-color: var(--audit-danger-02);
+  border-color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-field-display {
@@ -934,11 +932,11 @@
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: var(--audit-space-4) var(--audit-space-8);
+  padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
   overflow: hidden;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   text-align: left;
   white-space: nowrap;
   cursor: text;
@@ -949,23 +947,23 @@
 }
 
 .bksec-field-display .is-variable {
-  padding: 0 var(--audit-space-4);
-  margin: 0 1px;
-  background: var(--audit-neutral-bg-01);
-  border-radius: var(--audit-radius-control);
+  padding: 0 var(--bk-theme-space-4);
+  margin: 0 var(--bk-theme-space-2);
+  background: var(--bk-theme-surface-muted);
+  border-radius: var(--bk-theme-control-radius);
 }
 
 .bksec-field-placeholder {
-  color: var(--audit-neutral-text-04);
+  color: var(--bk-theme-text-disabled);
 }
 
 .bksec-native-input {
   height: 100%;
   min-width: 0;
-  padding: 0 var(--audit-space-8);
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  padding: 0 var(--bk-theme-space-8);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   background: transparent;
   border: 0;
   outline: none;
@@ -973,31 +971,31 @@
 }
 
 .bksec-native-input::placeholder {
-  color: var(--audit-neutral-text-04);
+  color: var(--bk-theme-text-disabled);
 }
 
 .bksec-var-trigger {
   display: inline-flex;
   padding: 0;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-brand-02);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
   align-items: center;
-  gap: var(--audit-space-4);
+  gap: var(--bk-theme-space-4);
   flex: none;
 }
 
 .bksec-var-icon {
-  font-size: var(--audit-font-size-lg);
+  font-size: var(--bk-theme-font-size-lg);
 }
 
 .bksec-error {
-  margin-top: var(--audit-space-8);
-  font-size: var(--audit-font-size-sm);
-  color: var(--audit-danger-02);
+  margin-top: var(--bk-theme-space-8);
+  font-size: var(--bk-theme-font-size-sm);
+  color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-field > .bksec-error {
@@ -1006,9 +1004,9 @@
   right: 0;
   left: 0;
   z-index: 1;
-  margin-top: 2px;
+  margin-top: var(--bk-theme-space-2);
   overflow: hidden;
-  line-height: var(--audit-line-height-sm);
+  line-height: var(--bk-theme-line-height-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
@@ -1017,7 +1015,7 @@
 <style lang="postcss">
 .bksec-var-popover.bk-pop2-content,
 .bksec-var-popover .bk-pop2-content {
-  padding: var(--audit-space-4) 0;
+  padding: var(--bk-theme-space-4) 0;
 }
 
 .bksec-field-value-tip {
@@ -1047,7 +1045,7 @@
   z-index: 2;
   height: auto;
   min-height: 56px;
-  background: var(--audit-neutral-bg-04);
+  background: var(--bk-theme-surface-default);
   align-self: stretch;
 }
 </style>

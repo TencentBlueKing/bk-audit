@@ -126,7 +126,7 @@
       z-index: 1;
       width: 100%;
       overflow: hidden;
-      background: #f5f7fa;
+      background: var(--bk-theme-surface-subtle);
       opacity: 100%;
       visibility: visible;
 

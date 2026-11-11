@@ -264,62 +264,41 @@
 
     .custom-tag {
       display: inline-flex;
-      align-items: center;
-      color: #63656e;
-      background-color: #f0f1f5;
-      border-color: #f0f1f5;
+      align-items: center;color: var(--bk-theme-text-default);background-color: var(--bk-theme-surface-muted);border-color: var(--bk-theme-surface-muted);
     }
 
     /* 聚焦时库会给当前标签加 active，改成蓝底蓝边；保持和未聚焦一致 */
-    .user-tag.user-tag.active {
-      color: #63656e;
-      background-color: #f0f1f5;
+    .user-tag.user-tag.active {color: var(--bk-theme-text-default);background-color: var(--bk-theme-surface-muted);
       border-color: #979ba54d;
     }
 
-    .user-tag.user-tag.active:hover {
-      background-color: #dcdee5;
+    .user-tag.user-tag.active:hover {background-color: var(--bk-theme-border-default);
     }
 
     /* 离职/不存在：灰色 tag + 失效字色 #c4c6cc */
-    .custom-tag.is-resigned {
-      color: #c4c6cc;
-      background-color: #f0f1f5;
-      border-color: #f0f1f5;
+    .custom-tag.is-resigned {color: var(--bk-theme-text-disabled);background-color: var(--bk-theme-surface-muted);border-color: var(--bk-theme-surface-muted);
     }
 
-    .user-tag.is-custom {
-      color: #c4c6cc !important;
-      background-color: #f0f1f5 !important;
-      border-color: #f0f1f5 !important;
+    .user-tag.is-custom {color: var(--bk-theme-text-disabled) !important;background-color: var(--bk-theme-surface-muted) !important;border-color: var(--bk-theme-surface-muted) !important;
     }
 
-    .user-tag.is-custom:hover {
-      color: #c4c6cc !important;
-      background-color: #f0f1f5 !important;
+    .user-tag.is-custom:hover {color: var(--bk-theme-text-disabled) !important;background-color: var(--bk-theme-surface-muted) !important;
     }
 
-    .user-tag.is-custom .tag-content .user-name {
-      color: #c4c6cc !important;
+    .user-tag.is-custom .tag-content .user-name {color: var(--bk-theme-text-disabled) !important;
     }
 
     &.nl-tag-user-selector .user-tag.is-custom,
     &.nl-tag-user-selector .user-tag.is-custom .tag-content .user-name,
-    &.nl-tag-user-selector .custom-tag.is-resigned {
-      color: #c4c6cc !important;
-      background-color: #f0f1f5 !important;
-      border-color: #f0f1f5 !important;
+    &.nl-tag-user-selector .custom-tag.is-resigned {color: var(--bk-theme-text-disabled) !important;background-color: var(--bk-theme-surface-muted) !important;border-color: var(--bk-theme-surface-muted) !important;
     }
 
-    &.nl-tag-user-selector .user-tag.is-custom:hover {
-      color: #c4c6cc !important;
-      background-color: #f0f1f5 !important;
+    &.nl-tag-user-selector .user-tag.is-custom:hover {color: var(--bk-theme-text-disabled) !important;background-color: var(--bk-theme-surface-muted) !important;
     }
 
     .avatar {
       width: 16px;
-      height: 16px;
-      margin-right: 4px;
+      height: 16px;margin-right: var(--bk-theme-space-4);
       border-radius: 50%;
     }
   }

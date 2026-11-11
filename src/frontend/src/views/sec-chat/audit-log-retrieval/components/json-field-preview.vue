@@ -52,7 +52,7 @@
             @click.stop>
             <button
               class="json-copy-btn"
-              title="复制"
+              v-bk-tooltips="'复制'"
               type="button"
               @click="handleCopy">
               <audit-icon type="copy" />
@@ -293,9 +293,9 @@
       max-width: 600px;
       padding: 0;
       overflow: hidden;
-      background: #fff;
-      border: 1px solid #dcdee5;
-      border-radius: 8px;
+      background: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-message-radius);
       box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
       box-sizing: border-box;
     }
@@ -310,13 +310,12 @@
   }
 
   .json-field-preview-scroll {
-    max-height: min(400px, 70vh);
-    padding: 16px 40px 16px 16px;
+    max-height: min(400px, 70vh);padding: var(--bk-theme-space-16) var(--bk-theme-space-32) var(--bk-theme-space-16) var(--bk-theme-space-16);
     overflow-x: hidden;
     overflow-y: auto;
     box-sizing: border-box;
     scrollbar-width: thin;
-    scrollbar-color: #dcdee5 transparent;
+    scrollbar-color: var(--bk-theme-border-default) transparent;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -324,8 +323,8 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #dcdee5;
-      border-radius: 2px;
+      background: var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 
@@ -339,16 +338,16 @@
     width: 24px;
     height: 24px;
     padding: 0;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
     justify-content: center;
 
     &:hover {
-      background: #f0f5ff;
+      background: var(--bk-theme-select-banner-bg);
     }
 
     .audit-icon {
@@ -361,17 +360,17 @@
     font-family: Consolas, Menlo, Monaco, 'Courier New', monospace;
     font-size: 12px;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     word-break: break-all;
     white-space: pre-wrap;
 
     .json-key {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
 
     .json-string,
     .json-literal {
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
   }
 </style>

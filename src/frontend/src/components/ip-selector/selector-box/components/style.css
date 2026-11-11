@@ -1,12 +1,11 @@
 @define-mixin render-table {
   table {
     width: 100%;
-    margin-top: 12px;
+    margin-top: var(--bk-theme-space-12);
     font-size: 12px;
     text-align: left;
 
-    tr {
-      border-bottom: 1px solid #e7e8ed;
+    tr {border-bottom: 1px solid var(--bk-theme-border-weak);
     }
 
     th {
@@ -14,13 +13,13 @@
       font-weight: normal;
       line-height: 40px;
       vertical-align: middle;
-      background: #f5f6fa;
+      background: var(--bk-theme-surface-subtle);
     }
 
     th,
     td {
       height: 40px;
-      padding: 0 16px;
+      padding: 0 var(--bk-theme-space-16);
     }
 
     tbody {

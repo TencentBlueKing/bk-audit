@@ -42,15 +42,13 @@
       <template v-else>
         <div>
           <bk-button
-            class="mr8"
+            class="confirm-btn"
             :loading="isLoading"
-            style="width: 102px;"
             theme="primary"
             @click="handleConfirm">
             {{ t(confirmText) }}
           </bk-button>
           <bk-button
-            style="min-width: 64px;"
             @click="handleCancle">
             {{ t(cancelText) }}
           </bk-button>
@@ -180,5 +178,8 @@
   height: 100%;
   overflow: hidden;
   flex-direction: column;
+}
+.confirm-btn {
+  margin-right: var(--bk-theme-space-8);
 }
 </style>

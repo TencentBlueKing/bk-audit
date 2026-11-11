@@ -104,16 +104,16 @@
 
 <style scoped lang="postcss">
 .step-basic-info-loading {
-  padding-top: 4px;
+  padding-top: var(--bk-theme-space-4);
   margin-bottom: 74px;
 
   .basic-row {
     display: flex;
-    gap: var(--audit-space-16);
+    gap: var(--bk-theme-space-16);
   }
 
   .form-item {
-    margin-bottom: var(--audit-space-24);
+    margin-bottom: var(--bk-theme-space-24);
   }
 
   .basic-row .form-item {
@@ -129,24 +129,23 @@
   .load-error-placeholder {
     display: flex;
     min-height: 64px;
-    color: var(--audit-neutral-text-03);
+    color: var(--bk-theme-text-weak);
     align-items: center;
     justify-content: center;
   }
 
   .load-error {
-    gap: var(--audit-space-8);
+    gap: var(--bk-theme-space-8);
   }
 
-  .skeleton {
-    background: #e4e7ee;
-    border-radius: var(--audit-radius-control);
+  .skeleton {background: var(--bk-theme-border-weak);
+    border-radius: var(--bk-theme-control-radius);
     animation: step-basic-info-shimmer 1.6s ease-in-out infinite;
   }
 
   .label {
     height: 20px;
-    margin-bottom: 6px;
+    margin-bottom: var(--bk-theme-space-6);
   }
 
   .name-label {
@@ -181,13 +180,13 @@
 
   .way-row {
     display: flex;
-    gap: var(--audit-space-16);
+    gap: var(--bk-theme-space-16);
   }
 
   .way {
     width: 200px;
     height: 48px;
-    border-radius: var(--audit-radius-container);
+    border-radius: var(--bk-theme-card-radius);
   }
 
   .schedule {
@@ -198,12 +197,10 @@
 
 @keyframes step-basic-info-shimmer {
   0%,
-  100% {
-    background: #e4e7ee;
+  100% {background: var(--bk-theme-border-weak);
   }
 
-  50% {
-    background: #f2f3f7;
+  50% {background: var(--bk-theme-surface-muted);
   }
 }
 </style>

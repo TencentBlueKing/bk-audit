@@ -346,12 +346,12 @@
 }
 
 .trigger-icon {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
   font-size: 14px;
 }
 
 .trigger-arrow {
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 12px;
   transition: transform .2s;
 
@@ -366,30 +366,30 @@
   left: 0;
   z-index: 2000;
   width: 520px;
-  padding: 8px 0;
-  background: #fff;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-8) 0;
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
   box-shadow: 0 2px 6px 0 rgb(0 0 0 / 10%);
 }
 
 .access-dropdown-item {
   position: relative;
   display: flex;
-  padding: 12px 16px;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
   cursor: pointer;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
 
   &:hover {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 }
 
 .access-item-icon {
   width: 32px;
   height: 32px;
-  margin-top: 2px;
+  margin-top: var(--bk-theme-space-2);
   flex-shrink: 0;
   object-fit: contain;
 }
@@ -401,24 +401,24 @@
 
 .access-item-title {
   display: flex;
-  margin-bottom: 4px;
+  margin-bottom: var(--bk-theme-space-4);
   font-size: 14px;
   font-weight: 700;
   line-height: 22px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   align-items: center;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 .access-item-badge {
   display: inline-flex;
   height: 18px;
-  padding: 0 8px;
+  padding: 0 var(--bk-theme-space-8);
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
-  color: #3a84ff;
-  background: #e1ecff;
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-fill-selected);
   border-radius: 9px;
   align-items: center;
 }
@@ -427,21 +427,21 @@
   overflow: hidden;
   font-size: 12px;
   line-height: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .access-item-arrow {
   font-size: 12px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   flex-shrink: 0;
   align-self: center;
   transform: rotate(-90deg);
 }
 
 .access-dropdown-item--existing {
-  padding-right: 12px;
+  padding-right: var(--bk-theme-space-12);
   align-items: center;
 
   .access-item-icon {
@@ -455,23 +455,23 @@
   left: calc(100% + 4px);
   z-index: 2001;
   width: 320px;
-  padding: 12px;
-  background: #fff;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
   box-shadow: 0 2px 6px 0 rgb(0 0 0 / 10%);
 }
 
 .search-icon {
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
 }
 
 .access-submenu-list {
   max-height: 280px;
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #c4c6cc transparent;
+  scrollbar-color: var(--bk-theme-border-strong) transparent;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -482,27 +482,27 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #c4c6cc;
-    border-radius: 2px;
+    background: var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: #979ba5;
+    background: var(--bk-theme-text-weak);
   }
 }
 
 .access-submenu-item {
-  padding: 8px 12px;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: var(--bk-theme-tag-radius);
 
   &:hover,
   &.is-active {
-    color: #3a84ff;
-    background: #f0f1f5;
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-surface-muted);
   }
 }
 
@@ -518,13 +518,13 @@
 }
 
 .access-submenu-id {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .access-submenu-empty {
-  padding: 24px 0 8px;
+  padding: var(--bk-theme-space-24) 0 var(--bk-theme-space-8);
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 

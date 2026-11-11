@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    class="strategy-customize"
+    class="strategy-customize bk-theme-form--inline"
     :class="{ 'customize-basic-mode': stepMode === 'basic' }">
     <!-- rules 模式：带 collapse-panel 和 form-item 包裹（旧）-->
     <auth-collapse-panel
@@ -2000,7 +2000,7 @@
   }
 
   .customize-rule {
-    padding: 16px 32px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-32) var(--bk-theme-space-24);
 
     &.customize-rule-basic {
       padding: 0;
@@ -2010,7 +2010,7 @@
       > :deep(.expected-result-form-item) {
         width: 624px;
         max-width: 100%;
-        margin-bottom: var(--audit-space-24);
+        margin-bottom: var(--bk-theme-space-24);
       }
 
       > :deep(.data-source-form-item:has(+ .other-table-detail)),
@@ -2020,8 +2020,8 @@
 
       > :deep(.other-table-detail),
       > :deep(.link-data-detail) {
-        margin-top: var(--audit-space-8);
-        margin-bottom: var(--audit-space-24);
+        margin-top: var(--bk-theme-space-8);
+        margin-bottom: var(--bk-theme-space-24);
       }
 
       > :deep(.expected-result-form-item) {
@@ -2036,27 +2036,26 @@
 
       :deep(.data-source-form-item .bk-form-error) {
         position: static;
-        margin-top: 4px;
+        margin-top: var(--bk-theme-space-4);
         line-height: 16px;
       }
 
       .data-source-skeleton {
         width: 100%;
-        height: 32px;
-        background: #e4e7ee;
-        border-radius: var(--audit-radius-control);
+        height: 32px;background: var(--bk-theme-border-weak);
+        border-radius: var(--bk-theme-control-radius);
         animation: data-source-skeleton-shimmer 1.6s ease-in-out infinite;
       }
     }
 
     .form-label-tip,
     .expected-result-label {
-      color: var(--audit-neutral-text-02);
+      color: var(--bk-theme-text-default);
       cursor: pointer;
     }
 
     .expected-result-label {
-      border-bottom: 1px dashed var(--audit-neutral-text-03);
+      border-bottom: 1px dashed var(--bk-theme-text-weak);
     }
 
     .select-group {
@@ -2072,7 +2071,7 @@
   .dispatch-section {
     display: flex;
     flex-direction: column;
-    gap: var(--audit-space-24);
+    gap: var(--bk-theme-space-24);
 
     .dispatch-type-item {
       margin-bottom: 0;
@@ -2081,7 +2080,7 @@
     :deep(.source-type-radio-group) {
       display: inline-flex;
       align-items: center;
-      gap: var(--audit-space-24);
+      gap: var(--bk-theme-space-24);
 
       .bk-radio {
         margin-right: 0;
@@ -2095,41 +2094,41 @@
     .source-type-option {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--bk-theme-space-6);
     }
 
     .source-type-label {
-      font-size: var(--audit-font-size-sm);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 16px;
-      color: var(--audit-neutral-text-02);
+      color: var(--bk-theme-text-default);
       cursor: pointer;
-      border-bottom: 1px dashed var(--audit-neutral-text-03);
+      border-bottom: 1px dashed var(--bk-theme-text-weak);
 
       &.is-disabled {
-        color: var(--audit-neutral-text-04);
+        color: var(--bk-theme-text-disabled);
         cursor: not-allowed;
-        border-bottom-color: var(--audit-neutral-text-04);
+        border-bottom-color: var(--bk-theme-text-disabled);
       }
     }
 
     .schedule-period-label {
       display: inline-flex;
       align-items: center;
-      gap: 2px;
-      margin-bottom: 6px;
-      font-size: var(--audit-font-size-sm);
-      line-height: var(--audit-line-height-sm);
-      color: var(--audit-neutral-text-02);
+      gap: var(--bk-theme-space-2);
+      margin-bottom: var(--bk-theme-space-6);
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-default);
       cursor: pointer;
     }
 
     .schedule-period-text {
       line-height: 16px;
-      border-bottom: 1px dashed var(--audit-neutral-text-03);
+      border-bottom: 1px dashed var(--bk-theme-text-weak);
     }
 
     .schedule-period-required {
-      color: var(--audit-danger-02);
+      color: var(--bk-theme-color-danger-2);
     }
 
     .schedule-period-row {
@@ -2139,7 +2138,6 @@
       align-items: center;
 
       :deep(.bk-form-item) {
-        margin-bottom: 0;
         flex: none;
       }
 
@@ -2153,7 +2151,7 @@
 
         :deep(.bk-input) {
           border-right: 0;
-          border-radius: var(--audit-radius-control) 0 0 var(--audit-radius-control);
+          border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
         }
       }
 
@@ -2162,7 +2160,7 @@
         flex: none;
 
         :deep(.bk-input) {
-          border-radius: 0 var(--audit-radius-control) var(--audit-radius-control) 0;
+          border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
         }
       }
     }
@@ -2171,12 +2169,10 @@
 
 @keyframes data-source-skeleton-shimmer {
   0%,
-  100% {
-    background: #e4e7ee;
+  100% {background: var(--bk-theme-border-weak);
   }
 
-  50% {
-    background: #f2f3f7;
+  50% {background: var(--bk-theme-surface-muted);
   }
 }
 </style>

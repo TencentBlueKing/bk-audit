@@ -42,7 +42,7 @@
                 target="_blank"
                 :to="item.value" />
             </td>
-            <template v-if="length>4">
+            <template v-if="length > 10">
               <template v-if="colDataRight[index]">
                 <td
                   class="hover-table-title  border-bottom"
@@ -161,11 +161,13 @@
       type: 'other',
     }));
     /**
-     * 当有超过四条数据一行展示两个数据
+     * 超过 10 行改为一行两个，10 行及以内一行一个
      */
     length.value = data.length;
     colDataLeft.value = data;
-    if (length.value > 4) {
+    colDataRight.value = [];
+    poverWidth.value = 352;
+    if (length.value > 10) {
       poverWidth.value = 588;
       const middleIndex = Math.ceil(data.length / 2);
       colDataLeft.value = data.splice(0, middleIndex);

@@ -26,10 +26,10 @@
             content: t('暂不支持变更，请前往权限中心变更'),
             disabled: canEditSystem,
           }"
-          class="mr8"
+         
           :disabled="!canEditSystem"
           theme="primary"
-          @click="handleCreate">
+          @click="handleCreate" style="margin-right: var(--bk-theme-space-8)">
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
@@ -381,14 +381,14 @@
 </script>
 <style lang="postcss">
 .access-model-operation-list {
-  padding: 16px 24px;
-  margin-top: 16px;
-  color: #313238;
-  background-color: #fff;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+  margin-top: var(--bk-theme-space-16);
+  color: var(--bk-theme-text-strong);
+  background-color: var(--bk-theme-surface-default);
 
   .access-model-action-header {
     display: flex;
-    margin-bottom: 14px;
+    margin-bottom: var(--bk-theme-space-12);
     align-items: center;
     justify-content: space-between;
   }
@@ -396,21 +396,20 @@
   .sensitivity-tag {
     display: inline-block;
     height: 22px;
-    padding: 0 10px;
+    padding: 0 var(--bk-theme-space-12);
     line-height: 22px;
-    color: #ea3536;
-    background: #feebea;
-    border-radius: 2px;
+    color: var(--bk-theme-color-danger-2);background: var(--bk-theme-fill-danger);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .not-sensitivity-tag {
     display: inline-block;
     height: 22px;
-    padding: 0 10px;
+    padding: 0 var(--bk-theme-space-12);
     line-height: 22px;
-    color: #63656e;
-    background: #f0f1f5;
-    border-radius: 2px;
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
   }
 }
 </style>

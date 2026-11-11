@@ -146,9 +146,9 @@
 .strategy-detail {
   height: 100%;
   min-height: 0;
-  padding-top: 24px;
+  padding-top: var(--bk-theme-space-24);
   overflow: hidden;
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -179,17 +179,16 @@
     flex-direction: column;
 
     .bk-tab-header {
-      margin-left: 24px;
+      margin-left: var(--bk-theme-space-24);
       font-size: 14px;
       flex-shrink: 0;
     }
 
     .bk-tab-content {
       flex: 1;
-      min-height: 0;
-      padding: 24px 40px 24px;
+      min-height: 0;padding: var(--bk-theme-space-24) var(--bk-theme-space-32) var(--bk-theme-space-24);
       overflow-y: auto;
-      background: #fff;
+      background: var(--bk-theme-surface-default);
       box-sizing: border-box;
     }
 
@@ -209,12 +208,12 @@
 
   :deep(.render-info-item) {
     display: flex;
-    gap: var(--audit-space-8);
+    gap: var(--bk-theme-space-8);
     align-items: flex-start;
     min-height: 32px;
-    padding: 6px 0;
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
+    padding: var(--bk-theme-space-6) 0;
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
   }
 
   :deep(.info-label) {
@@ -222,7 +221,7 @@
     width: 84px;
     min-width: 84px;
     overflow: visible;
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
     text-align: right;
     white-space: nowrap;
   }
@@ -230,7 +229,7 @@
   :deep(.info-value) {
     padding-left: 0;
     overflow: visible;
-    color: var(--audit-neutral-text-01);
+    color: var(--bk-theme-text-strong);
     text-overflow: unset;
     word-break: break-all;
   }

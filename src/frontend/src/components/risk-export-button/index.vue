@@ -20,7 +20,7 @@
     class="risk-export-btn-wrapper"
     :class="{ 'is-export-disabled': disabled && !isExporting }">
     <bk-button
-      class="risk-export-btn"
+      class="risk-export-btn risk-toolbar-secondary"
       :class="[buttonClass, { 'is-exporting': isExporting }]"
       :disabled="disabled || isExporting"
       outline
@@ -71,18 +71,12 @@
 .risk-export-btn-wrapper {
   display: inline-flex;
 
-  &.is-export-disabled :deep(.risk-export-btn) {
-    color: #c4c6cc;
+  &.is-export-disabled :deep(.risk-export-btn) {color: var(--bk-theme-text-disabled);
     pointer-events: none;
-    cursor: not-allowed;
-    background-color: #fff;
-    border-color: #dcdee5;
+    cursor: not-allowed;background-color: var(--bk-theme-surface-default);border-color: var(--bk-theme-border-default);
 
     &:hover,
-    &:active {
-      color: #c4c6cc;
-      background-color: #fff;
-      border-color: #dcdee5;
+    &:active {color: var(--bk-theme-text-disabled);background-color: var(--bk-theme-surface-default);border-color: var(--bk-theme-border-default);
     }
   }
 }
@@ -94,9 +88,7 @@
   }
 }
 
-.risk-export-btn__loading {
-  margin-right: 4px;
-  font-size: 12px;
-  color: #3a84ff;
+.risk-export-btn__loading {margin-right: var(--bk-theme-space-4);
+  font-size: 12px;color: var(--bk-theme-color-brand-2);
 }
 </style>

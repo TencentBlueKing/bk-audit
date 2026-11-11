@@ -45,11 +45,11 @@
       <div class="btns">
         <auth-button
           action-id="edit_rule_v2"
-          class="mr8"
+         
           :permission="permissionCheckData.edit_rule_v2"
           resource-is-scene
           theme="primary"
-          @click="handleSubmit">
+          @click="handleSubmit" style="margin-right: var(--bk-theme-space-8)">
           {{ t('去调整规则优先级') }}
         </auth-button>
         <bk-button @click="handleToList">
@@ -126,29 +126,28 @@
 }
 
 .batch-prioriry-dialog {
-  margin-top: -24px;
+  margin-top: -var(--bk-theme-space-24);
 
   .logo {
     display: flex;
     width: 42px;
     height: 42px;
-    margin: 0 auto;
-    background: #e5f6ea;
+    margin: 0 auto;background: var(--bk-theme-status-success-bg);
     border-radius: 50%;
     align-items: center;
     justify-content: center;
   }
 
   .title {
-    margin: 15px 0 10px;
+    margin: var(--bk-theme-space-16) 0 var(--bk-theme-space-12);
     font-size: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .btns {
     display: flex;
     width: 100%;
-    margin-top: 24px;
+    margin-top: var(--bk-theme-space-24);
     align-items: center;
     justify-content: center;
   }

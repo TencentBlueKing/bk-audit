@@ -59,14 +59,14 @@
           </bk-form>
           <div v-if="source === ''">
             <bk-button
-              class="mr8"
+             
               theme="primary"
-              @click.stop="submit">
+              @click.stop="submit" style="margin-right: var(--bk-theme-space-8)">
               查询
             </bk-button>
             <bk-button
-              class="mr8"
-              @click.stop="handleReset">
+             
+              @click.stop="handleReset" style="margin-right: var(--bk-theme-space-8)">
               重置
             </bk-button>
           </div>
@@ -351,21 +351,21 @@
 
 <style scoped lang="postcss">
 .top-search {
-  padding: 16px;
-  background: #fff;
+  padding: var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
 
   .top-search-title {
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .top-search-result {
     position: relative;
-    padding-right: 16px;
-    margin-top: 12px;
+    padding-right: var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-12);
 
     /* 不再固定 height，避免与表格 max-height 产生嵌套滚动条 */
     overflow: visible;
@@ -375,16 +375,16 @@
     }
 
     .top-search-table-title {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 12px;
       line-height: 20px;
       letter-spacing: 0;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
   }
 
   .example {
-    margin-top: 10px;
+    margin-top: var(--bk-theme-space-12);
 
     .formref-item {
       display: flex;
@@ -392,21 +392,21 @@
 
       .formref-item-item {
         min-width: 400px;
-        margin-right: 15px;
+        margin-right: var(--bk-theme-space-16);
       }
     }
   }
 
   .list-data {
-    margin-top: 10px;
+    margin-top: var(--bk-theme-space-12);
   }
 }
 
 /* api-search-result 样式覆盖 - 仅在工具广场生效 */
 :deep(.card-content) {
-  border: .5px solid #dcdee5;
-  border-bottom-right-radius: 2px;
-  border-bottom-left-radius: 2px;
+  border: .5px solid var(--bk-theme-border-default);
+  border-bottom-right-radius: var(--bk-theme-tag-radius);
+  border-bottom-left-radius: var(--bk-theme-tag-radius);
 }
 
 :deep(.bk-table.bordered-outer) {
@@ -415,7 +415,7 @@
   border-left: none;
 
   .bk-table-footer {
-    background-color: #fff;
+    background-color: var(--bk-theme-surface-default);
     border-bottom: none;
   }
 }
@@ -424,7 +424,7 @@
   .bk-table-head table thead th,
   .bk-table-body table thead th,
   table thead th {
-    background-color: #f0f1f5 !important;
+    background-color: var(--bk-theme-surface-muted) !important;
   }
 }
 </style>

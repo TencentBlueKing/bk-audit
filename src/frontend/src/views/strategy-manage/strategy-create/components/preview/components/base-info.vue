@@ -146,18 +146,17 @@
 </script>
 <style lang="postcss" scoped>
 .detail-base-info {
-  position: relative;
-  padding: 10px 16px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 #1919290d;
+  position: relative;padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 
   .title {
-    margin-bottom: 10px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .render-info-item {
@@ -169,17 +168,17 @@
     position: absolute;
     right: calc(50% - 52px);
     bottom: -11px;
-    box-shadow: 0 2px 4px 0 #1919290d;
+    box-shadow: var(--bk-theme-card-shadow);
 
     .show-more-btn {
       width: 120px;
       height: 22px;
-      color: #fff;
-      background: #c4c6cc;;
-      border-radius: 12px;
+      color: var(--bk-theme-surface-default);
+      background: var(--bk-theme-border-strong);;
+      border-radius: var(--bk-theme-card-radius);
 
       &:hover {
-        background-color: #3a84ff;
+        background-color: var(--bk-theme-color-brand-2);
       }
     }
 

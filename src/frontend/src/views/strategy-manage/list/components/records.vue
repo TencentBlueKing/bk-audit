@@ -323,7 +323,7 @@
   height: calc(100vh - 52px);
   max-height: calc(100vh - 52px);
   min-height: 0;
-  padding: 20px 40px;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-32);
   overflow: hidden;
 
   .strategy-records-alert {
@@ -333,7 +333,7 @@
   .strategy-records-table-wrap {
     flex: 1;
     min-height: 0;
-    margin-top: 12px;
+    margin-top: var(--bk-theme-space-12);
     overflow: hidden;
   }
 
@@ -349,12 +349,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     width: 100%;
     height: 32px;
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
   }
 
   :deep(.bk-alert-wraper) {

@@ -86,8 +86,7 @@
 
 </script>
 <style lang="postcss" scoped>
-  .auth-option-disabled {
-    color: #c4c6cc !important;
+  .auth-option-disabled {color: var(--bk-theme-text-disabled) !important;
 
     & > * {
       pointer-events: none;

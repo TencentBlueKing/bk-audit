@@ -60,16 +60,16 @@
   left: 50%;
   width: 60%;
   height: 330px;
-  margin-top: 30px;
-  background-color: #fff;
+  margin-top: var(--bk-theme-space-32);
+  background-color: var(--bk-theme-surface-default);
   transform: translateX(-50%);
 
   .corret-fill-icon {
     position: absolute;
     left: 50%;
-    margin-top: 44px;
+    margin-top: var(--bk-theme-space-32);
     font-size: 64px;
-    color: #2caf5e;
+    color: var(--bk-theme-color-success-2);
     transform: translateX(-50%);
   }
 
@@ -78,7 +78,7 @@
     left: 50%;
     margin-top: 144px;
     font-size: 24px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     transform: translateX(-50%);
   }
 
@@ -87,7 +87,7 @@
     width: 100%;
     margin-top: 192px;
     font-size: 14px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     text-align: center;
   }
 
@@ -95,17 +95,17 @@
     position: absolute;
     left: 50%;
     height: 32px;
-    padding-right: 10px;
-    padding-left: 10px;
+    padding-right: var(--bk-theme-space-12);
+    padding-left: var(--bk-theme-space-12);
     margin-top: 238px;
     font-size: 14px;
     line-height: 32px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     text-align: center;
     cursor: pointer;
-    background: #fff;
-    border: 1px solid #c4c6cc;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
     transform: translateX(-50%);
 
     &:hover {

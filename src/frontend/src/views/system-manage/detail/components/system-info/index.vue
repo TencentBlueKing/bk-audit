@@ -89,7 +89,7 @@
   .system-detail-box {
     position: relative;
     display: flex;
-    padding: 24px;
+    padding: var(--bk-theme-space-24);
     overflow: hidden;
     align-items: flex-start;
 
@@ -101,7 +101,7 @@
       flex: 0;
       width: 48px;
       height: 48px;
-      margin-right: 12px;
+      margin-right: var(--bk-theme-space-12);
     }
 
     .system-base-box {
@@ -109,7 +109,7 @@
         font-size: 20px;
         font-weight: bold;
         line-height: 26px;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
         word-break: keep-all;
       }
 
@@ -127,8 +127,7 @@
     .system-delete {
       position: absolute;
       top: 24px;
-      right: 24px;
-      color: #c5c7cd;
+      right: 24px;color: var(--bk-theme-text-disabled);
       cursor: pointer;
 
       .bk-button-primary {

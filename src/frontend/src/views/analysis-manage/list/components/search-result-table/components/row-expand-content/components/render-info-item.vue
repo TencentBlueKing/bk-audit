@@ -31,20 +31,20 @@
 <style lang="postcss" scoped>
   .render-info-item {
     display: flex;
-    padding: 5px 0;
+    padding: var(--bk-theme-space-4) 0;
 
     .info-label {
       display: inline-block;
       min-width: 80px;
-      padding-left: 10px;
-      color: #979ba5;
+      padding-left: var(--bk-theme-space-12);
+      color: var(--bk-theme-text-weak);
       text-align: right;
       flex-shrink: 0;
     }
 
     .info-value {
-      padding-left: 8px;
-      color: #63656e;
+      padding-left: var(--bk-theme-space-8);
+      color: var(--bk-theme-text-default);
       word-break: break-all;
     }
 

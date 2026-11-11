@@ -236,7 +236,7 @@
 </script>
 <style lang="postcss">
 .link-data-strategy {
-  padding: 0 25px;
+  padding: 0 var(--bk-theme-space-24);
 
   .edit-badge {
     .bk-badge.pinned.top-right {

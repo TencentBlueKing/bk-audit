@@ -379,7 +379,7 @@
       .date-content{
        position: absolute;
        width: 85%;
-       margin-left: 15px;
+       margin-left: var(--bk-theme-space-16);
       }
     }
 

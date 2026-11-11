@@ -145,18 +145,18 @@
   .edit-icon {
     flex-shrink: 0;
     font-size: 14px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
 
     &:hover {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .edit-loading {
     flex-shrink: 0;
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     animation: spin 1s linear infinite;
   }
 
@@ -164,7 +164,7 @@
     display: flex;
     width: 100%;
     max-width: 480px;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: flex-start;
 
     :deep(.audit-user-selector),
@@ -184,14 +184,14 @@
   .edit-actions {
     display: inline-flex;
     flex-shrink: 0;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
     height: 32px;
   }
 
   .confirm-icon {
     font-size: 18px;
-    color: #2dcb56;
+    color: var(--bk-theme-color-success-2);
     cursor: pointer;
 
     &:hover {
@@ -201,7 +201,7 @@
 
   .cancel-icon {
     font-size: 18px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
     cursor: pointer;
 
     &:hover {

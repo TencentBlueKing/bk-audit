@@ -35,8 +35,7 @@
       margin-top: 150px;
     }
 
-    p {
-      margin: 32px 0;
+    p {margin: var(--bk-theme-space-32) 0;
       font-size: 20px;
       font-weight: 400;
       color: #979797;

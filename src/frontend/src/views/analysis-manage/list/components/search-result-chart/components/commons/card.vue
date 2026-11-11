@@ -34,15 +34,15 @@
 </script>
 <style scoped lang="postcss">
   .card {
-    padding: 17px 24px;
-    background: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+    padding: 17px var(--bk-theme-space-24);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-tag-radius);
+    box-shadow: var(--bk-theme-card-shadow);
 
     .card-title {
       font-size: 14px;
       line-height: 22px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
   }
 </style>

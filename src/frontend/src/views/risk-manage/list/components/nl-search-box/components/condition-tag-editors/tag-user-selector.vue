@@ -354,7 +354,7 @@
       max-width: min(480px, calc(100vw - 260px)) !important;
       max-height: 20px !important;
       min-height: 20px !important;
-      padding: 0 4px !important;
+      padding: 0 var(--bk-theme-space-4) !important;
       overflow: hidden !important;
     }
 
@@ -403,11 +403,10 @@
       height: 20px !important;
       max-height: 20px !important;
       min-height: 20px !important;
-      padding: 0 4px !important;
+      padding: 0 var(--bk-theme-space-4) !important;
       overflow: hidden !important;
-      background: #fff !important;
-      border: 1px solid #3a84ff !important;
-      border-radius: 2px !important;
+      background: var(--bk-theme-surface-default) !important;
+      border: 1px solid var(--bk-theme-color-brand-2) !important;border-radius: var(--bk-theme-control-radius) !important;
       box-shadow: none !important;
       box-sizing: border-box !important;
       transition: none !important;
@@ -419,7 +418,7 @@
     }
 
     .nl-tag-user-selector.bk-user-selector .tags-container.focused {
-      border-color: #3a84ff !important;
+      border-color: var(--bk-theme-color-brand-2) !important;
       box-shadow: none !important;
     }
 
@@ -465,19 +464,18 @@
       display: inline-flex !important;
       height: 18px !important;
       max-width: 100%;
-      padding: 0 4px 0 6px !important;
-      margin: 0 4px 0 0 !important;
-      color: #1768ef !important;
-      background: #e1ecff !important;
-      border: none !important;
-      border-radius: 2px !important;
+      padding: 0 var(--bk-theme-space-4) 0 var(--bk-theme-space-6) !important;
+      margin: 0 var(--bk-theme-space-4) 0 0 !important;
+      color: var(--bk-theme-color-brand-1) !important;
+      background: var(--bk-theme-fill-selected) !important;
+      border: none !important;border-radius: var(--bk-theme-control-radius) !important;
       box-sizing: border-box !important;
       align-items: center !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag:hover,
     .nl-tag-user-selector.bk-user-selector .user-tag:hover {
-      background: #cddffe !important;
+      background: var(--bk-theme-color-brand-5) !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-text,
@@ -487,7 +485,7 @@
       overflow: hidden;
       font-size: 12px !important;
       line-height: 1 !important;
-      color: #1768ef !important;
+      color: var(--bk-theme-color-brand-1) !important;
       text-overflow: ellipsis;
       white-space: nowrap;
       background: transparent !important;
@@ -496,15 +494,14 @@
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-close {
       display: inline-flex !important;
-      margin-left: 4px !important;
+      margin-left: var(--bk-theme-space-4) !important;
       font-size: 12px !important;
       line-height: 1 !important;
-      color: #1768ef !important;
+      color: var(--bk-theme-color-brand-1) !important;
       align-items: center !important;
     }
 
-    .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-close:hover {
-      color: #0f5bd8 !important;
+    .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-close:hover {color: var(--bk-theme-color-brand-1) !important;
     }
   }
 

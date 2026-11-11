@@ -342,15 +342,15 @@
 </script>
 <style lang="postcss">
   .storage-manage-info-toggle {
-    margin-top: 20px;
-    margin-bottom: 24px;
+    margin-top: var(--bk-theme-space-16);
+    margin-bottom: var(--bk-theme-space-24);
   }
 
   .notice-info {
-    margin-left: 10px;
+    margin-left: var(--bk-theme-space-12);
     font-size: 12px;
     font-weight: 500;
     font-weight: normal;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 </style>

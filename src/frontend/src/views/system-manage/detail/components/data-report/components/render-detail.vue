@@ -96,11 +96,11 @@
 <style lang="postcss" scoped>
   .collector-detail {
     .check-detail {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
 
     .operation-icon {
-      margin-left: 18px;
+      margin-left: var(--bk-theme-space-16);
       font-size: 16px;
     }
   }

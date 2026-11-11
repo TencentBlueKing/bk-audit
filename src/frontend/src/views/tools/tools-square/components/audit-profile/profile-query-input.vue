@@ -50,11 +50,11 @@
     </div>
     <div class="query-actions">
       <bk-button
-        class="query-btn mr8"
+        class="query-btn"
         :disabled="isThrottled || loading"
         :loading="loading"
         theme="primary"
-        @click="handleQuery">
+        @click="handleQuery" style="margin-right: var(--bk-theme-space-8)">
         {{ t('查询') }}
       </bk-button>
       <bk-button
@@ -221,24 +221,23 @@
 </script>
 
 <style scoped lang="postcss">
-.top-search {
-  padding: 16px 24px 22px;
-  background: #fff;
+.top-search {padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 
   .top-search-title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 }
 
 .query-form {
   display: flex;
-  gap: 24px;
-  margin-top: 16px;
+  gap: var(--bk-theme-space-24);
+  margin-top: var(--bk-theme-space-16);
   align-items: flex-end;
   flex-wrap: wrap;
 }
@@ -246,55 +245,53 @@
 .form-item {
   .form-label {
     display: flex;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 12px;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     align-items: center;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
 
     .required {
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
   }
 }
 
 .account-type-group {
   display: flex;
-  border-radius: 2px;
+  border-radius: var(--bk-theme-tag-radius);
 
   .account-type-item {
     width: 88px;
-    margin-left: -1px;
+    margin-left: -var(--bk-theme-space-2);
     font-size: 12px;
     line-height: 30px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: center;
     cursor: pointer;
-    background: #fff;
-    border: 1px solid #c4c6cc;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-strong);
     transition: all .15s;
 
     &:first-child {
-      margin-left: 0;
-      border-radius: 2px 0 0 2px;
+      margin-left: 0;border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
     }
 
-    &:last-child {
-      border-radius: 0 2px 2px 0;
+    &:last-child {border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
     }
 
     &:hover {
-      color: #3a84ff;
-      background: #e1ecff;
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-fill-selected);
     }
 
     &.active {
       position: relative;
       z-index: 1;
-      color: #3a84ff;
-      background: #e1ecff;
-      border-color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-fill-selected);
+      border-color: var(--bk-theme-color-brand-2);
     }
   }
 }
@@ -304,12 +301,12 @@
 }
 
 .query-actions {
-  margin-top: 24px;
+  margin-top: var(--bk-theme-space-24);
 
   .query-btn {
     height: 32px;
     min-width: 88px;
-    padding: 0 20px;
+    padding: 0 var(--bk-theme-space-16);
     font-size: 14px;
   }
 }

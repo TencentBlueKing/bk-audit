@@ -82,9 +82,9 @@
 <style lang="postcss">
   .show-node-attr-detail-btn {
     display: inline-block;
-    padding-left: 8px;
+    padding-left: var(--bk-theme-space-8);
     font-size: 12px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
   }
 </style>

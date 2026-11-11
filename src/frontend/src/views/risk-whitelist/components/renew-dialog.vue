@@ -94,8 +94,8 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="isShow = false">
+       
+        @click="isShow = false" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -186,47 +186,47 @@
 </script>
 <style lang="postcss" scoped>
   .renew-alert :deep(.bk-alert-wraper) {
-    padding: 6px 8px;
+    padding: var(--bk-theme-space-6) var(--bk-theme-space-8);
   }
 
   .meta-row {
     display: flex;
-    gap: 40px;
+    gap: var(--bk-theme-space-32);
     justify-content: flex-start;
-    margin: 16px 0;
+    margin: var(--bk-theme-space-16) 0;
     text-align: left;
   }
 
   .meta-item {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
-    padding: 6px 0;
+    padding: var(--bk-theme-space-6) 0;
   }
 
   .meta-label,
   .field-label {
-    font-family: var(--audit-font-family);
-    font-size: var(--audit-font-size-sm);
+    font-family: var(--bk-theme-font-family);
+    font-size: var(--bk-theme-font-size-sm);
     font-style: normal;
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
     text-align: left;
   }
 
   .meta-value {
-    font-size: var(--audit-font-size-sm);
+    font-size: var(--bk-theme-font-size-sm);
     font-style: normal;
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-01);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-strong);
   }
 
   .duration-block {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
   }
 
   .field-label {
@@ -234,8 +234,8 @@
   }
 
   .field-label.is-required::after {
-    margin-left: 2px;
-    color: var(--audit-danger-02);
+    margin-left: var(--bk-theme-space-2);
+    color: var(--bk-theme-color-danger-2);
     content: '*';
   }
 
@@ -248,29 +248,29 @@
     position: relative;
     flex: 1;
     height: 32px;
-    margin-right: -1px;
-    font-size: var(--audit-font-size-sm);
+    margin-right: -var(--bk-theme-space-2);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 20px;
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
     cursor: pointer;
-    background: var(--audit-neutral-bg-04);
-    border: 1px solid var(--audit-neutral-text-04);
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-text-disabled);
   }
 
   .duration-item:first-child {
-    border-radius: var(--audit-radius-control) 0 0 var(--audit-radius-control);
+    border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
   }
 
   .duration-item:last-child {
     margin-right: 0;
-    border-radius: 0 var(--audit-radius-control) var(--audit-radius-control) 0;
+    border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
   }
 
   .duration-item.is-active {
     z-index: 1;
-    color: var(--audit-brand-02);
-    background: var(--audit-brand-06);
-    border-color: var(--audit-brand-02);
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-color-brand-6);
+    border-color: var(--bk-theme-color-brand-2);
   }
 
   .custom-expire {
@@ -281,22 +281,22 @@
     display: flex;
     align-items: center;
     height: 32px;
-    padding: 0 12px;
-    font-size: var(--audit-font-size-sm);
+    padding: 0 var(--bk-theme-space-12);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 20px;
-    color: var(--audit-neutral-text-02);
-    background: var(--audit-neutral-bg-03);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-subtle);
   }
 
   .expire-preview strong {
-    font-weight: var(--audit-font-weight-bold);
+    font-weight: var(--bk-theme-font-weight-bold);
   }
 
   .remark-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-top: 24px;
+    gap: var(--bk-theme-space-6);
+    margin-top: var(--bk-theme-space-24);
   }
 
   .remark-field :deep(textarea) {
@@ -309,6 +309,6 @@
   }
 
   .field-error {
-    color: var(--audit-danger-02);
+    color: var(--bk-theme-color-danger-2);
   }
 </style>

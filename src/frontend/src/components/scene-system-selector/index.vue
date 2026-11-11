@@ -28,25 +28,33 @@
     @after-show="handlePopoverShow">
     <div
       class="scene-system-selector"
-      :class="{ 'is-active': isPopoverShow, 'is-dark': dark }"
+      :class="{ 'is-active': isPopoverShow, 'is-dark': dark, 'is-pending': showSelectorSkeleton }"
       :style="{ width: typeof width === 'number' ? `${width}px` : width }"
-      @click.stop="isPopoverShow = !isPopoverShow">
-      <div class="selector-content">
-        <bk-tag
-          v-if="selectedItem"
-          class="type-tag"
-          :class="[`type-${selectedItem.type}`]">
-          <span class="type-tag-full">{{ getTypeLabel(selectedItem.type) }}</span>
-          <span class="type-tag-short">{{ getTypeShortLabel(selectedItem.type) }}</span>
-        </bk-tag>
-        <show-tooltips-text
-          class="selector-text"
-          :data="displayText" />
+      @click.stop="handleTriggerClick">
+      <div
+        v-if="showSelectorSkeleton"
+        class="selector-skeleton">
+        <span class="audit-skeleton selector-skeleton-tag" />
+        <span class="audit-skeleton selector-skeleton-text" />
       </div>
-      <audit-icon
-        class="selector-arrow"
-        :class="{ 'is-flip': isPopoverShow }"
-        type="angle-line-down" />
+      <template v-else>
+        <div class="selector-content">
+          <bk-tag
+            v-if="selectedItem"
+            class="type-tag"
+            :class="[`type-${selectedItem.type}`]">
+            <span class="type-tag-full">{{ getTypeLabel(selectedItem.type) }}</span>
+            <span class="type-tag-short">{{ getTypeShortLabel(selectedItem.type) }}</span>
+          </bk-tag>
+          <show-tooltips-text
+            class="selector-text"
+            :data="displayText" />
+        </div>
+        <audit-icon
+          class="selector-arrow"
+          :class="{ 'is-flip': isPopoverShow }"
+          type="angle-line-down" />
+      </template>
     </div>
     <template #content>
       <div
@@ -163,6 +171,7 @@
   import useEventBus from '@hooks/use-event-bus';
 
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+  import '../skeleton/skeleton.css';
 
   import useRequest from '@/hooks/use-request';
   import { changeConfirm } from '@/utils/assist/change-confirm';
@@ -233,6 +242,8 @@
   const popoverRef = ref();
   const isPopoverShow = ref(false);
   const selectedItem = ref<SelectorItem | null>(props.modelValue);
+  const selectorResolved = ref(false);
+  const showSelectorSkeleton = computed(() => !selectorResolved.value && !selectedItem.value);
 
   //  审计场景列表
   const sceneList = ref<SelectorItem[]>([]);
@@ -849,11 +860,17 @@
   });
 
   // 获取数据的方法（按角色按需请求）
+  const handleTriggerClick = () => {
+    if (showSelectorSkeleton.value) return;
+    isPopoverShow.value = !isPopoverShow.value;
+  };
+
   const fetchData = () => {
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
     setTimeout(() => {
+      const tasks: Promise<unknown>[] = [];
       if (hasSystemAccess) {
-        fetchSystemWithAction({
+        tasks.push(fetchSystemWithAction({
           action_ids: 'view_system,edit_system',
           audit_status__in: 'accessed',
           namespace: 'default',
@@ -861,13 +878,20 @@
           sort_keys: 'name',
           with_favorite: false,
           with_system_status: false,
-        });
+        }));
       }
       if (hasSceneAccess) {
-        fetchSceneAll({
+        tasks.push(fetchSceneAll({
           status: 'enabled',
-        });
+        }));
       }
+      if (!tasks.length) {
+        selectorResolved.value = true;
+        return;
+      }
+      Promise.all(tasks.map(task => task.then(() => undefined, () => undefined))).then(() => {
+        selectorResolved.value = true;
+      });
     }, 0);
   };
 
@@ -940,41 +964,63 @@
   justify-content: space-between;
   min-width: 0;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 var(--bk-theme-space-8);
   cursor: pointer;
-  background: #f0f1f5;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-title-select-radius);
   transition: all .3s;
 
   &:hover {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
   }
 
   &.is-active {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
+  }
+
+  &.is-pending {
+    cursor: default;
+  }
+
+  .selector-skeleton {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+    gap: var(--bk-theme-space-8);
+  }
+
+  .selector-skeleton-tag {
+    width: 32px;
+    height: 18px;
+    border-radius: var(--bk-theme-title-select-tag-radius);
+  }
+
+  .selector-skeleton-text {
+    width: 96px;
+    max-width: 100%;
+    height: 12px;
   }
 
   /* 深色主题 */
-  &.is-dark {
-    background: #2e3847;
-    border: 1px solid #3c4558;
+  &.is-dark {background: var(--bk-theme-text-strong);border: 1px solid var(--bk-theme-text-default);
 
     &:hover {
       border-color: #4d5565;
     }
 
     &.is-active {
-      border-color: #699df4;
+      border-color: var(--bk-theme-color-brand-3);
     }
 
     .selector-content {
       .selector-text {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
       }
     }
 
     .selector-arrow {
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 
@@ -987,14 +1033,14 @@
 
     .type-tag {
       flex-shrink: 0;
-      height: 22px;
-      padding: 0 8px;
-      margin-right: 8px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #fff;
+      height: 18px;
+      padding: 0 var(--bk-theme-space-4);
+      margin-right: var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: 18px;
+      color: var(--bk-theme-surface-default);
       border: none;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-title-select-tag-radius) !important;
 
       .type-tag-short {
         display: none;
@@ -1005,19 +1051,19 @@
       }
 
       &.type-scene {
-        background-color: #699df4;
+        background-color: var(--bk-theme-title-select-tag-bg);
       }
 
-      &.type-system {
-        background-color: #f8b64f;
+      &.type-system {background-color: var(--bk-theme-color-warn-2);
       }
     }
 
     .selector-text {
       flex: 1;
       overflow: hidden;
-      font-size: 14px;
-      color: #313238;
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -1025,9 +1071,9 @@
 
   .selector-arrow {
     flex-shrink: 0;
-    margin-left: 8px;
-    font-size: 16px;
-    color: #979ba5;
+    margin-left: var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
+    color: var(--bk-theme-text-weak);
     transition: transform .3s;
 
     &.is-flip {
@@ -1060,20 +1106,18 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #c4c6cc;
-    border-radius: 2px;
+    background: var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: #979ba5;
+    background: var(--bk-theme-text-weak);
   }
 
   /* 深色主题 */
-  &.is-dark {
-    background: #1a2233;
+  &.is-dark {background: var(--bk-theme-text-strong);
 
-    .group-search {
-      background: #1a2233;
+    .group-search {background: var(--bk-theme-text-strong);
     }
 
     &::-webkit-scrollbar {
@@ -1084,22 +1128,20 @@
       background: transparent;
     }
 
-    &::-webkit-scrollbar-thumb {
-      background: #2e3847;
-      border-radius: 2px;
+    &::-webkit-scrollbar-thumb {background: var(--bk-theme-text-strong);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
-    &::-webkit-scrollbar-thumb:hover {
-      background: #3c4558;
+    &::-webkit-scrollbar-thumb:hover {background: var(--bk-theme-text-default);
     }
 
     .dropdown-empty {
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
 
     .dropdown-group {
       .group-title {
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
 
       .group-list {
@@ -1113,7 +1155,7 @@
 
             .item-name,
             .item-name.is-highlight {
-              color: #fff;
+              color: var(--bk-theme-surface-default);
             }
           }
 
@@ -1149,15 +1191,15 @@
           }
 
           .item-name {
-            color: #979ba5;
+            color: var(--bk-theme-text-weak);
 
             &.is-highlight {
-              color: #dcdee5;
+              color: var(--bk-theme-border-default);
             }
           }
 
           .item-id {
-            color: #63656e;
+            color: var(--bk-theme-text-default);
           }
         }
       }
@@ -1169,28 +1211,28 @@
     top: 0;
     z-index: 1;
     display: flex;
-    padding: 0 12px 8px;
-    background: #fff;
+    padding: 0 var(--bk-theme-space-12) var(--bk-theme-space-8);
+    background: var(--bk-theme-surface-default);
     align-items: center;
   }
 
   .dropdown-empty {
-    padding: 16px 12px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-12);
     font-size: 12px;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     text-align: center;
   }
 
   .dropdown-group {
     &:not(:last-child) {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
     }
 
     .group-title {
-      padding: 8px 12px;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
 
 
@@ -1200,43 +1242,42 @@
         display: flex;
         align-items: center;
         height: 36px;
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
         cursor: pointer;
         transition: background-color .2s;
 
         &:hover {
-          background-color: #f5f7fa;
+          background-color: var(--bk-theme-surface-subtle);
         }
 
         &.is-selected {
-          background-color: #e1ecff;
+          background-color: var(--bk-theme-fill-selected);
 
           .item-name.is-highlight {
-            color: #3a84ff;
+            color: var(--bk-theme-color-brand-2);
           }
         }
 
         .type-tag {
           flex-shrink: 0;
           height: 26px;
-          padding: 0 8px;
-          margin-right: 16px;
+          padding: 0 var(--bk-theme-space-8);
+          margin-right: var(--bk-theme-space-16);
           font-size: 12px;
           line-height: 24px;
-          color: #fff;
+          color: var(--bk-theme-surface-default);
           border: none;
-          border-radius: 2px;
+          border-radius: var(--bk-theme-tag-radius);
 
           &.type-aggregate {
             background-color: #ba69f4;
           }
 
           &.type-scene {
-            background-color: #699df4;
+            background-color: var(--bk-theme-color-brand-3);
           }
 
-          &.type-system {
-            background-color: #f8b64f;
+          &.type-system {background-color: var(--bk-theme-color-warn-2);
           }
         }
 
@@ -1244,17 +1285,17 @@
           flex: 1;
           min-width: 0;
           font-size: 12px;
-          color: #63656e;
+          color: var(--bk-theme-text-default);
 
           &.is-highlight {
-            color: #313238;
+            color: var(--bk-theme-text-strong);
           }
         }
 
         .item-id {
-          margin-left: 4px;
+          margin-left: var(--bk-theme-space-4);
           font-size: 12px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
         }
 
         &.is-locked,
@@ -1265,7 +1306,7 @@
 
           .item-name,
           .item-name.is-highlight {
-            color: #c4c6cc;
+            color: var(--bk-theme-border-strong);
           }
 
           .type-tag {
@@ -1281,12 +1322,12 @@
   display: inline-block;
   align-items: center;
   justify-content: center;
-  margin-top: 1px;
+  margin-top: var(--bk-theme-space-2);
 
   .search-prefix {
     font-size: 14px;
     line-height: 1;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
@@ -1294,8 +1335,7 @@
 
 <style lang="postcss">
 /* 深色主题弹出层样式 */
-.scene-system-selector-popover-dark.bk-popover.bk-pop2-content {
-  background: #1a2232 !important;
+.scene-system-selector-popover-dark.bk-popover.bk-pop2-content {background: var(--bk-theme-text-strong) !important;
   box-shadow: 0 3px 9px 0 rgb(0 0 0 / 50%) !important;
 
   /* 搜索框：深色主题，仅保留底部边框 */
@@ -1307,21 +1347,19 @@
     .bk-form-control[style],
     .bk-form-content,
     input[type='text'],
-    input[type='text'][style] {
-      background-color: #1a2232 !important;
+    input[type='text'][style] {background-color: var(--bk-theme-text-strong) !important;
       background-image: none !important;
-      border: none !important;
-      border-bottom: 1px solid #4f5566 !important;
+      border: none !important;border-bottom: 1px solid var(--bk-theme-text-default) !important;
       outline: none !important;
       box-shadow: none !important;
-      caret-color: #c4c6cc;
+      caret-color: var(--bk-theme-border-strong);
     }
 
     input {
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
 
       &::placeholder {
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
     }
 
@@ -1333,13 +1371,13 @@
     .input-prefix *,
     .audit-icon {
       display: flex;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       background: transparent !important;
       align-items: center;
       justify-content: center;
     }
 
-    /* 去除前缀区域白底（组件内部 .bk-input--prefix 设置了 #fff !important） */
+    /* 去除前缀区域白底（组件内部 .bk-input--prefix 设置了 var(--bk-theme-surface-default) !important） */
     .input-prefix,
     [class*='prefix'],
     .bk-input--prefix,
@@ -1366,8 +1404,7 @@
       .bk-input--prefix *,
       .search-prefix-wrap,
       .search-prefix-wrap * {
-        color: #63656e;
-        background-color: #1a2232 !important;
+        color: var(--bk-theme-text-default);background-color: var(--bk-theme-text-strong) !important;
         border-radius: 0;
       }
     }
@@ -1389,14 +1426,13 @@
       input[type='text']:active {
         background-color: transparent !important;
         background-image: none !important;
-        border: none !important;
-        border-bottom: 1px solid #4f5566 !important;
+        border: none !important;border-bottom: 1px solid var(--bk-theme-text-default) !important;
         outline: none !important;
         box-shadow: none !important;
       }
 
       input {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
   }

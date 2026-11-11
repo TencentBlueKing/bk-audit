@@ -32,21 +32,21 @@
 </script>
 <style lang="postcss" scoped>
   .create-collect-card {
-    padding: 16px 24px;
-    margin-bottom: 16px;
-    background: #fff;
-    border-radius: 2px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+    margin-bottom: var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
 
     .title {
       font-size: 14px;
       font-weight: bold;
       line-height: 22px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
 
     .content {
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
     }
   }
 </style>

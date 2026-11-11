@@ -417,45 +417,45 @@
   .nl-add-condition-trigger {
     display: inline-flex;
     height: 26px;
-    padding: 7px 10px;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
     font-size: 12px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     white-space: nowrap;
     cursor: pointer;
     background: transparent;
-    border: 1px dashed #c4c6cc;
-    border-radius: 2px;
+    border: 1px dashed var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
     transition: all .15s;
     align-items: center;
 
     .nl-add-condition-icon {
-      margin-right: 4px;
-      color: #979ba5;
+      margin-right: var(--bk-theme-space-4);
+      color: var(--bk-theme-text-weak);
       transition: color .15s;
     }
 
     &:hover {
-      color: #63656e;
-      background: #fff;
-      border-color: #c4c6cc;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-default);
+      border-color: var(--bk-theme-border-strong);
     }
 
     &.is-active,
     &.is-accent,
     &:active {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       background: transparent;
-      border-color: #3a84ff;
+      border-color: var(--bk-theme-color-brand-2);
 
       .nl-add-condition-icon {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
     &.is-accent:hover {
-      color: #3a84ff;
-      background: #f0f5ff;
-      border-color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-select-banner-bg);
+      border-color: var(--bk-theme-color-brand-2);
       border-style: solid;
     }
   }
@@ -465,22 +465,22 @@
     max-width: calc(100vw - 24px);
     min-width: 240px;
     padding: 0;
-    gap: 9px;
+    gap: var(--bk-theme-space-8);
     box-sizing: border-box;
 
     .panel-tabs {
       display: flex;
-      gap: 8px;
-      padding: 4px;
-      background-color: #f0f1f5;
+      gap: var(--bk-theme-space-8);
+      padding: var(--bk-theme-space-4);
+      background-color: var(--bk-theme-surface-muted);
 
       .panel-tab-item {
         display: inline-flex;
         height: 22px;
-        padding: 0 30px;
+        padding: 0 var(--bk-theme-space-32);
         font-size: 12px;
         line-height: 32px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         text-align: center;
         cursor: pointer;
         background: transparent;
@@ -491,23 +491,23 @@
         flex: 1;
 
         &.active {
-          color: #3a84ff;
-          background: #fff;
+          color: var(--bk-theme-color-brand-2);
+          background: var(--bk-theme-surface-default);
         }
       }
     }
 
     .panel-search {
       display: flex;
-      padding: 4px 12px;
-      margin-bottom: 2px;
-      border-bottom: 1px solid #dcdee5;
+      padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
+      margin-bottom: var(--bk-theme-space-2);
+      border-bottom: 1px solid var(--bk-theme-border-default);
       align-items: center;
 
       .nl-tag-search-icon {
-        margin-right: 6px;
+        margin-right: var(--bk-theme-space-6);
         font-size: 15px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         flex-shrink: 0;
       }
 
@@ -517,7 +517,7 @@
         box-shadow: none;
 
         &.is-focused {
-          border-bottom-color: #3a84ff;
+          border-bottom-color: var(--bk-theme-color-brand-2);
           box-shadow: none;
         }
       }
@@ -525,7 +525,7 @@
 
     .panel-field-list {
       max-height: 260px;
-      padding-bottom: 4px;
+      padding-bottom: var(--bk-theme-space-4);
       overflow: hidden auto;
 
       /* 窄灰色滚动条 - 纵向 */
@@ -535,8 +535,8 @@
       }
 
       &::-webkit-scrollbar-thumb {
-        background: #c4c6cc;
-        border-radius: 2px;
+        background: var(--bk-theme-border-strong);
+        border-radius: var(--bk-theme-tag-radius);
       }
 
       &::-webkit-scrollbar-track {
@@ -546,20 +546,20 @@
       .field-group-header {
         display: flex;
         height: 32px;
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
         cursor: pointer;
         background: transparent;
         align-items: center;
         user-select: none;
 
         &:hover {
-          background: #f5f7fa;
+          background: var(--bk-theme-surface-subtle);
         }
 
         .field-group-arrow {
-          margin-right: 6px;
+          margin-right: var(--bk-theme-space-6);
           font-size: 12px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           transition: transform .2s;
 
           &.is-collapsed {
@@ -569,31 +569,31 @@
 
         .field-group-label {
           font-size: 12px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
         }
       }
 
       .field-item {
         display: flex;
         min-height: 36px;
-        padding: 6px 16px;
+        padding: var(--bk-theme-space-6) var(--bk-theme-space-16);
         font-size: 12px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         cursor: pointer;
         align-items: center;
         justify-content: space-between;
         transition: background .15s;
 
         &:hover {
-          background: #f5f7fa;
+          background: var(--bk-theme-surface-subtle);
         }
 
         &.is-selected {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
 
         &.field-item-indent {
-          padding-left: 32px;
+          padding-left: var(--bk-theme-space-32);
         }
 
         .field-item-label {
@@ -606,9 +606,9 @@
       }
 
       .field-list-empty {
-        padding: 24px 0;
+        padding: var(--bk-theme-space-24) 0;
         font-size: 12px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         text-align: center;
       }
     }
@@ -616,6 +616,6 @@
 
   /* popover 主题样式 - 减少默认 padding */
   .nl-add-condition-popover.bk-popover.bk-pop2-content {
-    padding: 6px;
+    padding: var(--bk-theme-space-6);
   }
 </style>

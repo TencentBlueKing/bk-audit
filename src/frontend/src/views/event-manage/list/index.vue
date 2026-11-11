@@ -57,7 +57,7 @@
     :title="t('风险详情')"
     :width="960">
     <template #header>
-      <div class="flex mr24">
+      <div class="flex" style="margin-right: var(--bk-theme-space-24)">
         <div>
           {{ t('风险详情') }}
           <bk-button
@@ -416,12 +416,12 @@
 }
 
 .event-manage-list {
-  padding: 24px;
+  padding: var(--bk-theme-space-24);
   background-color: white;
 
   .action-header {
     display: flex;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
 
     .search-dater {
       width: 480px;
@@ -432,32 +432,27 @@
   .label-box {
     display: inline-block;
     height: 23px;
-    padding: 0 10px;
-    margin-right: 4px;
+    padding: 0 var(--bk-theme-space-12);
+    margin-right: var(--bk-theme-space-4);
     line-height: 22px;
     text-align: center;
-    background-color: #f0f1f5;
-    border-radius: 2px;
+    background-color: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
-  .recovered {
-    color: #14a568;
-    background: #e4faf0;
+  .recovered {color: var(--bk-theme-status-success-text);background: var(--bk-theme-status-success-bg);
   }
 
-  .unknown {
-    color: #fe9c00;
-    background: #fff1db;
+  .unknown {color: var(--bk-theme-color-warn-2);background: var(--bk-theme-fill-warn);
   }
 
   .abnormal {
-    color: #ea3536;
-    background: #feebea;
+    color: var(--bk-theme-color-danger-2);background: var(--bk-theme-fill-danger);
   }
 
   .close {
-    color: #979ba5;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-weak);
+    background: var(--bk-theme-surface-subtle);
   }
 }
 </style>

@@ -56,7 +56,7 @@
         {{ t(roleText.text.value.confirmOk) }}
       </bk-button>
       <bk-button
-        class="ml8"
+        class="dialog-cancel"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -163,32 +163,32 @@
 
   .desc-row {
     display: flex;
-    gap: 12px;
-    margin-bottom: 8px;
-    font-size: var(--audit-font-size-base);
-    line-height: var(--audit-line-height-base);
+    gap: var(--bk-theme-space-12);
+    margin-bottom: var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-base);
+    line-height: var(--bk-theme-line-height-base);
   }
 
   .desc-label {
     width: 84px;
     flex-shrink: 0;
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
     text-align: right;
   }
   .desc-text {
-    color: var(--audit-neutral-text-01);
-    font-size: var(--audit-font-size-sm);
+    color: var(--bk-theme-text-strong);
+    font-size: var(--bk-theme-font-size-sm);
   }
   .impact-box {
-    padding: 8px 6px;
-    margin-top: 12px;
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
-    background: var(--audit-neutral-bg-01);
-    border-radius: var(--audit-radius-control);
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-6);
+    margin-top: var(--bk-theme-space-12);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-control-radius);
   }
 
   .impact-box ul {
@@ -197,7 +197,8 @@
   }
 
   .impact-box li {
-    margin-left: 18px;
+    margin-left: var(--bk-theme-space-16);
     list-style: disc;
   }
+  .dialog-cancel { margin-left: var(--bk-theme-space-8); }
 </style>

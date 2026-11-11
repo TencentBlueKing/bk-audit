@@ -16,7 +16,7 @@
 -->
 <template>
   <desc-popover
-    :width="415"
+    :width="432"
     @after-show="handleAfterShow">
     <render-field-text>
       {{ data.system_info.name || '--' }} ({{ data.system_id || '--' }})

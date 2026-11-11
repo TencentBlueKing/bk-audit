@@ -31,8 +31,8 @@
 
 | 组件 | 职责与实现要点 |
 | --- | --- |
-| **render-list** ★ | bk-table 版远程分页列表（存量配置类页面：策略 / 规则 / 通知组 / 联表 / 处理套餐 / 事件 / 系统列表等）。远程分页（`remote-pagination`）、URL 分页/排序恢复（旧 `order_field/order_type` 与新 `sort:['-event_time']` 双向兼容）、按视口高度计算 `page_size`（`isUserSelectedPageSize` 避免覆盖用户选择）、排序图标高亮恢复、场景参数注入、`useRecordPage` 分页记忆。expose：`fetchData` / `resetFetchData`（切场景清空排序筛选并强制重挂载）/ `refreshList` / `getListData`。**改这些页时继续复用本封装，不要无故换成裸表或回退选型。** |
-| **tdesign-list** ★ | TDesign 版远程分页列表。**新增列表优先使用**。在 render-list 能力基础上额外提供 `selection-change`、`getSelectionMeta`、`resolveSelectedRowKeys`、`getExportFilters`，支持**跨页全选**与批量导出；prop `is-need-scene-params` 控制场景参数注入。已用于风险五视图、工具列表、场景管理、平台报表等。不要在业务页再铺一套裸 `PrimaryTable`。 |
+| **render-list** ★ | bk-table 版远程分页列表（存量配置类页面：策略 / 规则 / 通知组 / 联表 / 处理套餐 / 事件 / 系统列表等）。远程分页（`remote-pagination`）、URL 分页/排序恢复（旧 `order_field/order_type` 与新 `sort:['-event_time']` 双向兼容）、按视口高度计算 `page_size`（表头和行高按 42px）、排序图标高亮恢复、场景参数注入、`useRecordPage` 分页记忆。表头、hover、圆角走 `src/css/theme/`。expose：`fetchData` / `resetFetchData`（切场景清空排序筛选并强制重挂载）/ `refreshList` / `getListData`。**改这些页时继续复用本封装，不要无故换成裸表或回退选型。** |
+| **tdesign-list** ★ | TDesign 版远程分页列表。**新增列表优先使用**。在 render-list 能力基础上额外提供 `selection-change`、`getSelectionMeta`、`resolveSelectedRowKeys`、`getExportFilters`，支持**跨页全选**与批量导出；prop `is-need-scene-params` 控制场景参数注入。表头、42px 行高、hover 和勾选行白底由 `theme/tdesign.css` 统一，跨页全选条和新增行高亮仍是本组件的业务状态。已用于风险五视图、工具列表、场景管理、平台报表等。不要在业务页再铺一套裸 `PrimaryTable`，也不要在页面里再引一份 TDesign CSS。 |
 | **search-box** ★ | 风险/事件检索统一入口。`fieldConfig` 驱动；`render-key`（关键词检索）与 `render-value`（字段值检索）两种形态通过 keep-alive 切换并写入 URL `searchType`；首屏从 URL 反序列化筛选条件，提交时回写；时间范围支持相对量（如 `now-6M`）；内置 `risk-export-button` 并 expose `exportData(riskIds, type, {async, filters})`。 |
 | **risk-export-button** | 风险批量导出按钮。只负责 UI 与并发互斥，导出逻辑由父组件 `exportFn` 注入；全局单例 `isRiskExportLoading` 保证同一时刻只有一个导出任务，期间 disabled 并显示 loading。 |
 
@@ -42,8 +42,8 @@
 | --- | --- |
 | **audit-router-view** ★ | 「权限 + 路由」门面：监听事件总线 `permission-page`，收到则渲染 `apply-permission/page.vue`，否则渲染 `keep-alive-router-view`。 |
 | **keep-alive-router-view** | 按 `route.meta.keepAlive` 在 `<keep-alive>` 与非缓存 `<component>` 间二选一，key 取 `meta.keepAliveKey \|\| route.name`（支持同路由多实例）。新页面要缓存只需在 router meta 打 `keepAlive: true`。 |
-| **audit-navigation** | 全站布局骨架：顶栏 + 可折叠侧栏 + 滚动内容区 `#auditNavigationContent`。插槽：`logo` / `header` / `headerRight` / `side` / `headerTips` / `nodeSideContent`；emit `menu-flod`。 |
-| **audit-menu** | 侧边导航菜单（index / item / item-group），通过 `provide(menuKey)` 共享 `activeIndex` 与 `floded`；emit `change(index)`。 |
+| **audit-navigation** | 全站布局骨架：52px 渐变顶栏 + 白底侧栏 + 滚动内容区 `#auditNavigationContent`。页底和标题字号走主题 token。插槽：`logo` / `header` / `headerRight` / `side` / `headerTips` / `nodeSideContent`；emit `menu-flod`。宽度、折叠和通知栏行为保持原样。 |
+| **audit-menu** | 浅色侧边导航（index / item / item-group）。选中态是浅蓝圆角底，不是实心蓝块。通过 `provide(menuKey)` 共享 `activeIndex` 与 `floded`；emit `change(index)`。 |
 | **smart-action** ★ | 底部操作栏自动吸底。`getBoundingClientRect` 判断 placeholder 是否还在视口下方，未进入视口则 `teleport to="body"` 固定；`MutationObserver` 监听 DOM 变化重算相对 `offsetTarget` 的左偏移。 |
 | **router-back** | 统一「返回」入口，优先执行 `useRouterBack` 注册的回调，否则 `history.back`；配合 `meta.routerBackName`。 |
 | **scroll-faker** ★ | 自定义滚动条容器（横向 + 纵向、触底事件），是 `#auditNavigationContent` 的滚动体；emit `scroll` / `reach-bottom`；expose `scrollTo`。 |
@@ -82,6 +82,20 @@
 | **audit-popconfirm** ★ | 基于 tippy 的二次确认气泡，支持异步确认/取消；props `title` / `content` / `confirmHandler` / `placement`；expose `hide()`。 |
 | **audit-collapse-panel** ★ | 轻量折叠面板，标题可自定义；插槽 `label` 暴露 `handleClick` 与 `isCollapseActive`。 |
 | **audit-sideslider** ★ | 侧滑弹层模板：内置确定/取消、离开确认，通过 `useModelProvider` 自动查找子组件 `submit` 方法。 |
+
+## 全局场景类
+
+不是组件，是 `src/css/theme/scenes.css` 里的全局 CSS 类，模板直接挂。值来自 `tokens.css` 场景层，规则见 [全局主题](./theme.md)。
+
+| 类 | 用途 |
+| --- | --- |
+| `bk-theme-card` | 页面级白卡片（圆角、阴影、内边距跟 `card` 场景）。卡片内表格自动去外框。修饰：`--flush` 无内边距、`--hoverable` hover 阴影、`--lg` 大圆角、`--stack` 纵向区块 gap；底栏 `bk-theme-card__footer` |
+| `bk-theme-form--compact` / `bk-theme-form--inline` | 挂在 `bk-form` / `audit-form` 上，表单项间距紧凑 / 归零（表格内、行内表单） |
+| `bk-theme-search-card` | 智能搜索卡片（渐变 + 描边） |
+| `bk-theme-search-filled` | 填充搜索。挂在 `bk-input` 或 `bk-search-select` 上，线框不加 |
+| `bk-theme-select-banner` | 表格已选提示条 |
+| `bk-theme-cell-tip` | 单元格 tips 虚线下划线，hover 不变色（旧名 `.tips`） |
+| `bk-theme-list-toolbar` | 列表工具栏（按钮间距、与表格的间距） |
 
 ---
 

@@ -109,16 +109,15 @@
     right: 8px;
     font-size: 16px;
     line-height: 1;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 
-.is-errored {
-  background-color: #fee;
+.is-errored {background-color: var(--bk-theme-fill-danger);
 
   .bk-input {
-    border: 1px solid #ea3636 !important;
-    border-color: #ea3636 !important;
+    border: 1px solid var(--bk-theme-color-danger-2) !important;
+    border-color: var(--bk-theme-color-danger-2) !important;
   }
 }
 </style>

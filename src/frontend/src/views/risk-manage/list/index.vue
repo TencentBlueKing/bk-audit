@@ -41,6 +41,8 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+      </template>
+      <template #toolbar-after-analyze>
         <batch-handle-entry
           ref="batchHandleRef"
           :list-ref="listRef"
@@ -54,6 +56,7 @@
       </template>
       <tdesign-list
         ref="listRef"
+        use-skeleton
         :columns="tableColumns"
         :data-source="dataSource"
         enable-cross-page-select
@@ -155,7 +158,7 @@
         ? <div>
           <bk-button text class='mr16'>--</bk-button>
         </div>
-        : (<p>
+        : (<div class="risk-action-cell">
         {
           ['for_approve', 'auto_process', 'whitelist_approving'].includes(row.status)
             ? (
@@ -232,7 +235,7 @@
             ),
           }}
         </bk-dropdown>
-        </p>)
+        </div>)
     ),
   };
 
@@ -312,8 +315,8 @@
         cell: (h: any, { row }: { row: RiskManageModel }) => (
           // eslint-disable-next-line no-nested-ternary
           row.status === 'stand_by' ? (
-             <span style='font-size: 14px;color: #3a84ff;'>
-             <audit-icon  type="loading" style='font-size: 14px;color: #3a84ff; animation: spin 1s linear infinite' />  {t('风险创建中')}
+             <span class="risk-status-creating">
+             <audit-icon class="risk-status-creating__icon" type="loading" />  {t('风险创建中')}
             </span>
           )
             : (row.status === 'closed' && row.experiences > 0
@@ -808,22 +811,28 @@
 
 .risk-manage-list-page-wrap {
   position: relative;
-  padding-bottom: 44px;
+  padding-bottom: var(--bk-theme-space-32);
   overflow-x: hidden;
 }
 
+.risk-status-creating,
+.risk-status-creating__icon {
+  font-size: var(--bk-theme-font-size-base);
+  color: var(--bk-theme-color-brand-2);
+}
+
+.risk-status-creating__icon {
+  animation: spin 1s linear infinite;
+}
+
 .risk-label-status {
-  padding: 1px 8px;
-  font-size: 12px;
-  color: #14a568;
-  background-color: #e4faf0;
+  padding: 1px var(--bk-theme-space-8);
+  font-size: var(--bk-theme-font-size-sm);color: var(--bk-theme-status-success-text);background-color: var(--bk-theme-status-success-bg);
   border: 1px solid rgb(20 165 104 / 30%);
-  border-radius: 11px;
+  border-radius: var(--bk-theme-message-radius);
 }
 
 .risk-label-status.misreport {
-  color: #ea3536;
-  background: #fedddc99;
-  border: 1px solid #ea35364d;
+  color: var(--bk-theme-color-danger-2);background: var(--bk-theme-status-danger-bg);border: 1px solid var(--bk-theme-color-danger-4);
 }
 </style>

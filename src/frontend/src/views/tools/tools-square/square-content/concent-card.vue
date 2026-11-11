@@ -16,33 +16,62 @@
 -->
 <template>
   <div class="card">
-    <div
-      v-if="dataList.length > 0 || searchValue.length > 0 || (isGroupedMode && groupedTools.length > 0)"
-      class="card-search">
-      <bk-search-select
-        v-model="searchValue"
-        class="search-input"
-        clearable
-        :data="searchSelectData"
-        :defaut-using-item="{ inputHtml: t('请选择') }"
-        :get-menu-list="getMenuList"
-        :placeholder="t('搜索工具名称、工具说明、工具类型、创建人、更新人')"
-        unique-select
-        @update:model-value="handleSearch" />
-    </div>
+    <teleport
+      v-if="searchAnchorReady"
+      to="#tools-square-search-anchor">
+      <div class="card-search">
+        <bk-search-select
+          v-model="searchValue"
+          class="search-input"
+          clearable
+          :data="searchSelectData"
+          :defaut-using-item="{ inputHtml: t('请选择') }"
+          :get-menu-list="getMenuList"
+          :placeholder="t('搜索工具名称、说明、类型、创建人')"
+          unique-select
+          @update:model-value="handleSearch" />
+      </div>
+    </teleport>
     <scroll-faker
       ref="scrollFakerRef"
       :style="scrollStyle">
-      <bk-loading
-        :loading="loading"
-        :z-index="10000">
+      <div
+        v-if="loading"
+        class="card-list">
+        <div
+          v-if="singleScopeGroup"
+          class="scene-group">
+          <div class="scene-group-header">
+            <span class="scene-group-arrow" />
+            <span class="scene-group-title">{{ singleScopeGroup.groupName }}({{ singleScopeGroup.groupId }})</span>
+          </div>
+        </div>
+        <div class="card-list-box">
+          <div
+            v-for="item in skeletonCount"
+            :key="item"
+            class="card-skeleton"
+            aria-hidden="true">
+            <div class="card-skeleton-head">
+              <span class="card-skeleton-mark" />
+              <span class="card-skeleton-copy">
+                <span class="card-skeleton-line is-title" />
+                <span class="card-skeleton-line is-tags" />
+              </span>
+            </div>
+            <span class="card-skeleton-line is-desc" />
+            <span class="card-skeleton-line is-footer" />
+          </div>
+        </div>
+      </div>
+      <template v-else>
         <!-- 跨场景/跨系统分组展示模式 -->
-        <template v-if="isGroupedMode && groupedTools.length > 0">
+        <template v-if="displayGroups.length > 0">
           <div
             ref="cardListRef"
             class="card-list">
             <div
-              v-for="group in groupedTools"
+              v-for="group in displayGroups"
               :key="group.groupKey"
               class="scene-group">
               <div
@@ -80,9 +109,10 @@
                   <div class="item-top">
                     <div class="item-top-left">
                       <img
-                        v-if="item.tool_type === 'smart_page'"
-                        class="top-left-icon-img"
-                        :src="userProfileIcon">
+                        v-if="toolTypeMark(item)"
+                        alt=""
+                        class="type-mark"
+                        :src="toolTypeMark(item)">
                       <audit-icon
                         v-else
                         class="top-left-icon"
@@ -212,9 +242,10 @@
                 <div class="item-top">
                   <div class="item-top-left">
                     <img
-                      v-if="item.tool_type === 'smart_page'"
-                      class="top-left-icon-img"
-                      :src="userProfileIcon">
+                      v-if="toolTypeMark(item)"
+                      alt=""
+                      class="type-mark"
+                      :src="toolTypeMark(item)">
                     <audit-icon
                       v-else
                       class="top-left-icon"
@@ -321,7 +352,7 @@
             scene="part"
             type="empty" />
         </div>
-      </bk-loading>
+      </template>
     </scroll-faker>
   </div>
   <div
@@ -342,7 +373,7 @@
   let cachedToolsSquareScrollTop = 0;
 </script>
 <script setup lang='tsx'>
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -355,7 +386,10 @@
 
   import pentagramIcon from '@images/pentagram.svg';
   import pentagramFillIcon from '@images/pentagram-fill.svg';
-  import userProfileIcon from '@images/user.svg';
+  import toolTypeApi from '@images/tools-square/tool-type-api.svg';
+  import toolTypeBkvision from '@images/tools-square/tool-type-bkvision.svg';
+  import toolTypeSmart from '@images/tools-square/tool-type-smart.svg';
+  import toolTypeSql from '@images/tools-square/tool-type-sql.svg';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
@@ -401,6 +435,11 @@
     sceneNameMap: Record<number, string>,
     systemNameMap: Record<string, string>,
     accessibleSceneIds: number[] | null,
+    singleScopeGroup?: {
+      groupKey: string,
+      groupName: string,
+      groupId: string | number,
+    } | null,
   }
 
 
@@ -527,6 +566,8 @@
     scrollTo: (scrollLeft: number, scrollTop: number) => void;
   }>();
   const loading = ref(false);
+  const skeletonCount = 4;
+  let listRequestSeq = 0;
 
   const saveScrollPosition = () => {
     cachedToolsSquareScrollTop = scrollFakerRef.value?.getScroll()?.scrollTop ?? 0;
@@ -611,6 +652,41 @@
     return buildSystemGroups(dataList.value);
   });
 
+  const displayGroups = computed<ToolGroup[]>(() => {
+    if (isGroupedMode.value) return groupedTools.value;
+    if (props.singleScopeGroup && dataList.value.length > 0) {
+      return [{
+        groupKey: props.singleScopeGroup.groupKey,
+        groupName: props.singleScopeGroup.groupName,
+        groupId: props.singleScopeGroup.groupId,
+        tools: dataList.value,
+      }];
+    }
+    return [];
+  });
+
+  const searchAnchorReady = ref(false);
+  const clearSearchAnchor = () => {
+    const anchor = document.getElementById('tools-square-search-anchor');
+    if (anchor) anchor.replaceChildren();
+  };
+  onMounted(() => {
+    clearSearchAnchor();
+    searchAnchorReady.value = !!document.getElementById('tools-square-search-anchor');
+  });
+  onBeforeUnmount(() => {
+    searchAnchorReady.value = false;
+    clearSearchAnchor();
+  });
+
+  const toolTypeMark = (item: ToolInfo) => {
+    if (item.tool_type === 'api') return toolTypeApi;
+    if (item.tool_type === 'data_search') return toolTypeSql;
+    if (item.tool_type === 'bk_vision') return toolTypeBkvision;
+    if (item.tool_type === 'smart_page') return toolTypeSmart;
+    return '';
+  };
+
   const toggleGroupCollapse = (groupKey: string) => {
     if (collapsedGroups.value.has(groupKey)) {
       collapsedGroups.value.delete(groupKey);
@@ -619,8 +695,7 @@
     }
   };
   const scrollStyle = {
-    width: '98%',
-    'margin-top': '10px',
+    width: '100%',
     flex: '1',
     'min-height': '0',
   };
@@ -882,6 +957,8 @@
   };
 
   const handleSearch = (keyword?: SearchKey[]) => {
+    listRequestSeq += 1;
+    const requestSeq = listRequestSeq;
     loading.value = true;
     const search: Record<string, any> = {};
     const searchKeys = keyword || searchValue.value;
@@ -909,9 +986,11 @@
       ...getValidTagsParam(props.tagId),
       ...props.scopeParams,
     }).then((data) => {
+      if (requestSeq !== listRequestSeq) return;
       dataList.value = data;
     })
       .finally(() => {
+        if (requestSeq !== listRequestSeq) return;
         loading.value = false;
       });
     emits('change');
@@ -929,6 +1008,9 @@
       if (!restoreScroll) {
         cachedToolsSquareScrollTop = 0;
       }
+      listRequestSeq += 1;
+      const requestSeq = listRequestSeq;
+      loading.value = true;
       nextTick(() => {
         const search: Record<string, any> = {};
         searchValue.value.forEach((item) => {
@@ -955,9 +1037,11 @@
           ...getValidTagsParam(id),
           ...props.scopeParams,
         }).then((data) => {
+          if (requestSeq !== listRequestSeq) return;
           dataList.value = data;
         })
           .finally(async () => {
+            if (requestSeq !== listRequestSeq) return;
             loading.value = false;
             if (restoreScroll) {
               await restoreScrollPosition();
@@ -974,15 +1058,15 @@
   display: flex;
   width: 100%;
   height: 100%;
-  padding-top: 20px;
-  padding-left: 16px;
-  background-color: #f5f7fa;
+  padding-top: var(--bk-theme-space-16);
+  padding-left: var(--bk-theme-space-16);
+  background-color: var(--bk-theme-surface-page);
   flex-direction: column;
 
   .card-search {
     position: relative;
     display: flex;
-    width: 98%;
+    width: calc(100% - 16px);
     justify-content: flex-end;
 
     .search-input {
@@ -993,90 +1077,96 @@
   .card-list {
     position: relative;
     width: 100%;
-    margin-top: 10px;
+    margin-top: 0;
     align-content: flex-start;
 
     /* 顶部对齐 */
     .card-list-box {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--bk-theme-space-16);
       width: 100%;
 
       .card-list-item {
         position: relative;
-        width: calc((100% - 40px) / 5);
-        height: 188px;
-        margin-bottom: 10px;
+        display: flex;
+        min-width: 0;
+        height: 180px;
+        padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+        overflow: hidden;
         cursor: pointer;
-        background: #fff;
-        transition: all .3s ease;
+        background: var(--bk-theme-surface-default);
+        border: 1px solid transparent;
+        border-radius: var(--bk-theme-card-radius);
+        box-shadow: var(--bk-theme-card-shadow);
+        flex-direction: column;
+        gap: var(--bk-theme-space-16);
+        transition: border-color .3s ease;
 
         &:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px 0 rgb(0 0 0 / 10%), 0 6px 12px 0 rgb(25 25 41 / 10%);
-        }
-
-        @media (width <=2200px) {
-          width: calc((100% - 30px) / 3);
-        }
-
-        @media (width <=2000px) {
-          width: calc((100% - 30px) / 3);
-        }
-
-        @media (width <=1600px) {
-          min-width: 400px;
-        }
-
-        @media (width <=1366px) {
-          min-width: calc((100% - 20px) / 2);
+          border-color: var(--bk-theme-border-brand);
         }
 
         .item-top {
           display: flex;
-          height: 85px;
+          height: auto;
+          min-height: 48px;
+          align-items: center;
+          gap: var(--bk-theme-space-12);
 
           .item-top-left {
-            .top-left-icon {
-              margin-top: 20px;
-              margin-left: 20px;
+            flex-shrink: 0;
+
+            .type-mark,
+            .top-left-icon,
+            .top-left-icon-img {
+              display: block;
+              width: 48px;
+              height: 48px;
+              margin: 0;
+              overflow: hidden;
               font-size: 48px;
             }
 
+            .type-mark {
+              border-radius: var(--bk-theme-tab-radius);
+            }
+
+            .top-left-icon {
+              border-radius: var(--bk-theme-radius-8);
+            }
+
             .top-left-icon-img {
-              width: 48px;
-              height: 48px;
-              margin-top: 20px;
-              margin-left: 20px;
-              border-radius: 8px;
+              border-radius: var(--bk-theme-radius-8);
             }
           }
 
           .item-top-right {
-            width: 330px;
-            height: 48px;
-            margin-top: 20px;
-            margin-left: 12px;
+            flex: 1;
+            width: auto;
+            height: auto;
+            min-width: 0;
+            margin: 0;
 
             .top-right-title {
               display: flex;
-              align-items: flex-start;
+              align-items: center;
+              min-width: 0;
+              gap: var(--bk-theme-space-8);
 
               .title-text {
-                display: inline-block;
-                max-width: 300px;
-                margin-right: 10px;
+                display: block;
+                max-width: 100%;
+                min-width: 0;
+                margin-right: 0;
                 overflow: hidden;
-                font-size: 16px;
+                font-size: var(--bk-theme-font-size-base);
                 font-weight: 700;
-                line-height: 22px;
+                line-height: var(--bk-theme-line-height-base);
                 letter-spacing: 0;
-                color: #313238;
+                color: var(--bk-theme-text-strong);
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                vertical-align: middle;
 
                 &.overflow-tooltip {
                   cursor: pointer;
@@ -1084,15 +1174,25 @@
               }
 
               .title-tag {
+                flex-shrink: 0;
                 margin-top: 0;
-                line-height: 22px;
+                line-height: var(--bk-theme-line-height-base);
                 cursor: pointer;
+                border-radius: var(--bk-theme-radius-full) !important;
               }
             }
 
             .top-right-desc {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              margin-top: var(--bk-theme-space-8);
+              gap: var(--bk-theme-space-8);
+
               .desc-tag {
-                margin-right: 5px;
+                max-width: 100%;
+                margin: 0;
+                border-radius: var(--bk-theme-radius-full) !important;
               }
 
               .tag-cursor {
@@ -1104,15 +1204,15 @@
 
         .item-middle {
           display: -webkit-box;
-          width: calc(100% - 40px);
-          height: 44px;
-          margin-left: 20px;
+          width: auto;
+          height: auto;
+          max-height: 40px;
+          margin: 0;
           overflow: hidden;
-          font-size: 14px;
-          line-height: 22px;
+          font-size: var(--bk-theme-font-size-sm);
+          line-height: var(--bk-theme-line-height-sm);
           letter-spacing: 0;
-          color: #313238;
-          text-align: justify;
+          color: var(--bk-theme-text-default);
           text-overflow: ellipsis;
           word-break: break-word;
           -webkit-box-orient: vertical;
@@ -1121,14 +1221,17 @@
         }
 
         .item-footer {
+          position: absolute;
+          right: var(--bk-theme-space-24);
+          bottom: var(--bk-theme-space-16);
+          left: var(--bk-theme-space-24);
           display: flex;
-          width: calc(100% - 40px);
-          margin-top: 20px;
-          margin-left: 20px;
-          font-size: 14px;
-          line-height: 22px;
+          width: auto;
+          margin: 0;
+          font-size: var(--bk-theme-font-size-sm);
+          line-height: var(--bk-theme-line-height-sm);
           letter-spacing: 0;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           align-items: center;
           justify-content: space-between;
 
@@ -1136,40 +1239,28 @@
             display: inline-block;
             width: 1px;
             height: 10px;
-            margin-right: 5px;
-            margin-left: 5px;
-            background-color: #979ba5;
+            margin-right: var(--bk-theme-space-4);
+            margin-left: var(--bk-theme-space-4);
+            background-color: var(--bk-theme-text-weak);
           }
         }
 
         .item-top-right-icon {
           position: absolute;
-          top: 0;
-          right: 0;
+          top: var(--bk-theme-space-8);
+          right: var(--bk-theme-space-8);
           z-index: 1;
           display: flex;
-          align-items: flex-start;
-          justify-content: flex-end;
-          width: 40px;
-          height: 40px;
-          border-top-right-radius: 2px;
-
-          &.with-bg {
-            background: linear-gradient(225deg, #f5f7fa 50%, transparent 50%);
-          }
+          align-items: center;
+          justify-content: center;
+          width: var(--bk-theme-space-16);
+          height: var(--bk-theme-space-16);
+          background: none;
 
           .favorite-icon {
-            position: relative;
-            top: 4px;
-            right: 4px;
-            width: 16px;
-            height: 16px;
+            width: var(--bk-theme-space-16);
+            height: var(--bk-theme-space-16);
             cursor: pointer;
-            transition: all .2s ease;
-
-            &:hover {
-              transform: scale(1.2);
-            }
           }
         }
 
@@ -1180,41 +1271,43 @@
   }
 
   .scene-group {
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
 
     .scene-group-header {
       display: flex;
-      height: 36px;
-      padding: 0 12px;
-      margin-bottom: 16px;
+      height: var(--bk-theme-space-32);
+      padding: 0 var(--bk-theme-space-16);
+      margin-bottom: var(--bk-theme-space-16);
       cursor: pointer;
-      background-color: #eaebf0;
-      border-radius: 2px;
+      background-color: var(--bk-theme-collapse-bg);
+      border-radius: var(--bk-theme-collapse-radius);
       user-select: none;
       align-items: center;
 
-      &:hover {
-        background-color: #e1e2e6;
-
-        .scene-group-title {
-          color: #3a84ff;
-        }
-      }
-
       .scene-group-arrow {
+        position: relative;
         display: inline-block;
-        width: 0;
-        height: 0;
-        margin-right: 8px;
-        border-color: #63656e transparent transparent;
-        border-style: solid;
-        border-width: 6px 5px 0;
-        transition: transform .2s ease;
+        width: var(--bk-theme-space-12);
+        height: var(--bk-theme-space-12);
+        margin-right: var(--bk-theme-space-8);
         flex-shrink: 0;
 
-        &.is-collapsed {
-          border-color: transparent transparent transparent #63656e;
-          border-width: 5px 0 5px 6px;
+        &::before {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 0;
+          height: 0;
+          border-color: var(--bk-theme-text-default) transparent transparent;
+          border-style: solid;
+          border-width: 5px 4px 0;
+          content: '';
+          transform: translate(-50%, -50%);
+          transition: transform .2s ease;
+        }
+
+        &.is-collapsed::before {
+          transform: translate(-50%, -50%) rotate(-90deg);
         }
       }
 
@@ -1222,7 +1315,7 @@
         font-size: 14px;
         font-weight: 400;
         line-height: 22px;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
         transition: color .2s;
       }
     }
@@ -1241,5 +1334,79 @@
   }
 }
 
+.card {
+  height: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.card .card-search {
+  width: 100%;
+}
+
+.card-skeleton {
+  position: relative;
+  display: flex;
+  height: 180px;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-card-radius);
+  box-shadow: var(--bk-theme-card-shadow);
+  flex-direction: column;
+  gap: var(--bk-theme-space-16);
+}
+
+.card-skeleton-head {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  gap: var(--bk-theme-space-12);
+}
+
+.card-skeleton-mark,
+.card-skeleton-line {
+  display: block;
+  background: var(--bk-theme-collapse-bg);
+  border-radius: var(--bk-theme-control-radius);
+}
+
+.card-skeleton-mark {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+
+.card-skeleton-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--bk-theme-space-8);
+}
+
+.card-skeleton-line {
+  height: var(--bk-theme-space-12);
+
+  &.is-title {
+    width: 42%;
+    height: var(--bk-theme-space-16);
+  }
+
+  &.is-tags {
+    width: 68%;
+  }
+
+  &.is-desc {
+    width: 86%;
+  }
+
+  &.is-footer {
+    position: absolute;
+    right: var(--bk-theme-space-24);
+    bottom: var(--bk-theme-space-16);
+    left: var(--bk-theme-space-24);
+    width: auto;
+  }
+}
 
 </style>

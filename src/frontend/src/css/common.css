@@ -1,6 +1,45 @@
+/* 风险列表工具栏。主按钮沿用 primary；次按钮灰边；智能分析使用独立描边。 */
+.bk-button.risk-toolbar-secondary {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-border-hover);
+}
+
+.bk-button.risk-toolbar-secondary:hover {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-subtle);
+  border-color: var(--bk-theme-border-hover);
+}
+
+.bk-button.risk-toolbar-secondary.is-disabled,
+.bk-button.risk-toolbar-secondary[disabled] {
+  color: var(--bk-theme-text-disabled);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-border-default);
+}
+
+.bk-button.risk-toolbar-analyze {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-color-ext-analyze-border);
+}
+
+.bk-button.risk-toolbar-analyze:hover {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-fill-hover);
+  border-color: var(--bk-theme-color-ext-analyze-border);
+}
+
+.bk-button.risk-toolbar-analyze.is-disabled,
+.bk-button.risk-toolbar-analyze[disabled] {
+  color: var(--bk-theme-text-disabled);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-border-default);
+}
+
 /** info dialog */
 .audit-info-dialog .audit-info-dialog__content {
-  margin-bottom: 24px;
+  margin-bottom: var(--bk-theme-space-24);
   text-align: center;
 }
 
@@ -9,7 +48,7 @@
 }
 
 .audit-info-dialog .audit-info-dialog__footer {
-  padding-bottom: 24px;
+  padding-bottom: var(--bk-theme-space-24);
   text-align: center;
 }
 
@@ -23,15 +62,15 @@
 }
 
 .bk-modal-wrapper.bk-dialog-wrapper.audit-info-dialog .bk-dialog-header {
-  padding: 48px 24px 16px;
-  font-size: 20px;
+  padding: 48px var(--bk-theme-space-24) var(--bk-theme-space-16);
+  font-size: var(--bk-theme-font-size-xl);
 }
 
 .bk-modal-wrapper.bk-dialog-wrapper.audit-info-dialog .bk-modal-content {
-  padding: 0 24px 24px;
+  padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-24);
 }
 
-/* fix bk-table */
+/* fix bk-table 结构与层叠，颜色在 theme/bkui.css */
 .bk-table {
   &.bordered-row {
     .bk-table-footer {
@@ -59,10 +98,6 @@
     table tbody tr td:not(:last-child) .cell .bk-button {
       margin-left: 0;
     }
-
-    .bk-exception {
-      border-bottom: 1px solid #dcdee5;
-    }
   }
 
   .bk-pagination {
@@ -71,49 +106,23 @@
     }
   }
 
-  /* 悬停表头的背景色修改 */
-  .bk-table-head table th.column_fixed,
-  .bk-table-head table td.column_fixed,
-  thead {
-    background-color: #fafbfd !important;
-  }
-
   /* 表格下方边界线被遮挡问题 */
   .bk-fixed-bottom-border {
     z-index: 1 !important;
   }
-
-
 }
 
-/* 解决表格中loading被遮挡的问题 */
+/* 解决表格中 loading 被遮挡的问题 */
 .bk-loading-wrapper .bk-loading-mask {
   z-index: 10 !important;
-
 }
 
 .bk-loading-wrapper .bk-loading-indicator {
   z-index: 11 !important;
 }
 
-
-
 .bk-sideslider-wrapper {
   z-index: 2000;
-}
-
-/* radio按钮选中禁用的样式 */
-.bk-radio-tab .bk-radio-button.is-checked.is-disabled .bk-radio-button-label,
-.bk-radio-card .bk-radio-button.is-checked.is-disabled .bk-radio-button-label {
-  color: #c9cbd1;
-  background-color: #f0f1f5;
-}
-
-/* radio按钮禁用的样式 */
-.bk-radio-tab .bk-radio-button.is-disabled .bk-radio-button-label,
-.bk-radio-card .bk-radio-button.is-disabled .bk-radio-button-label {
-  color: #d5d7db;
-  background-color: #fff;
 }
 
 .collapse-card-title {
@@ -134,20 +143,16 @@
   }
 }
 
+/* 报错边框色在 theme/bkui.css，这里只保留过渡 */
 .bk-form-item.is-error {
   .bk-select-tag {
-    border-color: #ea3636;
     transition: all .15s;
   }
 }
 
-/* 产品内 Tag 统一最大宽度，超长省略，hover 由 overflow tooltip 展示全文 */
-:root {
-  --audit-tag-max-width: 180px;
-}
-
+/* 产品内 Tag 统一最大宽度（tokens.css tag 场景），超长省略，hover 由 overflow tooltip 展示全文 */
 .bk-tag {
-  max-width: var(--audit-tag-max-width);
+  max-width: var(--bk-theme-tag-max-width);
   min-width: 0;
   overflow: hidden;
   vertical-align: middle;
@@ -159,16 +164,29 @@
 }
 
 .bk-user-selector .user-tag {
-  max-width: var(--audit-tag-max-width) !important;
+  max-width: var(--bk-theme-tag-max-width) !important;
 }
 
 .pa-param-user-tag,
 .audit-ellipsis-tag {
   display: inline-block;
-  max-width: var(--audit-tag-max-width);
+  max-width: var(--bk-theme-tag-max-width);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+/* 操作列按钮组保持单行。容器必须是 div：标记误报和更多菜单的根节点是 div，
+   放进 p 里会被浏览器拆出去，后面的按钮就各自换行。 */
+.risk-action-cell {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.risk-action-cell > * {
+  flex: none;
 }

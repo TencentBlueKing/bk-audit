@@ -670,7 +670,7 @@
     position: relative;
     width: 60%;
     padding-bottom: 150px;
-    margin: 10px auto 0;
+    margin: var(--bk-theme-space-12) auto 0;
 
     .rotate-right {
       transform: rotate(90deg);
@@ -683,56 +683,54 @@
       left: 5px;
       font-size: 12px;
       line-height: 1;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
     .step1-tip {
       display: flex;
       height: 32px;
-      padding: 0 12px;
-      background: #fdf4e8;
-      border: 1px solid #f9d090;
-      border-radius: 2px;
+      padding: 0 var(--bk-theme-space-12);background: var(--bk-theme-status-warn-bg);border: 1px solid var(--bk-theme-status-warn-bg);
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
 
       .remind-icon {
         width: 16px;
         height: 16px;
-        margin-right: 8px;
+        margin-right: var(--bk-theme-space-8);
       }
 
       .remind-text {
         font-size: 12px;
         letter-spacing: 0;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
       }
 
       .close-icon {
         position: absolute;
         right: 5px;
         font-size: 12px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
       }
     }
 
     .step1-card {
-      margin-top: 10px;
+      margin-top: var(--bk-theme-space-12);
       overflow: auto;
 
       .card-header {
         height: 22px;
-        margin-left: 5px;
+        margin-left: var(--bk-theme-space-4);
         font-size: 14px;
         font-weight: 700;
         letter-spacing: 0;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       .example {
         .form-item-box {
           display: flex;
           width: 96%;
-          margin-top: 10px;
+          margin-top: var(--bk-theme-space-12);
           margin-left: 2%;
 
           .form-item {
@@ -751,20 +749,20 @@
         }
 
         .form-item-top {
-          margin-top: 10px;
+          margin-top: var(--bk-theme-space-12);
 
           .item-right-tips {
             position: absolute;
             right: 60px;
             display: inline-flex;
-            margin-top: -12px;
-            color: #3a84ff;
+            margin-top: -var(--bk-theme-space-12);
+            color: var(--bk-theme-color-brand-2);
             align-items: center;
-            gap: 4px;
+            gap: var(--bk-theme-space-4);
 
             .jump-link {
               font-size: inherit;
-              color: #3a84ff;
+              color: var(--bk-theme-color-brand-2);
               vertical-align: middle;
             }
           }
@@ -772,18 +770,18 @@
           .item-concent {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 8px;
+            gap: var(--bk-theme-space-8);
+            margin-top: var(--bk-theme-space-8);
 
             .add-fill {
-              margin-left: 8px;
+              margin-left: var(--bk-theme-space-8);
               font-size: 15px;
-              color: #4d4f56;
+              color: var(--bk-theme-text-default);
             }
 
             .reduce-fill {
               font-size: 15px;
-              color: #dcdee5;
+              color: var(--bk-theme-border-default);
             }
           }
         }
@@ -794,11 +792,11 @@
 
   .step1-box-with-sidebar {
     width: 100%;
-    padding-bottom: 20px;
+    padding-bottom: var(--bk-theme-space-16);
   }
 
   .step1-select-model-type {
-    padding: 16px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
     .select-model-type-container {
       width: 45%;
@@ -807,23 +805,23 @@
       text-align: center;
 
       .title {
-        margin-bottom: 10px;
+        margin-bottom: var(--bk-theme-space-12);
         font-size: 20px;
         line-height: 28px;
       }
 
       .type-list {
         display: flex;
-        margin-top: 30px;
+        margin-top: var(--bk-theme-space-32);
         text-align: left;
         justify-content: space-between;
 
         .type-list-item {
           width: 45%;
-          padding: 24px;
+          padding: var(--bk-theme-space-24);
           cursor: pointer;
-          background: #fff;
-          border-radius: 3px;
+          background: var(--bk-theme-surface-default);
+          border-radius: var(--bk-theme-tag-radius);
           box-shadow: 0 2px 4px 0 #0000001a, 0 2px 4px 0 #1919290d;
         }
       }
@@ -832,10 +830,10 @@
   }
 
   .dashed-underline {
-    padding-bottom: 2px;
+    padding-bottom: var(--bk-theme-space-2);
 
     /* 可选，增加文字和虚线间距 */
-    border-bottom: 1px dashed #c4c6cc;
+    border-bottom: 1px dashed var(--bk-theme-border-strong);
   }
 }
 </style>

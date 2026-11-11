@@ -167,36 +167,35 @@
 </script>
 <style lang="postcss" scoped>
 .detail-base-info {
-  position: relative;
-  padding: 10px 16px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 #1919290d;
+  position: relative;padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 
   &.has-expand-btn {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
   }
 
   .title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 14px;
     font-style: normal;
     font-weight: 700;
     line-height: 22px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
 
     .title-input {
       max-width: 320px;
     }
 
     .edit-fill {
-      margin-left: 10px;
+      margin-left: var(--bk-theme-space-12);
       cursor: pointer;
 
       &:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
   }
@@ -213,19 +212,19 @@
       justify-content: center;
       width: 120px;
       height: 22px;
-      color: #63656e;
-      background: #f0f1f5;
-      border: 1px solid #dcdee5;
-      border-radius: 12px;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-card-radius);
 
       &:hover {
-        color: #63656e;
-        background: #e1e3e9;
+        color: var(--bk-theme-text-default);
+        background: var(--bk-theme-border-weak);
       }
     }
 
     .show-more-icon {
-      margin-left: 4px;
+      margin-left: var(--bk-theme-space-4);
     }
 
     .active {

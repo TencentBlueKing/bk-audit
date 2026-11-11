@@ -255,7 +255,7 @@
     right: 30px;
     font-size: 16px;
     line-height: 1;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 
   .bk-cascader-wrapper.float-mode {
@@ -265,8 +265,8 @@
   .bk-cascader {
     width: 100%;
     height: 100%;
-    background-color: #fff;
-    border: 1px solid #fff;
+    background-color: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-surface-default);
 
     .bk-cascader-name {
       height: 42px;
@@ -283,7 +283,7 @@
   }
 
   .bk-input.is-focused {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
   }
 
   .bk-input--large {
@@ -291,23 +291,20 @@
   }
 
   .bk-cascader.is-hover:not(.is-disabled) {
-    border: 1px solid #fff;
+    border: 1px solid var(--bk-theme-surface-default);
   }
 }
 
 .is-errored .bk-cascader {
-  border-color: #ea3636 !important;
+  border-color: var(--bk-theme-color-danger-2) !important;
 }
 
 .is-errored .cascader-wrap {
   height: 41px;
-  padding-top: 4px;
-  background-color: #fee;
+  padding-top: var(--bk-theme-space-4);background-color: var(--bk-theme-fill-danger);
 }
 
-.is-errored.is-background-errored-tip .bk-cascader {
-  background-color: #fee !important;
-  border-color: #fee !important;
+.is-errored.is-background-errored-tip .bk-cascader {background-color: var(--bk-theme-fill-danger) !important;border-color: var(--bk-theme-fill-danger) !important;
 
 }
 

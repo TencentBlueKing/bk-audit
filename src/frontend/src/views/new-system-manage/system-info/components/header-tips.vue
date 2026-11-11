@@ -109,19 +109,15 @@
   font-size: 12px;
   line-height: 32px;
   letter-spacing: 0;
-  color: #4d4f56;
-  background: #fdf4e8;
-  border: 1px solid #f9d090;
+  color: var(--bk-theme-text-default);background: var(--bk-theme-status-warn-bg);border: 1px solid var(--bk-theme-status-warn-bg);
 
   .menu-item-icon {
-    margin-right: 5px;
-    margin-left: 10px;
-    color: #f59500;
+    margin-right: var(--bk-theme-space-4);
+    margin-left: var(--bk-theme-space-12);color: var(--bk-theme-color-warn-2);
   }
 
   .tips-text {
-    .tips-link {
-      color: #77a8f8;
+    .tips-link {color: var(--bk-theme-color-brand-3);
       cursor: pointer;
     }
   }

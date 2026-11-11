@@ -150,14 +150,14 @@
 </script>
 <style scoped lang="postcss">
 .link-data-detail {
-  padding-top: 24px;
-  background-color: #f5f7fa;
+  padding-top: var(--bk-theme-space-24);
+  background-color: var(--bk-theme-surface-subtle);
 
   :deep(.bk-tab) {
     height: calc(100vh - 100px);
 
     .bk-tab-header {
-      margin-left: 24px;
+      margin-left: var(--bk-theme-space-24);
     }
 
     .bk-tab-content {

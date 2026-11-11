@@ -1,0 +1,178 @@
+/* TDesign PrimaryTable 公共主题。业务行状态（新增行、跨页全选）留在列表封装里。 */
+
+:root {
+  --td-brand-color: var(--bk-theme-color-brand-2);
+  --td-brand-color-1: var(--bk-theme-color-brand-7);
+  --td-brand-color-2: var(--bk-theme-color-brand-6);
+  --td-brand-color-3: var(--bk-theme-color-brand-5);
+  --td-brand-color-4: var(--bk-theme-color-brand-4);
+  --td-brand-color-5: var(--bk-theme-color-brand-3);
+  --td-brand-color-6: var(--bk-theme-color-brand-2);
+  --td-brand-color-7: var(--bk-theme-color-brand-1);
+  --td-brand-color-hover: var(--bk-theme-color-brand-3);
+  --td-brand-color-active: var(--bk-theme-color-brand-1);
+  --td-brand-color-disabled: var(--bk-theme-color-brand-5);
+  --td-brand-color-light: var(--bk-theme-color-brand-7);
+  --td-brand-color-light-hover: var(--bk-theme-color-brand-6);
+  --td-error-color: var(--bk-theme-color-danger-2);
+  --td-error-color-hover: var(--bk-theme-color-danger-3);
+  --td-error-color-active: var(--bk-theme-color-danger-1);
+  --td-success-color: var(--bk-theme-color-success-2);
+  --td-success-color-hover: var(--bk-theme-color-success-3);
+  --td-warning-color: var(--bk-theme-color-warn-2);
+  --td-warning-color-hover: var(--bk-theme-color-warn-3);
+  --td-text-color-primary: var(--bk-theme-text-strong);
+  --td-text-color-secondary: var(--bk-theme-text-default);
+  --td-text-color-placeholder: var(--bk-theme-text-weak);
+  --td-text-color-disabled: var(--bk-theme-text-disabled);
+  --td-text-color-anti: var(--bk-theme-text-inverse);
+  --td-text-color-brand: var(--bk-theme-color-brand-2);
+  --td-bg-color-page: var(--bk-theme-surface-page);
+  --td-bg-color-container: var(--bk-theme-surface-default);
+  --td-bg-color-container-hover: var(--bk-theme-table-row-hover);
+  --td-bg-color-container-select: var(--bk-theme-table-row-selected-bg);
+  --td-bg-color-secondarycontainer: var(--bk-theme-table-header-bg);
+  --td-bg-color-secondarycontainer-hover: var(--bk-theme-surface-subtle);
+  --td-bg-color-component: var(--bk-theme-surface-subtle);
+  --td-bg-color-component-hover: var(--bk-theme-surface-muted);
+  --td-bg-color-component-disabled: var(--bk-theme-surface-muted);
+  --td-component-border: var(--bk-theme-table-border);
+  --td-component-stroke: var(--bk-theme-border-weak);
+  --td-border-level-1-color: var(--bk-theme-border-default);
+  --td-border-level-2-color: var(--bk-theme-border-weak);
+  --td-radius-small: var(--bk-theme-tag-radius);
+  --td-radius-default: var(--bk-theme-control-radius);
+  --td-radius-medium: var(--bk-theme-message-radius);
+  --td-radius-large: var(--bk-theme-overlay-radius);
+  --td-radius-round: var(--bk-theme-radius-full);
+  --td-shadow-1: var(--bk-theme-overlay-shadow);
+  --td-shadow-2: var(--bk-theme-overlay-shadow);
+  --td-shadow-3: var(--bk-theme-dialog-shadow);
+  --td-font-family: var(--bk-theme-font-family);
+  --td-font-family-medium: var(--bk-theme-font-family);
+}
+
+.t-table thead td,
+.t-table th,
+.t-table.t-size-m th {
+  height: var(--bk-theme-table-row-height) !important;
+  padding: 0 var(--bk-theme-space-16) !important;
+  font-weight: var(--bk-theme-font-weight-regular);
+  color: var(--bk-theme-table-header-text) !important;
+  background-color: var(--bk-theme-table-header-bg);
+}
+
+/* 带筛选/排序列的内部标题节点由库内深色改为统一表头文字色 */
+.t-table thead .t-table__cell--title,
+.t-table thead .t-table__cell--title *,
+.t-table thead .t-table__filter-icon-wrap,
+.t-table thead .t-table__cell--sort-trigger,
+.t-table thead th * {
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  color: var(--bk-theme-table-header-text);
+}
+
+/* 内容行高仍是 42；上下 8 写在行高里面，对应文本格 pad 上8 下8。表头保持上下 0。 */
+.t-table tbody td,
+.t-table.t-size-m td {
+  box-sizing: border-box;
+  height: var(--bk-theme-table-row-height);
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  background-color: var(--bk-theme-table-row-bg);
+  border-bottom-color: var(--bk-theme-table-border);
+}
+
+.t-table thead th {
+  border-bottom-color: var(--bk-theme-table-header-divider);
+}
+
+/* 空数据行不是数据行：不要行高、单元格内边距和行 hover。
+   横向超出时 tdesign 用 tableWidth 给空态定宽，首帧是 0，会先挤在左侧。
+   改成跟可见表格同宽。 */
+.t-table tbody tr.t-table__empty-row > td {
+  height: auto;
+  padding: 0;
+  background-color: transparent;
+}
+
+.audit-tdesign-list {
+  container-type: inline-size;
+}
+
+.t-table__empty {
+  position: sticky;
+  left: 0;
+  box-sizing: border-box;
+  width: 100cqi !important;
+  min-width: 100cqi;
+  max-width: 100cqi;
+}
+
+.t-table--hoverable tbody tr:hover:not(.t-table__empty-row),
+.t-table--hoverable tbody tr:hover:not(.t-table__empty-row) > td {
+  background-color: var(--bk-theme-table-row-hover);
+}
+
+.t-table--hoverable tbody tr.t-table__empty-row:hover,
+.t-table--hoverable tbody tr.t-table__empty-row:hover > td {
+  background-color: transparent;
+}
+
+.t-table.t-table__row--active-single tbody > tr.t-table__row--active,
+.t-table.t-table__row--active-multiple tbody > tr.t-table__row--active,
+.t-table.t-table__row--active-single tbody > tr.t-table__row--active > td,
+.t-table.t-table__row--active-multiple tbody > tr.t-table__row--active > td {
+  background-color: var(--bk-theme-table-row-selected-bg);
+}
+
+.t-table .t-table__cell--fixed-left,
+.t-table .t-table__cell--fixed-right {
+  background-color: var(--bk-theme-table-row-bg);
+}
+
+.t-table--hoverable tbody tr:hover:not(.t-table__empty-row) > td.t-table__cell--fixed-left,
+.t-table--hoverable tbody tr:hover:not(.t-table__empty-row) > td.t-table__cell--fixed-right {
+  background-color: var(--bk-theme-table-row-hover);
+}
+
+.t-table .t-popup__content,
+.t-table__filter-pop,
+.t-table .t-table__filter-pop-content {
+  border-radius: var(--bk-theme-overlay-radius);
+  box-shadow: var(--bk-theme-overlay-shadow);
+}
+
+.t-pagination {
+  color: var(--bk-theme-text-default);
+}
+
+.t-pagination .t-input,
+.t-pagination .t-select .t-input {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+/* 单元格里的编辑控件。普通表没有 td 内的 t-input，不会套到展示列。
+   外框圆角仍走 table-frame：和可编辑表同是 8。标题底只在这种表上改成 Neutral/9。 */
+.t-table:has(tbody td .t-input) thead th,
+.t-table:has(tbody td .t-input) thead td {
+  background-color: var(--bk-theme-editable-table-header-bg);
+  border-bottom-color: var(--bk-theme-editable-table-border);
+}
+
+.t-table:has(tbody td .t-input) td {
+  border-bottom-color: var(--bk-theme-editable-table-border);
+}
+
+.t-table td .t-input {
+  border-color: var(--bk-theme-editable-table-border);
+}
+
+.t-table td .t-input.t-is-focused,
+.t-table td .t-input:hover {
+  border-color: var(--bk-theme-editable-table-hover-border);
+}
+
+.t-table td .t-input.t-is-disabled {
+  background-color: var(--bk-theme-editable-table-disabled-bg);
+}

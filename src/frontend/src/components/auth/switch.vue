@@ -76,14 +76,10 @@
 
 </script>
 <style lang="postcss" scoped>
-  .auth-switch-disable {
-    color: #fff !important;
-    background-color: #dcdee5 !important;
-    border-color: #dcdee5 !important;
+  .auth-switch-disable {color: var(--bk-theme-surface-default) !important;background-color: var(--bk-theme-border-default) !important;border-color: var(--bk-theme-border-default) !important;
     user-select: none !important;
 
-    &.is-text {
-      color: #c4c6cc !important;
+    &.is-text {color: var(--bk-theme-text-disabled) !important;
       background-color: transparent !important;
       border-color: transparent !important;
     }

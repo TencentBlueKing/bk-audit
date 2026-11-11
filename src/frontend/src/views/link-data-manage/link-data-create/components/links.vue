@@ -23,7 +23,7 @@
       <template
         v-for="(link, index) in links"
         :key="index">
-        <div class="link-data-table">
+        <div class="link-data-table bk-theme-form--inline">
           <div class="table-head">
             <!-- 左表 -->
             <div
@@ -798,21 +798,20 @@
 <style scoped lang="postcss">
 .link-data-table {
   position: relative;
-  padding: 16px;
-  margin-bottom: 8px;
-  background: #f5f7fa;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-16);
+  margin-bottom: var(--bk-theme-space-8);
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-tag-radius);
 
   .table-head {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     width: calc(100% - 44px);
 
     .left-name,
     .right-name {
       :deep(.bk-form-item) {
-        margin-bottom: 0;
       }
 
       .view-icon {
@@ -820,7 +819,7 @@
         top: 9px;
         right: 22px;
         font-size: 14px;
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: pointer;
       }
     }
@@ -840,13 +839,13 @@
     top: 5px;
     right: 5px;
     font-size: 13px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     cursor: pointer;
   }
 }
 
 .add-link {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 </style>

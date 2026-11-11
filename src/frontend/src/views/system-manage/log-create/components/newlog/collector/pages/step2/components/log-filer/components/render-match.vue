@@ -31,16 +31,16 @@
           :value="item.id" />
       </bk-select>
       <bk-input
-        class="ml8"
+       
         :model-value="localData.match_content"
         :placeholder="t('请输入过滤内容')"
-        style="width: 312px;"
+        style="width: 312px; margin-left: var(--bk-theme-space-8)"
         @input="(value: any) => handleChange('match_content', value as string)" />
       <bk-select
-        class="ml8"
+       
         :clearable="false"
         :model-value="localData.match_type"
-        style="width: 240px;"
+        style="width: 240px; margin-left: var(--bk-theme-space-8)"
         @change="(value: string) => handleChange('match_type', value)">
         <bk-option
           v-for="item in globalsData.param_conditions_match"

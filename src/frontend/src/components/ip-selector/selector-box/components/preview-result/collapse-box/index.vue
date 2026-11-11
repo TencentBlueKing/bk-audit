@@ -52,14 +52,14 @@
   .title {
     display: flex;
     height: 34px;
-    padding: 0 24px;
+    padding: 0 var(--bk-theme-space-24);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
     align-items: center;
 
     .arrow-flag {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
       transform: rotateZ(-90deg);
       transition: all .15s;
 
@@ -71,7 +71,7 @@
 
   .content {
     max-height: 476px;
-    padding: 0 24px;
+    padding: 0 var(--bk-theme-space-24);
     overflow-y: auto;
   }
 

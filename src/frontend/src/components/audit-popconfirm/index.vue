@@ -37,7 +37,7 @@
     </div>
     <div style="margin-top: 16px; text-align: right;">
       <bk-button
-        class="mr8"
+        class="confirm-btn"
         :loading="isConfirmLoading"
         size="small"
         theme="primary"
@@ -168,5 +168,9 @@
   .audit-popconfirm {
     display: inline-block;
     line-height: 1;
+  }
+
+  .confirm-btn {
+    margin-right: var(--bk-theme-space-8);
   }
 </style>

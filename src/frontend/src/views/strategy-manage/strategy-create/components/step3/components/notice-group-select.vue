@@ -141,17 +141,17 @@
 </script>
 <style lang="postcss" scoped>
 .create-notice-group {
-  padding: 0 12px;
+  padding: 0 var(--bk-theme-space-12);
   text-align: center;
   flex: 1;
 }
 
 .refresh {
-  padding: 0 12px;
-  color: #3a84ff;
+  padding: 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-color-brand-2);
   text-align: center;
   cursor: pointer;
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
   flex: 1;
 }
 </style>

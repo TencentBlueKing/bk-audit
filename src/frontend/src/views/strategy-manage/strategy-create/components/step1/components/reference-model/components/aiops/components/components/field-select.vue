@@ -134,12 +134,12 @@
     right: 30px;
     font-size: 16px;
     line-height: 1;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 
 .strategy-create-aiops-select-item {
-  /* margin: 0 -15px;
+  /* margin: 0 -var(--bk-theme-space-16);
   border-bottom: 0; */
 
   .bk-input,
@@ -149,7 +149,7 @@
   }
 
   .bk-input.is-focused {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
   }
 
   .bk-input--large {
@@ -162,14 +162,12 @@
 }
 
 .is-errored .bk-input {
-  border-color: #ea3636 !important;
+  border-color: var(--bk-theme-color-danger-2) !important;
 }
 
-.is-errored.is-background-errored-tip .bk-input {
-  border-color: #fee !important;
+.is-errored.is-background-errored-tip .bk-input {border-color: var(--bk-theme-fill-danger) !important;
 
-  input {
-    background-color: #fee !important;
+  input {background-color: var(--bk-theme-fill-danger) !important;
   }
 }
 </style>

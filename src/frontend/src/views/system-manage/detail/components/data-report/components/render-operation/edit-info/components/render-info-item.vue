@@ -38,14 +38,14 @@
 
     .info-label {
       width: 80px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       text-align: right;
     }
 
     .info-value {
       display: flex;
-      padding-left: 8px;
-      color: #63656e;
+      padding-left: var(--bk-theme-space-8);
+      color: var(--bk-theme-text-default);
       align-items: center;
     }
   }

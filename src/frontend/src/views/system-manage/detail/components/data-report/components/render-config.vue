@@ -133,16 +133,16 @@
   } -->
 <style lang="postcss" scoped>
 .collector-config {
-  padding-right: 12px;
-  color: #979ba5;
+  padding-right: var(--bk-theme-space-12);
+  color: var(--bk-theme-text-weak);
 
   .route-config {
     position: relative;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 
   .operation-icon {
-    margin-left: 18px;
+    margin-left: var(--bk-theme-space-16);
     font-size: 16px;
   }
 }

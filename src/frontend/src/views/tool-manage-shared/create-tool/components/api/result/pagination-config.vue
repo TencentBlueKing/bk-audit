@@ -853,18 +853,18 @@
 
 <style lang="postcss" scoped>
 .pagination-setting {
-  padding-bottom: 10px;
+  padding-bottom: var(--bk-theme-space-12);
 }
 
 .enable-pagination-row {
   display: flex;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--bk-theme-space-4);
 
   .enable-pagination-label {
-    margin-right: 12px;
+    margin-right: var(--bk-theme-space-12);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 }
 
@@ -874,9 +874,9 @@
 
   .collapse-icon {
     display: inline-block;
-    margin-right: 8px;
+    margin-right: var(--bk-theme-space-8);
     font-size: 14px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
     transition: transform .2s ease;
 
@@ -886,10 +886,10 @@
   }
 
   .title-text {
-    margin-right: 12px;
+    margin-right: var(--bk-theme-space-12);
     font-size: 14px;
     font-weight: 600;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .title-switch {
@@ -898,13 +898,13 @@
 }
 
 .pagination-table {
-  margin-top: 12px;
+  margin-top: var(--bk-theme-space-12);
 
   .pagination-table-content {
     width: 100%;
     overflow-x: auto;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     .table-cell {
       box-sizing: border-box;
@@ -949,17 +949,17 @@
       height: 42px;
       font-size: 12px;
       line-height: 42px;
-      color: #313238;
-      background: #f0f1f5;
-      border-bottom: 1px solid #dcdee5;
+      color: var(--bk-theme-text-strong);
+      background: var(--bk-theme-surface-muted);
+      border-bottom: 1px solid var(--bk-theme-border-default);
 
       .table-cell {
         display: flex;
         align-items: center;
         justify-content: flex-start;
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
         text-align: left;
-        border-left: 1px solid #dcdee5;
+        border-left: 1px solid var(--bk-theme-border-default);
 
         &:first-child {
           border-left: none;
@@ -971,8 +971,8 @@
         }
 
         &.is-required::after {
-          margin-left: 4px;
-          color: #ea3636;
+          margin-left: var(--bk-theme-space-4);
+          color: var(--bk-theme-color-danger-2);
           content: '*';
         }
       }
@@ -983,7 +983,7 @@
       min-height: 42px;
       font-size: 12px;
       line-height: 42px;
-      border-bottom: 1px solid #dcdee5;
+      border-bottom: 1px solid var(--bk-theme-border-default);
       align-items: stretch;
 
       &:last-child {
@@ -994,7 +994,7 @@
         display: flex;
         padding: 0;
         overflow: hidden;
-        border-left: 1px solid #dcdee5;
+        border-left: 1px solid var(--bk-theme-border-default);
         align-items: center;
         justify-content: flex-start;
 
@@ -1006,7 +1006,7 @@
           display: flex;
           justify-content: flex-start;
           align-items: center;
-          padding-left: 16px;
+          padding-left: var(--bk-theme-space-16);
         }
 
         /* 仅撑满触发器宽度，避免对 .bk-popover 设 display:block 破坏下拉定位 */
@@ -1030,7 +1030,7 @@
 
       /* 输入框文字与表头 12px padding 对齐 */
       :deep(.bk-input .bk-input--text) {
-        padding-left: 12px;
+        padding-left: var(--bk-theme-space-12);
         background: transparent;
       }
 
@@ -1040,13 +1040,13 @@
       }
 
       :deep(.bk-input.is-focused:not(.is-readonly)) {
-        border: 1px solid #3a84ff;
+        border: 1px solid var(--bk-theme-color-brand-2);
         outline: 0;
-        box-shadow: 0 0 3px #a3c5fd;
+       
       }
 
       :deep(.bk-select.is-focus .bk-select-trigger) {
-        border: 1px solid #3a84ff;
+        border: 1px solid var(--bk-theme-color-brand-2);
       }
 
       :deep(.bk-input--text) {
@@ -1089,7 +1089,7 @@
   width: 100%;
   height: 100%;
   min-height: 42px;
-  padding: 0 12px;
+  padding: 0 var(--bk-theme-space-12);
   overflow: hidden;
   font-size: 12px;
   cursor: pointer;
@@ -1098,12 +1098,12 @@
   align-items: center;
 
   &.is-error {
-    border: 1px solid #ea3636;
+    border: 1px solid var(--bk-theme-color-danger-2);
   }
 
   .placeholder {
     padding: 0;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
   }
 
   .field-tag {
@@ -1134,7 +1134,7 @@
 .field-tree-popover {
   width: 100%;
   max-height: 300px;
-  padding: 8px;
+  padding: var(--bk-theme-space-8);
   box-sizing: border-box;
 
   :deep(.bk-input) {
@@ -1150,20 +1150,20 @@
 :deep(.bk-input.is-error-input),
 :deep(.is-error-input.bk-input),
 :deep(.is-error-input .bk-input) {
-  border: 1px solid #ea3636 !important;
+  border: 1px solid var(--bk-theme-color-danger-2) !important;
 }
 
 :deep(.is-error-select .bk-select-trigger),
 :deep(.is-error-select .bk-input),
 :deep(.bk-select.is-error-select .bk-select-trigger),
 :deep(.bk-select.is-error-select .bk-input) {
-  border: 1px solid #ea3636 !important;
+  border: 1px solid var(--bk-theme-color-danger-2) !important;
 }
 
 .op-icon {
-  margin-left: 16px;
+  margin-left: var(--bk-theme-space-16);
   font-size: 14px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: pointer;
 
   &:first-child {
@@ -1171,15 +1171,15 @@
   }
 
   &:hover {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   &.is-disabled {
-    color: #dcdee5;
+    color: var(--bk-theme-border-default);
     cursor: not-allowed;
 
     &:hover {
-      color: #dcdee5;
+      color: var(--bk-theme-border-default);
     }
   }
 }
