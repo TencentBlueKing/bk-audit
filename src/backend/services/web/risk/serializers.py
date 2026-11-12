@@ -1059,13 +1059,12 @@ class ListBkSecProjectsResponseSerializer(serializers.Serializer):
 
 
 class PreviewTicketResponseSerializer(serializers.Serializer):
-    """工单预览响应（ticket/ticket_header 等动态体以 JSONField 透传）"""
+    """工单预览响应（ticket 动态体以 JSONField 透传）"""
 
     risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"), allow_blank=True)
     risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
     has_sample_risk = serializers.BooleanField(label=gettext_lazy("是否有样例风险单"))
     ticket = serializers.JSONField(label=gettext_lazy("工单报文"))
-    ticket_header = serializers.JSONField(label=gettext_lazy("工单头"), help_text=gettext_lazy("发单前为空，空值由前端展示"))
     warnings = serializers.JSONField(label=gettext_lazy("告警"))
 
 
