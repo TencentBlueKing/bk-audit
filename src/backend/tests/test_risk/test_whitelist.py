@@ -491,3 +491,35 @@ class WhitelistFlowTests(SimpleTestCase):
             self.assertEqual(hit.action, HitAction.SUPPRESS_NEW)
             self.assertEqual(hit.risk_id, "")
             self.assertFalse(intercept_whitelist({**event, "operator": "bob"}, {}, 3))
+
+
+class WhitelistListQueryTests(SimpleTestCase):
+    def test_status_type_and_sort_accept_multiple_values(self):
+        from services.web.risk.whitelist.serializers import (
+            ListRiskWhitelistReqSerializer,
+        )
+
+        serializer = ListRiskWhitelistReqSerializer(
+            data={
+                "status": "active,disabled",
+                "whitelist_type": ["false_positive", "risk_acceptance"],
+                "updated_by": ["alice", "bob"],
+                "sort": ["-updated_at", "hit_count"],
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["status"], ["active", "disabled"])
+        self.assertEqual(
+            serializer.validated_data["whitelist_type"],
+            ["false_positive", "risk_acceptance"],
+        )
+        self.assertEqual(serializer.validated_data["order_fields"], ["-updated_at", "hit_count"])
+
+    def test_default_sort_is_rule_id_desc(self):
+        from services.web.risk.whitelist.serializers import (
+            ListRiskWhitelistReqSerializer,
+        )
+
+        serializer = ListRiskWhitelistReqSerializer(data={})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["order_fields"], ["-id"])

@@ -60,6 +60,18 @@ from services.web.risk.whitelist.service import (
 )
 
 
+def _filter_any_icontains(queryset, field_name, values):
+    """多个关键字任一包含即命中，和场景列表的名称、更新人筛选一样。"""
+
+    if not values:
+        return queryset
+    matched = Q()
+    for value in values:
+        if value:
+            matched |= Q(**{f"{field_name}__icontains": value})
+    return queryset.filter(matched) if matched else queryset
+
+
 class RiskWhitelistMeta(AuditMixinResource, abc.ABC):
     tags = ["RiskWhitelist"]
     audit_action = None
@@ -84,23 +96,22 @@ class ListRiskWhitelists(RiskWhitelistMeta):
             queryset = queryset.filter(scene_id=scene_id)
         rule_id = validated_request_data.get("id")
         if rule_id:
-            queryset = queryset.filter(pk=rule_id)
-        for field in ("status", "whitelist_type"):
-            if validated_request_data.get(field):
-                queryset = queryset.filter(**{field: validated_request_data[field]})
-        if validated_request_data.get("reason"):
-            queryset = queryset.filter(reason__icontains=validated_request_data["reason"])
-        if validated_request_data.get("updated_by"):
-            queryset = queryset.filter(updated_by__icontains=validated_request_data["updated_by"])
+            queryset = queryset.filter(pk__in=rule_id)
+        if validated_request_data.get("status"):
+            queryset = queryset.filter(status__in=validated_request_data["status"])
+        if validated_request_data.get("whitelist_type"):
+            queryset = queryset.filter(whitelist_type__in=validated_request_data["whitelist_type"])
+        queryset = _filter_any_icontains(queryset, "reason", validated_request_data.get("reason"))
+        queryset = _filter_any_icontains(queryset, "updated_by", validated_request_data.get("updated_by"))
         if validated_request_data.get("keyword"):
             queryset = queryset.filter(match_scope__icontains=validated_request_data["keyword"])
         total = queryset.count()
         page = validated_request_data["page"]
         page_size = validated_request_data["page_size"]
         rows = list(
-            queryset.annotate(hit_count=Count("hits", filter=Q(hits__is_deleted=False))).order_by("-id")[
-                (page - 1) * page_size : page * page_size
-            ]
+            queryset.annotate(hit_count=Count("hits", filter=Q(hits__is_deleted=False))).order_by(
+                *validated_request_data["order_fields"]
+            )[(page - 1) * page_size : page * page_size]
         )
         snapshots = progress_map(rows)
         return {

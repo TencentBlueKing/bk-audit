@@ -2570,6 +2570,7 @@ class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
         default="",
         allow_blank=True,
     )
+    whitelist = serializers.JSONField(required=False)
 
 
 class BatchConfirmAsMisReportRequestSerializer(BulkRiskSelectionSerializer):
@@ -2582,6 +2583,7 @@ class BatchConfirmAsMisReportRequestSerializer(BulkRiskSelectionSerializer):
         allow_blank=False,
         max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
     )
+    whitelist = serializers.JSONField(required=False)
 
 
 # ---------------------------------------------------------------------------
