@@ -87,6 +87,7 @@ def _report_bksec_rule_activation_failed(strategy: Strategy, error: Exception) -
         )
 
         BkSecConfigSyncFailedEvent(
+            target="bksec_config_sync",
             context={
                 "strategy_id": str(strategy.strategy_id),
                 "stage": BkSecConfigSyncStage.RULE_SYNC.value,
