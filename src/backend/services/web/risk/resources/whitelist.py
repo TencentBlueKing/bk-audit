@@ -54,6 +54,7 @@ from services.web.risk.whitelist.service import (
     managed_scene_ids,
     operate_itsm,
     progress_map,
+    renew_whitelist,
     serialize_rule,
     submit_whitelist,
 )
@@ -207,6 +208,17 @@ class UpdateRiskWhitelist(RiskWhitelistMeta):
         error = validate_match_scope(validated_request_data["match_scope"], rule.whitelist_type)
         if error:
             raise ValidationError(gettext(error))
+        # 带了新有效期就是续期：原白名单不新建，重新提工单后把状态和工单绑回去。
+        if validated_request_data.get("duration_days") not in (None, ""):
+            renewed = renew_whitelist(
+                rule,
+                match_scope=validated_request_data["match_scope"],
+                reason=validated_request_data["reason"],
+                duration_days=validated_request_data["duration_days"],
+                expire_at=validated_request_data.get("expire_at"),
+                username=get_request_username(),
+            )
+            return serialize_rule(renewed)
         rule.match_scope = validated_request_data["match_scope"]
         rule.reason = validated_request_data["reason"]
         rule.save(update_fields=["match_scope", "reason", "updated_at", "updated_by"])
@@ -274,21 +286,15 @@ class RenewRiskWhitelist(RiskWhitelistMeta):
 
     def perform_request(self, validated_request_data):
         rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
-        if rule.is_permanent:
-            raise ValidationError(gettext("永久规则不能续期"))
-        if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.EXPIRED}:
-            raise ValidationError(gettext("只有生效中或已到期的规则可以续期"))
-        created = submit_whitelist(
-            scene_id=rule.scene_id,
+        renewed = renew_whitelist(
+            rule,
             match_scope=rule.match_scope,
-            whitelist_type=rule.whitelist_type,
             reason=validated_request_data.get("remark") or rule.reason,
             duration_days=validated_request_data["duration_days"],
             expire_at=validated_request_data.get("expire_at"),
-            risks=[],
             username=get_request_username(),
         )
-        return serialize_rule(created)
+        return serialize_rule(renewed)
 
 
 class DeleteRiskWhitelist(RiskWhitelistMeta):

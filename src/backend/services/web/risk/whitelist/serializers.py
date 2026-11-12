@@ -65,6 +65,8 @@ class UpdateRiskWhitelistReqSerializer(serializers.Serializer):
     id = serializers.IntegerField(label=gettext_lazy("白名单ID"))
     match_scope = serializers.JSONField(label=gettext_lazy("匹配范围"))
     reason = serializers.CharField(label=gettext_lazy("加白原因"), max_length=500)
+    duration_days = DurationDaysField(label=gettext_lazy("有效天数"), required=False, allow_null=True)
+    expire_at = serializers.DateTimeField(label=gettext_lazy("到期时间"), required=False, allow_null=True)
 
 
 class RiskWhitelistIdReqSerializer(serializers.Serializer):

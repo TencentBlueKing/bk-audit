@@ -201,7 +201,7 @@ def _format_expire(value) -> str:
 
 
 def validity_text(rule: RiskWhitelist) -> str:
-    if rule.is_permanent:
+    if not rule.expire_at:
         return "永久"
     return _format_expire(rule.expire_at)
 
@@ -490,67 +490,132 @@ def _abort_whitelist(rule: RiskWhitelist) -> None:
     rule.delete()
 
 
-def create_itsm_ticket(rule_id: int) -> None:
-    rule = RiskWhitelist.objects.filter(pk=rule_id).first()
-    if rule is None or rule.itsm_ticket_id:
-        return
+def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: str, reason=None, match_scope=None):
+    """提交 ITSM 工单。"""
+
     workflow_key = RISK_WHITELIST_WORKFLOW_KEY
     if not workflow_key:
-        logger.error("[RiskWhitelist] RISK_WHITELIST_WORKFLOW_KEY 未配置, id=%s", rule.id)
-        _abort_whitelist(rule)
+        logger.error("[RiskWhitelist] 未配置itsm, id=%s", rule.id)
         raise ValidationError(gettext("ITSM 审批流程未配置"))
-    callback_url = RISK_WHITELIST_CALLBACK_URL
+    scope = rule.match_scope if match_scope is None else match_scope
     form_data = {
-        "ticket__title": f"【审计中心】风险白名单 {rule.id}",
+        "ticket__title": "【审计中心】风险白名单",
         "scene_id": str(rule.scene_id),
-        "whitelist_id": str(rule.id),
         "whitelist_type": rule.whitelist_type,
-        "reason": rule.reason,
-        "match_scope": json.dumps(rule.match_scope, ensure_ascii=False),
+        "reason": rule.reason if reason is None else reason,
+        "match_scope": json.dumps(scope, ensure_ascii=False),
         "risk_id": rule.risk_id,
-        "applicant": rule.created_by or "",
+        "applicant": operator or rule.created_by or "",
     }
     try:
         ticket = api.bk_itsm_v4.ticket_create(
-            operator=rule.created_by or "",
+            operator=operator or rule.created_by or "",
             workflow_key=workflow_key,
             form_data=form_data,
             is_submit=True,
-            callback_url=callback_url,
-            callback_token=rule.callback_token,
+            callback_url=RISK_WHITELIST_CALLBACK_URL,
+            callback_token=callback_token,
             portal="DEFAULT",
         )
     except Exception as exc:
         logger.exception("[RiskWhitelist] ticket_create failed, id=%s", rule.id)
-        _abort_whitelist(rule)
         raise ValidationError(gettext("ITSM 工单创建失败")) from exc
+    if not str((ticket or {}).get("id") or ""):
+        raise ValidationError(gettext("ITSM 工单创建失败"))
+    return ticket or {}
+
+
+def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
     rule.itsm_ticket_id = str(ticket.get("id") or "")
     rule.itsm_sn = ticket.get("sn") or ""
     rule.itsm_ticket_url = ticket.get("frontend_url") or ""
-    if not rule.itsm_ticket_id:
+
+
+def _pass_if_admin(rule: RiskWhitelist, ticket: dict, username: str) -> None:
+    if not username or not is_scene_admin(username, rule.scene_id):
+        return
+    try:
+        operate_itsm(rule, "approve", username)
+    except Exception:
+        logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
+        return
+    apply_whitelist_result(
+        rule,
+        {
+            "id": rule.itsm_ticket_id,
+            "sn": rule.itsm_sn,
+            "frontend_url": rule.itsm_ticket_url,
+            "status": ITSMV4TicketStatus.FINISHED,
+            "approve_result": True,
+            "comment": "",
+            "current_processors": ticket.get("current_processors") or [],
+            "current_steps": ticket.get("current_steps") or [],
+        },
+    )
+
+
+def renew_whitelist(
+    rule: RiskWhitelist, *, match_scope, reason, duration_days, expire_at, username: str
+) -> RiskWhitelist:
+    """续期不新建白名单。重新提工单，成功后把状态和工单绑回同一条规则。"""
+
+    if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.EXPIRED, WhitelistStatus.DISABLED}:
+        raise ValidationError(gettext("只有生效中或已到期的规则可以续期"))
+    error = validate_match_scope(match_scope, rule.whitelist_type)
+    if error:
+        raise ValidationError(gettext(error))
+    is_permanent, resolved_expire = resolve_expire_at(rule.whitelist_type, duration_days, expire_at)
+    callback_token = uuid.uuid4().hex
+    ticket = _submit_itsm_ticket(
+        rule,
+        operator=username,
+        callback_token=callback_token,
+        reason=reason,
+        match_scope=match_scope,
+    )
+    rule.match_scope = match_scope
+    rule.reason = (reason or "")[:500]
+    rule.is_permanent = is_permanent
+    rule.expire_at = resolved_expire
+    rule.status = WhitelistStatus.PENDING
+    rule.reject_reason = ""
+    rule.callback_token = callback_token
+    _bind_ticket(rule, ticket)
+    rule.updated_by = username
+    rule.save(
+        update_fields=[
+            "match_scope",
+            "reason",
+            "expire_at",
+            "status",
+            "reject_reason",
+            "callback_token",
+            "itsm_ticket_id",
+            "itsm_sn",
+            "itsm_ticket_url",
+            "updated_at",
+            "updated_by",
+        ]
+    )
+    refresh_whitelist_nodes(rule, ticket)
+    _pass_if_admin(rule, ticket, username)
+    rule.refresh_from_db()
+    return rule
+
+
+def create_itsm_ticket(rule_id: int) -> None:
+    rule = RiskWhitelist.objects.filter(pk=rule_id).first()
+    if rule is None or rule.itsm_ticket_id:
+        return
+    try:
+        ticket = _submit_itsm_ticket(rule, operator=rule.created_by or "", callback_token=rule.callback_token)
+    except ValidationError:
         _abort_whitelist(rule)
-        raise ValidationError(gettext("ITSM 工单创建失败"))
+        raise
+    _bind_ticket(rule, ticket)
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     refresh_whitelist_nodes(rule, ticket)
-    if rule.created_by and is_scene_admin(rule.created_by, rule.scene_id):
-        try:
-            operate_itsm(rule, "approve", rule.created_by)
-        except Exception:
-            logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
-            return
-        apply_whitelist_result(
-            rule,
-            {
-                "id": rule.itsm_ticket_id,
-                "sn": rule.itsm_sn,
-                "frontend_url": rule.itsm_ticket_url,
-                "status": ITSMV4TicketStatus.FINISHED,
-                "approve_result": True,
-                "comment": "",
-                "current_processors": ticket.get("current_processors") or [],
-                "current_steps": ticket.get("current_steps") or [],
-            },
-        )
+    _pass_if_admin(rule, ticket, rule.created_by or "")
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:
@@ -653,16 +718,17 @@ def list_actions(rule: RiskWhitelist) -> list:
         return ["approve", "reject"]
     if rule.status == WhitelistStatus.ACTIVE:
         actions = ["edit", "disable", "hits"]
-        if not rule.is_permanent:
-            actions.insert(2, "renew")
-        return actions
-    if rule.status == WhitelistStatus.DISABLED:
-        return ["edit", "enable", "hits", "delete"]
-    if rule.status == WhitelistStatus.EXPIRED:
-        return ["edit", "renew", "hits", "delete"]
-    if rule.status == WhitelistStatus.REJECTED:
+    elif rule.status == WhitelistStatus.DISABLED:
+        actions = ["edit", "enable", "hits", "delete"]
+    elif rule.status == WhitelistStatus.EXPIRED:
+        actions = ["edit", "hits", "delete"]
+    elif rule.status == WhitelistStatus.REJECTED:
         return ["delete"]
-    return []
+    else:
+        return []
+    if rule.expire_at:
+        actions.insert(1, "renew")
+    return actions
 
 
 def flow_of(rule: RiskWhitelist, ticket: dict = None):

@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy
 
 # ITSM V4 审批流程编码
 RISK_WHITELIST_WORKFLOW_KEY = os.getenv("BKAPP_RISK_WHITELIST_WORKFLOW_KEY", "")
-# ITSM 回调地址。建单时传入
+# ITSM 回调地址。
 RISK_WHITELIST_CALLBACK_URL = f'{os.getenv("BKAPP_BKAUDIT_CALLBACK_URL_PREFIX", "")}/risk_whitelist_callback/callback/'
 
 
