@@ -1020,10 +1020,17 @@
     resource_id: String(strategy.strategy_id),
     tags,
   }).then((result) => {
+    const nameToIdMap: Record<string, string> = {};
     result.forEach((item) => {
       strategyTagMap.value[item.tag_id] = item.tag_name;
+      nameToIdMap[item.tag_name] = String(item.tag_id);
     });
-    const tagIds = result.map(item => String(item.tag_id));
+    // 接口返回顺序与提交顺序无关，按用户编辑顺序回填，保证新加的标签在最后
+    const orderedIds = tags.map(name => nameToIdMap[name]).filter(Boolean);
+    const tagIds = [
+      ...orderedIds,
+      ...result.map(item => String(item.tag_id)).filter(id => !orderedIds.includes(id)),
+    ];
     const targetRow = listRef.value?.getListData()
       ?.find((item: StrategyModel) => item.strategy_id === strategy.strategy_id);
     if (targetRow) {
