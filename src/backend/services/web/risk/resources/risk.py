@@ -1048,8 +1048,8 @@ class UpdateRiskLabel(RiskMeta):
                 match_scope=whitelist["match_scope"],
                 whitelist_type=whitelist["whitelist_type"],
                 reason=whitelist["reason"],
-                is_permanent=whitelist.get("is_permanent"),
                 duration_days=whitelist.get("duration_days"),
+                expire_at=whitelist.get("expire_at"),
                 risks=[risk],
                 username=get_request_username(),
             )
@@ -2676,8 +2676,8 @@ class BulkMisreportResource(RiskMeta):
                     match_scope=whitelist["match_scope"],
                     whitelist_type=whitelist["whitelist_type"],
                     reason=whitelist["reason"],
-                    is_permanent=whitelist.get("is_permanent"),
                     duration_days=whitelist.get("duration_days"),
+                    expire_at=whitelist.get("expire_at"),
                     risks=done,
                     username=get_request_username(),
                 )

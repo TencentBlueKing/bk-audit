@@ -14,11 +14,13 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext
+from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.settings import api_settings
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
+from core.serializers import FriendlyDateTimeField
 from services.web.risk.constants import RiskStatus, TicketNodeStatus
 from services.web.risk.whitelist.constants import (
     FLOW_STATUS,
@@ -85,7 +87,7 @@ def _period_value(text: str):
 
 
 def coerce_duration_days(value):
-    """整数或 Nd 是有效天数，Nm 是整月，时间字符串是到期时间。空值返回 None。"""
+    """整数或 Nd 是有效天数，Nm 是整月，permanent 永久，custom 另传到期时间。空值返回 None。"""
 
     if value in (None, ""):
         return None
@@ -102,6 +104,8 @@ def coerce_duration_days(value):
     text = str(value).strip()
     if text.lower() == "permanent":
         return "permanent"
+    if text.lower() == "custom":
+        return "custom"
     period = _period_value(text)
     if period is not None:
         return period
@@ -129,18 +133,14 @@ def _looks_like_local_dt(text: str) -> bool:
     return len(text) == 19 and text[10] == " "
 
 
-def resolve_duration(whitelist_type: str, is_permanent=None, duration_days=None) -> tuple:
-    """返回 (是否永久, 天数)。天数由调用方传入，不限 7 天或整月。"""
+def resolve_duration(whitelist_type: str, duration_days=None) -> tuple:
+    """返回 (是否永久, 天数)。未传时误报加白默认永久，冒险加白默认 30 天。"""
 
     has_days = duration_days not in (None, "")
-    if is_permanent is not True and not has_days:
+    if not has_days:
         if whitelist_type == WhitelistType.FALSE_POSITIVE:
             return True, None
         return False, DEFAULT_ACCEPTANCE_DAYS
-    if is_permanent is True:
-        if whitelist_type == WhitelistType.RISK_ACCEPTANCE:
-            raise ValidationError(gettext("冒险加白需要填写有效天数"))
-        return True, None
     try:
         days = int(duration_days)
     except (TypeError, ValueError):
@@ -150,29 +150,29 @@ def resolve_duration(whitelist_type: str, is_permanent=None, duration_days=None)
     return False, days
 
 
-def resolve_expire_at(whitelist_type: str, is_permanent=None, duration_days=None, base=None):
-    """返回 (是否永久, 到期时间)。时间为原样保存，整数加天数，Nm 加整月。"""
+def resolve_expire_at(whitelist_type: str, duration_days=None, expire_at=None, base=None):
+    """返回 (是否永久, 到期时间)。permanent 为永久，custom 直接存 expire_at，整数加天数，Nm 加整月。"""
 
     duration_days = coerce_duration_days(duration_days)
     if duration_days == "permanent":
         if whitelist_type == WhitelistType.RISK_ACCEPTANCE:
             raise ValidationError(gettext("冒险加白需要填写有效天数"))
         return True, None
-    if isinstance(duration_days, datetime.datetime):
-        if is_permanent is True:
-            raise ValidationError(gettext("永久规则不能填写到期时间"))
-        expire_at = duration_days
-        if timezone.is_naive(expire_at):
-            expire_at = timezone.make_aware(expire_at, timezone.get_current_timezone())
-        expire_at = expire_at.replace(microsecond=0)
+    if duration_days == "custom":
+        if expire_at in (None, ""):
+            raise ValidationError(gettext("自定义有效期需要填写到期时间"))
+        if not isinstance(expire_at, datetime.datetime):
+            expire_at = serializers.DateTimeField().to_internal_value(expire_at)
         if expire_at <= timezone.now():
             raise ValidationError(gettext("到期时间必须晚于当前时间"))
-        return False, expire_at
+        return False, expire_at.replace(microsecond=0)
+    if isinstance(duration_days, datetime.datetime):
+        if duration_days <= timezone.now():
+            raise ValidationError(gettext("到期时间必须晚于当前时间"))
+        return False, duration_days.replace(microsecond=0)
     if isinstance(duration_days, tuple) and duration_days[:1] == ("month",):
-        if is_permanent is True:
-            raise ValidationError(gettext("永久规则不能填写到期时间"))
         return False, expire_at_from_months(duration_days[1], base)
-    permanent, days = resolve_duration(whitelist_type, is_permanent, duration_days)
+    permanent, days = resolve_duration(whitelist_type, duration_days)
     return permanent, expire_at_from(permanent, days, base)
 
 
@@ -189,17 +189,15 @@ def expire_at_from(is_permanent: bool, duration_days, base=None):
 
 
 def _format_dt(value) -> str:
+    """和风险列表一样：转到默认时区后按 DATETIME_FORMAT 输出。"""
+
     if not value:
         return ""
-    return value.strftime(api_settings.DATETIME_FORMAT)
+    return FriendlyDateTimeField().to_representation(value) or ""
 
 
 def _format_expire(value) -> str:
-    if not value:
-        return ""
-    if timezone.is_aware(value):
-        value = timezone.localtime(value)
-    return value.strftime(api_settings.DATETIME_FORMAT)
+    return _format_dt(value)
 
 
 def validity_text(rule: RiskWhitelist) -> str:
@@ -328,8 +326,8 @@ def submit_whitelist(
     match_scope: dict,
     whitelist_type: str,
     reason: str,
-    is_permanent=None,
     duration_days=None,
+    expire_at=None,
     risks,
     username: str,
 ):
@@ -348,8 +346,8 @@ def submit_whitelist(
                 ),
                 whitelist_type=whitelist_type,
                 reason=reason,
-                is_permanent=is_permanent,
                 duration_days=duration_days,
+                expire_at=expire_at,
                 risks=[risk],
                 username=username,
             )
@@ -368,8 +366,8 @@ def submit_whitelist(
         match_scope=match_scope,
         whitelist_type=whitelist_type,
         reason=reason,
-        is_permanent=is_permanent,
         duration_days=duration_days,
+        expire_at=expire_at,
         risks=risks,
         username=username,
     )
@@ -381,8 +379,8 @@ def _create_whitelist(
     match_scope: dict,
     whitelist_type: str,
     reason: str,
-    is_permanent=None,
     duration_days=None,
+    expire_at=None,
     risks,
     username: str,
 ):
@@ -393,7 +391,7 @@ def _create_whitelist(
         raise ValidationError(gettext("不支持的加白类型"))
     if not reason:
         raise ValidationError(gettext("加白原因不能为空"))
-    is_permanent, expire_at = resolve_expire_at(whitelist_type, is_permanent, duration_days)
+    is_permanent, expire_at = resolve_expire_at(whitelist_type, duration_days, expire_at)
     if not Scene.objects.filter(pk=scene_id, is_deleted=False).exists():
         raise ValidationError(gettext("场景不存在"))
 
@@ -685,7 +683,7 @@ def flow_of(rule: RiskWhitelist, ticket: dict = None):
         "current_steps": ticket.get("current_steps") or [],
         "rejector": rule.updated_by if rejected else "",
         "reject_reason": rule.reject_reason if rejected else "",
-        "rejected_at": rule.updated_at.strftime(api_settings.DATETIME_FORMAT) if rejected and rule.updated_at else "",
+        "rejected_at": _format_dt(rule.updated_at) if rejected else "",
     }
 
 
@@ -724,7 +722,7 @@ def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = Non
         "reason": rule.reason,
         "hit_count": hit_count,
         "updated_by": rule.updated_by or "",
-        "updated_at": rule.updated_at.strftime(api_settings.DATETIME_FORMAT) if rule.updated_at else "",
+        "updated_at": _format_dt(rule.updated_at),
         "applicant": rule.created_by or "",
         "itsm_ticket_id": rule.itsm_ticket_id or "",
         "itsm_sn": rule.itsm_sn or "",

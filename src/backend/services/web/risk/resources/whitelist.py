@@ -46,6 +46,7 @@ from services.web.risk.whitelist.serializers import (
     UpdateRiskWhitelistReqSerializer,
 )
 from services.web.risk.whitelist.service import (
+    _format_dt,
     apply_whitelist_result,
     ensure_admin,
     ensure_same_strategy_scene,
@@ -96,7 +97,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
         page = validated_request_data["page"]
         page_size = validated_request_data["page_size"]
         rows = list(
-            queryset.annotate(hit_count=Count("hits", filter=Q(hits__is_deleted=False))).order_by("-updated_at", "-id")[
+            queryset.annotate(hit_count=Count("hits", filter=Q(hits__is_deleted=False))).order_by("-id")[
                 (page - 1) * page_size : page * page_size
             ]
         )
@@ -190,8 +191,8 @@ def _submit_created(validated_request_data, *, scene_id, risks, username):
         match_scope=validated_request_data["match_scope"],
         whitelist_type=validated_request_data["whitelist_type"],
         reason=validated_request_data["reason"],
-        is_permanent=validated_request_data.get("is_permanent"),
         duration_days=validated_request_data.get("duration_days"),
+        expire_at=validated_request_data.get("expire_at"),
         risks=risks,
         username=username,
     )
@@ -282,8 +283,8 @@ class RenewRiskWhitelist(RiskWhitelistMeta):
             match_scope=rule.match_scope,
             whitelist_type=rule.whitelist_type,
             reason=validated_request_data.get("remark") or rule.reason,
-            is_permanent=False,
             duration_days=validated_request_data["duration_days"],
+            expire_at=validated_request_data.get("expire_at"),
             risks=[],
             username=get_request_username(),
         )
@@ -324,7 +325,7 @@ class ListWhitelistHitRecords(RiskWhitelistMeta):
             "results": [
                 {
                     "id": str(row.id),
-                    "hit_time": row.hit_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    "hit_time": _format_dt(row.hit_at),
                     "action": row.action,
                     "match_scope": row.match_snapshot,
                     "risk_id": row.risk_id,

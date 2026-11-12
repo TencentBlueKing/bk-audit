@@ -33,8 +33,8 @@ class RiskWhitelistScopeSerializer(serializers.Serializer):
     match_scope = serializers.JSONField(label=gettext_lazy("匹配范围"))
     whitelist_type = serializers.CharField(label=gettext_lazy("加白类型"))
     reason = serializers.CharField(label=gettext_lazy("加白原因"), max_length=500)
-    is_permanent = serializers.BooleanField(label=gettext_lazy("是否永久"), required=False)
     duration_days = DurationDaysField(label=gettext_lazy("有效天数"), required=False, allow_null=True)
+    expire_at = serializers.DateTimeField(label=gettext_lazy("到期时间"), required=False, allow_null=True)
 
 
 class CreateRiskWhitelistReqSerializer(RiskWhitelistScopeSerializer):
@@ -77,6 +77,7 @@ class RejectRiskWhitelistReqSerializer(RiskWhitelistIdReqSerializer):
 
 class RenewRiskWhitelistReqSerializer(RiskWhitelistIdReqSerializer):
     duration_days = DurationDaysField(label=gettext_lazy("有效天数"), required=True, allow_null=False)
+    expire_at = serializers.DateTimeField(label=gettext_lazy("到期时间"), required=False, allow_null=True)
     remark = serializers.CharField(
         label=gettext_lazy("备注"), required=False, allow_blank=True, default="", max_length=500
     )

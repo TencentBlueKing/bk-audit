@@ -309,11 +309,13 @@ class WhitelistDurationTests(SimpleTestCase):
         from django.utils import timezone
 
         text = "2026-12-31 18:00:00"
-        permanent, expire_at = resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days=text)
+        permanent, expire_at = resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="custom", expire_at=text)
         self.assertFalse(permanent)
         self.assertEqual(timezone.localtime(expire_at).strftime("%Y-%m-%d %H:%M:%S"), text)
         with self.assertRaises(ValidationError):
-            resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="2020-01-01 00:00:00")
+            resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="custom")
+        with self.assertRaises(ValidationError):
+            resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="custom", expire_at="2020-01-01 00:00:00")
 
     def test_one_month_uses_a_calendar_month(self):
         base = datetime.datetime(2026, 1, 31, 8, 33, 41, tzinfo=datetime.timezone.utc)
@@ -336,7 +338,7 @@ class WhitelistDurationTests(SimpleTestCase):
 
     def test_risk_acceptance_cannot_be_permanent(self):
         with self.assertRaises(ValidationError):
-            resolve_duration(WhitelistType.RISK_ACCEPTANCE, is_permanent=True)
+            resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="permanent")
 
 
 class _Rule:
