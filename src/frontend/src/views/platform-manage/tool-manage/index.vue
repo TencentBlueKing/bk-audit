@@ -88,6 +88,7 @@
           ref="toolListRef"
           :scene-name-map="sceneNameMap"
           :scene-options="visibilitySceneOptions"
+          :global-strategy-ids="globalStrategyIds"
           :search-params="searchModel"
           :strategy-list="strategyList"
           :system-name-map="systemNameMap"
@@ -500,6 +501,7 @@
   const searchModel = ref<Record<string, any>>({});
   const tagsEnums = ref<Array<TagItem>>([]);
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
+  const globalStrategyIds = ref<number[]>([]);
   const allToolsData = ref<Array<ToolInfo>>([]);
 
   const statusFilter = ref(initialListSearchCache.status);
@@ -778,6 +780,16 @@
     },
   });
 
+  const fetchGlobalStrategyIds = () => {
+    StrategyManageService.fetchAllStrategyList({ binding_type: 'platform_binding' })
+      .then((data) => {
+        globalStrategyIds.value = data.map(item => item.value);
+      })
+      .catch(() => {
+        globalStrategyIds.value = [];
+      });
+  };
+
   const {
     run: fetchAllToolsData,
   } = useRequest(ToolManageService.fetchToolsList, {
@@ -798,6 +810,7 @@
 
   onMounted(() => {
     fetchStrategyList();
+    fetchGlobalStrategyIds();
     fetchAllToolsData();
     fetchUserList();
     fetchStatusCounts();

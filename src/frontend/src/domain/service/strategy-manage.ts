@@ -76,6 +76,7 @@ export default {
    */
   fetchAllStrategyList(params: {
     scene_id?: string
+    binding_type?: 'platform_binding' | 'scene_binding'
   }) {
     return StrategySource.getAllStrategyList(params)
       .then(({ data }) => data);
