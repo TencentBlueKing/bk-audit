@@ -24,7 +24,7 @@
       <span class="highlight">{{ total }}</span>
       <span class="text">{{ tipContent.suffix }}</span>
     </div>
-    <div class="list-panel">
+    <div class="list-panel bk-theme-card bk-theme-card--flush">
       <div class="action-toolbar">
         <div class="action-left">
           <slot name="toolbar-before-analyze" />
@@ -33,7 +33,7 @@
             class="analyze-btn-wrapper"
             :class="{ 'is-analyze-disabled': !isAnalyzeEnabled }">
             <bk-button
-              class="analyze-btn"
+              class="analyze-btn risk-toolbar-analyze"
               :disabled="!isAnalyzeEnabled"
               outline
               @click="handleAnalyze">
@@ -49,7 +49,7 @@
         </div>
         <div class="action-right">
           <bk-button
-            class="history-btn"
+            class="history-btn risk-toolbar-secondary"
             outline
             @click="handleHistory">
             <img
@@ -294,46 +294,44 @@
   z-index: 1;
   width: 100%;
   min-width: 0;
-  margin-top: 16px;
+  margin-top: var(--bk-theme-space-16);
 
   .tip-bar {
     display: flex;
     height: 32px;
     padding: 0;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 12px;
     line-height: 32px;
     align-items: center;
 
     .info-fill {
-      margin-right: 4px;
-      color: #979ba5;
+      margin-right: var(--bk-theme-space-4);
+      color: var(--bk-theme-text-weak);
     }
 
     .text {
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .highlight {
-      margin: 0 4px;
+      margin: 0 var(--bk-theme-space-4);
       font-weight: bold;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
   }
 
   .list-panel {
     width: 100%;
     min-width: 0;
-    padding: 0;
+    padding: var(--bk-theme-space-24);
     overflow: visible;
-    background-color: #fff;
-    border: 1px solid #e2e6ed;
     box-sizing: border-box;
   }
 
   .action-toolbar {
     display: flex;
-    padding: 8px 16px 12px;
+    margin-bottom: var(--bk-theme-space-16);
     align-items: center;
     justify-content: space-between;
 
@@ -341,11 +339,11 @@
     .action-right {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
     }
 
     :deep(.add-icon) {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
       font-size: 12px;
     }
 
@@ -353,11 +351,11 @@
       display: inline-flex;
 
       &.is-analyze-disabled :deep(.analyze-btn) {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         pointer-events: none;
         cursor: not-allowed;
-        background-color: #fff;
-        border-color: #dcdee5;
+        background-color: var(--bk-theme-surface-default);
+        border-color: var(--bk-theme-border-default);
 
         .ai-agent-ai {
           opacity: 50%;
@@ -365,38 +363,22 @@
 
         &:hover,
         &:active {
-          color: #c4c6cc;
-          background-color: #fff;
-          border-color: #dcdee5;
+          color: var(--bk-theme-border-strong);
+          background-color: var(--bk-theme-surface-default);
+          border-color: var(--bk-theme-border-default);
         }
       }
     }
 
     :deep(.analyze-btn) {
-      color: #7b29ff;
-      border-color: #7b29ff;
-
-      &:not(.is-disabled, [disabled]):hover {
-        color: #9b5cff;
-        border-color: #9b5cff;
-      }
-
       .ai-agent-ai {
-        margin-right: 4px;
+        margin-right: var(--bk-theme-space-4);
       }
     }
 
     :deep(.history-btn) {
-      color: #4d4f56;
-      border-color: #c4c6cc;
-
-      &:hover {
-        color: #4d4f56;
-        border-color: #979ba5;
-      }
-
       .ai-agent-history {
-        margin-right: 4px;
+        margin-right: var(--bk-theme-space-4);
       }
     }
   }
@@ -411,6 +393,11 @@
       width: 100%;
       max-width: 100%;
       min-width: 0;
+    }
+
+    :deep(.tdesign-list-pagination) {
+      padding-right: 0;
+      padding-left: 0;
     }
   }
 }

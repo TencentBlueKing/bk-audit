@@ -206,13 +206,13 @@
                           placement="top"
                           theme="black">
                           <bk-button
-                            class="ml8"
+                           
                             text
                             theme="primary"
                             @click="handleUseTool(
                               drillMap.get(basicItem.field_name),
                               basicItem.field_name
-                            )">
+                            )" style="margin-left: var(--bk-theme-space-8)">
                             <span
                               style="
                               padding: 2px 10px;
@@ -231,14 +231,14 @@
                                 :key="config.tool.uid">
                                 {{ config.drill_name || config.tool_name || getToolNameAndType(config.tool.uid).name }}
                                 <bk-button
-                                  class="ml8"
+                                 
                                   text
                                   theme="primary"
                                   @click="(e: any) => {
                                     e.stopPropagation(); // 阻止事件冒泡
                                     handleUseTool(drillMap.get(basicItem.field_name),
                                                   basicItem.field_name, config.tool.uid);
-                                  }">
+                                  }" style="margin-left: var(--bk-theme-space-8)">
                                   {{ t('去查看') }}
                                   <audit-icon
                                     class="mr-18"
@@ -348,13 +348,13 @@
                           placement="top"
                           theme="black">
                           <bk-button
-                            class="ml8"
+                           
                             text
                             theme="primary"
                             @click="handleUseTool(
                               drillMap.get(key),
                               key
-                            )">
+                            )" style="margin-left: var(--bk-theme-space-8)">
                             <span
                               style="
                               padding: 2px 10px;
@@ -373,13 +373,13 @@
                                 :key="config.tool.uid">
                                 {{ config.drill_name || config.tool_name || getToolNameAndType(config.tool.uid).name }}
                                 <bk-button
-                                  class="ml8"
+                                 
                                   text
                                   theme="primary"
                                   @click="(e: any) => {
                                     e.stopPropagation(); // 阻止事件冒泡
                                     handleUseTool(drillMap.get(key), key, config.tool.uid);
-                                  }">
+                                  }" style="margin-left: var(--bk-theme-space-8)">
                                   {{ t('去查看') }}
                                   <audit-icon
                                     class="mr-18"
@@ -1288,19 +1288,19 @@
       justify-content: center;
       width: 120px;
       height: 22px;
-      color: #63656e;
-      background: #f0f1f5;
-      border: 1px solid #dcdee5;
-      border-radius: 12px;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-card-radius);
 
       &:hover {
-        color: #63656e;
-        background: #e1e3e9;
+        color: var(--bk-theme-text-default);
+        background: var(--bk-theme-border-weak);
       }
     }
 
     .show-more-icon {
-      margin-left: 4px;
+      margin-left: var(--bk-theme-space-4);
     }
 
     .active {
@@ -1312,17 +1312,17 @@
   .timeline-empty-action {
     display: flex;
     justify-content: flex-end;
-    padding: 8px 0 16px;
+    padding: var(--bk-theme-space-8) 0 var(--bk-theme-space-16);
   }
 
   .add-event {
     font-size: 12px;
     line-height: 20px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
 
     .add-fill-event {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
     }
   }
 
@@ -1332,12 +1332,12 @@
     width: 100%;
 
     /* 有 Tab 时，页签到内容 24px（设计稿）；底部与容器留 16px */
-    padding: 24px 16px 16px;
+    padding: var(--bk-theme-space-24) var(--bk-theme-space-16) var(--bk-theme-space-16);
     box-sizing: border-box;
 
     /* 无调查报告仅展示区块标题时，标题上下为 16px */
     &.is-section-title-mode {
-      padding-top: 16px;
+      padding-top: var(--bk-theme-space-16);
     }
   }
 
@@ -1349,25 +1349,25 @@
   }
 
   .link-event-section-title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 14px;
     font-style: normal;
     font-weight: 700;
     line-height: 22px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .link-event-block-title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 12px;
     font-style: normal;
     font-weight: 700;
     line-height: 20px;
     letter-spacing: 0;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 
   .list-item-detail {
@@ -1382,7 +1382,7 @@
 
       /* 时间轴到首个区块标题（基本信息/事件详情）24px */
       > .link-event-block-title:first-child {
-        margin-top: 24px;
+        margin-top: var(--bk-theme-space-24);
       }
     }
 
@@ -1390,8 +1390,8 @@
       height: 1px;
 
       /* 「基本信息」内容与「事件详情」之间上下各 24px */
-      margin: 24px 0;
-      background: #dcdee5;
+      margin: var(--bk-theme-space-24) 0;
+      background: var(--bk-theme-border-default);
     }
 
     .exception-part {
@@ -1402,13 +1402,13 @@
     }
 
     .important-information {
-      padding: 12px 0;
-      margin-bottom: 24px;
-      background-color: #fafbfd;
+      padding: var(--bk-theme-space-12) 0;
+      margin-bottom: var(--bk-theme-space-24);
+      background-color: var(--bk-theme-table-header-bg);
 
       .title {
-        padding-left: 8px;
-        border-left: 3px solid #3a84ff;
+        padding-left: var(--bk-theme-space-8);
+        border-left: 3px solid var(--bk-theme-color-brand-2);
       }
 
       .render-info-item {
@@ -1434,7 +1434,7 @@
     }
 
     .data-info {
-      /* border: 1px solid #ecedf1; */
+      /* border: 1px solid var(--bk-theme-border-weak); */
 
       .data-info-row:last-child {
         .data-info-item-key,
@@ -1456,14 +1456,14 @@
         .data-info-item-value {
           display: flex;
           align-items: center;
-          padding: 6px 12px;
-          border-right: 1px solid #ecedf1;
-          border-bottom: 1px solid #ecedf1;
+          padding: var(--bk-theme-space-6) var(--bk-theme-space-12);
+          border-right: 1px solid var(--bk-theme-border-weak);
+          border-bottom: 1px solid var(--bk-theme-border-weak);
         }
 
         .data-info-item-key {
           width: 160px;
-          background-color: #fafbfd;
+          background-color: var(--bk-theme-table-header-bg);
           justify-self: flex-end;
 
           &>span {
@@ -1483,8 +1483,8 @@
     .evidence-info {
       display: flex;
       max-width: 1000px;
-      border-top: 1px solid #ecedf1;
-      border-left: 1px solid #ecedf1;
+      border-top: 1px solid var(--bk-theme-border-weak);
+      border-left: 1px solid var(--bk-theme-border-weak);
 
       .evidence-info-value-wrap {
         display: flex;
@@ -1499,10 +1499,10 @@
 
         & > div {
           height: 32px;
-          padding: 0 12px;
+          padding: 0 var(--bk-theme-space-12);
           line-height: 32px;
-          border-right: 1px solid #ecedf1;
-          border-bottom: 1px solid #ecedf1;
+          border-right: 1px solid var(--bk-theme-border-weak);
+          border-bottom: 1px solid var(--bk-theme-border-weak);
 
           .evidence-info-item-text {
             width: 100%;
@@ -1518,7 +1518,7 @@
       .evidence-info-key {
         width: 160px;
         text-align: right;
-        background-color: #fafbfd;
+        background-color: var(--bk-theme-table-header-bg);
       }
     }
 
@@ -1548,7 +1548,7 @@
     }
 
     :deep(.bk-loading-title) {
-      margin-left: -15px !important;
+      margin-left: -var(--bk-theme-space-16) !important;
     }
   }
 }
@@ -1564,8 +1564,8 @@
 }
 
 .copy-btn {
-  margin-left: 8px;
-  color: #3a84ff;
+  margin-left: var(--bk-theme-space-8);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   opacity: 0%;
 

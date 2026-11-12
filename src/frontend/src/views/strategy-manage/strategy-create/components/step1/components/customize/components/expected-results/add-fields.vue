@@ -41,8 +41,8 @@
               <bk-input
                 v-model="searchKey"
                 behavior="simplicity"
-                class="mb8"
-                :placeholder="t('请输入关键字')">
+               
+                :placeholder="t('请输入关键字')" style="margin-bottom: var(--bk-theme-space-8)">
                 <template #prefix>
                   <span class="input-icon">
                     <audit-icon type="search1" />
@@ -269,11 +269,11 @@
         </div>
         <div class="field-pop-bth">
           <bk-button
-            class="mr8"
+           
             :disabled="!tableData.length || exist || isTableAggregate || hasInvalidFields"
             size="small"
             theme="primary"
-            @click="handleAddField">
+            @click="handleAddField" style="margin-right: var(--bk-theme-space-8)">
             {{ t('确定') }}
           </bk-button>
           <bk-button
@@ -692,18 +692,18 @@
     display: flex;
     width: 26px;
     height: 26px;
-    margin: 3px 0;
+    margin: var(--bk-theme-space-4) 0;
     font-size: 16px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
-    background: #e1ecff;
-    border-radius: 2px;
+    background: var(--bk-theme-fill-selected);
+    border-radius: var(--bk-theme-tag-radius);
     justify-content: center;
     align-items: center;
 
     &:hover {
-      color: #fff;
-      background: #3a84ff;
+      color: var(--bk-theme-surface-default);
+      background: var(--bk-theme-color-brand-2);
     }
   }
 
@@ -722,9 +722,9 @@
 
       .input-icon {
         display: flex;
-        padding-left: 8px;
+        padding-left: var(--bk-theme-space-8);
         font-size: 16px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         align-items: center;
         justify-content: center;
       }
@@ -735,23 +735,23 @@
 
         .field-pop-select-item {
           display: flex;
-          padding: 0 12px;
+          padding: 0 var(--bk-theme-space-12);
           line-height: 32px;
           justify-content: space-between;
           cursor: pointer;
 
           &:hover {
-            background-color: #f5f7fa;
+            background-color: var(--bk-theme-surface-subtle);
           }
         }
 
         .select-item-active {
-          color: #3a84ff;
-          background: #e1ecff;
+          color: var(--bk-theme-color-brand-2);
+          background: var(--bk-theme-fill-selected);
         }
 
         .select-item-disabled {
-          color: #c4c6cc;
+          color: var(--bk-theme-border-strong);
           cursor: not-allowed;
         }
       }
@@ -759,8 +759,8 @@
 
     .field-pop-radio {
       flex: 1;
-      padding: 16px;
-      background: #f5f7fa;
+      padding: var(--bk-theme-space-16);
+      background: var(--bk-theme-surface-subtle);
 
       :deep(.field-pop-radio-table-head) {
         width: 100%;
@@ -768,13 +768,12 @@
 
         th,
         td {
-          padding: 8px;
-          border: 1px solid #ddd;
+          padding: var(--bk-theme-space-8);border: 1px solid var(--bk-theme-border-default);
         }
 
         th {
           text-align: left;
-          background-color: #f0f1f5;
+          background-color: var(--bk-theme-surface-muted);
         }
       }
 
@@ -784,31 +783,29 @@
 
         .table-field {
           width: 180px;
-          padding-left: 8px;
+          padding-left: var(--bk-theme-space-8);
           overflow-wrap: break-word;
         }
 
         th,
         td {
-          padding: 0;
-          border: 1px solid #ddd;
+          padding: 0;border: 1px solid var(--bk-theme-border-default);
         }
 
         .is-duplicate {
           position: relative;
 
-          input {
-            background-color: #ffebeb;;
+          input {background-color: var(--bk-theme-fill-danger);;
           }
 
           .duplicate-icon {
             position: absolute;
             top: 15px;
             right: 10px;
-            padding: 1px;
+            padding: var(--bk-theme-space-2);
             font-size: 10px;
             background: red;
-            border-radius: 2px;
+            border-radius: var(--bk-theme-tag-radius);
           }
         }
 
@@ -824,11 +821,11 @@
             position: absolute;
             top: 15px;
             right: 10px;
-            padding: 1px;
+            padding: var(--bk-theme-space-2);
             font-size: 10px;
             color: #856404;
             background: #ffc107;
-            border-radius: 2px;
+            border-radius: var(--bk-theme-tag-radius);
           }
         }
 
@@ -838,11 +835,11 @@
 
           .bk-input--text {
             &:hover {
-              border: 1px solid #a3c5fd;
+              border: 1px solid var(--bk-theme-color-brand-4);
             }
 
             &:focus {
-              border: 1px solid #3a84ff;
+              border: 1px solid var(--bk-theme-color-brand-2);
             }
           }
         }
@@ -852,8 +849,8 @@
     .field-pop-bth {
       display: flex;
       height: 42px;
-      padding: 0 16px;
-      background: #fafbfd;
+      padding: 0 var(--bk-theme-space-16);
+      background: var(--bk-theme-table-header-bg);
       box-shadow: inset 0 1px #0000001f;
       align-items: center;
       justify-content: flex-end;
@@ -866,15 +863,15 @@
 }
 
 .comm-agg-pop {
-  padding: 5px 0 !important;
+  padding: var(--bk-theme-space-4) 0 !important;
 
   .common-agg-item {
     position: relative;
     display: flex;
     min-height: 32px;
-    padding: 0 12px;
+    padding: 0 var(--bk-theme-space-12);
     overflow: hidden;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -883,20 +880,20 @@
     align-items: center;
 
     &:hover {
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
     }
   }
 
   .is-disabled {
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: not-allowed;
     background-color: transparent;
   }
 }
 
 .subscript {
-  margin-right: 5px;
-  margin-left: 5px;
+  margin-right: var(--bk-theme-space-4);
+  margin-left: var(--bk-theme-space-4);
   font-weight: 700;
   color: black;
   text-align: center;

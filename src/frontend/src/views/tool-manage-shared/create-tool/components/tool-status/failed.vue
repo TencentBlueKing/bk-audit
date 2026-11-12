@@ -33,8 +33,8 @@
           {{ t('重新修改') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="handleBack">
+         
+          @click="handleBack" style="margin-left: var(--bk-theme-space-8)">
           {{ t('返回工具管理') }}
         </bk-button>
       </div>
@@ -77,13 +77,13 @@
   display: flex;
   height: 360px;
   text-align: center;
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
   flex-direction: column;
   justify-content: center;
   align-items: center;
 
   .tool-status-failed-icon {
-    margin-bottom: 10px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 64px;
     color: red;
   }

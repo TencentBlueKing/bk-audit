@@ -206,7 +206,7 @@
 <style lang="postcss" scoped>
 .assign-rule-fields {
   .form-section {
-    margin-bottom: 20px;
+    margin-bottom: var(--bk-theme-space-16);
 
     &:last-child {
       margin-bottom: 0;
@@ -215,7 +215,7 @@
 
   .form-section-row {
     display: flex;
-    gap: 16px;
+    gap: var(--bk-theme-space-16);
   }
 
   .form-section-col {
@@ -224,14 +224,14 @@
   }
 
   .form-label {
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
 
     &.is-required::before {
       display: inline-block;
       width: 8px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
       text-align: center;
       content: '*';
     }

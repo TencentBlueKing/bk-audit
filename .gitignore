@@ -66,3 +66,19 @@ AGENTS.md
 skills-lock.json
 pre-*-bkcodeai
 .husky/
+
+# 前端本地验收、主题核对，不进业务分支
+src/frontend/playwright.config.ts
+src/frontend/vitest.config.ts
+src/frontend/tests/
+src/frontend/docs/theme-remaining-331.md
+src/frontend/docs/theme-migration.md
+src/frontend/docs/miffy-coverage-matrix.md
+src/frontend/scripts/check-theme-tokens.mjs
+src/frontend/scripts/theme-baseline.json
+src/frontend/.browseros-verify/
+src/frontend/.ui-workflow/
+src/frontend/.aitest
+src/frontend/.agents
+src/frontend/.husky
+src/frontend/.gitignore

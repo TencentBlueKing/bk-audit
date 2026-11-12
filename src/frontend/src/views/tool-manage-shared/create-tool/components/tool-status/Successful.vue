@@ -33,8 +33,8 @@
           {{ t('返回工具管理') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="handleStrategy">
+         
+          @click="handleStrategy" style="margin-left: var(--bk-theme-space-8)">
           {{ t('配置策略') }}
         </bk-button>
       </div>
@@ -87,15 +87,15 @@
   display: flex;
   height: 360px;
   text-align: center;
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
   flex-direction: column;
   justify-content: center;
   align-items: center;
 
   .tool-status-successful-icon {
-    margin-bottom: 10px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 64px;
-    color: #2caf5e;
+    color: var(--bk-theme-color-success-2);
   }
 }
 </style>

@@ -23,8 +23,7 @@
     :width="960">
     <risk-whitelist-form
       ref="formRef"
-      :record="record"
-      @renew="openRenew" />
+      :record="record" />
     <template #footer>
       <bk-button
         class="footer-action"
@@ -35,16 +34,13 @@
         {{ t('提交') }}
       </bk-button>
       <bk-button
-        class="footer-action ml8"
-        @click="isShow = false">
+        class="footer-action"
+        @click="isShow = false" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
   </audit-sideslider>
   <whitelist-confirm-dialog ref="confirmRef" />
-  <renew-dialog
-    ref="renewRef"
-    @success="handleRenewed" />
 </template>
 <script setup lang="ts">
   import { ref } from 'vue';
@@ -59,8 +55,6 @@
   import RiskWhitelistForm from '@components/risk-whitelist-form/index.vue';
   import WhitelistConfirmDialog from '@components/whitelist-confirm-dialog/index.vue';
 
-  import RenewDialog from './renew-dialog.vue';
-
   const emit = defineEmits<{(e: 'success'): void}>();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -70,21 +64,11 @@
   const record = ref<RiskWhitelist | null>(null);
   const formRef = ref<InstanceType<typeof RiskWhitelistForm>>();
   const confirmRef = ref<InstanceType<typeof WhitelistConfirmDialog>>();
-  const renewRef = ref<InstanceType<typeof RenewDialog>>();
 
   const open = (row?: RiskWhitelist) => {
     record.value = row || null;
     isEdit.value = Boolean(row?.id);
     isShow.value = true;
-  };
-
-  const openRenew = () => {
-    if (record.value) renewRef.value?.open(record.value);
-  };
-
-  const handleRenewed = (row: RiskWhitelist) => {
-    formRef.value?.applyRenewed(row.expire_at, row.validity_mode, row.custom_days);
-    emit('success');
   };
 
   const handleSubmit = async () => {

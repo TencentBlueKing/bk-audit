@@ -295,10 +295,10 @@
   <style lang="postcss" scoped>
     .config {
       width: 96%;
-      margin-top: 20px;
+      margin-top: var(--bk-theme-space-16);
       margin-left: 2%;
 
-      /* background-color: #f5f7fa; */
+      /* background-color: var(--bk-theme-surface-subtle); */
       overflow: hidden;
 
       .base-form-item {
@@ -313,12 +313,12 @@
 
     .event-table {
       width: 96%;
-      margin-top: 20px;
+      margin-top: var(--bk-theme-space-16);
       margin-left: 2%;
-      border: 1px solid #dcdee5;
+      border: 1px solid var(--bk-theme-border-default);
 
       .border-right {
-        border-right: 1px solid #dcdee5;
+        border-right: 1px solid var(--bk-theme-border-default);
       }
 
       .field-type-box {
@@ -326,7 +326,7 @@
       }
 
       .table-text {
-        padding: 0 10px;
+        padding: 0 var(--bk-theme-space-12);
         line-height: 42px;
       }
 
@@ -334,15 +334,15 @@
         display: flex;
         height: 42px;
         line-height: 42px;
-        background: #f5f7fa;
-        border-bottom: 1px solid #dcdee5;
+        background: var(--bk-theme-surface-subtle);
+        border-bottom: 1px solid var(--bk-theme-border-default);
       }
 
       .table-list {
         display: flex;
         min-height: 42px;
         line-height: 42px;
-        border-bottom: 1px solid #dcdee5;
+        border-bottom: 1px solid var(--bk-theme-border-default);
       }
 
       .table-index {
@@ -370,16 +370,16 @@
 
       .table-info-fill {
         font-size: 12px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
       }
 
       .trigger {
         display: flex;
-        margin-right: 10px;
-        margin-left: 10px;
+        margin-right: var(--bk-theme-space-12);
+        margin-left: var(--bk-theme-space-12);
         font-size: 12px;
         letter-spacing: 0;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         cursor: pointer;
         align-items: center;
         justify-content: space-between;
@@ -387,22 +387,22 @@
     }
 
     .dashed-underline {
-      padding-bottom: 2px;
+      padding-bottom: var(--bk-theme-space-2);
 
       /* 可选，增加文字和虚线间距 */
-      border-bottom: 1px dashed #c4c6cc;
+      border-bottom: 1px dashed var(--bk-theme-border-strong);
     }
 
     .field-type {
       height: 20px;
-      padding: 1px 5px;
-      margin-top: 12px;
-      margin-left: 5px;
+      padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
+      margin-top: var(--bk-theme-space-12);
+      margin-left: var(--bk-theme-space-4);
       font-size: 12px;
       line-height: normal;
-      color: #1768ef;
-      background: #e1ecff;
-      border-radius: 10px;
+      color: var(--bk-theme-color-brand-1);
+      background: var(--bk-theme-fill-selected);
+      border-radius: var(--bk-theme-message-radius);
       align-items: center;
       justify-content: center;
     }

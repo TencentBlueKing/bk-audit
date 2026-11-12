@@ -198,8 +198,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: rgb(255 255 255 / 35%);
-      border-radius: 4px;
+      background: rgb(255 255 255 / 35%);border-radius: var(--bk-theme-tag-radius);
     }
 
     &::-webkit-scrollbar-thumb:hover {

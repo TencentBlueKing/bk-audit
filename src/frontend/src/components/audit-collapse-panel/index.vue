@@ -55,18 +55,18 @@
 </script>
 <style scoped lang="postcss">
   .collapse-panel {
-    border: .5px solid #dcdee5;
-    border-top-right-radius: 2px;
-    border-top-left-radius: 2px;
+    border: .5px solid var(--bk-theme-border-default);
+    border-top-right-radius: var(--bk-theme-collapse-radius);
+    border-top-left-radius: var(--bk-theme-collapse-radius);
 
     .collapse-panel-title {
       height: 40px;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
       font-weight: 700;
       line-height: 40px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
       cursor: pointer;
-      background: #f0f1f5;
+      background: var(--bk-theme-collapse-bg);
     }
   }
 </style>

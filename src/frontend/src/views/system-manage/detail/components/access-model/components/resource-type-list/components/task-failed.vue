@@ -48,9 +48,9 @@
 <style scoped>
   .task-failed {
     .failed-icon {
-      margin-right: 6px;
+      margin-right: var(--bk-theme-space-6);
       font-size: 14px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
       vertical-align: middle;
       user-select: none;
     }

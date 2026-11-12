@@ -58,9 +58,7 @@
 </script>
 <style lang="postcss">
   .audit-router-back {
-    display: inline-block;
-    padding-right: 8px;
-    color: #3a84ff;
+    display: inline-block;padding-right: var(--bk-theme-space-8);color: var(--bk-theme-color-brand-2);
     cursor: pointer;
   }
 </style>

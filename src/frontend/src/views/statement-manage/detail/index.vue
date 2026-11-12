@@ -175,11 +175,11 @@
     const titleRect = titleEl?.getBoundingClientRect();
     const left = sideRect
       ? Math.ceil(sideRect.right)
-      : 220;
+      : 240;
     // 必须在标题栏下方，标题保持显示
     const top = titleRect
       ? Math.ceil(titleRect.bottom)
-      : (TOP_NAV_HEIGHT + 52);
+      : (TOP_NAV_HEIGHT + 48);
     const cw = Math.max(window.innerWidth - left, 0);
     const ch = Math.max(window.innerHeight - top, 0);
     if (!cw || !ch) return;
@@ -750,8 +750,7 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgb(255 255 255 / 22%);
-    border-radius: 4px;
+    background: rgb(255 255 255 / 22%);border-radius: var(--bk-theme-tag-radius);
   }
 
   &::-webkit-scrollbar-thumb:hover {

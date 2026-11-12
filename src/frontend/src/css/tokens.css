@@ -1,73 +1,321 @@
-/* 蓝鲸审计中心全局 Design Token。取值对齐蓝鲸设计规范，前缀 --audit-。 */
+/* 蓝鲸审计中心全局 Design Token。前缀 --bk-theme-。色值以 miffy Design Mode 为准。
+   分四层：原始层（色阶 + 审计增量 ext）→ 语义层 → 尺度层 → 场景层。
+   业务页只用场景层 / 场景类 / 语义层；局部间距用 var(--bk-theme-space-N)；不直接用 radius-* / shadow-*。
+   新增或调整场景见 bk-audit-theme/references/scene-workflow.md。 */
 
 :root {
-  --audit-brand-01: #1768ef;
-  --audit-brand-02: #3a84ff;
-  --audit-brand-03: #699df4;
-  --audit-brand-04: #a3c5fd;
-  --audit-brand-05: #cddffe;
-  --audit-brand-06: #e1ecff;
-  --audit-brand-07: #f0f5ff;
-  --audit-success-01: #299e56;
-  --audit-success-02: #2caf5e;
-  --audit-success-03: #65c389;
-  --audit-success-04: #a1e3ba;
-  --audit-success-05: #cbf0da;
-  --audit-success-06: #daf6e5;
-  --audit-success-07: #ebfaf0;
-  --audit-danger-01: #e71818;
-  --audit-danger-02: #ea3636;
-  --audit-danger-03: #ff5656;
-  --audit-danger-04: #f8b4b4;
-  --audit-danger-05: #fdd;
-  --audit-danger-06: #ffebeb;
-  --audit-danger-07: #fff0f0;
-  --audit-warn-01: #e38b02;
-  --audit-warn-02: #f59500;
-  --audit-warn-03: #f8b64f;
-  --audit-warn-04: #f9d090;
-  --audit-warn-05: #fce5c0;
-  --audit-warn-06: #fdeed8;
-  --audit-warn-07: #fdf4e8;
-  --audit-neutral-text-01: #313238;
-  --audit-neutral-text-02: #4d4f56;
-  --audit-neutral-text-03: #979ba5;
-  --audit-neutral-text-04: #c4c6cc;
-  --audit-neutral-border-01: #dcdee5;
-  --audit-neutral-border-02: #eaebf0;
-  --audit-neutral-bg-01: #f0f1f5;
-  --audit-neutral-bg-02: #fafbfd;
-  --audit-neutral-bg-03: #f5f7fa;
-  --audit-neutral-bg-04: #fff;
-  --audit-radius-control: 2px;
-  --audit-radius-container: 4px;
-  --audit-font-family: blinkmacsystemfont, 'Helvetica Neue', helvetica, 'Segoe UI', arial, roboto, 'PingFang SC', miui,
+  /* 原始层 · Brand */
+  --bk-theme-color-brand-1: #1768ef;
+  --bk-theme-color-brand-2: #3a84ff;
+  --bk-theme-color-brand-3: #6ba1ff;
+  --bk-theme-color-brand-4: #a3c5fd;
+  --bk-theme-color-brand-5: #c9dcff;
+  --bk-theme-color-brand-6: #e4efff;
+  --bk-theme-color-brand-7: #f3f7ff;
+
+  /* 原始层 · Neutral */
+  --bk-theme-color-neutral-1: #000;
+  --bk-theme-color-neutral-2: #2e3440;
+  --bk-theme-color-neutral-3: #4a5160;
+  --bk-theme-color-neutral-4: #8e95a6;
+  --bk-theme-color-neutral-5: #b0b7c6;
+  --bk-theme-color-neutral-6: #c8cfdb;
+  --bk-theme-color-neutral-7: #dde3ee;
+  --bk-theme-color-neutral-8: #e6eaf3;
+  --bk-theme-color-neutral-9: #eef2f7;
+  --bk-theme-color-neutral-10: #f7f9fc;
+  --bk-theme-color-neutral-11: #fff;
+
+  /* 原始层 · Success */
+  --bk-theme-color-success-1: #1b8045;
+  --bk-theme-color-success-2: #2caf5e;
+  --bk-theme-color-success-3: #52c47d;
+  --bk-theme-color-success-4: #8fd9a8;
+  --bk-theme-color-success-5: #bdead0;
+  --bk-theme-color-success-6: #ddf6e7;
+  --bk-theme-color-success-7: #f0faf4;
+
+  /* 原始层 · Warn */
+  --bk-theme-color-warn-1: #c88800;
+  --bk-theme-color-warn-2: #f59500;
+  --bk-theme-color-warn-3: #f8b040;
+  --bk-theme-color-warn-4: #facc7a;
+  --bk-theme-color-warn-5: #fce0ad;
+  --bk-theme-color-warn-6: #fdf0d6;
+  --bk-theme-color-warn-7: #fef8ec;
+
+  /* 原始层 · Danger */
+  --bk-theme-color-danger-1: #d92020;
+  --bk-theme-color-danger-2: #ea3636;
+  --bk-theme-color-danger-3: #f56c6c;
+  --bk-theme-color-danger-4: #f5a8a8;
+  --bk-theme-color-danger-5: #fad4d4;
+  --bk-theme-color-danger-6: #feecec;
+  --bk-theme-color-danger-7: #fff5f5;
+
+  /* 原始层 · 审计增量色。设计稿明确要求单独命名、不并入 Magicbox 色阶的值只在这里写 hex，
+     语义层和场景层只引用这里，不再直接写 hex。 */
+  --bk-theme-color-ext-page: #f2f5fb;
+  --bk-theme-color-ext-table-header: #fafbfd;
+  --bk-theme-color-ext-table-hover: #eef2f8;
+  --bk-theme-color-ext-select-banner: #f0f5ff;
+  --bk-theme-color-ext-nav-top-start: #182132;
+  --bk-theme-color-ext-nav-top-end: #203e61;
+  --bk-theme-color-ext-nav-indicator: #266efe;
+  --bk-theme-color-ext-nav-side-text: #6b7996;
+  --bk-theme-color-ext-nav-side-active: #e1ecff;
+  --bk-theme-color-ext-nav-side-icon: #b0bdd5;
+  --bk-theme-color-ext-search-border: #d3d9ff;
+  --bk-theme-color-ext-search-input-border: #488bff;
+  --bk-theme-color-ext-scene-tag: #699df4;
+  --bk-theme-color-ext-category-purple: #8a6cf0;
+  --bk-theme-color-ext-category-green: #7dae1e;
+  --bk-theme-color-ext-analyze-border: #3261f8;
+
+  /* 语义层 · 文字 */
+  --bk-theme-text-strong: var(--bk-theme-color-neutral-2);
+  --bk-theme-text-default: var(--bk-theme-color-neutral-3);
+  --bk-theme-text-weak: var(--bk-theme-color-neutral-4);
+  --bk-theme-text-disabled: var(--bk-theme-color-neutral-5);
+  --bk-theme-text-inverse: var(--bk-theme-color-neutral-11);
+
+  /* 语义层 · 表面 */
+  --bk-theme-surface-page: var(--bk-theme-color-ext-page);
+  --bk-theme-surface-default: var(--bk-theme-color-neutral-11);
+  --bk-theme-surface-muted: var(--bk-theme-color-neutral-9);
+  --bk-theme-surface-subtle: var(--bk-theme-color-neutral-10);
+  --bk-theme-surface-soft: var(--bk-theme-color-neutral-8);
+
+  /* 语义层 · 边框 */
+  --bk-theme-border-strong: var(--bk-theme-color-neutral-6);
+  --bk-theme-border-default: var(--bk-theme-color-neutral-7);
+  --bk-theme-border-weak: var(--bk-theme-color-neutral-8);
+  --bk-theme-border-hover: var(--bk-theme-color-neutral-5);
+  --bk-theme-border-brand: var(--bk-theme-color-brand-4);
+
+  /* 语义层 · 填充。通用选中 / 悬浮底，不借用导航专用 token */
+  --bk-theme-fill-selected: var(--bk-theme-color-ext-nav-side-active);
+  --bk-theme-fill-hover: var(--bk-theme-color-brand-7);
+  --bk-theme-fill-info: var(--bk-theme-color-brand-6);
+  --bk-theme-fill-success: var(--bk-theme-color-success-6);
+  --bk-theme-fill-warn: var(--bk-theme-color-warn-6);
+  --bk-theme-fill-danger: var(--bk-theme-color-danger-6);
+
+  /* 语义层 · 状态。P7 待确认：先按「-1 字色 / -7 底色」占位 */
+  --bk-theme-status-info-text: var(--bk-theme-color-brand-1);
+  --bk-theme-status-info-bg: var(--bk-theme-color-brand-7);
+  --bk-theme-status-success-text: var(--bk-theme-color-success-1);
+  --bk-theme-status-success-bg: var(--bk-theme-color-success-7);
+  --bk-theme-status-warn-text: var(--bk-theme-color-warn-1);
+  --bk-theme-status-warn-bg: var(--bk-theme-color-warn-7);
+  --bk-theme-status-danger-text: var(--bk-theme-color-danger-1);
+  --bk-theme-status-danger-bg: var(--bk-theme-color-danger-7);
+
+  /* 语义层 · 导航 */
+  --bk-theme-nav-top-bg: linear-gradient(90deg, var(--bk-theme-color-ext-nav-top-start) 0%, var(--bk-theme-color-ext-nav-top-end) 100%);
+  --bk-theme-nav-top-text: var(--bk-theme-color-neutral-4);
+  --bk-theme-nav-top-text-active: var(--bk-theme-text-inverse);
+  --bk-theme-nav-top-hover: rgb(255 255 255 / 12%); /* P17 待确认：规范禁止 alpha，白名单特例 */
+  --bk-theme-nav-indicator: var(--bk-theme-color-ext-nav-indicator); /* P3 待确认：#266EFE 还是 Brand/2 */
+  --bk-theme-nav-side-bg: var(--bk-theme-surface-default);
+  --bk-theme-nav-side-text: var(--bk-theme-color-ext-nav-side-text); /* P15 待确认：miffy Navigation/文字-Nomal 为 #6E7993 */
+  --bk-theme-nav-side-text-active: var(--bk-theme-color-brand-2);
+  --bk-theme-nav-side-active-bg: var(--bk-theme-color-ext-nav-side-active);
+  --bk-theme-nav-side-icon: var(--bk-theme-color-ext-nav-side-icon);
+  --bk-theme-nav-side-border: var(--bk-theme-color-neutral-7);
+
+  /* 语义层 · 表格颜色 */
+  --bk-theme-table-header-bg: var(--bk-theme-color-ext-table-header);
+  --bk-theme-table-header-text: var(--bk-theme-text-weak);
+  --bk-theme-table-header-divider: var(--bk-theme-border-weak);
+  --bk-theme-table-row-bg: var(--bk-theme-surface-default);
+  --bk-theme-table-row-hover: var(--bk-theme-color-ext-table-hover);
+  --bk-theme-table-row-selected-bg: var(--bk-theme-surface-default);
+  --bk-theme-table-border: var(--bk-theme-border-default);
+  --bk-theme-table-select-banner-bg: var(--bk-theme-color-ext-select-banner);
+  --bk-theme-table-row-new-bg: var(--bk-theme-color-success-6);
+  --bk-theme-table-row-new-hover-bg: var(--bk-theme-color-success-5);
+
+  /* 语义层 · 分类色。P14 待确认：只登记设计稿已给 hex 的两色，蓝 / 橙待补 */
+  --bk-theme-category-purple: var(--bk-theme-color-ext-category-purple);
+  --bk-theme-category-green: var(--bk-theme-color-ext-category-green);
+
+  /* 尺度层 · 圆角 */
+  --bk-theme-radius-0: 0;
+  --bk-theme-radius-4: 4px;
+  --bk-theme-radius-6: 6px;
+  --bk-theme-radius-8: 8px;
+  --bk-theme-radius-12: 12px;
+  --bk-theme-radius-16: 16px;
+  --bk-theme-radius-full: 999px;
+
+  /* 尺度层 · 间距。只表示档位，业务页局部排版直接写 var(--bk-theme-space-N)。
+     40 不在 miffy 档位内（P18），只保留存量，禁止新增引用 */
+  --bk-theme-space-2: 2px;
+  --bk-theme-space-4: 4px;
+  --bk-theme-space-6: 6px;
+  --bk-theme-space-8: 8px;
+  --bk-theme-space-12: 12px;
+  --bk-theme-space-16: 16px;
+  --bk-theme-space-24: 24px;
+  --bk-theme-space-32: 32px;
+  --bk-theme-space-40: 40px;
+
+  /* 尺度层 · 字体 */
+  --bk-theme-font-family: blinkmacsystemfont, 'Helvetica Neue', helvetica, 'Segoe UI', arial, roboto, 'PingFang SC', miui,
     'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;
-  --audit-font-family-code: menlo, monaco, consolas, courier, monospace;
-  --audit-font-size-mini: 10px;
-  --audit-font-size-sm: 12px;
-  --audit-font-size-md: 13px;
-  --audit-font-size-base: 14px;
-  --audit-font-size-lg: 16px;
-  --audit-font-size-xl: 20px;
-  --audit-line-height-mini: 16px;
-  --audit-line-height-sm: 20px;
-  --audit-line-height-md: 20px;
-  --audit-line-height-base: 22px;
-  --audit-line-height-lg: 24px;
-  --audit-line-height-xl: 28px;
-  --audit-font-weight-regular: 400;
-  --audit-font-weight-bold: 700;
-  --audit-space-4: 4px;
-  --audit-space-8: 8px;
-  --audit-space-12: 12px;
-  --audit-space-16: 16px;
-  --audit-space-24: 24px;
-  --audit-space-32: 32px;
-  --audit-space-40: 40px;
-  --audit-shadow-card: 0 2px 4px 0 rgb(25 25 41 / 5%);
-  --audit-shadow-card-hover: 0 2px 4px 0 rgb(0 0 0 / 10%);
-  --audit-shadow-dropdown: 0 0 10px 0 rgb(0 0 0 / 10%);
-  --audit-shadow-popover: 0 0 20px 0 rgb(0 0 0 / 16%);
-  --audit-shadow-dialog: 0 4px 12px 0 rgb(0 0 0 / 20%);
+  --bk-theme-font-family-code: menlo, monaco, consolas, courier, monospace;
+  --bk-theme-font-size-mini: 10px;
+  --bk-theme-font-size-sm: 12px;
+  --bk-theme-font-size-md: 13px;
+  --bk-theme-font-size-base: 14px;
+  --bk-theme-font-size-lg: 16px;
+  --bk-theme-font-size-xl: 20px;
+  --bk-theme-line-height-mini: 16px;
+  --bk-theme-line-height-sm: 20px;
+  --bk-theme-line-height-md: 20px;
+  --bk-theme-line-height-base: 22px;
+  --bk-theme-line-height-lg: 24px;
+  --bk-theme-line-height-xl: 28px;
+  --bk-theme-font-weight-regular: 400;
+  --bk-theme-font-weight-bold: 700;
+
+  /* 尺度层 · 阴影 */
+  --bk-theme-shadow-card: 0 4px 16px rgb(31 41 69 / 8%);
+  --bk-theme-shadow-card-hover: 0 8px 24px rgb(31 41 69 / 12%);
+  --bk-theme-shadow-dropdown: 0 0 10px 0 rgb(0 0 0 / 10%);
+  --bk-theme-shadow-popover: 0 0 20px 0 rgb(0 0 0 / 16%);
+  --bk-theme-shadow-dialog: 0 4px 12px 0 rgb(0 0 0 / 20%);
+
+  /* ================================================================
+     场景层。业务页、库主题、场景类只引用这一层或语义层。
+     每组上方的 @scene 注释是场景注册表，build_profile.py 据此生成 scenes.md / scenes.json，
+     check-theme-tokens.mjs 据此校验，scene-audit.js 据此验收。
+     格式：@scene <id> | <名称> | doc: <规范出处> | class: <场景类或 -> | detect: <识别方式> | status: active|placeholder|deprecated
+     场景层只能引用语义层 / 尺度层 / 本层 token，不写字面量（P 编号占位除外）。
+     ================================================================ */
+
+  /* @scene shell-nav-top | 顶栏 | doc: §1 顶部导航 / 一级模块选中 | class: - | detect: nav-top | status: active */
+  --bk-theme-nav-height: 52px;
+  --bk-theme-nav-indicator-height: 3px;
+  --bk-theme-nav-indicator-offset: 6px;
+  --bk-theme-nav-indicator-radius: 2px;
+
+  /* @scene shell-nav-side | 左侧二级导航 | doc: §1 左侧二级导航 / 侧栏菜单选中 / 侧栏项间距 | class: - | detect: nav-side | status: active */
+  --bk-theme-nav-side-width: 240px;
+  --bk-theme-nav-side-active-radius: var(--bk-theme-radius-8);
+  --bk-theme-nav-side-item-gap: var(--bk-theme-space-4);
+
+  /* @scene page | 内容区与页面标题 | doc: §1 页面标题 / 内容区 padding | class: - | detect: page | status: active */
+  --bk-theme-page-padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  --bk-theme-page-gap: var(--bk-theme-space-16); /* P5 待确认 */
+  --bk-theme-page-title-height: 32px;
+  --bk-theme-page-title-size: var(--bk-theme-font-size-xl);
+  --bk-theme-page-title-weight: var(--bk-theme-font-weight-bold);
+  --bk-theme-page-title-color: var(--bk-theme-text-strong);
+  --bk-theme-title-select-radius: var(--bk-theme-radius-6);
+  --bk-theme-title-select-tag-radius: 2px;
+  --bk-theme-title-select-tag-bg: var(--bk-theme-color-ext-scene-tag);
+
+  /* @scene card | 主内容白卡片 | doc: §1 主内容卡片 / §3.3 圆角12 / §3.4 页面编组 | class: .bk-theme-card | detect: white-container | status: active */
+  --bk-theme-card-bg: var(--bk-theme-surface-default);
+  --bk-theme-card-radius: var(--bk-theme-radius-12);
+  --bk-theme-card-radius-lg: var(--bk-theme-radius-16);
+  --bk-theme-card-shadow: var(--bk-theme-shadow-card);
+  --bk-theme-card-shadow-hover: var(--bk-theme-shadow-card-hover);
+  --bk-theme-card-padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24); /* P4 待确认 */
+  --bk-theme-card-gap: var(--bk-theme-space-24); /* P5 待确认 */
+  --bk-theme-card-footer-padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+
+  /* @scene search-card | 智能搜索卡片 | doc: §1 智能搜索卡片 / 设计稿 #7 | class: .bk-theme-search-card | detect: class | status: active */
+  --bk-theme-search-card-bg: var(--bk-theme-surface-default);
+  --bk-theme-search-card-gradient: linear-gradient(90deg, var(--bk-theme-color-ext-select-banner) 0%, var(--bk-theme-color-ext-search-border) 100%);
+  --bk-theme-search-card-border: var(--bk-theme-color-ext-search-border);
+  --bk-theme-search-card-radius: var(--bk-theme-radius-12);
+  --bk-theme-search-card-inner-radius: var(--bk-theme-radius-6);
+  --bk-theme-search-input-border: var(--bk-theme-color-ext-search-input-border);
+
+  /* @scene search-filled | 填充搜索 | doc: miffy Input-search / SearchSelect 填充底。库无填充类，页面挂 .bk-theme-search-filled | class: .bk-theme-search-filled | detect: class | status: active */
+  --bk-theme-search-filled-bg: var(--bk-theme-surface-soft);
+  --bk-theme-search-filled-hover-bg: var(--bk-theme-border-default); /* Neutral/7，与默认边线同值 */
+
+  /* @scene select-banner | 表格已选提示条 | doc: §1 已选提示条 | class: .bk-theme-select-banner | detect: class | status: active */
+  --bk-theme-select-banner-bg: var(--bk-theme-table-select-banner-bg);
+  --bk-theme-select-banner-radius: var(--bk-theme-radius-6);
+
+  /* @scene table-frame | 表格外框 | doc: §3.3 圆角8 Table 外框（外部有白卡片时 0 圆角无外框） | class: - | detect: table | status: active */
+  --bk-theme-table-frame-radius: var(--bk-theme-radius-8);
+  --bk-theme-table-frame-border: 1px solid var(--bk-theme-table-border);
+  --bk-theme-table-row-height: 42px;
+  --bk-theme-table-pagination-gap: 0;
+  --bk-theme-table-radius: var(--bk-theme-table-frame-radius); /* 兼容别名，新代码用 table-frame-radius */
+
+  /* @scene cell-tip | 带 tips 的单元格文字 | doc: §1 有 tips 的单元格 | class: .bk-theme-cell-tip | detect: class | status: active */
+  --bk-theme-cell-tip-underline: 1px dashed var(--bk-theme-text-disabled);
+
+  /* @scene control | 标准控件 | doc: §3.3 圆角6 Button/Input/Select/Form/DatePicker/Radio-button-group/Tab-胶囊 | class: - | detect: control | status: active */
+  --bk-theme-control-radius: var(--bk-theme-radius-6);
+  --bk-theme-control-border-color: var(--bk-theme-border-strong); /* P12 待确认 */
+
+  /* @scene tag | Tag 与内嵌小芯片 | doc: miffy Tag 方角圆角4；胶囊不跟方角 | class: - | detect: tag | status: active */
+  --bk-theme-tag-radius: var(--bk-theme-radius-4);
+  --bk-theme-tag-height: 22px;
+  --bk-theme-tag-max-width: 180px;
+
+  /* @scene tab | 标签页 Tab | doc: miffy 下划线底线 Neutral/6；色块大 8、色块小 6、数字胶囊全圆角 | class: - | detect: tab | status: active */
+  --bk-theme-tab-radius: var(--bk-theme-radius-8);
+  --bk-theme-tab-radius-sm: var(--bk-theme-radius-6);
+  --bk-theme-tab-pill-radius: var(--bk-theme-radius-full);
+  --bk-theme-tab-rail-bg: var(--bk-theme-border-strong);
+
+  /* @scene message | Message / Upload / 小 InfoBox | doc: §3.3 圆角8。Alert 单独走 alert 场景 | class: - | detect: message | status: active */
+  --bk-theme-message-radius: var(--bk-theme-radius-8);
+
+  /* @scene alert | 警告提示 | doc: miffy Alert 圆角6 / 6 阶语义底 / 无可见描边 | class: - | detect: alert | status: active */
+  --bk-theme-alert-radius: var(--bk-theme-radius-6);
+  --bk-theme-alert-info-bg: var(--bk-theme-fill-info);
+  --bk-theme-alert-success-bg: var(--bk-theme-fill-success);
+  --bk-theme-alert-warn-bg: var(--bk-theme-fill-warn);
+  --bk-theme-alert-danger-bg: var(--bk-theme-fill-danger);
+
+  /* @scene tooltip | 文字气泡内容容器 | doc: miffy Tooltip 内容圆角6。黑底 80% 不新增 alpha token | class: - | detect: tooltip | status: active */
+  --bk-theme-tooltip-radius: var(--bk-theme-radius-6);
+
+  /* @scene collapse | 折叠面板 | doc: miffy Collapse 圆角6 / Neutral/8 底 | class: - | detect: collapse | status: active */
+  --bk-theme-collapse-radius: var(--bk-theme-radius-6);
+  --bk-theme-collapse-bg: var(--bk-theme-surface-soft);
+
+  /* @scene editable-table | 可编辑表 | doc: miffy Editable 外框8 / 线 Neutral/7 / 标题 Neutral/9 | class: - | detect: editable-table | status: active */
+  --bk-theme-editable-table-radius: var(--bk-theme-radius-8);
+  --bk-theme-editable-table-border: var(--bk-theme-border-default);
+  --bk-theme-editable-table-header-bg: var(--bk-theme-surface-muted);
+  --bk-theme-editable-table-disabled-bg: var(--bk-theme-surface-subtle);
+  --bk-theme-editable-table-hover-border: var(--bk-theme-border-brand);
+
+  /* @scene overlay | 下拉 / Popover / PopConfirm 面板 | doc: §3.3 圆角12 Dropdown/Popover/PopConfirm | class: - | detect: overlay | status: active */
+  --bk-theme-overlay-radius: var(--bk-theme-radius-12);
+  --bk-theme-overlay-shadow: var(--bk-theme-shadow-dropdown); /* P9 待确认：气泡阴影是否改为卡片阴影 */
+
+  /* @scene dialog | Dialog / 大 InfoBox / Notify | doc: §3.3 圆角16 | class: - | detect: dialog | status: active */
+  --bk-theme-dialog-radius: var(--bk-theme-radius-16);
+  --bk-theme-dialog-shadow: var(--bk-theme-shadow-dialog);
+  --bk-theme-dialog-padding-x: var(--bk-theme-space-24); /* P20 待确认：取 bkui 默认 */
+  --bk-theme-dialog-footer-padding: var(--bk-theme-space-8) var(--bk-theme-space-24); /* P20 待确认：取 bkui 默认 */
+
+  /* @scene sideslider | 侧滑 | doc: miffy 标题线 Neutral/7 / 脚部底 Neutral/10。根圆角保持 0 | class: - | detect: sideslider | status: active */
+  --bk-theme-sideslider-footer-padding-x: var(--bk-theme-space-24); /* P20 待确认：取 bkui 默认 */
+  --bk-theme-sideslider-header-border: var(--bk-theme-border-default);
+  --bk-theme-sideslider-footer-bg: var(--bk-theme-surface-subtle);
+
+  /* @scene form | 表单项间距 | doc: 表单栈纵向24 / compact 12；垂直 label gap 6 | class: .bk-theme-form--compact .bk-theme-form--inline | detect: form-item | status: active */
+  --bk-theme-form-item-gap: var(--bk-theme-space-24);
+  --bk-theme-form-item-gap-compact: var(--bk-theme-space-12); /* P19 待确认 */
+  --bk-theme-form-label-gap: var(--bk-theme-space-6);
+
+  /* @scene list-toolbar | 列表工具栏 | doc: 设计稿 #11 表格卡片工具栏 | class: .bk-theme-list-toolbar | detect: class | status: active */
+  --bk-theme-list-toolbar-gap: var(--bk-theme-space-16); /* P21 待确认 */
+  --bk-theme-list-toolbar-item-gap: var(--bk-theme-space-8);
+
+  /* @scene descriptions | 气泡内 Descriptions | doc: §1 Popover/Descriptions 行距0，>10 行一行两项 | class: .bk-theme-descriptions--dense | detect: class | status: placeholder */
+  --bk-theme-descriptions-row-gap: 0; /* P10 待确认：示例行高 26 */
 }

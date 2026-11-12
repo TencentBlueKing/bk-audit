@@ -248,7 +248,7 @@
 </script>
 <style lang="postcss" scoped>
   .log-collection-detail-box {
-    margin-bottom: 24px;
+    margin-bottom: var(--bk-theme-space-24);
 
     .log-record-content {
       :deep(.render-info-item) {
@@ -257,28 +257,27 @@
     }
 
     .title {
-      padding-bottom: 16px;
+      padding-bottom: var(--bk-theme-space-16);
       font-size: 14px;
       font-weight: bold;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .logic-expression {
       display: inline-block;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       line-height: 22px;
-      background: #f0f1f5;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .logic-op {
       display: inline-block;
-      padding: 0 8px;
-      margin: 0 4px;
+      padding: 0 var(--bk-theme-space-8);
+      margin: 0 var(--bk-theme-space-4);
       line-height: 22px;
-      color: #3a84ff;
-      background: #edf4ff;
-      border-radius: 2px;
+      color: var(--bk-theme-color-brand-2);background: var(--bk-theme-fill-selected);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .logic-op:last-child {

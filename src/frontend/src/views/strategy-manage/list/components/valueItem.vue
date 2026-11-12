@@ -174,7 +174,7 @@
     display: flex;
     width: max-content;
     min-height: 36px;
-    line-height: var(--audit-line-height-sm);
+    line-height: var(--bk-theme-line-height-sm);
 
     &.fill-last-column {
       width: 100%;
@@ -195,23 +195,23 @@
   }
 
   .drill-empty {
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
   }
 
   .drill-configured {
     cursor: default;
 
     .drill-count {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .value-item {
     .empty-text {
       height: 36px;
-      font-size: var(--audit-font-size-sm);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 36px;
-      color: var(--audit-neutral-text-03);
+      color: var(--bk-theme-text-weak);
       text-align: center;
     }
   }

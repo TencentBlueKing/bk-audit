@@ -16,7 +16,7 @@
 -->
 <template>
   <div>
-    <div class="dialog-content">
+    <div class="dialog-content bk-theme-form--inline">
       <div class="dialog-content-left">
         <bk-input>
           <template #prefix>
@@ -173,10 +173,10 @@
     </div>
     <div class="dialog-footer">
       <bk-button
-        class="mr8"
+       
         theme="primary"
         type="primary"
-        @click="submit">
+        @click="submit" style="margin-right: var(--bk-theme-space-8)">
         {{ t('确定') }}
       </bk-button>
       <bk-button
@@ -248,10 +248,10 @@
     .list-head {
       display: flex;
       height: 40px;
-      margin-top: 10px;
+      margin-top: var(--bk-theme-space-12);
       font-size: 12px;
-      color: #979ba5;
-      background-color: #fafbfd;
+      color: var(--bk-theme-text-weak);
+      background-color: var(--bk-theme-table-header-bg);
       justify-content: space-between;
       align-items: center;
 
@@ -267,7 +267,7 @@
 
       .list-head-right {
         width: 70px;
-        margin-right: 10px;
+        margin-right: var(--bk-theme-space-12);
         text-align: right;
       }
     }
@@ -284,22 +284,22 @@
         flex-direction: column;
 
         :deep(.bk-radio.bk-radio) {
-          margin-left: 20px;
+          margin-left: var(--bk-theme-space-16);
           font-size: 12px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
 
         }
 
         :deep(.bk-radio-label) {
           font-size: 12px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
 
         .list-item-radio {
-          margin-top: 10px;
-          margin-left: 30px;
+          margin-top: var(--bk-theme-space-12);
+          margin-left: var(--bk-theme-space-32);
           font-size: 12px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
       }
 
@@ -312,10 +312,10 @@
 
         .list-item-text {
           height: 20px;
-          margin-top: 10px;
-          margin-right: 5px;
+          margin-top: var(--bk-theme-space-12);
+          margin-right: var(--bk-theme-space-4);
           font-size: 12px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           text-align: right;
 
         }
@@ -328,32 +328,32 @@
     width: 530px;
     height: 100%;
     overflow: auto;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
 
     .right-title {
-      margin-top: 15px;
-      margin-left: 20px;
+      margin-top: var(--bk-theme-space-16);
+      margin-left: var(--bk-theme-space-16);
       font-size: 12px;
       font-weight: 700;
       line-height: 20px;
       letter-spacing: 0;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .right-checkbox {
-      margin-top: 10px;
-      margin-left: 20px;
+      margin-top: var(--bk-theme-space-12);
+      margin-left: var(--bk-theme-space-16);
       font-size: 12px;
       line-height: 20px;
       letter-spacing: 0;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .table {
       width: 480px;
       height: 300px;
-      margin-top: 10px;
-      margin-left: 20px;
+      margin-top: var(--bk-theme-space-12);
+      margin-left: var(--bk-theme-space-16);
 
     }
   }
@@ -364,14 +364,14 @@
   display: flex;
   width: 100%;
   height: 42px;
-  padding: 0 20px;
-  margin-top: 10px;
-  margin-bottom: 10px;
+  padding: 0 var(--bk-theme-space-16);
+  margin-top: var(--bk-theme-space-12);
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
-  background: #fafbfd;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-table-header-bg);
   box-shadow: inset 0 1px 0 0 #0000001f;
   align-items: center;
   justify-content: flex-end;
@@ -379,17 +379,17 @@
 }
 
 .search1 {
-  margin-top: 5px;
+  margin-top: var(--bk-theme-space-4);
   font-size: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .render-field {
   display: flex;
   min-width: 300px;
   overflow: hidden;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
   user-select: none;
   flex-direction: column;
   flex: 1;
@@ -397,14 +397,14 @@
   .field-select {
     width: 40px;
     text-align: center;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 
   .field-operation {
     width: 170px;
-    padding-left: 16px;
-    background: #fafbfd;
-    border-left: 1px solid #dcdee5;
+    padding-left: var(--bk-theme-space-16);
+    background: var(--bk-theme-table-header-bg);
+    border-left: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(.field-value) {
@@ -413,12 +413,12 @@
 
     /* width: 180px; */
     overflow: hidden;
-    border-left: 1px solid #dcdee5;
+    border-left: 1px solid var(--bk-theme-border-default);
     align-items: center;
 
     .field-value-div {
       display: flex;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       cursor: pointer;
       align-items: center;
 
@@ -434,11 +434,11 @@
         z-index: 1;
         display: none;
         font-size: 12px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         transition: all .15s;
 
         &:hover {
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
         }
       }
 
@@ -446,19 +446,17 @@
         position: absolute;
         right: 8px;
         font-size: 14px;
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
     .bk-form-item.is-error {
-      .bk-input--text {
-        background-color: #ffebeb;
+      .bk-input--text {background-color: var(--bk-theme-fill-danger);
       }
     }
 
     .bk-form-item {
       width: 100%;
-      margin-bottom: 0;
 
       .bk-input,
       .bk-date-picker-editor,
@@ -474,9 +472,9 @@
       }
 
       .bk-input.is-focused:not(.is-readonly) {
-        border: 1px solid #3a84ff;
+        border: 1px solid var(--bk-theme-color-brand-2);
         outline: 0;
-        box-shadow: 0 0 3px #a3c5fd;
+       
       }
 
       .bk-form-error-tips {
@@ -497,16 +495,16 @@
     height: 42px;
     font-size: 12px;
     line-height: 40px;
-    color: #313238;
-    background: #f0f1f5;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-muted);
 
     .field-value {
-      padding-left: 8px;
+      padding-left: var(--bk-theme-space-8);
     }
 
     .field-value.is-required {
       &::after {
-        margin-left: 4px;
+        margin-left: var(--bk-theme-space-4);
         color: red;
         content: '*';
       }
@@ -514,7 +512,7 @@
 
     .field-select,
     .field-operation {
-      background: #f0f1f5;
+      background: var(--bk-theme-surface-muted);
     }
   }
 
@@ -523,8 +521,8 @@
     overflow: hidden;
     font-size: 12px;
     line-height: 42px;
-    color: #63656e;
-    border-top: 1px solid #dcdee5;
+    color: var(--bk-theme-text-default);
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 }
 
@@ -535,13 +533,13 @@
 
   .algorithm-item {
     width: 100px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     text-align: center;
     cursor: pointer;
 
     &:hover {
-      color: #3a84ff;
-      background-color: #e1ecff
+      color: var(--bk-theme-color-brand-2);
+      background-color: var(--bk-theme-fill-selected)
     }
   }
 }

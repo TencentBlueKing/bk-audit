@@ -207,22 +207,22 @@
     max-height: 200px;
     min-width: 120px;
     min-height: 20px;
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     overflow-y: auto;
     font-family: inherit;
     font-size: 12px;
     line-height: 18px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     word-break: break-all;
-    background: #fff;
-    border: 1px solid #3a84ff;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-color-brand-2);
+    border-radius: var(--bk-theme-tag-radius);
     outline: none;
     box-sizing: border-box;
     resize: none;
 
     &::placeholder {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
     }
 
     /* 窄灰色滚动条 */
@@ -231,8 +231,8 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #c4c6cc;
-      border-radius: 2px;
+      background: var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     &::-webkit-scrollbar-track {
@@ -246,7 +246,7 @@
     top: 0;
     left: 0;
     height: 0;
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     overflow: hidden;
     font-family: inherit;
     font-size: 12px;

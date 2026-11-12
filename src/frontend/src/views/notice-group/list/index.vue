@@ -15,13 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="noticeGroup">
-    <div
-      class="notice-group-list">
-      <div class="action-header">
+  <div class="notice-group-list bk-theme-card">
+    <div class="action-header bk-theme-list-toolbar">
         <auth-button
           action-id="create_notice_group_v2"
           :permission="permissionCheckData.create_notice_group_v2"
@@ -44,10 +39,10 @@
         is-need-scene-id
         :reverse-sort-fields="['name']"
         scene-id-key="scene_id"
+        use-skeleton
         @clear-search="handleClearSearch"
         @request-success="handleRequestSuccess" />
-    </div>
-  </skeleton-loading>
+  </div>
   <create-group
     ref="createRef"
     @update="handleCreateUpdate" />
@@ -101,7 +96,6 @@
   const createRef = ref();
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
-  const isLoading = ref(false);
   const listRef = ref();
   const searchKey = ref('');
   const showDetail = ref(false);
@@ -269,8 +263,7 @@
 </script>
 <style lang="postcss">
   .notice-group-list {
-    padding: 24px;
-    background: white;
+    padding: var(--bk-theme-space-24);
 
     /* 解决表格悬停超出 */
     .bk-table-fixed .column_fixed {
@@ -279,7 +272,6 @@
 
     .action-header {
       display: flex;
-      margin-bottom: 16px;
 
       .search-input {
         width: 480px;

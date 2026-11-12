@@ -174,28 +174,27 @@
   position: relative;
   width: 100%;
   min-height: 32px;
-  padding: 0 3px;
-  background: #f5f7fa;
-  border-radius: 2px;
+  padding: 0 var(--bk-theme-space-4);
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-control-radius);
   flex-wrap: wrap;
 
   .query-field {
     position: relative;
     width: 180px;
-    height: 26px;
-    margin: 3px 4px 3px 0;
+    height: 26px;margin: var(--bk-theme-space-2) var(--bk-theme-space-4) var(--bk-theme-space-2) 0;
     line-height: 26px;
-    color: #fff;
+    color: var(--bk-theme-surface-default);
     white-space: nowrap;
     background: #29bc9e;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
 
     .edit-field {
       width: 26px;
       cursor: pointer;
       background-color: #0eac8c;
-      border-bottom-left-radius: 2px;
-      border-top-left-radius: 2px;
+      border-bottom-left-radius: var(--bk-theme-tag-radius);
+      border-top-left-radius: var(--bk-theme-tag-radius);
     }
 
     &:hover {
@@ -206,12 +205,12 @@
 
     .dragging-handle {
       width: 130px;
-      padding: 0 4px;
+      padding: 0 var(--bk-theme-space-4);
       cursor: move;
     }
 
     .query-field-remove {
-      padding: 0 4px;
+      padding: 0 var(--bk-theme-space-4);
       text-align: center;
       visibility: hidden;
     }
@@ -227,20 +226,19 @@
 
   .clear-fields-btn {
     width: 26px;
-    height: 26px;
-    margin: 3px 0 3px 4px;
+    height: 26px;margin: var(--bk-theme-space-2) 0 var(--bk-theme-space-2) var(--bk-theme-space-4);
     font-size: 16px;
     cursor: pointer;
-    background: #eaebf0;
-    border-radius: 2px;
+    background: var(--bk-theme-border-weak);
+    border-radius: var(--bk-theme-tag-radius);
     justify-content: center;
   }
 
   .expected-result-placeholder {
-    margin-left: var(--audit-space-8);
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-03);
+    margin-left: var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-weak);
   }
 
   &.is-empty {

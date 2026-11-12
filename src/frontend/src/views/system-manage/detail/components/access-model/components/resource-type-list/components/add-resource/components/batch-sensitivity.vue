@@ -48,10 +48,10 @@
   </audit-form>
   <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
     <bk-button
-      class="mr8"
+     
       size="small"
       theme="primary"
-      @click="handleSubmitBatch">
+      @click="handleSubmitBatch" style="margin-right: var(--bk-theme-space-8)">
       {{ t('确定') }}
     </bk-button>
     <bk-button
@@ -99,3 +99,6 @@
     emit('cancel');
   };
 </script>
+
+<style scoped lang="postcss">
+</style>

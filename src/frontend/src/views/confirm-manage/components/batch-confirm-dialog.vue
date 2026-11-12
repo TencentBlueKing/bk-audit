@@ -60,9 +60,9 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         :disabled="isSubmitting"
-        @click="handleCancel">
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -172,3 +172,6 @@
     show,
   });
 </script>
+
+<style scoped lang="postcss">
+</style>

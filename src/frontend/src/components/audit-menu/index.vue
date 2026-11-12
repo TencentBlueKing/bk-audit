@@ -55,58 +55,61 @@
 
 <style lang='postcss'>
   .audit-menu {
-    font-size: 14px;
+    font-size: var(--bk-theme-font-size-base);
     white-space: nowrap;
   }
 
   .audit-menu-item-group {
     .audit-menu-group-title {
       height: 40px;
-      padding-left: 18px;
-      font-size: 12px;
+      padding-left: var(--bk-theme-space-16);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 40px;
-      color: #66748f;
+      color: var(--bk-theme-nav-side-text);
     }
 
     &:nth-child(n+2) {
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
     }
   }
 
   .audit-menu-item {
     height: 40px;
-    padding-left: 22px;
+    padding-left: var(--bk-theme-space-12);
+    margin: 0 var(--bk-theme-space-12) var(--bk-theme-nav-side-item-gap);
     line-height: 40px;
-    color: #acb9d1;
+    color: var(--bk-theme-nav-side-text);
     cursor: pointer;
+    border-radius: var(--bk-theme-nav-side-active-radius);
 
     &:hover {
-      color: #acb9d1;
-      background: #253047;
+      color: var(--bk-theme-nav-side-text);
+      background: var(--bk-theme-surface-subtle);
     }
 
     &.active {
-      color: #fff;
-      background: #3a84ff;
+      color: var(--bk-theme-nav-side-text-active);
+      background: var(--bk-theme-nav-side-active-bg);
 
-      .menu-item-icon {
-        color: #fff;
+      .menu-item-icon,
+      .audit-icon {
+        color: var(--bk-theme-nav-side-text-active);
       }
     }
 
     &.active-weak {
-      color: #acb9d1;
-      background: #3a84ff4d ;
+      color: var(--bk-theme-nav-side-text);
+      background: var(--bk-theme-color-brand-7);
 
       .menu-item-icon {
-        color: #acb9d1;
+        color: var(--bk-theme-nav-side-text);
       }
     }
 
     .audit-icon {
-      margin-right: 19px;
-      font-size: 16px;
-      color: #b0bdd5;
+      margin-right: var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-lg);
+      color: var(--bk-theme-nav-side-text);
     }
   }
 </style>

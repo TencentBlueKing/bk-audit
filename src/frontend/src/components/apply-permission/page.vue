@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="perimission-page">
-    <div class="perimission-page-container">
+    <div class="perimission-page-container bk-theme-card">
       <render-result :data="data" />
       <div class="perimission-page-footer">
         <bk-button
@@ -76,15 +76,11 @@
 
     .perimission-page-container {
       width: 768px;
-      padding: 24px;
-      margin: 60px auto;
-      background-color: #fff;
-      border-radius: 2px;
-      box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
+      margin: var(--bk-theme-space-32) auto;
     }
 
     .perimission-page-footer {
-      margin: 24px auto 6px;
+      margin: var(--bk-theme-space-24) auto var(--bk-theme-space-6);
       text-align: center;
     }
   }

@@ -18,17 +18,17 @@
   <div class="application-list-anchor">
     <div
       ref="rootRef"
-      class="application-list-wrap">
-      <div class="action-header">
+      class="application-list-wrap bk-theme-card">
+      <div class="action-header bk-theme-list-toolbar">
         <div class="action-header-left">
           <auth-button
             action-id="create_pa_v2"
-            class="mr8"
+           
             :loading="checkLoading"
             :permission="permissionCheckData.create_pa_v2"
             resource-is-scene
             theme="primary"
-            @click="handleCreate">
+            @click="handleCreate" style="margin-right: var(--bk-theme-space-8)">
             <audit-icon
               style="margin-right: 8px;font-size: 14px;"
               type="add" />
@@ -85,8 +85,8 @@
         <span> {{ t('套餐详情') }}</span>
         <div style="display: flex;align-items: center;">
           <span
-            class="mr8"
-            style="margin-left: 24px;font-size: 14px;color: #63656e;">
+           
+            style="margin-left: 24px;font-size: 14px;color: #63656e; margin-right: var(--bk-theme-space-8)">
             {{ t('启/停') }}
           </span>
           <auth-switch
@@ -114,19 +114,19 @@
           </template>
           <auth-button
             action-id="edit_pa_v2"
-            class="mr8 ml8"
+           
             :permission="permissionCheckData.edit_pa_v2"
             resource-is-scene
             theme="primary"
-            @click="()=>handleEdit(detailItem)">
+            @click="()=>handleEdit(detailItem)" style="margin-right: var(--bk-theme-space-8); margin-left: var(--bk-theme-space-8)">
             {{ t('编辑') }}
           </auth-button>
           <auth-button
             action-id="list_rule_v2"
-            class="mr8"
+           
             :permission="permissionCheckData.list_rule_v2"
             resource-is-scene
-            @click="()=>showRisks(detailItem)">
+            @click="()=>showRisks(detailItem)" style="margin-right: var(--bk-theme-space-8)">
             {{ t('查看关联规则') }}
           </auth-button>
 
@@ -755,9 +755,12 @@
 }
 
 .application-list-anchor {
-  /* 铺满导航内容区，不再用 100vh 硬算，避免高出滚动容器 */
+  /* 落在内容区内边距之内，不再盖住页面四周留白 */
   position: absolute;
-  inset: 0;
+  top: var(--bk-theme-space-16);
+  right: var(--bk-theme-space-24);
+  bottom: var(--bk-theme-space-24);
+  left: var(--bk-theme-space-24);
   overflow: hidden;
 }
 
@@ -765,9 +768,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 24px;
+  padding: var(--bk-theme-space-24);
   overflow: hidden;
-  background: #fff;
   box-sizing: border-box;
 
   :deep(.audit-render-list) {
@@ -793,7 +795,6 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
   }
 
   .action-header-left {

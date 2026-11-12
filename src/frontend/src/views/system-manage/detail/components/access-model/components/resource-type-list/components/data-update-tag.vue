@@ -142,24 +142,24 @@
       line-height: 20px;
       text-align: center;
       border: 1px solid;
-      border-radius: 11px;
+      border-radius: var(--bk-theme-message-radius);
     }
 
     .type-edit {
       display: none;
       width: 12px;
       height: 12px;
-      margin-left: 9px;
-      color: #979ba5;
+      margin-left: var(--bk-theme-space-8);
+      color: var(--bk-theme-text-weak);
       cursor: pointer;
 
       &:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
     .type-edit-disabled {
-      color: #dcdee5;
+      color: var(--bk-theme-border-default);
       cursor: not-allowed;
     }
   }

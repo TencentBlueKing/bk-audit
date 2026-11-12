@@ -39,6 +39,18 @@
 - 分页记忆：`use-record-page`；列设置：`use-table-settings`
 - 需要缓存：在 router meta 打 `keepAlive: true`
 
+## 主题
+
+细节见 [全局主题](./theme.md)。
+
+- 页面级白卡片挂 `bk-theme-card`；卡片里的表格不写外框（场景级联自动去掉）
+- 圆角、阴影走场景 token / 场景类，业务页不直接写 `var(--bk-theme-radius-*)` / `var(--bk-theme-shadow-*)`
+- 颜色用语义 token；页面内局部间距只写 `var(--bk-theme-space-N)`，不用 `.mt8` 等已冻结原子类
+- 表单、Dialog、Sideslider 的间距跟场景，变体用 `bk-theme-form--compact` / `--inline`，不在页面覆盖
+- bkui / TDesign 的公共外观改 `src/css/theme/`，不要在单个业务页覆盖表头色、行 hover 和控件圆角
+- 新增或调整场景按 `bk-audit-theme` 的 `scene-workflow.md`
+- 改完执行 `node scripts/check-theme-tokens.mjs`（业务页违规只减不增）
+
 ## 常用服务速查
 
 | 场景 | Service |

@@ -209,9 +209,9 @@
     }
     const mainEl = document.querySelector('.audit-navigation-main') as HTMLElement | null;
     if (mainEl) {
-      return mainEl.getBoundingClientRect().top + 52;
+      return mainEl.getBoundingClientRect().top + 100;
     }
-    return 104;
+    return 100;
   };
 
   const getMaxPanelHeight = () => {
@@ -500,9 +500,9 @@
   display: flex;
   overflow: hidden;
   flex-direction: column;
-  background: #fff;
-  border-top: 1px solid #dcdee5;
-  box-shadow: 0 -2px 8px 0 rgb(0 0 0 / 8%);
+  background: var(--bk-theme-surface-default);
+  border-top: 1px solid var(--bk-theme-border-default);
+  box-shadow: var(--bk-theme-card-shadow);
   transition: height .2s ease, left .2s ease, width .2s ease;
 
 
@@ -520,7 +520,7 @@
 
 
   &.is-expanded.is-resize-hover {
-    border-top-color: #a3c5fd;
+    border-top-color: var(--bk-theme-color-brand-4);
 
   }
 
@@ -545,7 +545,7 @@
   right: 0;
   left: 0;
   height: 2px;
-  background: #3a84ff;
+  background: var(--bk-theme-color-brand-2);
   opacity: 0%;
   transition: opacity .15s;
 
@@ -564,8 +564,8 @@
   left: 50%;
   width: 40px;
   height: 6px;
-  background: #3a84ff;
-  border-radius: 1px;
+  background: var(--bk-theme-color-brand-2);
+  border-radius: var(--bk-theme-tag-radius);
   opacity: 0%;
   transform: translateX(-50%);
   transition: opacity .15s;
@@ -581,17 +581,16 @@
 
 .risk-handle-dock__header {
   display: flex;
-  height: 52px;
-  padding: 0 var(--dock-content-padding, 24px);
+  height: 52px;padding: 0 var(--dock-content-padding, var(--bk-theme-space-24));
   cursor: pointer;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
   user-select: none;
   flex-shrink: 0;
   align-items: center;
 
 
   &:hover {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
 
   }
 
@@ -600,60 +599,59 @@
 
 .risk-handle-dock__toggle {
   flex-shrink: 0;
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
   font-size: 12px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 
 }
 
 
 .risk-handle-dock__title {
-  margin-right: 16px;
+  margin-right: var(--bk-theme-space-16);
   font-size: 14px;
   font-weight: 700;
   line-height: 22px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 
 }
 
 
 .risk-handle-dock__info {
   font-size: 14px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 
 }
 
 
 .risk-handle-dock__stage {
   display: flex;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   align-items: center;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
 }
 
 
 .risk-handle-dock__stage-text {
   font-size: 12px;
   line-height: 20px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 
 }
 
 
 .risk-handle-dock__stage-tag {
-  padding: 0 6px;
+  padding: 0 var(--bk-theme-space-6);
   font-size: 12px;
   line-height: 20px;
-  color: #3a84ff;
-  background: #c9dcff;
-  border-radius: 2px;
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-color-brand-5);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 
 .risk-handle-dock__body {
   flex: 1;
-  min-height: 0;
-  padding: 16px var(--dock-content-padding, 24px) 16px;
+  min-height: 0;padding: var(--bk-theme-space-16) var(--dock-content-padding, var(--bk-theme-space-24)) var(--bk-theme-space-16);
   overflow: hidden auto;
 }
 

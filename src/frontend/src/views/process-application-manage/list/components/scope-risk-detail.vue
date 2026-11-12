@@ -137,8 +137,7 @@
 <style scoped lang="postcss">
 .rule-panel {
   box-sizing: border-box;
-  height: calc(100vh - 52px);
-  padding: 16px 24px 20px;
+  height: calc(100vh - 52px);padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-16);
   overflow: hidden;
 }
 
@@ -153,6 +152,6 @@
 }
 
 .rule-table :deep(thead th) {
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
 }
 </style>

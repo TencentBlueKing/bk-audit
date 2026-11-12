@@ -1,8 +1,5 @@
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="false"
-    name="strategyList">
+  <div class="link-data-manage-anchor">
     <div class="link-data-manage">
       <!-- 左侧标签-->
       <render-label
@@ -15,9 +12,9 @@
 
       <!-- 右侧表格 -->
       <div
-        class="link-data-manage-list"
+        class="link-data-manage-list bk-theme-card"
         :style="styles">
-        <div class="action-header">
+        <div class="action-header bk-theme-list-toolbar">
           <bk-button
             class="w88"
             theme="primary"
@@ -43,12 +40,13 @@
           :columns="tableColumn"
           :data-source="dataSource"
           :settings="settings"
+          use-skeleton
           @clear-search="handleClearSearch"
           @on-setting-change="handleSettingChange"
           @request-success="handleRequestSuccess" />
       </div>
     </div>
-  </skeleton-loading>
+  </div>
   <create-link-data
     ref="createRef"
     @show-link-strategy="handleShowLinkStrategy"
@@ -329,7 +327,7 @@
       ),
     }]) as Ref<Column[]>;
 
-  const styles = shallowRef({ left: '216px' });
+  const styles = shallowRef({ left: '240px' });
   const disabledMap: Record<string, string> = {
     name: 'name',
     tags: 'tags',
@@ -439,7 +437,7 @@
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
-    styles.value = showLabel ? { left: '216px' } : { left: '-24px' };
+    styles.value = showLabel ? { left: '240px' } : { left: '0' };
   };
 
   // 选中左侧label 过滤表格
@@ -640,9 +638,15 @@
   });
 </script>
 <style scoped lang="postcss">
+.link-data-manage-anchor {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 .link-data-manage {
   display: flex;
-  margin: -20px -24px 0;
+  height: 100%;
 
   :deep(.edit-badge) {
     .bk-badge.pinned.top-right {
@@ -652,14 +656,23 @@
 
   .link-data-manage-list {
     position: absolute;
-    right: -24px;
-    padding: 24px;
-    background-color: white;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    padding: var(--bk-theme-space-24);
+    overflow: hidden;
+
+    :deep(.audit-render-list) {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
 
     .action-header {
       display: flex;
-      margin-bottom: 20px;
+      flex-shrink: 0;
 
       .search-input {
         width: 480px;

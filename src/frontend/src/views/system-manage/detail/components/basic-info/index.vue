@@ -378,20 +378,19 @@
 
 </script>
 <style scoped lang="postcss">
-.system-basic-info {
-  padding: 6px 14px;
+.system-basic-info {padding: var(--bk-theme-space-6) var(--bk-theme-space-16);
 
   .item {
     display: flex;
-    margin: 30px 0;
+    margin: var(--bk-theme-space-32) 0;
     font-size: 12px;
     line-height: 26px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
 
     .item-title {
       width: 120px;
-      margin-right: 12px;
-      color: #979ba5;
+      margin-right: var(--bk-theme-space-12);
+      color: var(--bk-theme-text-weak);
       text-align: right;
     }
 
@@ -401,21 +400,21 @@
       flex: 1;
 
       .edit-icon {
-        margin-left: 10px;
-        color: #63656e;
+        margin-left: var(--bk-theme-space-12);
+        color: var(--bk-theme-text-default);
         cursor: pointer;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
       .tag-list {
-        padding-right: 30px;
+        padding-right: var(--bk-theme-space-32);
       }
 
       .bk-select-tag--default {
-        padding-right: 50px;
+        padding-right: var(--bk-theme-space-32);
       }
     }
   }

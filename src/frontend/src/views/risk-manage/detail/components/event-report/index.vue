@@ -371,8 +371,8 @@
 
 .event-report {
   /* 有 Tab 时，页签到「基本信息」24px；底部留 16px */
-  padding: 24px 16px 16px;
-  margin-bottom: 10px;
+  padding: var(--bk-theme-space-24) var(--bk-theme-space-16) var(--bk-theme-space-16);
+  margin-bottom: var(--bk-theme-space-12);
 
   .event-report-section-title {
     font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
@@ -381,14 +381,14 @@
     font-weight: 700;
     line-height: 20px;
     letter-spacing: 0;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 
   .event-report-basic-info {
-    padding-bottom: 24px;
-    margin-top: 12px;
-    margin-bottom: 24px;
-    border-bottom: 1px solid #dcdee5;
+    padding-bottom: var(--bk-theme-space-24);
+    margin-top: var(--bk-theme-space-12);
+    margin-bottom: var(--bk-theme-space-24);
+    border-bottom: 1px solid var(--bk-theme-border-default);
 
     .render-info-item {
       align-items: flex-start;
@@ -398,7 +398,7 @@
   .event-report-content-header {
     display: flex;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
 
     &.is-first-section {
       margin-top: 0;
@@ -407,32 +407,31 @@
 
   .event-report-edit-button {
     display: inline-flex;
-    margin-left: 10px;
+    margin-left: var(--bk-theme-space-12);
     font-size: 12px;
     line-height: 20px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
     align-items: center;
-    gap: 2px;
+    gap: var(--bk-theme-space-2);
 
     &:hover {
-      color: #699df4;
+      color: var(--bk-theme-color-brand-3);
     }
   }
 
   .event-report-content,
   :deep(.ql-editor) {
     line-height: 1.5;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   /* v-html 渲染区：补齐原 Quill 容器边框 */
   .event-report-content {
-    min-height: 120px;
-    padding: 12px 15px;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    min-height: 120px;padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
     box-sizing: border-box;
 
     :deep(strong) {
@@ -440,7 +439,7 @@
     }
 
     :deep(p) {
-      margin: 0 0 12px;
+      margin: 0 0 var(--bk-theme-space-12);
       line-height: 1.5;
     }
 
@@ -452,42 +451,42 @@
     :deep(h6),
     :deep(ul),
     :deep(ol) {
-      margin: 0 0 12px;
+      margin: 0 0 var(--bk-theme-space-12);
     }
 
     :deep(ul),
     :deep(ol) {
-      padding-left: 20px;
+      padding-left: var(--bk-theme-space-16);
     }
 
     :deep(li) {
-      margin-bottom: 4px;
+      margin-bottom: var(--bk-theme-space-4);
     }
 
     :deep(.report-blockquote) {
-      padding: 8px 12px;
-      margin: 0 0 12px;
-      color: #313238;
-      background: #f5f7fa;
-      border-left: 4px solid #dcdee5;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+      margin: 0 0 var(--bk-theme-space-12);
+      color: var(--bk-theme-text-strong);
+      background: var(--bk-theme-surface-subtle);
+      border-left: 4px solid var(--bk-theme-border-default);
     }
 
     :deep(code) {
-      padding: 2px 4px;
+      padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
       font-family: Consolas, Monaco, monospace;
       font-size: .9em;
-      background: #f0f1f5;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     :deep(hr) {
-      margin: 16px 0;
+      margin: var(--bk-theme-space-16) 0;
       border: 0;
-      border-top: 1px solid #dcdee5;
+      border-top: 1px solid var(--bk-theme-border-default);
     }
 
     :deep(.ql-report-table) {
-      margin: 0 0 16px;
+      margin: 0 0 var(--bk-theme-space-16);
     }
 
     :deep(table) {
@@ -499,29 +498,28 @@
     }
 
     :deep(th),
-    :deep(td) {
-      padding: 10px 12px;
-      color: #313238;
+    :deep(td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+      color: var(--bk-theme-text-strong);
       text-align: left;
       vertical-align: top;
-      border: 1px solid #dcdee5;
+      border: 1px solid var(--bk-theme-border-default);
     }
 
     :deep(thead th) {
       font-weight: 600;
-      color: #313238;
-      background: #f5f7fa;
+      color: var(--bk-theme-text-strong);
+      background: var(--bk-theme-surface-subtle);
     }
   }
 
   :deep(.quill-editor .ql-container.ql-snow) {
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   :deep(.ql-disabled) {
-    background-color: #fff !important;
+    background-color: var(--bk-theme-surface-default) !important;
   }
 
   :deep(.ql-editor li p) {
@@ -538,7 +536,7 @@
   }
 
   :deep(.ql-editor p) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
     line-height: 1.5;
   }
 
@@ -550,72 +548,71 @@
   :deep(.ql-editor h6),
   :deep(.ql-editor ul),
   :deep(.ql-editor ol) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
   }
 
   :deep(.ql-editor ul),
   :deep(.ql-editor ol) {
-    padding-left: 20px;
+    padding-left: var(--bk-theme-space-16);
   }
 
   :deep(.ql-editor li) {
-    margin-bottom: 4px;
+    margin-bottom: var(--bk-theme-space-4);
   }
 
   :deep(.ql-editor .report-blockquote) {
-    padding: 8px 12px;
-    margin: 0 0 12px;
-    color: #313238;
-    background: #f5f7fa;
-    border-left: 4px solid #dcdee5;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+    margin: 0 0 var(--bk-theme-space-12);
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
+    border-left: 4px solid var(--bk-theme-border-default);
   }
 
   :deep(.ql-editor code) {
-    padding: 2px 4px;
+    padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
     font-family: Consolas, Monaco, monospace;
     font-size: .9em;
-    background: #f0f1f5;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   :deep(.ql-editor hr) {
-    margin: 16px 0;
+    margin: var(--bk-theme-space-16) 0;
     border: 0;
-    border-top: 1px solid #dcdee5;
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(.ql-editor .ql-report-table) {
-    margin: 0 0 16px;
+    margin: 0 0 var(--bk-theme-space-16);
   }
 
   :deep(.ql-editor table) {
     width: 100%;
-    margin: 0 0 16px;
+    margin: 0 0 var(--bk-theme-space-16);
     font-size: 14px;
     border-collapse: collapse;
     table-layout: auto;
   }
 
   :deep(.ql-editor th),
-  :deep(.ql-editor td) {
-    padding: 10px 12px;
-    color: #313238;
+  :deep(.ql-editor td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+    color: var(--bk-theme-text-strong);
     text-align: left;
     vertical-align: top;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(.ql-editor thead th) {
     font-weight: 600;
-    color: #313238;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
   }
 
 }
 
 .event-report-loading {
   :deep(.bk-loading-title) {
-    margin-left: -45px;
+    margin-left: -var(--bk-theme-space-32);
   }
 }
 </style>

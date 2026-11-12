@@ -93,7 +93,7 @@ src/frontend/
     │
     ├── router/index.ts         # 路由表 + 角色访问规则 + 全局守卫
     ├── language/               # i18n
-    ├── css/                    # reset.css / tokens.css / common.css
+    ├── css/                    # tokens.css、reset.css、common.css、theme/（bkui 与 TDesign 覆盖）
     ├── directives/cursor/      # v-cursor 指令
     └── images/                 # 静态图片（field-type/*.png 由 import.meta.glob 预加载）
 ```

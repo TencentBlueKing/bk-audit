@@ -480,14 +480,14 @@
   }
 
   :deep(.bk-input.description-input:hover:not(.is-disabled)) {
-    background-color: #fff;
-    border-color: #c4c6cc;
+    background-color: var(--bk-theme-surface-default);
+    border-color: var(--bk-theme-border-strong);
     box-shadow: none;
   }
 
   :deep(.bk-input.description-input.is-focused:not(.is-readonly)) {
-    background-color: #fff;
-    border-color: #3a84ff;
+    background-color: var(--bk-theme-surface-default);
+    border-color: var(--bk-theme-color-brand-2);
     box-shadow: none;
   }
 
@@ -497,7 +497,7 @@
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 0 12px;
+    padding: 0 var(--bk-theme-space-12);
     line-height: 33px;
     cursor: pointer;
 
@@ -517,7 +517,7 @@
       flex: none;
       align-items: center;
       margin-left: auto;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
 
       :deep(.audit-popconfirm) {
         display: inline-flex;
@@ -534,11 +534,11 @@
       display: none;
       font-size: 12px;
       line-height: 1;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       transition: all .15s;
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       &.is-popconfirm-visible {
@@ -549,7 +549,7 @@
     .renew-tips {
       font-size: 14px;
       line-height: 1;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 }

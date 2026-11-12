@@ -68,8 +68,8 @@
 
 <style scoped lang="postcss">
 .ai-report-edit-form {
-  padding: 16px 24px 0;
-  background: #fff;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24) 0;
+  background: var(--bk-theme-surface-default);
 }
 </style>
 

@@ -17,7 +17,7 @@
 <template>
   <div
     ref="rootRef"
-    class="search-result-list">
+    class="search-result-list bk-theme-card">
     <render-table
       ref="listRef"
       :columns="tableColumn"
@@ -543,18 +543,14 @@
 <style lang="postcss">
 .search-result-list {
   position: relative;
-  padding: 24px;
-  margin-top: 4px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+  margin-top: var(--bk-theme-space-4);
 }
 
 .highlight-cell {
-  background: #fafbfd;
+  background: var(--bk-theme-table-header-bg);
 
   .cell {
-    color: #979ba5 !important;
+    color: var(--bk-theme-text-weak) !important;
   }
 }
 

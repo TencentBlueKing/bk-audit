@@ -16,18 +16,14 @@ html,
 body {
   padding: 0;
   margin: 0;
-  font-family: -apple-system,
-    BlinkMacSystemFont,
-    'PingFang SC',
-    'Microsoft YaHei',
-    'Helvetica Neue',
-    Arial,
-    sans-serif;
-  font-size: 12px;
-  line-height: 1.4285;
+  font-family: var(--bk-theme-font-family);
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-line-height-base);
   letter-spacing: .4px;
   text-rendering: optimizelegibility;
-  background: #f5f6fa;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-page);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -61,11 +57,11 @@ h3,
 h4,
 h5,
 h6 {
-  font-weight: bold;
+  font-weight: var(--bk-theme-font-weight-bold);
 }
 
 a {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   text-decoration: none;
   cursor: pointer;
 }
@@ -92,72 +88,74 @@ th {
   width: 88px;
 }
 
+/* 以下 margin 原子类已冻结：只保留存量，新代码不用、不新增。
+   局部间距统一在样式里写 var(--bk-theme-space-N)，见 bk-audit-theme。 */
 .mt8 {
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
 }
 
 .mr8 {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
 }
 
 .mt16 {
-  margin-top: 16px;
+  margin-top: var(--bk-theme-space-16);
 }
 
 .mt24 {
-  margin-top: 24px;
+  margin-top: var(--bk-theme-space-24);
 }
 
 .mr16 {
-  margin-right: 16px;
+  margin-right: var(--bk-theme-space-16);
 }
 
 .mb8 {
-  margin-bottom: 8px;
+  margin-bottom: var(--bk-theme-space-8);
 }
 
 .mb12 {
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
 }
 
-
 .mb16 {
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
 }
 
 .mb24 {
-  margin-bottom: 24px;
+  margin-bottom: var(--bk-theme-space-24);
 }
 
 .mr24 {
-  margin-right: 24px;
+  margin-right: var(--bk-theme-space-24);
 }
 
 .ml8 {
-  margin-left: 8px;
+  margin-left: var(--bk-theme-space-8);
 }
 
 .ml16 {
-  margin-left: 16px;
+  margin-left: var(--bk-theme-space-16);
 }
 
 .ml24 {
-  margin-left: 24px;
+  margin-left: var(--bk-theme-space-24);
 }
 
 .rotate-loading {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   animation: rotate-loading 1s linear infinite;
 }
 
+/* 旧名，等同 theme/scenes.css 的 .bk-theme-cell-tip，新代码用 .bk-theme-cell-tip */
 .tips {
-  border-bottom: 1px dashed #c4c6cc;
+  border-bottom: var(--bk-theme-cell-tip-underline);
 }
 
 .number {
-  padding: 0 2px;
-  font-weight: 600;
-  color: #3a84ff;
+  padding: 0 var(--bk-theme-space-2);
+  font-weight: var(--bk-theme-font-weight-bold);
+  color: var(--bk-theme-color-brand-2);
 }
 
 .cursor {

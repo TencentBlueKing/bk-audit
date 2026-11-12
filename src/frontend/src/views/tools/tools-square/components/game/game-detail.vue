@@ -1096,41 +1096,41 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  background: #f0f5ff;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+  background: var(--bk-theme-select-banner-bg);
   border: 1px solid #d4e4ff;
-  border-radius: 2px;
+  border-radius: var(--bk-theme-tag-radius);
 
   .game-info-row {
     display: flex;
     flex: 1;
     flex-wrap: wrap;
     min-width: 0;
-    margin-right: 24px;
-    gap: 16px clamp(32px, 6vw, 116px);
+    margin-right: var(--bk-theme-space-24);
+    gap: var(--bk-theme-space-16) clamp(var(--bk-theme-space-32), 6vw, 116px);
   }
 
   .info-item {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
 
     .info-label {
       font-size: 12px;
       line-height: 20px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
 
     .info-value {
       display: flex;
       font-size: 14px;
       line-height: 22px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
       align-items: center;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
 
       &.is-empty-rate {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
     }
 
@@ -1141,10 +1141,9 @@
     .game-name-skeleton {
       display: inline-block;
       width: 96px;
-      height: 14px;
-      background: linear-gradient(90deg, #e1e8f4 25%, #f0f5ff 50%, #e1e8f4 75%);
+      height: 14px;background: linear-gradient(90deg, var(--bk-theme-border-weak) 25%, var(--bk-theme-select-banner-bg) 50%, var(--bk-theme-border-weak) 75%);
       background-size: 200% 100%;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       animation: game-name-skeleton-shimmer 1.2s ease-in-out infinite;
     }
   }
@@ -1162,11 +1161,11 @@
   .copy-icon,
   .eye-icon {
     font-size: 14px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     cursor: pointer;
 
     &:hover {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
@@ -1180,28 +1179,28 @@
   padding: 0;
 
   .export-popover-body {
-    padding: 16px 16px 0;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-16) 0;
   }
 
   .export-popover-title {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 16px;
     font-weight: 700;
     line-height: 24px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .export-form-item {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
 
     .export-form-label {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 14px;
       line-height: 22px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
 
       .required-star {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
     }
   }
@@ -1209,9 +1208,9 @@
   .export-checkbox-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px 24px;
+    gap: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
-    /* bkui-vue 默认给 .bk-checkbox 设置 justify-self: center 和 ~ 选择器加 margin-left: 24px，
+    /* bkui-vue 默认给 .bk-checkbox 设置 justify-self: center 和 ~ 选择器加 margin-left: var(--bk-theme-space-24)，
        会导致 grid 单元格内复选框居中且偏移，必须强制覆盖以保证严格左对齐 */
     :deep(.bk-checkbox) {
       margin-right: 0 !important;
@@ -1226,18 +1225,18 @@
 
   .export-popover-footer {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     justify-content: flex-end;
-    padding: 12px 16px;
-    margin-top: 8px;
-    background: #fafbfd;
-    border-top: 1px solid #dcdee5;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-8);
+    background: var(--bk-theme-table-header-bg);
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 }
 
 /* Tab 标签页 */
 .game-tabs {
-  margin-top: 4px;
+  margin-top: var(--bk-theme-space-4);
 }
 
 .game-tabs :deep(.bk-tab),
@@ -1248,7 +1247,7 @@
 
 /* 在 nav 容器顶部留出 12px 空间用于阴影展示（nav 是阴影直接的父容器，最关键的一层） */
 .game-tabs :deep(.bk-tab-header-nav) {
-  padding-top: 12px;
+  padding-top: var(--bk-theme-space-12);
 }
 
 .game-tabs :deep(.bk-tab-header-item.bk-tab-header--active) {
@@ -1262,7 +1261,7 @@
 
 /* 概览内容 */
 .overview-content {
-  padding-top: 16px;
+  padding-top: var(--bk-theme-space-16);
 }
 
 /* section 加载占位 */
@@ -1281,23 +1280,23 @@
 
   .section-empty-text {
     font-size: 12px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
 .section {
-  padding: 16px;
-  margin-bottom: 16px;
-  background: #fff;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-16);
+  margin-bottom: var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .section-title {
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 14px;
   font-weight: 700;
   line-height: 22px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .section-title-row {
@@ -1305,7 +1304,7 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
 
   .section-title {
     margin-bottom: 0;
@@ -1314,15 +1313,15 @@
 
 .view-detail-link {
   display: flex;
-  margin-left: 20px;
+  margin-left: var(--bk-theme-space-16);
   font-size: 12px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 
   &:hover {
-    color: #1768ef;
+    color: var(--bk-theme-color-brand-1);
   }
 
   .view-detail-icon {
@@ -1335,7 +1334,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 80px;
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 14px;
   line-height: 22px;
 
@@ -1345,12 +1344,12 @@
   }
 
   .record-label {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     white-space: nowrap;
   }
 
   .record-value {
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 }
 

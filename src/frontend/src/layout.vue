@@ -688,67 +688,86 @@
 <style lang="postcss">
 #app {
   .site-title {
-    padding-left: 16px;
-    font-size: 16px;
-    color: #eaebf0;
+    padding-left: var(--bk-theme-space-16);
+    font-size: var(--bk-theme-font-size-lg);
+    color: var(--bk-theme-nav-top-text-active);
     word-break: keep-all;
     white-space: nowrap;
     cursor: pointer;
   }
 
   .main-navigation-left {
+    display: flex;
+    align-items: stretch;
+    height: var(--bk-theme-nav-height);
+
     .main-navigation-nav {
-      margin-right: 32px;
-      font-size: 14px;
-      color: #94a2bb;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      height: var(--bk-theme-nav-height);
+      margin-right: var(--bk-theme-space-32);
+      font-size: var(--bk-theme-font-size-base);
+      color: var(--bk-theme-nav-top-text);
     }
 
     .main-navigation-nav.active {
-      color: #fff;
+      color: var(--bk-theme-nav-top-text-active);
+    }
+
+    .main-navigation-nav.active::after {
+      position: absolute;
+      right: 0;
+      bottom: var(--bk-theme-nav-indicator-offset);
+      left: 0;
+      height: var(--bk-theme-nav-indicator-height);
+      background: var(--bk-theme-nav-indicator);
+      border-radius: var(--bk-theme-nav-indicator-radius);
+      content: '';
     }
   }
 
   .system-select {
-    width: 90%;
-    margin-top: 10px;
+    width: 90%;margin-top: var(--bk-theme-space-8);
     margin-left: 5%;
 
     .bk-input {
-      border: none;
+      border: 1px solid var(--bk-theme-nav-side-border);
       box-shadow: none;
 
       .bk-input--text {
-        color: #979ba5;
-        background-color: #40495e;
+        color: var(--bk-theme-nav-side-text);
+        background-color: var(--bk-theme-surface-default);
       }
     }
   }
 }
 
 .system-select-popover.bk-popover.bk-pop2-content[data-theme^='light'] {
-  color: #979ba5;
-  background-color: #182233;
-  border-color: #182233;
-  box-shadow: none;
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-nav-side-border);
+  box-shadow: var(--bk-theme-overlay-shadow);
 
   .bk-select-content-wrapper {
     .bk-select-search-wrapper {
-      border-bottom: 1px solid #3c4558;
+      border-bottom: 1px solid var(--bk-theme-nav-side-border);
 
       .bk-select-search-input {
-        color: #c4c6cc;
-        background-color: #182233;
+        color: var(--bk-theme-text-default);
+        background-color: var(--bk-theme-surface-default);
       }
     }
   }
 
   .bk-select-content {
     .bk-select-option.is-hover {
-      background-color: #2d3542;
+      background-color: var(--bk-theme-surface-subtle);
     }
 
     .is-selected:not(.is-checkbox) {
-      background-color: #294066 !important;
+      color: var(--bk-theme-nav-side-text-active);
+      background-color: var(--bk-theme-fill-selected) !important;
     }
 
     .popover {
@@ -760,8 +779,7 @@
 
       .pentagram-fill {
         width: 14px;
-        height: 14px;
-        margin-left: 8px;  /* 添加左边距 */
+        height: 14px;margin-left: var(--bk-theme-space-8);  /* 添加左边距 */
         cursor: pointer;
       }
     }
@@ -772,30 +790,27 @@
       .custom-extension {
         display: flex;
         width: 100%;
-        height: 100%;
-        padding: 0 10px;
+        height: 100%;padding: 0 var(--bk-theme-space-8);
         font-size: 12px;
-        background-color: #28354d;
+        color: var(--bk-theme-text-default);
+        background-color: var(--bk-theme-surface-muted);
         align-items: center;  /* 垂直居中 */
         justify-content: center;  /* 水平居中 */
         gap: 4px;  /* 图标和文字间距 */
         border: none;
         border-radius: 0;
 
-        .custom-extension-icon {
-          padding: 2px;
-          margin-right: 10px;
+        .custom-extension-icon {padding: var(--bk-theme-space-2);margin-right: var(--bk-theme-space-8);
           font-size: 8px;
-          color: #c4c6cc;
-          border: 1px solid #c4c6cc;
-          border-radius: 50%;
+          color: var(--bk-theme-text-disabled);
+          border: 1px solid var(--bk-theme-text-disabled);
+          border-radius: var(--bk-theme-radius-full);
         }
       }
     }
   }
 }
 
-.group {
-  margin-top: 10px;
+.group {margin-top: var(--bk-theme-space-8);
 }
 </style>

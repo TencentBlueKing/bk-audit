@@ -31,7 +31,7 @@
     height: 16px;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: var(--bk-theme-space-2);
     vertical-align: middle;
     flex-shrink: 0;
   }
@@ -40,7 +40,7 @@
     display: block;
     width: 3px;
     height: 3px;
-    background-color: #3a84ff;
+    background-color: var(--bk-theme-color-brand-2);
     border-radius: 50%;
     animation: select-checkbox-loading-bounce .9s infinite ease-in-out;
   }

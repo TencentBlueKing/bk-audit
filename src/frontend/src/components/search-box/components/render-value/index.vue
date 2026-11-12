@@ -17,7 +17,7 @@
 <template>
   <div class="render-form-serach-value">
     <audit-icon
-      class="filter-flag mr8"
+      class="filter-flag"
       style="color: #c4c6cc;"
       type="filter" />
     <value-tag
@@ -97,13 +97,14 @@
 <style lang="postcss">
   .render-form-serach-value {
     display: flex;
-    padding: 24px 16px 16px;
+    padding: var(--bk-theme-space-24) var(--bk-theme-space-16) var(--bk-theme-space-16);
     font-size: 12px;
     align-items: center;
     flex-wrap: wrap;
 
     .filter-flag {
-      margin-top: 4px;
+      margin-top: var(--bk-theme-space-4);
+      margin-right: var(--bk-theme-space-8);
       font-size: 16px;
       align-self: flex-start;
     }
@@ -111,15 +112,15 @@
     .search-value-clear-btn {
       display: flex;
       height: 22px;
-      margin-bottom: 8px;
-      color: #c4c6cc;
+      margin-bottom: var(--bk-theme-space-8);
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
       align-items: center;
       justify-content: center;
       transition: all .15s;
 
       &:hover {
-        color: #dcdee5;
+        color: var(--bk-theme-border-default);
       }
     }
   }

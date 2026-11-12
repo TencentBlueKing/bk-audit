@@ -360,7 +360,7 @@
 <style lang="postcss" scoped>
   .nl-tag-select-popover {
     width: 320px;
-    padding: 8px;
+    padding: var(--bk-theme-space-8);
 
     &.is-compact {
       width: max-content;
@@ -371,14 +371,14 @@
     .nl-tag-search-input {
       display: flex;
       align-items: center;
-      padding: 4px 0;
-      margin-bottom: 4px;
-      border-bottom: 1px solid #dcdee5;
+      padding: var(--bk-theme-space-4) 0;
+      margin-bottom: var(--bk-theme-space-4);
+      border-bottom: 1px solid var(--bk-theme-border-default);
 
       .nl-tag-search-icon {
-        margin-right: 6px;
+        margin-right: var(--bk-theme-space-6);
         font-size: 15px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         flex-shrink: 0;
       }
 
@@ -387,14 +387,14 @@
         height: 24px;
         padding: 0;
         font-size: 12px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         background: transparent;
         border: none;
         outline: none;
         flex: 1;
 
         &::placeholder {
-          color: #c4c6cc;
+          color: var(--bk-theme-border-strong);
         }
       }
     }
@@ -409,8 +409,8 @@
       }
 
       &::-webkit-scrollbar-thumb {
-        background: #c4c6cc;
-        border-radius: 2px;
+        background: var(--bk-theme-border-strong);
+        border-radius: var(--bk-theme-tag-radius);
       }
 
       &::-webkit-scrollbar-track {
@@ -420,21 +420,21 @@
       .nl-tag-select-item {
         display: flex;
         height: 32px;
-        padding: 0 8px;
+        padding: 0 var(--bk-theme-space-8);
         font-size: 12px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         cursor: pointer;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: var(--bk-theme-space-8);
         transition: background .15s;
 
         &:hover {
-          background: #f5f7fa;
+          background: var(--bk-theme-surface-subtle);
         }
 
         &.is-selected {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
 
         .nl-tag-select-item-label {
@@ -447,9 +447,9 @@
       }
 
       .nl-tag-select-empty {
-        padding: 16px 0;
+        padding: var(--bk-theme-space-16) 0;
         font-size: 12px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         text-align: center;
       }
     }

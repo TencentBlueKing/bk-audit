@@ -20,8 +20,8 @@
       v-for="(fieldGroup, groupIndex) in renderShowFieldNames"
       :key="groupIndex">
       <render-info-block
-        class="flex mt16"
-        :style="{ marginBottom: groupIndex === renderShowFieldNames.length - 1 ? '0px' : '12px' }">
+        class="flex"
+        :style="{ marginTop: 'var(--bk-theme-space-16)', marginBottom: groupIndex === renderShowFieldNames.length - 1 ? '0px' : '12px' }">
         <render-info-item
           v-for="(fieldItem, itemIndex) in fieldGroup"
           :key="itemIndex"
@@ -141,9 +141,9 @@
 </script>
 <style lang="postcss" scoped>
 .base-info-form {
-  /* background-color: #f5f7fa; */
-  padding: 10px;
-  margin-bottom: 10px;
+  /* background-color: var(--bk-theme-surface-subtle); */
+  padding: var(--bk-theme-space-12);
+  margin-bottom: var(--bk-theme-space-12);
 
   .render-info-item {
     min-width: 50%;

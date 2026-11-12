@@ -78,10 +78,10 @@
 </script>
 <style lang="postcss" scoped>
 .risk-preview {
-  padding: 16px 24px;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
   .link-event-wrap {
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
   }
 }
 </style>

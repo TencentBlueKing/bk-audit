@@ -115,8 +115,8 @@
         {{ t('下一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </div>
@@ -252,8 +252,8 @@
 <style scoped lang="postcss">
 .log-create-wrapper {
   min-height: calc(100vh - 60px);
-  padding: 16px 24px;
-  background: #fff;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 }
 
 .log-create-header {
@@ -263,74 +263,73 @@
   .log-create-header-line {
     width: 1px;
     height: 12px;
-    margin: 0 10px;
-    background: #979ba5;
+    margin: 0 var(--bk-theme-space-12);
+    background: var(--bk-theme-text-weak);
   }
 
   .log-create-header-title {
     font-size: 14px;
     font-weight: 600;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .log-create-header-desc {
     font-size: 12px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     vertical-align: middle;
   }
 }
 
 .log-form {
-  margin-top: 32px;
+  margin-top: var(--bk-theme-space-32);
 
   :deep(.bk-radio-label) {
     font-size: 12px;
   }
 
   .recommend-text {
-    padding: 2px 4px;
+    padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
     font-size: 10px;
-    color: #fff;
-    background: #f59500;
-    border-radius: 2px;
+    color: var(--bk-theme-surface-default);background: var(--bk-theme-color-warn-2);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .log-create-guide {
-    padding: 8px 12px;
-    background-color: #f5f7fa;
-    border-radius: 4px;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+    background-color: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
 
     .guide-text {
       display: flex;
       font-size: 12px;
       line-height: 20px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       align-items: center;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
     }
 
     .guide-text-icon {
       display: inline-block;
       width: 6px;
       height: 6px;
-      background-color: #979ba5;
+      background-color: var(--bk-theme-text-weak);
       border-radius: 50%;
     }
 
     .guide-steps-wrapper {
       display: flex;
-      margin-top: 12px;
-      gap: 16px;
+      margin-top: var(--bk-theme-space-12);
+      gap: var(--bk-theme-space-16);
 
       .guide-steps-title {
         display: inline-block;
         width: 68px;
         font-size: 12px;
         line-height: 20px;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
 
         .guide-steps-title-text {
-          margin-left: 8px;
+          margin-left: var(--bk-theme-space-8);
         }
       }
 
@@ -352,16 +351,16 @@
         :deep(.bk-step-title) {
           font-size: 14px;
           line-height: 22px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
 
         :deep(.bk-step-description) {
           max-width: 400px;
-          padding-bottom: 26px;
-          margin-top: 6px;
+          padding-bottom: var(--bk-theme-space-24);
+          margin-top: var(--bk-theme-space-6);
           font-size: 12px;
           line-height: 16px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
         }
       }
     }
@@ -370,7 +369,7 @@
 
 .footer-actions {
   display: flex;
-  margin-top: 32px;
-  gap: 8px;
+  margin-top: var(--bk-theme-space-32);
+  gap: var(--bk-theme-space-8);
 }
 </style>

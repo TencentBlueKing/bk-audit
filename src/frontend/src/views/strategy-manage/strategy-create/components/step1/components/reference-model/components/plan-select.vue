@@ -137,7 +137,7 @@
     right: 30px;
     font-size: 16px;
     line-height: 1;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 
@@ -145,12 +145,11 @@
   position: absolute;
   top: 50%;
   right: 24px;
-  padding: 3px 10px;
+  padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
   font-size: 12px;
   font-weight: normal;
-  color: #3a84ff;
-  background: #edf4ff;
-  border-radius: 2px;
+  color: var(--bk-theme-color-brand-2);background: var(--bk-theme-fill-selected);
+  border-radius: var(--bk-theme-tag-radius);
   transform: translateY(-50%);
 }
 </style>

@@ -393,7 +393,7 @@
   :deep(.t-table__inner-wrapper),
   :deep(.t-table__scroll-container) {
     scrollbar-width: thin;
-    scrollbar-color: #c4c6cc transparent;
+    scrollbar-color: var(--bk-theme-border-strong) transparent;
   }
 
   /* WebKit: 固定尺寸，禁止 hover 变宽（覆盖 scroll-faker 组件的 14px !important） */
@@ -426,15 +426,15 @@
     &::-webkit-scrollbar-thumb,
     & .scrollbar-vertical::-webkit-scrollbar-thumb,
     & .scrollbar-horizontal::-webkit-scrollbar-thumb {
-      background-color: #c4c6cc !important;
-      border-radius: 3px !important;
+      background-color: var(--bk-theme-border-strong) !important;
+      border-radius: var(--bk-theme-tag-radius) !important;
     }
 
     &:hover::-webkit-scrollbar-thumb,
     & .scrollbar-vertical:hover::-webkit-scrollbar-thumb,
     & .scrollbar-horizontal:hover::-webkit-scrollbar-thumb {
       background-color: #a3a6ad !important;
-      border-radius: 3px !important;
+      border-radius: var(--bk-theme-tag-radius) !important;
     }
 
     &::-webkit-scrollbar-track,
@@ -448,8 +448,8 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 12px 16px;
-    background-color: #fff;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    background-color: var(--bk-theme-surface-default);
 
     /* 分页样式由底部非 scoped style 块统一处理 */
   }
@@ -458,7 +458,7 @@
 .tips {
   text-decoration: underline;
   text-decoration-style: dashed;
-  text-decoration-color: #c4c6cc;
+  text-decoration-color: var(--bk-theme-border-strong);
   text-underline-offset: 5px;
   cursor: pointer;
 }

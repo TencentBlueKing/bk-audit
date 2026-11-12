@@ -162,27 +162,27 @@
   width: 100vw;
   height: 100%;
   overflow-y: auto;
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
 
   .page-header {
     display: flex;
     align-items: center;
     height: 52px;
-    padding: 0 24px;
-    background-color: #fff;
+    padding: 0 var(--bk-theme-space-24);
+    background-color: var(--bk-theme-surface-default);
     box-shadow: 0 2px 4px 0 rgb(0 0 0 / 5%);
 
     .header-title {
-      margin-right: 16px;
+      margin-right: var(--bk-theme-space-16);
       font-size: 16px;
       font-weight: 700;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
   }
 
   .search-result-action {
     display: flex;
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
   }
 }
 </style>

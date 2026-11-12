@@ -381,7 +381,7 @@
 .timeline-tabs-inner {
   display: flex;
   flex-wrap: nowrap;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
   align-items: flex-end;
   min-width: 0;
 }
@@ -390,7 +390,7 @@
   position: relative;
   display: flex;
   flex: 0 0 auto;
-  gap: 12px;
+  gap: var(--bk-theme-space-12);
   align-items: flex-end;
 }
 
@@ -399,13 +399,13 @@
   top: 4px;
   z-index: 0;
   height: 1px;
-  background: #dcdee5;
+  background: var(--bk-theme-border-default);
 }
 
 .timeline-item {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   align-items: center;
 }
 
@@ -425,43 +425,43 @@
   display: block;
   width: 8px;
   height: 8px;
-  background: #c4c6cc;
+  background: var(--bk-theme-border-strong);
   border-radius: 50%;
 
   &.is-active {
-    background: #3a84ff;
+    background: var(--bk-theme-color-brand-2);
   }
 }
 
 .event-capsule {
   height: 32px;
-  padding: 0 16px;
+  padding: 0 var(--bk-theme-space-16);
   font-size: 12px;
   line-height: 30px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   white-space: nowrap;
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #dcdee5;
-  border-radius: 16px;
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-dialog-radius);
 
   &:hover {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
   }
 
   &.is-active {
-    color: #3a84ff;
-    background: #f0f5ff;
-    border-color: #a3c5fd;
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-select-banner-bg);
+    border-color: var(--bk-theme-color-brand-4);
   }
 }
 
 .overflow-trigger {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   align-items: center;
-  color: #3a84ff;
-  border-color: #a3c5fd;
+  color: var(--bk-theme-color-brand-2);
+  border-color: var(--bk-theme-color-brand-4);
 }
 
 .overflow-icon {
@@ -475,26 +475,26 @@
 }
 
 .overflow-menu-item {
-  padding: 8px 12px;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   cursor: pointer;
 
   &:hover {
-    color: #3a84ff;
-    background: #f0f5ff;
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-select-banner-bg);
   }
 }
 
 .add-event {
   display: inline-flex;
   flex-shrink: 0;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   align-items: center;
   font-size: 12px;
   line-height: 32px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   white-space: nowrap;
   cursor: pointer;
 

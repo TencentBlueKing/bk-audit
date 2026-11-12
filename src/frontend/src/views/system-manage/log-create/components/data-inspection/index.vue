@@ -35,8 +35,8 @@
             {{ t('返回上报列表') }}
           </bk-button>
           <bk-button
-            class="ml8"
-            @click="handleViewDetail">
+           
+            @click="handleViewDetail" style="margin-left: var(--bk-theme-space-8)">
             {{ t('查看数据详情') }}
           </bk-button>
         </div>
@@ -581,8 +581,8 @@
 
 .bkbase-step-content {
   min-height: 400px;
-  padding: 40px 0;
-  padding-right: 20px;
+  padding: var(--bk-theme-space-32) 0;
+  padding-right: var(--bk-theme-space-16);
 }
 
 .complete-section {
@@ -592,55 +592,54 @@
 
   .complete-icon {
     font-size: 64px;
-    color: #2dcb56;
+    color: var(--bk-theme-color-success-2);
   }
 
   .complete-title {
-    margin-top: 36px;
+    margin-top: var(--bk-theme-space-32);
     font-size: 24px;
     font-weight: 600;
     line-height: 32px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .complete-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 32px;
+    gap: var(--bk-theme-space-8);
+    margin-top: var(--bk-theme-space-32);
   }
 }
 
 .check-detail-content {
   height: calc(100vh - 114px);
-  padding: 22px 40px;
+  padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
 }
 
 .validation-section {
-  padding: 32px;
-  margin-top: 24px;
-  border-top: 1px solid #e5e5e5;
+  padding: var(--bk-theme-space-32);
+  margin-top: var(--bk-theme-space-24);border-top: 1px solid var(--bk-theme-border-default);
 
   .validation-header {
     display: flex;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: var(--bk-theme-space-24);
 
     .validation-line {
       width: 1px;
       height: 12px;
-      margin: 0 10px;
-      background: #979ba5;
+      margin: 0 var(--bk-theme-space-12);
+      background: var(--bk-theme-text-weak);
     }
 
     .validation-title {
       font-size: 14px;
       font-weight: 600;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .validation-desc {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       vertical-align: middle;
     }
   }
@@ -654,9 +653,9 @@
       position: relative;
       display: inline-flex;
       height: 44px;
-      padding: 2px 26px 2px 6px;
-      margin-bottom: 32px;
-      background-color: #f5f7fa;
+      padding: var(--bk-theme-space-2) 26px var(--bk-theme-space-2) var(--bk-theme-space-6);
+      margin-bottom: var(--bk-theme-space-32);
+      background-color: var(--bk-theme-surface-subtle);
       border-radius: 24px;
       align-items: center;
 
@@ -666,17 +665,17 @@
         left: 20px;
         width: 1px;
         height: 32px;
-        border-left: 1.5px dashed #dcdee5;
+        border-left: 1.5px dashed var(--bk-theme-border-default);
         content: '';
       }
 
       .step-item-icon {
-        margin-right: 10px;
+        margin-right: var(--bk-theme-space-12);
         font-size: 32px;
         color: currentcolor;
 
         &.step-item-icon-loading {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
@@ -684,10 +683,10 @@
         font-size: 12px;
         font-weight: 700;
         line-height: 16px;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
 
         .step-item-description {
-          margin-top: 4px;
+          margin-top: var(--bk-theme-space-4);
           font-size: 12px;
           font-weight: 400;
         }

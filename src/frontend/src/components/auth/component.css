@@ -3,8 +3,7 @@
   display: inline-block;
   user-select: none !important;
 
-  * {
-    color: #c4c6cc !important;
+  * {color: var(--bk-theme-text-disabled) !important;
     pointer-events: none;
   }
 

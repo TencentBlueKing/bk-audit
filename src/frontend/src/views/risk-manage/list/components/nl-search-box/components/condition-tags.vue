@@ -351,14 +351,14 @@
     .nl-condition-tags-first-row {
       display: flex;
       align-items: flex-start;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
     }
 
     .nl-condition-tags-content {
       display: flex;
       flex: 1;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
       align-items: flex-start;
       min-width: 0;
     }
@@ -368,35 +368,34 @@
       position: relative;
       display: inline-flex;
       height: 26px;
-      max-width: 100%;
-      padding: 3px 8px;
+      max-width: 100%;padding: var(--bk-theme-space-2) var(--bk-theme-space-8);
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       cursor: pointer;
-      background: #fff;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
       transition: all .15s;
       align-items: center;
 
       &:hover {
         .tag-value-wrapper {
-          background: #f0f1f5;
-          border-radius: 2px;
+          background: var(--bk-theme-surface-muted);
+          border-radius: var(--bk-theme-tag-radius);
         }
 
         .tag-remove-btn {
-          color: #63656e;
+          color: var(--bk-theme-text-default);
         }
       }
 
       &.is-editing {
         .tag-value-wrapper {
-          background: #e1ecff;
-          border-radius: 2px;
+          background: var(--bk-theme-fill-selected);
+          border-radius: var(--bk-theme-tag-radius);
         }
 
         .tag-value {
-          color: #1768ef;
+          color: var(--bk-theme-color-brand-1);
         }
       }
 
@@ -406,22 +405,22 @@
       }
 
       .tag-label {
-        margin-right: 2px;
-        color: #4d4f56;
+        margin-right: var(--bk-theme-space-2);
+        color: var(--bk-theme-text-default);
         white-space: nowrap;
       }
 
       .tag-value-wrapper {
         display: inline-flex;
-        padding: 0 4px;
+        padding: 0 var(--bk-theme-space-4);
         transition: background .15s;
         align-items: center;
       }
 
       .tag-value-icon {
-        margin-right: 4px;
+        margin-right: var(--bk-theme-space-4);
         font-size: 14px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       .tag-value {
@@ -429,7 +428,7 @@
         max-width: 260px;
         overflow: hidden;
         font-weight: 700;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
         text-overflow: ellipsis;
         word-break: keep-all;
         white-space: nowrap;
@@ -442,13 +441,13 @@
       }
 
       .tag-remove-btn {
-        margin-left: 6px;
+        margin-left: var(--bk-theme-space-6);
         font-size: 12px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         transition: color .15s;
 
         &:hover {
-          color: #ea3636 !important;
+          color: var(--bk-theme-color-danger-2) !important;
         }
       }
     }
@@ -457,7 +456,7 @@
       display: flex;
       height: 22px;
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       white-space: nowrap;
       cursor: pointer;
       transition: all .15s;
@@ -468,11 +467,11 @@
       .clear-icon {
         width: 14px;
         height: 14px;
-        margin-right: 4px;
+        margin-right: var(--bk-theme-space-4);
       }
 
       &:hover {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
     }
   }

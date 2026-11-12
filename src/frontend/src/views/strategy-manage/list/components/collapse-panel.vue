@@ -45,13 +45,13 @@
   .collapse-panel-title {
     display: flex;
     height: 28px;
-    padding-left: 8px;
+    padding-left: var(--bk-theme-space-8);
     font-size: 14px;
     font-weight: 700;
     line-height: 28px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
-    background: #f0f1f5;
+    background: var(--bk-theme-surface-muted);
     align-items: center;
   }
 }

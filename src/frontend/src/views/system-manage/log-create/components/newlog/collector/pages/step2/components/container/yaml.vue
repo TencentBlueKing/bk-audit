@@ -33,14 +33,14 @@
           @click="handleUpload" />
         <audit-icon
           v-bk-tooltips="t('下载')"
-          class="ml16 icon"
+          class="icon"
           type="download"
-          @click="handleDownload()" />
+          @click="handleDownload()" style="margin-left: var(--bk-theme-space-16)" />
         <audit-icon
           v-bk-tooltips="t('全屏')"
-          class="ml16 icon"
+          class="icon"
           type="full-screen"
-          @click.stop="handleToggleFullScreen" />
+          @click.stop="handleToggleFullScreen" style="margin-left: var(--bk-theme-space-16)" />
       </span>
     </div>
     <div
@@ -50,7 +50,7 @@
       <audit-icon
         v-if="showExit"
         v-bk-tooltips="t('退出全屏')"
-        class="ml16 exit-icon"
+        class="exit-icon"
         type="un-full-screen-2"
         @click="handleExitFullScreen" />
       <render-problems
@@ -280,9 +280,9 @@
   .title {
     display: flex;
     height: 40px;
-    padding: 0 25px;
+    padding: 0 var(--bk-theme-space-24);
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     background: #2e2e2e;
     box-shadow: 0 2px 4px 0 rgb(0 0 0 / 16%);
 
@@ -297,6 +297,7 @@
   }
 
   .exit-icon {
+    margin-left: var(--bk-theme-space-16);
     position: absolute;
     top: 10px;
     right: 20px;
@@ -307,7 +308,7 @@
   }
 
   .is-error {
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 }
 

@@ -72,10 +72,10 @@
     height: 550px;
 
     .preview-result-header {
-      padding: 8px 24px;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-24);
       font-size: 14px;
       line-height: 22px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .result-empty {

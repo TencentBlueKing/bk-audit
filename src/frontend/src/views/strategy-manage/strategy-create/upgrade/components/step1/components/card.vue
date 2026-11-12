@@ -45,7 +45,7 @@
     <div
       v-if="inputFieldsMap && inputFieldsMap.length"
       class="fields-map">
-      <p class="mb8">
+      <p style="margin-bottom: var(--bk-theme-space-8)">
         {{ t('输入字段映射') }}
       </p>
       <template
@@ -116,53 +116,53 @@
 <style scoped lang="postcss">
 .strategy-upgrade-card {
   width: 491px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 #1919290d;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 
   .field-type-icon {
     width: 46px;
-    margin-right: 6px;
+    margin-right: var(--bk-theme-space-6);
   }
 
   .fields-map {
-    margin-top: 15px;
+    margin-top: var(--bk-theme-space-16);
     font-size: 12px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
 
     .title {
       /* width: 459px; */
       height: 32px;
-      padding-left: 8px;
-      margin-top: 12px;
+      padding-left: var(--bk-theme-space-8);
+      margin-top: var(--bk-theme-space-12);
       font-size: 12px;
       line-height: 32px;
-      color: #313238;
-      background: #f0f1f5;
+      color: var(--bk-theme-text-strong);
+      background: var(--bk-theme-surface-muted);
     }
   }
 
   >.title {
-    margin-bottom: 14px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 14px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .table-content {
     .table-tr:last-child {
-      border-bottom: 1px solid #f0f1f5;
+      border-bottom: 1px solid var(--bk-theme-surface-muted);
     }
 
     .table-tr.disabled {
-      color: #ff9c01;
+      color: var(--bk-theme-color-warn-2);
 
       .tr-title {
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
 
         .field-type-icon {
           width: 46px;
-          margin-right: 6px;
+          margin-right: var(--bk-theme-space-6);
         }
 
         .content {
@@ -171,27 +171,27 @@
       }
 
       .tr-content {
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
         text-decoration: line-through;
       }
     }
 
     .table-tr.new {
-      color: #ff9c01;
+      color: var(--bk-theme-color-warn-2);
 
       .tr-title {
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
 
         .field-type-icon {
           width: 46px;
-          margin-right: 6px;
+          margin-right: var(--bk-theme-space-6);
         }
       }
 
       .tr-content {
         position: relative;
         width: 100%;
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
       }
 
       .new-tip {
@@ -203,11 +203,11 @@
 
     .table-tr.highlight {
       .tr-title {
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
       }
 
       .tr-content {
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
       }
     }
 
@@ -215,37 +215,36 @@
       display: flex;
       align-items: center;
       height: 32px;
-      border-top: 1px solid #f0f1f5;
+      border-top: 1px solid var(--bk-theme-surface-muted);
 
       >.tr-title {
         display: flex;
         height: 31px;
         max-width: 200px;
         min-width: 200px;
-        padding: 0 8px;
-        color: #979ba5;
-        background: #fafbfd;
-        border-right: 1px solid #f0f1f5;
+        padding: 0 var(--bk-theme-space-8);
+        color: var(--bk-theme-text-weak);
+        background: var(--bk-theme-table-header-bg);
+        border-right: 1px solid var(--bk-theme-surface-muted);
         align-items: center;
 
         .tr-type {
           display: inline-block;
           width: 46px;
           height: 23px;
-          margin-right: 8px;
+          margin-right: var(--bk-theme-space-8);
           font-size: 10px;
           font-weight: 400;
           line-height: 23px;
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
           text-align: center;
-          background: #e1ecff;
-          border-radius: 10px;
+          background: var(--bk-theme-fill-selected);
+          border-radius: var(--bk-theme-message-radius);
         }
       }
 
-      >.tr-content {
-        padding: 5px 8px;
-        color: #63656e;
+      >.tr-content {padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
+        color: var(--bk-theme-text-default);
       }
     }
   }

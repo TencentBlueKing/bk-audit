@@ -106,6 +106,6 @@
 </script>
 <style lang="postcss" scoped>
   .job-plan {
-    padding: 28px 40px;
+    padding: var(--bk-theme-space-32) var(--bk-theme-space-32);
   }
 </style>

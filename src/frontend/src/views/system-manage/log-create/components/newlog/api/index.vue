@@ -103,13 +103,13 @@
         {{ t('创建') }}
       </auth-button>
       <bk-button
-        class="ml8"
-        @click="handlePrevious">
+       
+        @click="handlePrevious" style="margin-left: var(--bk-theme-space-8)">
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </div>
@@ -286,8 +286,8 @@
 </script>
 <style scoped lang="postcss">
 .log-create-api-push {
-  padding: 16px 24px;
-  background: #fff;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
 
   .api-form {
     width: 66%;
@@ -302,24 +302,24 @@
   .log-create-header {
     display: flex;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: var(--bk-theme-space-24);
 
     .log-create-header-line {
       width: 1px;
       height: 12px;
-      margin: 0 10px;
-      background: #979ba5;
+      margin: 0 var(--bk-theme-space-12);
+      background: var(--bk-theme-text-weak);
     }
 
     .log-create-header-title {
       font-size: 14px;
       font-weight: 600;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .log-create-header-desc {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       vertical-align: middle;
     }
   }
@@ -327,32 +327,32 @@
   .sdk-support {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
 
     .sdk-support-desc {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
 
     .sdk-support-footer {
-      padding: 0 12px;
-      margin-top: 6px;
+      padding: 0 var(--bk-theme-space-12);
+      margin-top: var(--bk-theme-space-6);
       font-size: 12px;
-      color: #4d4f56;
-      background-color: #f5f7fa;
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-surface-subtle);
     }
   }
 
   .log-create-notice {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
   }
 }
 
 .footer-actions {
   display: flex;
-  margin-top: 32px;
-  gap: 8px;
+  margin-top: var(--bk-theme-space-32);
+  gap: var(--bk-theme-space-8);
 }
 </style>

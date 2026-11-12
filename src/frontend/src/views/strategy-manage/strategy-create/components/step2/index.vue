@@ -36,20 +36,20 @@
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         theme="primary"
-        @click="handleNext">
+        @click="handleNext" style="margin-left: var(--bk-theme-space-8)">
         {{ t('下一步') }}
       </bk-button>
       <bk-button
         v-if="showSaveDraftButton"
-        class="ml8"
-        @click="handleSaveDraft">
+       
+        @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
         {{ t('保存草稿') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
       <bk-button
@@ -197,29 +197,28 @@
 <style lang="postcss" scoped>
 .document-display-step {
   .create-strategy-main {
-    padding-top: 4px;
-    margin-bottom: 24px;
+    padding-top: var(--bk-theme-space-4);
+    margin-bottom: var(--bk-theme-space-24);
   }
 
   :deep(.strategy-create-card-part) {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
 
     > .card-part-content {
-      padding: 16px 24px 24px;
+      padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
     }
   }
 
   :deep(.strategy-table),
   :deep(.event-table) {
     margin-bottom: 0;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     overflow-x: auto;
   }
 
   :deep(.strategy-table > .head),
   :deep(.event-table > .head) {
-    overflow: hidden;
-    border-radius: 2px 2px 0 0;
+    overflow: hidden;border-radius: var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0 0;
   }
 }
 </style>

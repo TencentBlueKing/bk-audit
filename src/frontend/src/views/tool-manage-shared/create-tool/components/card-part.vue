@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-create-card-part">
+  <div class="strategy-create-card-part bk-theme-card bk-theme-card--flush">
     <div
       class="card-part-title"
       @click="handleChangeCollapse">
@@ -75,23 +75,20 @@
 
 <style scoped lang="postcss">
 .strategy-create-card-part {
-  padding-bottom: 10px;
+  padding-bottom: var(--bk-theme-space-12);
 
   /* width: 82%; */
-  margin-bottom: 16px;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 1px 2px 0 #00000029;
+  margin-bottom: var(--bk-theme-space-16);
 
   >.card-part-title {
     display: flex;
     height: 53px;
-    padding: 0 16px;
+    padding: 0 var(--bk-theme-space-16);
 
     /* font-family: PingFangSC-SNaNpxibold; */
     font-size: 14px;
     font-weight: 600;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     cursor: pointer;
     align-items: center;
     justify-content: space-between;
@@ -103,9 +100,9 @@
 
     .card-part-collapse-icon {
       display: inline-block;
-      margin-right: 8px;
+      margin-right: var(--bk-theme-space-8);
       font-size: 14px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       transition: transform .2s ease;
 
       &.is-collapsed {
@@ -119,19 +116,18 @@
     }
 
     .card-part-title-description {
-      margin-left: 8px;
+      margin-left: var(--bk-theme-space-8);
       font-size: 12px;
       font-weight: 400;
       line-height: 20px;
       letter-spacing: 0;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 
-  >.card-part-content {
-    padding: 10px 16px 0;
+  >.card-part-content {padding: var(--bk-theme-space-8) var(--bk-theme-space-16) 0;
     overflow: hidden;
-    border-top: 1px solid #f0f1f5;
+    border-top: 1px solid var(--bk-theme-border-weak);
   }
 }
 </style>

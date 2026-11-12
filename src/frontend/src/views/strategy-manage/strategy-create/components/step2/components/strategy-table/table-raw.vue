@@ -121,18 +121,18 @@
 <style lang="postcss" scoped>
 .table-row {
   display: flex;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
 
   &.is-even {
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 
   .cell {
     display: flex;
     height: 42px;
-    padding: 0 12px;
-    border-right: 1px solid #dcdee5;
-    border-bottom: 1px solid #dcdee5;
+    padding: 0 var(--bk-theme-space-12);
+    border-right: 1px solid var(--bk-theme-border-default);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     align-items: center;
 
     &.field-name {
@@ -164,10 +164,10 @@
     display: flex;
     width: 100%;
     height: 58px;
-    padding: 12px;
-    color: #979ba5;
-    border-right: 1px solid #dcdee5;
-    border-bottom: 1px solid #dcdee5;
+    padding: var(--bk-theme-space-12);
+    color: var(--bk-theme-text-weak);
+    border-right: 1px solid var(--bk-theme-border-default);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     justify-content: center;
     align-items: center;
   }

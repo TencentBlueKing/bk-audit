@@ -236,5 +236,12 @@ export default {
     停用成功: 'Disabled successfully',
     请先停用后再删除: 'Please disable before deleting',
     '此工具暂不支持编辑，如需调整可见范围，请直接在“可见范围”列进行操作': 'This tool does not support editing. To adjust visibility, please operate in the Visibility column.',
+    全部工具: 'All tools',
+    最近使用: 'Recent',
+    我的收藏: 'Favorites',
+    我创建的: 'Created by me',
+    继续操作: 'Continue',
+    '标签：选择标签进行筛选': 'Tags: select a tag to filter',
+    '搜索工具名称、说明、类型、创建人': 'Search by name, description, type, or creator',
   },
 };

@@ -187,9 +187,9 @@
         content=""
         :title="t('确认更新？')"> -->
       <bk-button
-        class="setting-filed-btn mr8"
+        class="setting-filed-btn"
         theme="primary"
-        @click="handleSubmit">
+        @click="handleSubmit" style="margin-right: var(--bk-theme-space-8)">
         {{ t('应用') }}
       </bk-button>
       <!-- </audit-popconfirm> -->
@@ -554,7 +554,7 @@
   display: flex;
 
   .search-input {
-    padding: 24px;
+    padding: var(--bk-theme-space-24);
   }
 
   .source-list,
@@ -562,39 +562,38 @@
     min-height: 500px;
 
     :deep(.bk-tree),
-    .list-content {
-      padding: 0 22px 0 8px;
+    .list-content {padding: 0 var(--bk-theme-space-24) 0 var(--bk-theme-space-8);
 
       .is-selected {
-        background-color: #fff;
+        background-color: var(--bk-theme-surface-default);
       }
 
       .item-list {
         position: relative;
         display: flex;
         width: auto;
-        padding: 0 8px;
+        padding: 0 var(--bk-theme-space-8);
         font-size: 12px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         align-items: center;
         justify-content: space-between;
 
         .item-name {
-          margin-left: 8px;
+          margin-left: var(--bk-theme-space-8);
         }
 
         .item-icon {
           display: none;
           margin-left: auto;
           font-size: 14px;
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
           cursor: pointer;
         }
 
         .sub-add-key-icon,
         .sub-select-key-icon {
-          margin: 0 5px;
-          color: #c4c6cc;
+          margin: 0 var(--bk-theme-space-4);
+          color: var(--bk-theme-border-strong);
         }
 
         .category-type {
@@ -603,19 +602,18 @@
           font-size: 10px;
           line-height: 16px;
           text-align: center;
-          border-radius: 2px;
+          border-radius: var(--bk-theme-tag-radius);
         }
       }
 
       .not-allowed {
-        margin-left: 16px;
+        margin-left: var(--bk-theme-space-16);
         color: lightgray;
         cursor: not-allowed;
       }
 
       .item-list-active:hover {
-        color: #3a84ff;
-        background-color: #edf4ff;
+        color: var(--bk-theme-color-brand-2);background-color: var(--bk-theme-fill-selected);
       }
 
       .item-list-active:hover .item-icon {
@@ -646,30 +644,30 @@
         height: 32px;
         font-size: 12px;
         line-height: 32px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
 
       .add-icon {
-        margin-left: 5px;
-        color: #c4c6cc;
+        margin-left: var(--bk-theme-space-4);
+        color: var(--bk-theme-border-strong);
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
       .disabled-add-icon {
-        color: #dcdee5;
+        color: var(--bk-theme-border-default);
         cursor: not-allowed;
         user-select: none
       }
 
       .field-edit-right {
         display: inline-block;
-        margin-left: 5px;
+        margin-left: var(--bk-theme-space-4);
 
         .submit-icon {
-          margin-right: 4px;
+          margin-right: var(--bk-theme-space-4);
           font-size: 18px;
           color: #7bbe8a;
           transform: translateY(4px);
@@ -677,7 +675,7 @@
 
         .disabled-submit-icon {
           font-size: 18px;
-          color: #dcdee5;
+          color: var(--bk-theme-border-default);
           cursor: not-allowed;
           transform: translateY(4px);
           user-select: none
@@ -700,9 +698,9 @@
     flex: 1;
 
     .checked-number {
-      padding: 8px 24px;
-      color: #313238;
-      background-color: #f5f7fa;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-24);
+      color: var(--bk-theme-text-strong);
+      background-color: var(--bk-theme-surface-subtle);
     }
   }
 }
@@ -713,9 +711,9 @@
   display: flex;
   width: 100%;
   height: 48px;
-  padding: 8px 24px;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-24);
   line-height: 48px;
-  background-color: #fafbfd;
+  background-color: var(--bk-theme-table-header-bg);
 
   .setting-filed-btn {
     display: flex;

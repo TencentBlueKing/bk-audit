@@ -395,8 +395,8 @@
         .bk-node-text {
           display: flex;
           min-width: 240px;
-          padding-right: 8px;;
-          margin-left: 8px;
+          padding-right: var(--bk-theme-space-8);;
+          margin-left: var(--bk-theme-space-8);
           align-items: center;
           justify-content: space-between;
 
@@ -406,21 +406,21 @@
             font-size: 10px;
             line-height: 16px;
             text-align: center;
-            border-radius: 2px;
+            border-radius: var(--bk-theme-tag-radius);
           }
         }
 
         .add-icon {
-          margin-left: 5px;
-          color: #c4c6cc;
+          margin-left: var(--bk-theme-space-4);
+          color: var(--bk-theme-border-strong);
 
           &:hover {
-            color: #3a84ff;
+            color: var(--bk-theme-color-brand-2);
           }
         }
 
         .disabled-add-icon {
-          color: #dcdee5;
+          color: var(--bk-theme-border-default);
           cursor: not-allowed;
           user-select: none
         }
@@ -428,17 +428,17 @@
         .field-edit-right {
           display: flex;
           align-items: center;
-          margin-left: 5px;
+          margin-left: var(--bk-theme-space-4);
 
           .submit-icon {
-            margin-right: 4px;
+            margin-right: var(--bk-theme-space-4);
             font-size: 18px;
             color: #7bbe8a;
           }
 
           .disabled-submit-icon {
             font-size: 18px;
-            color: #dcdee5;
+            color: var(--bk-theme-border-default);
             cursor: not-allowed;
             user-select: none
           }
@@ -457,7 +457,7 @@
         }
 
         .bk-node-text:has(.disabled-row) {
-          color: #dcdee5;
+          color: var(--bk-theme-border-default);
           cursor: not-allowed;
           user-select: none
         }

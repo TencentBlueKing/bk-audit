@@ -155,11 +155,11 @@
 
 <style lang="postcss" scoped>
 .risk-info {
-  padding: 20px 40px 0;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-32) 0;
 
   .search-input-box {
     position: relative;
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
   }
 
   .search-input-suffix {
@@ -169,7 +169,7 @@
     bottom: 0;
     display: flex;
     font-size: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     align-items: center;
     justify-content: center;
   }
@@ -180,7 +180,7 @@
 
   :deep(.t-table) {
     .insert-link {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
       transition: opacity .2s;
 
@@ -190,22 +190,22 @@
     }
 
     .risk-info-copy-icon {
-      margin-left: 5px;
-      color: #4d4f56;
+      margin-left: var(--bk-theme-space-4);
+      color: var(--bk-theme-text-default);
       cursor: pointer;
       transition: color .2s;
 
       &:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
   }
 }
 
 .empty-text {
-  padding: 20px;
+  padding: var(--bk-theme-space-16);
   font-size: 14px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 </style>

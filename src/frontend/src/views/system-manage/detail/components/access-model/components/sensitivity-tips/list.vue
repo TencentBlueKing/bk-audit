@@ -91,14 +91,14 @@
 .sensitivity-tips-pop {
   .tips-li {
     display: flex;
-    margin: 10px 0;
+    margin: var(--bk-theme-space-12) 0;
 
     .outside {
       display: inline-block;
       width: 5px;
       height: 5px;
-      margin: 0 10px;
-      background: #979ba5;
+      margin: 0 var(--bk-theme-space-12);
+      background: var(--bk-theme-text-weak);
       border-radius: 50%;
     }
   }

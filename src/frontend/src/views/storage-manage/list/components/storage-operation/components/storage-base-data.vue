@@ -129,16 +129,16 @@
     <template v-if="!isConnectivityDetectLoading">
       <connect-detect-result v-if="isConnectivityDetectePassed">
         <audit-icon
-          class="ml8 mr8"
+         
           svg
-          type="completed" />
+          type="completed" style="margin-left: var(--bk-theme-space-8); margin-right: var(--bk-theme-space-8)" />
         <span>{{ t('连接成功') }}</span>
       </connect-detect-result>
       <template v-if="!isConnectivityDetecteMissed">
         <connect-detect-result v-if="!isConnectivityDetectePassed || isConnectivityDetectFailed">
           <audit-icon
-            class="ml8 mr8"
-            style="color: #ea3636;"
+           
+            style="color: #ea3636; margin-left: var(--bk-theme-space-8); margin-right: var(--bk-theme-space-8)"
             svg
             type="delete-fill" />
           <span>{{ t('连接失败，请检查数据是否正确') }}</span>
@@ -146,8 +146,8 @@
       </template>
       <connect-detect-result v-if="isShowMissMessage">
         <audit-icon
-          class="ml8 mr8"
-          style="color: #ea3636;"
+         
+          style="color: #ea3636; margin-left: var(--bk-theme-space-8); margin-right: var(--bk-theme-space-8)"
           svg
           type="delete-fill" />
         <span>{{ t('提交数据前请先连通性测试') }}</span>
@@ -325,3 +325,5 @@
   });
 </script>
 
+<style scoped lang="postcss">
+</style>

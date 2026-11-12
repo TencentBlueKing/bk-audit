@@ -94,22 +94,22 @@
 
 <style lang="postcss" scoped>
   .usage-restriction {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
   }
 
   .usage-restriction-title {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 12px;
     line-height: 20px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .usage-restriction-tip {
-    margin-left: 4px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     cursor: default;
   }
 

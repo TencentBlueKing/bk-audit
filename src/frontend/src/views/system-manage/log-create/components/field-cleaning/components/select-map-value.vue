@@ -223,11 +223,11 @@
     align-items: center;
 
     &:hover {
-      background-color: #fafbfd;
+      background-color: var(--bk-theme-table-header-bg);
     }
 
     &.is-focused {
-      border: 1px solid #3a84ff;
+      border: 1px solid var(--bk-theme-color-brand-2);
 
       .focused-flag {
         transform: rotateZ(-90deg);
@@ -236,7 +236,7 @@
 
     &.is-errored {
       background: rgb(255 221 221 / 20%);
-      outline: 1px solid #dcdee5;
+      outline: 1px solid var(--bk-theme-border-default);
     }
 
     .draggable-box {
@@ -249,19 +249,19 @@
         position: absolute;
         inset: 0;
         z-index: 1;
-        border: 1px solid #3a84ff;
+        border: 1px solid var(--bk-theme-color-brand-2);
       }
     }
 
     .select-result-text {
       display: flex;
-      padding-right: 16px;
-      padding-left: 16px;
+      padding-right: var(--bk-theme-space-16);
+      padding-left: var(--bk-theme-space-16);
     }
 
     .select-result-text-value {
       overflow: hidden;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       text-overflow: ellipsis;
       word-break: keep-all;
       white-space: nowrap;
@@ -279,11 +279,11 @@
       right: 8px;
       z-index: 1;
       font-size: 12px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       transition: all .15s;
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
 
@@ -291,26 +291,25 @@
       position: absolute;
       right: 27px;
       font-size: 14px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
   }
 
   .tippy-box[data-theme~='alternative-field-pop-menu'] {
     .tippy-content {
-      padding: 10px 0;
+      padding: var(--bk-theme-space-12) 0;
       font-size: 12px;
-      line-height: 32px;
-      color: #26323d;
-      background-color: #fff;
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      line-height: 32px;color: var(--bk-theme-text-strong);
+      background-color: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
       user-select: none;
 
       .search-input-box {
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
 
         .bk-input--text {
-          background-color: #fff;
+          background-color: var(--bk-theme-surface-default);
         }
       }
 
@@ -323,29 +322,29 @@
         display: flex;
         height: 32px;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
           cursor: pointer;
-          background-color: #f5f7fa;
+          background-color: var(--bk-theme-surface-subtle);
         }
 
         &.active {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
 
         &.disabled {
-          color: #c4c6cc;
+          color: var(--bk-theme-border-strong);
           cursor: not-allowed;
           background-color: transparent;
         }
       }
 
       .field-item-value {
-        padding-left: 8px;
+        padding-left: var(--bk-theme-space-8);
         overflow: hidden;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         text-overflow: ellipsis;
         word-break: keep-all;
         white-space: nowrap;

@@ -368,33 +368,28 @@
       margin-right: 0;
       margin-left: 0;
 
-      & ~ .bk-tag {
-        margin-left: 6px;
+      & ~ .bk-tag {margin-left: var(--bk-theme-space-6);
       }
     }
 
     /* +N 与左侧标签保持空隙（需写在 .bk-tag 之后，避免被 margin-left:0 覆盖） */
     .audit-edit-tag__more.bk-tag {
-      flex-shrink: 0;
-      margin-left: 6px;
+      flex-shrink: 0;margin-left: var(--bk-theme-space-6);
     }
 
     .copy-btn {
       display: inline-flex;
-      align-items: center;
-      padding-left: 8px;
+      align-items: center;padding-left: var(--bk-theme-space-8);
       cursor: pointer;
       opacity: 0%;
 
-      &:hover {
-        color: #3a84ff;
+      &:hover {color: var(--bk-theme-color-brand-2);
       }
     }
 
     .edit-tag-suffix {
       display: inline-flex;
-      align-items: center;
-      margin-left: 4px;
+      align-items: center;margin-left: var(--bk-theme-space-4);
       vertical-align: middle;
     }
   }
@@ -415,8 +410,7 @@
       margin-right: 0;
       margin-left: 0;
 
-      & ~ .bk-tag {
-        margin-left: 6px;
+      & ~ .bk-tag {margin-left: var(--bk-theme-space-6);
       }
     }
   }

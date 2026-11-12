@@ -1,0 +1,560 @@
+/* bkui-vue 公共主题。先映射库暴露的变量，再补库内硬编码盖不住的选择器。
+   页面宽高、业务状态色和组合布局不放这里。 */
+
+:root {
+  --primary-color: var(--bk-theme-color-brand-2);
+  --success-color: var(--bk-theme-color-success-2);
+  --warning-color: var(--bk-theme-color-warn-2);
+  --danger-color: var(--bk-theme-color-danger-2);
+  --default-color: var(--bk-theme-text-default);
+  --gray-color: var(--bk-theme-text-weak);
+  --light-gray: var(--bk-theme-text-disabled);
+  --white-color: var(--bk-theme-surface-default);
+  --whitesmoke-color: var(--bk-theme-table-header-bg);
+  --disable-color: var(--bk-theme-border-default);
+  --disable-bg-color: var(--bk-theme-surface-subtle);
+  --border-color: var(--bk-theme-border-default);
+  --border-style-color: var(--bk-theme-text-disabled);
+  --font-size-base: var(--bk-theme-font-size-sm);
+  --font-size-medium: var(--bk-theme-font-size-base);
+  --font-size-large: var(--bk-theme-font-size-lg);
+  --line-height-base: var(--bk-theme-line-height-sm);
+  --line-height-medium: var(--bk-theme-line-height-sm);
+  --line-height-large: var(--bk-theme-line-height-lg);
+  --border-radius-base: var(--bk-theme-control-radius);
+  --input-disabled-bg: var(--bk-theme-surface-subtle);
+  --input-disabled-border: var(--bk-theme-border-default);
+  --input-color: var(--bk-theme-text-default);
+  --input-bg: var(--bk-theme-surface-default);
+  --input-border-color: var(--bk-theme-control-border-color);
+  --input-broder-radius: var(--bk-theme-control-radius);
+  --input-shadow-color: var(--bk-theme-color-brand-4);
+  --input-block-color: var(--bk-theme-surface-page);
+  --input-block-hover-color: var(--bk-theme-border-weak);
+  --input-maxlength-color: var(--bk-theme-text-weak);
+  --button-primary-hover-color: var(--bk-theme-color-brand-3);
+  --button-danger-hover-color: var(--bk-theme-color-danger-3);
+  --button-success-hover-color: var(--bk-theme-color-success-3);
+  --button-warning-hover-color: var(--bk-theme-color-warn-3);
+  --button-default-hover-border-color: var(--bk-theme-text-weak);
+  --button-primary-active-color: var(--bk-theme-color-brand-1);
+  --button-danger-active-color: var(--bk-theme-color-danger-1);
+  --button-success-active-color: var(--bk-theme-color-success-1);
+  --button-warning-active-color: var(--bk-theme-color-warn-1);
+  --button-selected-bg-color: var(--bk-theme-fill-selected);
+  --button-disabled-selected-bg-color: var(--bk-theme-surface-muted);
+  --radio-font-color: var(--bk-theme-text-default);
+  --radio-active-color: var(--bk-theme-color-brand-2);
+  --radio-hover-border-color: var(--bk-theme-text-weak);
+  --radio-disabled-border: var(--bk-theme-border-default);
+  --radio-disabled-font-color: var(--bk-theme-text-disabled);
+  --radio-disabled-checked-bg: var(--bk-theme-color-brand-4);
+  --radio-button-checked-bg: var(--bk-theme-fill-selected);
+  --radio-button-disabled-checked-bg: var(--bk-theme-surface-subtle);
+  --checkbox-disabled-checked-bg: var(--bk-theme-color-brand-4);
+  --fixed-navbar-background: var(--bk-theme-surface-default);
+  --switch-default-color: var(--bk-theme-surface-default);
+  --switch-grey-color: var(--bk-theme-text-disabled);
+  --breadcrumb-black-color: var(--bk-theme-text-weak);
+  --breadcrumb-primary-hover-color: var(--bk-theme-color-brand-2);
+  --breadcrumb-fn-main-color: var(--bk-theme-text-default);
+  --link-default-hover-color: var(--bk-theme-text-weak);
+  --link-primary-hover-color: var(--bk-theme-color-brand-3);
+  --link-success-hover-color: var(--bk-theme-color-success-3);
+  --link-warning-hover-color: var(--bk-theme-color-warn-3);
+  --link-danger-hover-color: var(--bk-theme-color-danger-3);
+  --link-default-disabled-color: var(--bk-theme-border-default);
+  --link-primary-disabled-color: var(--bk-theme-color-brand-4);
+  --link-success-disabled-color: var(--bk-theme-color-success-4);
+  --link-warning-disabled-color: var(--bk-theme-color-warn-4);
+  --link-danger-disabled-color: var(--bk-theme-color-danger-4);
+  --message-color: var(--bk-theme-text-default);
+  --message-primary-bg-color: var(--bk-theme-color-brand-7);
+  --message-primary-border-color: var(--bk-theme-color-brand-6);
+  --message-warning-bg-color: var(--bk-theme-color-warn-7);
+  --message-warning-border-color: var(--bk-theme-color-warn-6);
+  --message-success-bg-color: var(--bk-theme-color-success-7);
+  --message-success-border-color: var(--bk-theme-color-success-6);
+  --message-danger-bg-color: var(--bk-theme-color-danger-6);
+  --message-danger-border-color: var(--bk-theme-color-danger-5);
+  --menu-bg-color: var(--bk-theme-nav-side-bg);
+  --submenu-bg-color: var(--bk-theme-surface-default);
+  --menu-active-bg-color: var(--bk-theme-fill-selected);
+  --menu-color: var(--bk-theme-nav-side-text);
+  --menu-group-color: var(--bk-theme-nav-side-text);
+  --menu-active-color: var(--bk-theme-nav-side-text-active);
+  --nav-header-bg-color: var(--bk-theme-nav-top-bg);
+  --nav-bg-color: var(--bk-theme-nav-side-bg);
+  --date-picker-disabled-bg: var(--bk-theme-surface-subtle);
+  --date-picker-dropdown-bg: var(--bk-theme-surface-default);
+  --table-bg-color: var(--bk-theme-table-row-bg);
+  --table-border-color: var(--bk-theme-table-border);
+  --table-strip-color: var(--bk-theme-surface-subtle);
+  --table-head-bg-color: var(--bk-theme-table-header-bg);
+  --table-head-font-color: var(--bk-theme-table-header-text);
+  --table-body-font-color: var(--bk-theme-text-default);
+  --table-row-hover-bg-color: var(--bk-theme-table-row-hover);
+  --table-row-active-bg-color: var(--bk-theme-surface-subtle);
+  --cascader-panel-border-color: var(--bk-theme-border-default);
+  --cascader-panel-hover: var(--bk-theme-surface-subtle);
+  --cascader-panel-active: var(--bk-theme-fill-selected);
+  --cascader-panel-disabled-bg: var(--bk-theme-surface-default);
+  --search-select-focus-border-color: var(--bk-theme-color-brand-2);
+  --search-select-focus-color: var(--bk-theme-color-brand-2);
+  --search-select-font-color: var(--bk-theme-text-default);
+  --search-select-placeholder-color: var(--bk-theme-text-disabled);
+  --search-select-message-color: var(--bk-theme-color-danger-2);
+  --search-select-menu-border-color: var(--bk-theme-border-default);
+  --select-active-color: var(--bk-theme-fill-selected);
+  --select-hover-color: var(--bk-theme-surface-subtle);
+  --sub-title-bg-color: var(--bk-theme-surface-page);
+  --slider-default-bg: var(--bk-theme-border-default);
+  --slider-disable-bar-bg: var(--bk-theme-text-weak);
+}
+
+.bk-button,
+.bk-input,
+.bk-textarea,
+.bk-select .bk-input,
+.bk-search-select,
+.bk-search-select-container,
+.bk-tag-input,
+.bk-tag-input .bk-tag-input-trigger,
+.bk-form .bk-input,
+.bk-date-picker-rel .bk-date-picker-editor,
+.bk-date-picker-editor,
+.bk-cascader,
+.bk-cascader .bk-input {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+/* 库把白底和 2px 圆角写在内部文本节点上。外框不裁切时，圆角看起来还在输入框里面。 */
+.bk-input,
+.bk-textarea {
+  overflow: hidden;
+}
+
+.bk-input .bk-input--text,
+.bk-textarea > textarea {
+  border-radius: 0;
+}
+
+.bk-input.is-simplicity,
+.bk-textarea.is-simplicity {
+  border-radius: 0;
+}
+
+/* Radio-button-group / 胶囊：库内写死 2px */
+.bk-radio-capsule,
+.bk-radio-capsule .bk-radio-button {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+/* bkui 2.0.2-beta.71 用 .bk-button-group .bk-button:first/last/only-child 把圆角锁在 2px。
+   中间按钮库内已是 0，只改外角。 */
+.bk-button-group .bk-button:first-child {
+  border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
+}
+
+.bk-button-group .bk-button:last-child {
+  border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
+}
+
+.bk-button-group .bk-button:only-child {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+.bk-tag-input .bk-tag-input-trigger {
+  border-color: var(--bk-theme-control-border-color);
+}
+
+.bk-tag-input .bk-tag-input-trigger.active {
+  border-color: var(--bk-theme-color-brand-2);
+}
+
+/* bkui 2.0.2-beta.71 的 Tag 把圆角写进内联 style，默认 radius 是 2px。
+   只压这一档到方角 4。页面传入的胶囊半径仍走内联，不再被一并改成 4。 */
+.bk-tag {
+  height: var(--bk-theme-tag-height);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-line-height-sm);
+}
+
+.bk-tag[style*="border-radius: 2px"],
+.bk-tag[style*="border-radius:2px"] {
+  border-radius: var(--bk-theme-tag-radius) !important;
+}
+
+/* 线框 Select 的禁用底。下划线 is-simplicity 不铺这块底。库内写死 #fafbfd。 */
+.bk-select .bk-select-trigger .bk-select-tag.is-disabled:not(.is-simplicity) {
+  background-color: var(--bk-theme-surface-muted);
+}
+
+.bk-tag-input .bk-tag-input-trigger .tag-list > li,
+.bk-tag-input .bk-tag-input-trigger .tag-list .text,
+.bk-cascader .bk-cascader-name .cascader-tag-list .tag-item {
+  border-radius: var(--bk-theme-tag-radius);
+}
+
+.bk-select .bk-select-trigger,
+.bk-select.bk-pagination-limit-select .bk-select-trigger,
+.bk-select .bk-input,
+.bk-select .bk-select-trigger .bk-select-tag,
+.bk-select-tag {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+.bk-message,
+.bk-exception,
+.bk-upload-list__item {
+  border-radius: var(--bk-theme-message-radius);
+}
+
+/* Alert 不跟 Message 的 8px。bkui 2.0.2-beta.71 把类型底色和描边写死在 .bk-alert-* */
+.bk-alert {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-alert-info-bg);
+  border-color: transparent;
+  border-width: 0;
+  border-radius: var(--bk-theme-alert-radius);
+}
+
+.bk-alert-info {
+  background-color: var(--bk-theme-alert-info-bg);
+  border-color: transparent;
+}
+
+.bk-alert-success {
+  background-color: var(--bk-theme-alert-success-bg);
+  border-color: transparent;
+}
+
+.bk-alert-warning {
+  background-color: var(--bk-theme-alert-warn-bg);
+  border-color: transparent;
+}
+
+.bk-alert-danger,
+.bk-alert-error {
+  background-color: var(--bk-theme-alert-danger-bg);
+  border-color: transparent;
+}
+
+/* miffy Alert：高 32、padding 6/8、gap 8、正文 12/20。设计稿工具广场那条带 Warn/4 描边，不跟。 */
+.bk-alert-wraper {
+  align-items: center;
+  min-height: var(--bk-theme-space-32);
+  padding: var(--bk-theme-space-6) var(--bk-theme-space-8);
+  gap: var(--bk-theme-space-8);
+}
+
+.bk-alert .bk-alert-icon-info {
+  margin-right: 0;
+}
+
+.bk-alert-title {
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
+}
+
+/* v-bk-tooltips 的内容容器是 .bk-popper，不是 overlay 的 popover */
+.bk-popper.dark,
+.bk-popper.light {
+  border-radius: var(--bk-theme-tooltip-radius);
+}
+
+/* 圆角只给浮层外壳。bkui 用更长的选择器把外壳锁在 2px，这里对齐同一条链。
+   .bk-select-dropdown / .bk-dropdown-content 是面板里的列表，不跟外壳一起圆。 */
+.bk-popover.bk-pop2-content,
+.bk-popover.bk-pop2-content[data-theme^='light'],
+.bk-popover.bk-pop2-content.bk-select-popover,
+.bk-popover.bk-pop2-content.bk-dropdown-popover,
+.bk-popover.bk-pop2-content.bk-cascader-popover,
+.bk-popover.bk-pop2-content.bk-table-head-filter,
+.bk-pop-confirm-box,
+.bk-date-picker-dropdown,
+.bk-date-picker .bk-date-picker-dropdown,
+.bk-dropdown-popover .bk-dropdown-menu {
+  overflow: hidden;
+  border-radius: var(--bk-theme-overlay-radius);
+  box-shadow: var(--bk-theme-overlay-shadow);
+}
+
+.bk-select-dropdown,
+.bk-dropdown-content,
+.bk-date-picker-dropdown .bk-time-picker-cells-list:first-child,
+.bk-date-picker-dropdown .bk-time-picker-cells-list:last-child,
+.bk-popover.bk-pop2-content.bk-select-popover .bk-select-content-wrapper .bk-select-extension,
+.bk-popover.bk-pop2-content.bk-select-popover .bk-select-content-wrapper .bk-select-search-wrapper .bk-select-search-input {
+  border-radius: 0;
+}
+
+/* 色块大：card-grid 头和内容区跟 tab 圆角 8。下划线根仍是 0。 */
+.bk-tab--card-grid .bk-tab-header-item {
+  border-radius: var(--bk-theme-tab-radius) var(--bk-theme-tab-radius) 0 0;
+}
+
+.bk-tab--card-grid .bk-tab-content {
+  border-radius: 0 var(--bk-theme-tab-radius) var(--bk-theme-tab-radius) var(--bk-theme-tab-radius);
+}
+
+/* 色块小：card-tab 库内 4px。附录根级圆角集合含 6，不跟 card-grid 的 8。 */
+.bk-tab--card-tab .bk-tab-header,
+.bk-tab--card-tab .bk-tab-header--active {
+  border-radius: var(--bk-theme-tab-radius-sm) var(--bk-theme-tab-radius-sm) 0 0;
+}
+
+/* 数字胶囊。库内 18px 写在这条链上，改成全圆角后仍是胶囊。 */
+.bk-tab-header-item .bk-tab-header--has-num-right .bk-tab-header--has-num-elliptic {
+  border-radius: var(--bk-theme-tab-pill-radius);
+}
+
+.bk-tab--card .bk-tab-header,
+.bk-tab--vertical-card .bk-tab-header,
+.bk-tab--unborder-card .bk-tab-header {
+  border-bottom-color: var(--bk-theme-tab-rail-bg);
+}
+
+/* 下划线 Tab 根圆角保持 0，不套色块圆角 */
+.bk-tab--top .bk-tab-header,
+.bk-tab--card .bk-tab-header,
+.bk-tab--unborder-card .bk-tab-header {
+  border-radius: 0;
+}
+
+/* 第三方公共表单组件：与标准控件统一圆角/6 和边框语义。
+   @blueking/date-picker 的触发器根节点只有 .__bk_date_picker__，没有 .date-picker。
+   库内写死 2px 圆角和 #c4c6cc 描边，放在这里覆盖，不逐页改。
+   下拉面板里的快捷项、时区标签仍是面板自己的 2px，不跟输入框圆角走。 */
+.__bk_date_picker__,
+.bk-user-selector .selection-trigger {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+/* bk-user-selector 用 scoped 属性选择器写死 2px，优先级高于普通类选择器 */
+.bk-user-selector .tags-container {
+  border-radius: var(--bk-theme-control-radius) !important;
+  border-color: var(--bk-theme-border-strong);
+}
+
+.bk-user-selector .tags-container.focused {
+  border-color: var(--bk-theme-color-brand-2);
+}
+
+.__bk_date_picker__ {
+  border-color: var(--bk-theme-border-strong);
+}
+
+.__bk_date_picker__ .date-icon,
+.__bk_date_picker__ .date-content {
+  border-radius: var(--bk-theme-control-radius);
+}
+
+/* 单选圆点尺寸。bkui 变量样式用 width/height: var(--line-height-base)，
+   库默认 --line-height-base 是 16px，非变量样式也写死 16px。
+   上面把该变量映射成 12px 字号配套的 20px 行高后，圆点会被放大。
+   这不是单选尺寸规范，单独把圆点收回 16px，不改行高变量。 */
+.bk-radio-input {
+  width: 16px;
+  height: 16px;
+}
+
+.bk-pagination {
+  color: var(--bk-theme-text-default);
+}
+
+/* 弹窗外壳是 .bk-modal-body。 .bk-modal-content 只是正文，圆在这里会让正文四角翘起来。 */
+.bk-dialog .bk-modal-body,
+.bk-infobox .bk-modal-body,
+.bk-notify {
+  overflow: hidden;
+  border-radius: var(--bk-theme-dialog-radius);
+  box-shadow: var(--bk-theme-dialog-shadow);
+}
+
+.bk-dialog .bk-modal-content,
+.bk-infobox .bk-modal-content {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.bk-dialog.is-fullscreen .bk-modal-body {
+  border-radius: 0;
+}
+
+/* Dialog 内容区与底栏间距（P20 待确认，默认值与 bkui 原值一致） */
+.bk-dialog-header,
+.bk-dialog-content {
+  padding-right: var(--bk-theme-dialog-padding-x);
+  padding-left: var(--bk-theme-dialog-padding-x);
+}
+
+.bk-dialog-footer {
+  padding: var(--bk-theme-dialog-footer-padding);
+}
+
+/* Sideslider 底栏左右间距（P20 待确认，默认值与 bkui 原值一致） */
+.bk-sideslider-header {
+  border-bottom-color: var(--bk-theme-sideslider-header-border);
+}
+
+.bk-sideslider-footer {
+  padding-right: var(--bk-theme-sideslider-footer-padding-x);
+  padding-left: var(--bk-theme-sideslider-footer-padding-x);
+}
+
+.bk-sideslider .bk-modal-footer.is-fixed .bk-sideslider-footer {
+  background: var(--bk-theme-sideslider-footer-bg);
+  border-top-color: var(--bk-theme-sideslider-header-border);
+}
+
+/* 表单项纵向间距：接管 bkui 写死的 24px，变体见 scenes.css 的 .bk-theme-form--compact / --inline */
+.bk-form-item {
+  margin-bottom: var(--bk-theme-form-item-gap);
+}
+
+/* 库把 .bk-form-label 的字号写死 14px，不走 --font-size-base。
+   表单规范默认 label 与输入文字都是 12。水平表单的 32px 行高是用来和控件对齐的，这里不改。 */
+.bk-form-label {
+  font-size: var(--bk-theme-font-size-sm);
+}
+
+.bk-form--vertical .bk-form-label,
+.bk-form-item--vertical .bk-form-label {
+  margin-bottom: var(--bk-theme-form-label-gap);
+}
+
+/* 线框搜索：常规线 Neutral/6，hover Neutral/5，focus Brand/2。
+   填充底只在页面挂了 .bk-theme-search-filled 时生效。
+   内层 .bk-input--text 写死白底；SearchSelect 聚焦把容器写成 #fff !important（bkui 2.0.2-beta.71）。 */
+.bk-input.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled) .bk-input--text,
+.bk-input.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled) .bk-input--suffix-icon,
+.bk-input.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled) .bk-input--prefix-area,
+.bk-search-select.bk-theme-search-filled .bk-search-select-container,
+.bk-search-select-container.bk-theme-search-filled {
+  background-color: var(--bk-theme-search-filled-bg);
+}
+
+.bk-input.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled):hover .bk-input--text,
+.bk-input.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled):hover .bk-input--suffix-icon,
+.bk-input.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled):hover .bk-input--prefix-area,
+.bk-search-select.bk-theme-search-filled:hover .bk-search-select-container,
+.bk-search-select-container.bk-theme-search-filled:hover {
+  background-color: var(--bk-theme-search-filled-hover-bg);
+}
+
+.bk-search-select.bk-theme-search-filled .bk-search-select-container.is-focus,
+.bk-search-select-container.bk-theme-search-filled.is-focus {
+  background-color: var(--bk-theme-search-filled-bg) !important;
+}
+
+.bk-search-select.bk-theme-search-filled:hover .bk-search-select-container.is-focus,
+.bk-search-select-container.bk-theme-search-filled.is-focus:hover {
+  background-color: var(--bk-theme-search-filled-hover-bg) !important;
+}
+
+.bk-search-select-container {
+  border-color: var(--bk-theme-control-border-color);
+}
+
+.bk-search-select-container:hover {
+  border-color: var(--bk-theme-border-hover);
+}
+
+.bk-search-select-container.is-focus {
+  border-color: var(--bk-theme-color-brand-2);
+}
+
+/* Collapse 块样式。bkui 2.0.2-beta.71 把头背景和 2px 圆角写死 */
+.bk-collapse-block .bk-collapse-item .bk-collapse-header {
+  background: var(--bk-theme-collapse-bg);
+  border-radius: var(--bk-theme-collapse-radius);
+}
+
+.bk-collapse-item.is-disabled .bk-collapse-header {
+  color: var(--bk-theme-text-disabled);
+}
+
+.bk-card {
+  background: var(--bk-theme-card-bg);
+  border-radius: var(--bk-theme-card-radius);
+  box-shadow: var(--bk-theme-card-shadow);
+}
+
+.bk-table {
+  --row-height: var(--bk-theme-table-row-height);
+
+  overflow: hidden;
+  border-radius: var(--bk-theme-table-frame-radius);
+}
+
+/* 外框线跟 table-frame 场景：放进 .bk-theme-card 后自动变为 none */
+.bk-table.bordered-outer {
+  border-top: var(--bk-theme-table-frame-border);
+  border-right: var(--bk-theme-table-frame-border);
+  border-left: var(--bk-theme-table-frame-border);
+}
+
+.bk-table.bordered-outer .bk-table-footer {
+  border-bottom: var(--bk-theme-table-frame-border);
+}
+
+.bk-table .bk-table-head table th,
+.bk-table .bk-table-head table td,
+.bk-table thead th {
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  color: var(--bk-theme-table-header-text);
+  background-color: var(--bk-theme-table-header-bg);
+  border-bottom-color: var(--bk-theme-table-header-divider);
+}
+
+/* 库内 .cell 用 line-height: calc(行高 - 4px) 撑满内容区。
+   上下 8 必须从这 4px 里再扣掉，否则 38 + 16 = 54，行高会被撑开。
+   td 上下各 1px 边框，所以格子本体是 42 - 2。 */
+.bk-table .bk-table-body table tbody tr td:not(.empty-cell) .cell {
+  box-sizing: border-box;
+  height: calc(var(--bk-theme-table-row-height) - 2px);
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  overflow: hidden;
+  line-height: calc(var(--bk-theme-table-row-height) - 2px - var(--bk-theme-space-8) - var(--bk-theme-space-8));
+}
+
+.bk-table .bk-table-head table th *,
+.bk-table thead th * {
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  color: var(--bk-theme-table-header-text);
+}
+
+.bk-table .bk-table-body table tbody tr.hover-highlight:hover td:not(.empty-cell) {
+  background: var(--bk-theme-table-row-hover);
+}
+
+.bk-table .bk-table-body table tbody tr.is-selected td,
+.bk-table .bk-table-body table tbody tr.selected td {
+  background-color: var(--bk-theme-table-row-selected-bg);
+}
+
+.bk-form-item.is-error .bk-select-tag,
+.bk-form-item.is-error .bk-input {
+  border-color: var(--bk-theme-color-danger-2);
+}
+
+.bk-radio-tab .bk-radio-button.is-checked.is-disabled .bk-radio-button-label,
+.bk-radio-card .bk-radio-button.is-checked.is-disabled .bk-radio-button-label {
+  color: var(--bk-theme-text-disabled);
+  background-color: var(--bk-theme-surface-muted);
+}
+
+.bk-radio-tab .bk-radio-button.is-disabled .bk-radio-button-label,
+.bk-radio-card .bk-radio-button.is-disabled .bk-radio-button-label {
+  color: var(--bk-theme-text-disabled);
+  background-color: var(--bk-theme-surface-default);
+}
+
+.bk-table .bk-exception {
+  border-bottom: 1px solid var(--bk-theme-table-border);
+}

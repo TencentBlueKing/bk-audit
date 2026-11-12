@@ -165,9 +165,9 @@
 }
 
 .title {
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 14px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 :deep(.bk-table-head) {
@@ -176,7 +176,7 @@
 
 :deep(.variable-name-cell) {
   display: flex;
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -196,12 +196,12 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: var(--bk-theme-tag-radius);
 
   &:hover {
-    background: #e1ecff;
+    background: var(--bk-theme-fill-selected);
   }
 }
 

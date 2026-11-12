@@ -60,33 +60,32 @@
   .retrieval-card-skeleton {
     width: 100%;
     max-width: 900px;
-    min-height: 280px;
-    padding: 20px 24px 28px;
-    background: #fff;
-    border-radius: 16px;
+    min-height: 280px;padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-32);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-dialog-radius);
     box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
   }
 
   .skeleton-status {
     display: flex;
-    margin-bottom: 20px;
+    margin-bottom: var(--bk-theme-space-16);
     align-items: center;
-    gap: 6px;
-    color: #63656e;
+    gap: var(--bk-theme-space-6);
+    color: var(--bk-theme-text-default);
   }
 
   .status-text {
-    margin-left: 4px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .loading-dot {
     width: 6px;
     height: 6px;
-    background: #3a84ff;
+    background: var(--bk-theme-color-brand-2);
     border-radius: 50%;
     opacity: 40%;
     animation: chat-loading-dot 1s ease-in-out infinite;
@@ -107,20 +106,20 @@
   .skeleton-paragraphs {
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: var(--bk-theme-space-24);
   }
 
   .skeleton-paragraph {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--bk-theme-space-12);
   }
 
   .bone {
     position: relative;
     overflow: hidden;
     background: #ebecf3;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
 
     &::after {
       position: absolute;

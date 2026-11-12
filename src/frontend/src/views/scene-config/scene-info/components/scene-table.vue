@@ -17,7 +17,7 @@
 <template>
   <div
     class="scene-table-wrapper"
-    :class="[{ 'scene-table-section': !!title }]">
+    :class="[{ 'scene-table-section bk-theme-card': !!title }]">
     <!-- 标题 + 搜索框 -->
     <div
       v-if="title || enableSearch"
@@ -53,28 +53,28 @@
           :get-menu-list="getMenuList"
           :placeholder="searchPlaceholder || t('请输入关键字搜索')"
           unique-select />
-        <bk-loading
+        <audit-skeleton
           v-if="searchLoading"
           class="search-loading-placeholder"
-          loading
-          size="small">
-          <div style="width: 600px; height: 32px;" />
-        </bk-loading>
+          :height="32"
+          :width="600" />
       </div>
     </div>
     <!-- PrimaryTable 表格 -->
-    <bk-loading
-      class="scene-table-loading"
-      :loading="loading">
-      <primary-table
-        :columns="columns"
-        :data="pageData"
-        :max-height="maxHeight"
-        :resizable="resizable"
-        row-key="id"
-        :stripe="stripe"
-        :style="{ '--row-height': rowHeight + 'px' }" />
-    </bk-loading>
+    <table-skeleton
+      v-if="loading"
+      :column-count="Math.max(columns.length, 1)"
+      :row-count="6"
+      row-size="small" />
+    <primary-table
+      v-else
+      :columns="columns"
+      :data="pageData"
+      :max-height="maxHeight"
+      :resizable="resizable"
+      row-key="id"
+      :stripe="stripe"
+      :style="{ '--row-height': rowHeight + 'px' }" />
     <!-- 分页器 -->
     <div
       v-if="showPagination && (total !== undefined ? total : filteredData.length) > 0"
@@ -105,8 +105,6 @@
   import MetaManageService from '@service/meta-manage';
 
   import useRequest from '@hooks/use-request';
-
-  import '@blueking/tdesign-ui/vue3/index.css';
 
   interface SearchDataItem {
     id: string;
@@ -271,31 +269,24 @@
     width: 100%;
   }
 
-  .scene-table-loading {
-    min-height: 280px;
-  }
-
   /* 作为独立区块时的样式（带标题） */
   .scene-table-section {
-    padding: 16px 24px 24px;
-    margin-bottom: 24px;
-    background-color: #fff;
-    border-radius: 2px;
+    margin-bottom: var(--bk-theme-page-gap);
   }
 
   .scene-table-header {
     display: flex;
     flex-wrap: nowrap;
-    gap: 12px;
+    gap: var(--bk-theme-space-12);
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
   }
 
   .scene-table-search-wrapper {
     display: flex;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
     margin-left: auto;
   }
@@ -305,54 +296,47 @@
   }
 
   .search-loading-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 600px;
-    height: 32px;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-control-radius);
   }
 
   .section-title {
     display: flex;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .info-icon {
     flex-shrink: 0;
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
   }
 
   /* 时间标签 */
   :deep(.time-label) {
     display: inline-block;
-    padding: 0 6px;
+    padding: 0 var(--bk-theme-space-6);
     font-size: 12px;
     line-height: 20px;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   :deep(.time-label-danger) {
-    color: #ea3636;
-    background-color: #feebea;
+    color: var(--bk-theme-color-danger-2);background-color: var(--bk-theme-fill-danger);
   }
 
   :deep(.time-label-warning) {
-    color: #ff9c01;
+    color: var(--bk-theme-color-warn-2);
     background-color: #fff3e1;
   }
 
   :deep(.time-label-success) {
-    color: #2dcb56;
-    background-color: #e5f6ea;
+    color: var(--bk-theme-color-success-2);background-color: var(--bk-theme-status-success-bg);
   }
 
   :deep(.domain-cell) {
@@ -360,15 +344,15 @@
     align-items: center;
 
     .domain-text {
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .domain-jump-icon {
       display: none;
       align-items: center;
-      margin-left: 4px;
+      margin-left: var(--bk-theme-space-4);
       font-size: 15px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
     }
 
@@ -378,18 +362,18 @@
   }
 
   :deep(.ml8) {
-    margin-left: 8px;
+    margin-left: var(--bk-theme-space-8);
   }
 
   /* 可用字段下划线链接 */
   :deep(.field-count-link) {
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     cursor: pointer;
-    border-bottom: 1px dashed #c4c6cc;
+    border-bottom: 1px dashed var(--bk-theme-border-strong);
 
     &:hover {
-      color: #3a84ff;
-      border-bottom-color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
+      border-bottom-color: var(--bk-theme-color-brand-2);
     }
   }
 
@@ -398,10 +382,21 @@
     max-height: 500px;
   }
 
-  /* PrimaryTable 表格样式 */
+  /* PrimaryTable 表格样式。列宽加总小于卡片时表格要铺满，
+     空态不要沿用列表页按容器宽度撑开的写法，否则右侧会空出一截并带横向滚动条。 */
   :deep(.t-table) {
+    width: 100%;
+
     table {
+      width: 100% !important;
       table-layout: fixed !important;
+    }
+
+    .t-table__empty {
+      position: static;
+      width: 100% !important;
+      min-width: 0;
+      max-width: none;
     }
 
     /* TDesign ellipsis 样式（tdesign-vue-next 原生 CSS 未被引入时需要手动补充） */
@@ -422,23 +417,23 @@
 
     /* 表头行 */
     thead tr {
-      background-color: #f5f7fa !important;
-      border-bottom: 1px solid #dcdee5 !important;
+      background-color: var(--bk-theme-surface-subtle) !important;
+      border-bottom: 1px solid var(--bk-theme-border-default) !important;
     }
 
     /* 内容行 */
     tbody tr:nth-child(even) {
-      background-color: #fafbfd !important;
+      background-color: var(--bk-theme-table-header-bg) !important;
     }
 
     tbody tr:nth-child(odd) {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
   }
 
   /* 分页器样式（使用 bk-pagination 内置 layout: total/limit/list） */
   .scene-table-pagination {
-    padding: 12px 0 0;
+    padding: var(--bk-theme-space-12) 0 0;
 
     :deep(.bk-pagination) {
       .is-last {

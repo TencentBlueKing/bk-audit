@@ -875,7 +875,7 @@
     width: 100%;
     height: 100%;
     overflow: visible;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-page);
     flex-direction: column;
   }
 
@@ -892,12 +892,12 @@
     display: flex;
     flex: 1;
     min-height: 0;
-    padding: 24px 24px 24px;
+    padding: var(--bk-theme-space-24) var(--bk-theme-space-24) var(--bk-theme-space-24);
     overflow: auto;
     flex-direction: column;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: #dcdee5 transparent;
+    scrollbar-color: var(--bk-theme-border-default) transparent;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -908,16 +908,16 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #dcdee5;
-      border-radius: 2px;
+      background: var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      background: #c4c6cc;
+      background: var(--bk-theme-border-strong);
     }
 
     .chat-surface {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       overflow: visible;
     }
   }
@@ -928,7 +928,7 @@
     min-width: 0;
     overflow: visible;
     flex-direction: column;
-    gap: 24px;
+    gap: var(--bk-theme-space-24);
   }
 
   .message-area-loading {
@@ -945,13 +945,13 @@
     align-items: center;
     justify-content: center;
     min-height: 32px;
-    margin-bottom: 16px;
-    gap: 6px;
-    color: #979ba5;
+    margin-bottom: var(--bk-theme-space-16);
+    gap: var(--bk-theme-space-6);
+    color: var(--bk-theme-text-weak);
   }
 
   .history-loading-text {
-    margin-left: 4px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 12px;
     line-height: 18px;
   }
@@ -984,13 +984,13 @@
 
   .user-bubble {
     max-width: 640px;
-    padding: 12px 24px;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-24);
     font-size: 14px;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     letter-spacing: 0;
     word-break: break-word;
-    background: #CDDFFE;
+    background: var(--bk-theme-color-brand-5);
     border-radius: 16px 0px 16px 16px;
     box-sizing: border-box;
   }
@@ -998,28 +998,27 @@
   .result-status-card {
     display: flex;
     width: 100%;
-    max-width: 900px;
-    padding: 20px 24px;
-    background: #fff;
-    border-radius: 16px;
+    max-width: 900px;padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-dialog-radius);
     box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
 
     &.is-recognition-failed {
       align-items: stretch;
-      gap: 16px;
+      gap: var(--bk-theme-space-16);
 
       .recognition-error-header {
         display: flex;
         width: 100%;
-        padding: 16px 0 8px;
+        padding: var(--bk-theme-space-16) 0 var(--bk-theme-space-8);
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: var(--bk-theme-space-8);
         text-align: center;
       }
 
@@ -1040,24 +1039,24 @@
         flex-wrap: wrap;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: var(--bk-theme-space-6);
       }
 
       .scene-admin-list {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--bk-theme-space-4);
       }
 
       .admin-name {
         font-size: 12px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       .admin-more {
         font-size: 12px;
         line-height: 20px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         text-decoration: underline;
         text-decoration-style: dashed;
         text-underline-offset: 2px;
@@ -1065,7 +1064,7 @@
       }
 
       .recognition-resend-btn {
-        margin-top: 4px;
+        margin-top: var(--bk-theme-space-4);
       }
     }
 
@@ -1073,7 +1072,7 @@
       align-items: center;
       justify-content: center;
       min-height: 200px;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
       text-align: center;
 
       .failed-icon {
@@ -1088,36 +1087,36 @@
       }
 
       .failed-retry-btn {
-        margin-top: 4px;
+        margin-top: var(--bk-theme-space-4);
       }
     }
 
     .suggest-section {
       width: 100%;
-      margin-top: 4px;
+      margin-top: var(--bk-theme-space-4);
     }
 
     .suggest-label {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 12px;
       line-height: 18px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
 
     .suggest-item {
       display: block;
       width: 100%;
-      margin-bottom: 8px;
-      padding: 8px 12px;
+      margin-bottom: var(--bk-theme-space-8);
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
       overflow: hidden;
       font-size: 14px;
       line-height: 22px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: left;
       cursor: pointer;
-      background: #f5f7fa;
+      background: var(--bk-theme-surface-subtle);
       border: 1px solid transparent;
-      border-radius: 4px;
+      border-radius: var(--bk-theme-tag-radius);
       transition: background-color .15s, border-color .15s;
       box-sizing: border-box;
 
@@ -1126,28 +1125,28 @@
       }
 
       &:hover {
-        background: #f0f5ff;
-        border-color: #a3c5fd;
+        background: var(--bk-theme-select-banner-bg);
+        border-color: var(--bk-theme-color-brand-4);
       }
     }
 
     .status-title {
       font-size: 14px;
       font-weight: 500;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .status-desc {
       font-size: 12px;
       line-height: 18px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
   }
 
   .loading-dot {
     width: 6px;
     height: 6px;
-    background: #3a84ff;
+    background: var(--bk-theme-color-brand-2);
     border-radius: 50%;
     opacity: 40%;
     animation: chat-loading-dot 1s ease-in-out infinite;
@@ -1180,8 +1179,7 @@
 
   .panel-footer {
     flex-shrink: 0;
-    width: 100%;
-    padding: 0 24px 20px;
+    width: 100%;padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-16);
     /* 与消息区同样预留滚动条槽，保证输入框与卡片左右对齐、同宽 */
     scrollbar-gutter: stable;
     box-sizing: border-box;

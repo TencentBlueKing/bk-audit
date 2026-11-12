@@ -89,8 +89,8 @@
           {{ isEditMode ? t('保存') : t('提交') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="closeDialog">
+         
+          @click="closeDialog" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -431,7 +431,7 @@
 </script>
 <style lang="postcss" scoped>
 .create-link-data {
-  padding: 24px;
+  padding: var(--bk-theme-space-24);
   background-color: white;
 }
 </style>

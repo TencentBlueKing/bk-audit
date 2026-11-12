@@ -348,56 +348,23 @@
   .nl-search-input {
     position: relative;
     z-index: 510;
-    padding: 16px 24px 10px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-8);
 
     .nl-input-wrapper {
       position: relative;
       display: flex;
       align-items: center;
-      height: 48px;
-      padding: 0 12px 0 14px;
-      background: #fff;
-      border: none;
-      border-radius: 4px;
-      box-shadow: 0 4px 14px 0 rgb(61 72 93 / 8%);
-      transition: all .2s;
-
-      &::before {
-        position: absolute;
-        padding: 1px;
-        pointer-events: none;
-        background: linear-gradient(90.08deg, #488bff 29.47%, #c43bff 98.92%);
-        border-radius: 2px;
-        content: '';
-        inset: 0;
-        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-        mask-composite: xor;
-        mask-composite: exclude;
-      }
-
-      &:hover {
-        background: #fcfdff;
-        box-shadow: 0 8px 20px 0 rgb(61 72 93 / 10%);
-      }
-
-      &:focus-within {
-        background: #fff;
-        box-shadow: 0 8px 20px 0 rgb(61 72 93 / 10%);
-      }
+      height: 40px;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+      background: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-search-input-border);
+      border-radius: var(--bk-theme-search-card-inner-radius);
 
       &.is-disabled {
         cursor: default;
-        background: #fcfdff;
-        box-shadow: 0 6px 18px 0 rgb(72 139 255 / 14%);
-
-        &::before {
-          background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
-          background-size: 200% 100%;
-          animation: nl-border-flow 2s linear infinite;
-        }
 
         .nl-input-inner {
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           cursor: default;
         }
       }
@@ -406,34 +373,34 @@
     .nl-input-inner {
       flex: 1;
       height: 100%;
-      font-size: 12px;
-      line-height: 48px;
-      color: #63656e;
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-default);
       background: transparent;
       border: none;
       outline: none;
 
       &::placeholder {
-        color: #c4c6cc;
+        color: var(--bk-theme-text-disabled);
       }
     }
 
     .nl-input-clear {
-      margin-right: 10px;
-      font-size: 16px;
-      color: #c4c6cc;
+      margin-right: var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-lg);
+      color: var(--bk-theme-text-disabled);
       cursor: pointer;
       flex-shrink: 0;
       transition: color .15s;
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
 
     .nl-input-loading-text {
-      margin-right: 10px;
-      font-size: 12px;
+      margin-right: var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
       color: transparent;
       white-space: nowrap;
       background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
@@ -447,8 +414,8 @@
       display: flex;
       width: 30px;
       height: 30px;
-      font-size: 16px;
-      color: #c4c6cc;
+      font-size: var(--bk-theme-font-size-lg);
+      color: var(--bk-theme-text-disabled);
       cursor: pointer;
       border-radius: 50%;
       transition: all .15s;
@@ -463,7 +430,7 @@
       }
 
       &.is-loading {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: not-allowed;
 
         .rotate-animation {
@@ -475,14 +442,14 @@
     .nl-input-panel {
       position: absolute;
       top: 68px;
-      left: 24px;
+      left: var(--bk-theme-space-24);
       z-index: 520;
       width: min(790px, calc(100% - 48px));
       overflow: hidden;
-      background: #fff;
-      border: 1px solid #eaebf0;
-      border-radius: 4px;
-      box-shadow: 0 10px 30px 0 rgb(31 35 41 / 12%);
+      background: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-border-weak);
+      border-radius: var(--bk-theme-overlay-radius);
+      box-shadow: var(--bk-theme-overlay-shadow);
     }
 
     .nl-input-panel-columns {
@@ -493,54 +460,54 @@
     .nl-input-panel-column {
       flex: 1;
       min-width: 0;
-      padding: 14px 0 12px;
+      padding: var(--bk-theme-space-16) 0 var(--bk-theme-space-12);
     }
 
     .nl-input-panel-divider {
       width: 1px;
-      margin: 12px 0;
-      background: #dcdee5;
+      margin: var(--bk-theme-space-12) 0;
+      background: var(--bk-theme-border-default);
       flex-shrink: 0;
     }
 
     .nl-input-panel-title {
-      padding: 0 16px 6px;
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 20px;
-      color: #979ba5;
+      padding: 0 var(--bk-theme-space-16) var(--bk-theme-space-6);
+      font-size: var(--bk-theme-font-size-sm);
+      font-weight: var(--bk-theme-font-weight-regular);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-weak);
     }
 
     .nl-input-panel-item {
-      padding: 0 16px;
+      padding: 0 var(--bk-theme-space-16);
       overflow: hidden;
-      font-size: 12px;
-      font-weight: 500;
+      font-size: var(--bk-theme-font-size-sm);
+      font-weight: var(--bk-theme-font-weight-regular);
       line-height: 34px;
-      color: #6c6d73;
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       white-space: nowrap;
       cursor: pointer;
       transition: all .15s;
 
       &:hover {
-        color: #3a84ff;
-        background: #edf4ff;
+        color: var(--bk-theme-color-brand-2);
+        background: var(--bk-theme-fill-selected);
       }
     }
 
     .nl-input-panel-item.is-history {
       &:hover {
-        color: #4d4f56;
-        background: #f5f7fa;
+        color: var(--bk-theme-text-default);
+        background: var(--bk-theme-surface-subtle);
       }
     }
 
     .nl-input-panel-empty {
-      padding: 0 16px;
-      font-size: 12px;
+      padding: 0 var(--bk-theme-space-16);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 40px;
-      color: #c4c6cc;
+      color: var(--bk-theme-text-disabled);
     }
   }
 </style>

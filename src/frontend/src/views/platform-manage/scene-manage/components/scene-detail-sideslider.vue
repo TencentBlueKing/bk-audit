@@ -45,10 +45,10 @@
             :disabled="detailData.status !== 'enabled'"
             placement="top">
             <bk-button
-              class="mr8"
+             
               :disabled="detailData.status === 'enabled'"
               outline
-              @click="handleDelete">
+              @click="handleDelete" style="margin-right: var(--bk-theme-space-8)">
               {{ t('删除') }}
             </bk-button>
             <template #content>
@@ -80,7 +80,7 @@
                   {{ detailData.name }}
                   <audit-icon
                     v-bk-tooltips="t('跳转至场景')"
-                    class="ml8 jump-link"
+                    class="jump-link"
                     type="jump-link"
                     @click="handleJumpToScene" />
                 </span>
@@ -379,51 +379,50 @@
     }
 
     .header-divider {
-      margin: 0 8px;
-      color: #dcdee5;
+      margin: 0 var(--bk-theme-space-8);
+      color: var(--bk-theme-border-default);
     }
 
     .header-scene-info {
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 
   .header-right {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
   }
 }
 
-.scene-detail-content {
-  padding: 24px 40px;
+.scene-detail-content {padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
 
   .info-section {
-    margin-bottom: 24px;
+    margin-bottom: var(--bk-theme-space-24);
 
     .section-title {
       display: flex;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
       font-size: 14px;
       font-weight: 700;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
 
       .count-tag {
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
       }
     }
 
     .info-list {
       .info-item {
         display: flex;
-        margin-bottom: 16px;
+        margin-bottom: var(--bk-theme-space-16);
         font-size: 12px;
         line-height: 20px;
 
         .info-label {
           flex-shrink: 0;
           width: 100px;
-          color: #63656e;
+          color: var(--bk-theme-text-default);
           text-align: right;
         }
 
@@ -431,14 +430,15 @@
           display: flex;
           flex: 1;
           align-items: center;
-          color: #313238;
+          color: var(--bk-theme-text-strong);
 
           .jump-link {
-            color: #3a84ff;
+            margin-left: var(--bk-theme-space-8);
+            color: var(--bk-theme-color-brand-2);
             cursor: pointer;
 
             &:hover {
-              color: #699df4;
+              color: var(--bk-theme-color-brand-3);
             }
           }
         }
@@ -449,7 +449,7 @@
     .table-list {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
 
       .system-tag,
       .table-tag {

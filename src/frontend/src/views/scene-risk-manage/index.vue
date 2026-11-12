@@ -29,8 +29,8 @@
       @sync="handleSearchSync" />
     <div
       :key="fieldConfigKey"
-      class="risk-manage-list">
-      <div class="add-button">
+      class="risk-manage-list bk-theme-card">
+      <div class="add-button bk-theme-list-toolbar">
         <bk-button
           v-bk-tooltips="{
             content: t('跨场景不支持新增风险'),
@@ -57,6 +57,7 @@
       </div>
       <tdesign-list
         ref="listRef"
+        use-skeleton
         :columns="tableColumns"
         :data-source="dataSource"
         enable-cross-page-select
@@ -139,8 +140,9 @@
     title: t('操作'),
     colKey: 'action',
     width: 180,
+    minWidth: 180,
     fixed: 'right',
-    cell: (h: any, { row }: { row: RiskManageModel }) => <p>
+    cell: (h: any, { row }: { row: RiskManageModel }) => <div class="risk-action-cell">
       {
         ['for_approve', 'auto_process', 'whitelist_approving'].includes(row.status)
           ? (
@@ -217,7 +219,7 @@
           ),
         }}
       </bk-dropdown>
-    </p>,
+    </div>,
   };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
@@ -602,18 +604,15 @@
   overflow-x: hidden;
 
   .risk-manage-list {
-    padding: 5px 20px;
-    margin-top: 16px;
-    background-color: white;
+    padding: var(--bk-theme-space-24);
+    margin-top: var(--bk-theme-space-16);
 
     .add-button {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding-bottom: 5px;
 
       .add-icon {
-        margin-right: 5px;
+        margin-right: var(--bk-theme-space-4);
         font-size: 12px;
       }
     }
@@ -622,18 +621,14 @@
 }
 
 .risk-label-status {
-  padding: 1px 8px;
-  font-size: 12px;
-  color: #14a568;
-  background-color: #e4faf0;
+  padding: 1px var(--bk-theme-space-8);
+  font-size: 12px;color: var(--bk-theme-status-success-text);background-color: var(--bk-theme-status-success-bg);
   border: 1px solid rgb(20 165 104 / 30%);
-  border-radius: 11px;
+  border-radius: var(--bk-theme-message-radius);
 }
 
 .risk-label-status.misreport {
-  color: #ea3536;
-  background: #fedddc99;
-  border: 1px solid #ea35364d;
+  color: var(--bk-theme-color-danger-2);background: var(--bk-theme-status-danger-bg);border: 1px solid var(--bk-theme-color-danger-4);
 }
 
 </style>

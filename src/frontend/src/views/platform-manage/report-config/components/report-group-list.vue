@@ -34,10 +34,10 @@
               <div class="collapse-header">
                 <div class="collapse-header-left">
                   <audit-icon
-                    class="group-drag-handle drag-icon mr8"
-                    type="move" />
+                    class="group-drag-handle drag-icon"
+                    type="move" style="margin-right: var(--bk-theme-space-8)" />
                   <audit-icon
-                    class="expand-icon mr8"
+                    class="expand-icon"
                     :class="{ expanded: activeGroups.includes(group.id) }"
                     type="angle-fill-down" />
                   <span class="group-name">{{ group.name }}</span>
@@ -63,10 +63,10 @@
                         content: t('平台报表为系统内置分组，不支持重命名和删除'),
                         disabled: !isPlatformGroup(group),
                       }"
-                      class="group-more-btn ml8"
+                      class="group-more-btn"
                       :disabled="isPlatformGroup(group)"
                       text
-                      theme="primary">
+                      theme="primary" style="margin-left: var(--bk-theme-space-8)">
                       <audit-icon type="more" />
                     </bk-button>
                     <template #content>
@@ -205,11 +205,11 @@
                               content: t('平台报表不支持编辑'),
                               disabled: report.binding_type !== 'platform_binding',
                             }"
-                            class="mr8"
+                           
                             :disabled="report.binding_type === 'platform_binding'"
                             text
                             theme="primary"
-                            @click="handleEdit(report)">
+                            @click="handleEdit(report)" style="margin-right: var(--bk-theme-space-8)">
                             {{ t('编辑') }}
                           </bk-button>
                           <bk-button
@@ -217,11 +217,11 @@
                               content: t('平台绑定的报表不支持停用操作'),
                               disabled: report.binding_type !== 'platform_binding',
                             }"
-                            class="mr8"
+                           
                             :disabled="report.binding_type === 'platform_binding'"
                             text
                             theme="primary"
-                            @click="handleConfirmToggleStatus(report)">
+                            @click="handleConfirmToggleStatus(report)" style="margin-right: var(--bk-theme-space-8)">
                             {{ report.status === 'published' ? t('停用') : t('启用') }}
                           </bk-button>
                           <bk-dropdown
@@ -290,10 +290,10 @@
       </bk-form>
       <template #footer>
         <bk-button
-          class="mr8"
+         
           :disabled="!moveToGroupTargetId"
           theme="primary"
-          @click="handleConfirmMoveToGroup">
+          @click="handleConfirmMoveToGroup" style="margin-right: var(--bk-theme-space-8)">
           {{ t('确定') }}
         </bk-button>
         <bk-button @click="handleCancelMoveToGroup">
@@ -323,10 +323,10 @@
       </bk-form>
       <template #footer>
         <bk-button
-          class="mr8"
+         
           :loading="renameGroupLoading"
           theme="primary"
-          @click="handleConfirmRenameGroup">
+          @click="handleConfirmRenameGroup" style="margin-right: var(--bk-theme-space-8)">
           {{ t('确定') }}
         </bk-button>
         <bk-button @click="handleCancelRenameGroup">
@@ -982,26 +982,26 @@
 }
 
 .mr4 {
-  margin-right: 4px;
+  margin-right: var(--bk-theme-space-4);
 }
 
 .mr8 {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
 }
 
 .ml4 {
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
 }
 
 .report-collapse {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--bk-theme-space-16);
 }
 
 .group-collapse-item {
   :deep(.bk-collapse-item) {
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: none;
 
     .bk-collapse-header {
@@ -1020,9 +1020,9 @@
   justify-content: space-between;
   width: 100%;
   height: 42px;
-  padding: 0 16px;
+  padding: 0 var(--bk-theme-space-16);
   cursor: pointer;
-  background-color: #f0f1f5;
+  background-color: var(--bk-theme-surface-muted);
 }
 
 .collapse-header-left {
@@ -1032,11 +1032,11 @@
 
 .drag-icon {
   font-size: 18px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: grab;
 
   &:hover {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
@@ -1049,8 +1049,9 @@
 }
 
 .expand-icon {
+  margin-right: var(--bk-theme-space-8);
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   transition: transform .2s ease;
 
   &.expanded {
@@ -1065,18 +1066,18 @@
 .group-name {
   font-size: 14px;
   font-weight: 600;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .group-count {
   height: 18px;
   min-width: 20px;
-  padding: 0 6px;
-  margin-left: 8px;
+  padding: 0 var(--bk-theme-space-6);
+  margin-left: var(--bk-theme-space-8);
   font-size: 12px;
   line-height: 18px;
   text-align: center;
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
   border-radius: 9px;
 }
 
@@ -1085,11 +1086,11 @@
   align-items: center;
 
   .group-more-btn {
-    margin-left: 8px;
-    color: #979ba5;
+    margin-left: var(--bk-theme-space-8);
+    color: var(--bk-theme-text-weak);
 
     &:hover {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 }
@@ -1098,8 +1099,6 @@
 .custom-table {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid #dcdee5;
-  border-top: none;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -1107,11 +1106,11 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background-color: #c4c6cc;
-    border-radius: 3px;
+    background-color: var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
 
     &:hover {
-      background-color: #979ba5;
+      background-color: var(--bk-theme-text-weak);
     }
   }
 
@@ -1125,12 +1124,12 @@
   align-items: center;
   height: 42px;
   font-size: 12px;
-  color: #313238;
-  background-color: #f5f7fa;
-  border-bottom: 1px solid #dcdee5;
+  color: var(--bk-theme-text-strong);
+  background-color: var(--bk-theme-surface-subtle);
+  border-bottom: 1px solid var(--bk-theme-border-default);
 
   .custom-table-cell {
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
   }
 }
 
@@ -1143,9 +1142,9 @@
   align-items: center;
   min-height: 42px;
   font-size: 12px;
-  color: #63656e;
-  background-color: #fff;
-  border-bottom: 1px solid #dcdee5;
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border-bottom: 1px solid var(--bk-theme-border-default);
   transition: background-color .2s;
 
   &:last-child {
@@ -1153,7 +1152,7 @@
   }
 
   &:hover {
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
 
     .jump-link {
       opacity: 100%;
@@ -1175,7 +1174,7 @@
   flex-shrink: 0;
   align-items: center;
   height: 100%;
-  padding: 0 16px;
+  padding: 0 var(--bk-theme-space-16);
   overflow: hidden;
   background-color: inherit;
 }
@@ -1202,13 +1201,13 @@
 
 .id-jump-link {
   flex-shrink: 0;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 14px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 
   &:hover {
-    color: #699df4;
+    color: var(--bk-theme-color-brand-3);
   }
 }
 
@@ -1251,8 +1250,8 @@
   justify-content: center;
   height: 100px;
   font-size: 14px;
-  color: #c4c6cc;
-  background-color: #fff;
+  color: var(--bk-theme-border-strong);
+  background-color: var(--bk-theme-surface-default);
 }
 
 /* 拖拽手柄 */
@@ -1266,27 +1265,27 @@
 
 .table-drag-icon {
   font-size: 18px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: grab;
 
   &:hover {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
 /* vuedraggable 拖拽中的样式 */
 .sortable-ghost {
-  background: #e1ecff !important;
+  background: var(--bk-theme-fill-selected) !important;
   opacity: 50%;
 }
 
 .sortable-chosen {
-  background: #fff !important;
+  background: var(--bk-theme-surface-default) !important;
   box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
 }
 
 .sortable-drag {
-  background: #fff !important;
+  background: var(--bk-theme-surface-default) !important;
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
 }
 
@@ -1310,23 +1309,23 @@
 
   .jump-link {
     flex-shrink: 0;
-    margin-left: 4px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
     opacity: 0%;
     transition: opacity .2s;
 
     &:hover {
-      color: #699df4;
+      color: var(--bk-theme-color-brand-3);
     }
 
     &.disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
 
       &:hover {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
       }
     }
   }
@@ -1335,27 +1334,27 @@
 /* 更多操作下拉菜单 */
 :deep(.action-item) {
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 }
 
 .disableddel {
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: not-allowed;
 }
 
 /* 删除分组确认弹窗样式 */
 .delete-group-info {
   font-size: 14px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .group-name-highlight {
   font-weight: 600;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .platform-binding-tag {
-  margin-left: 5px;
+  margin-left: var(--bk-theme-space-4);
 }
 </style>

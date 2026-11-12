@@ -18,15 +18,15 @@
   <div class="selected-systems-panel">
     <div class="systems-header">
       <div class="systems-title">
-        <span class="title-text">
+        <div class="title-text">
           <span class="title-label">{{ title }}</span>
           <template v-if="selectedSystemLabel">
             <span>：</span>
-            <span
+            <show-tooltips-text
               class="system-name"
-              :title="selectedSystemLabel">{{ selectedSystemLabel }}</span>
+              :data="selectedSystemLabel" />
           </template>
-        </span>
+        </div>
       </div>
       <button
         v-if="actionText"
@@ -45,6 +45,8 @@
 
 <script lang="ts" setup>
   import { computed } from 'vue';
+
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import type { SelectedSystem } from '../../types';
 
@@ -81,7 +83,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--bk-theme-space-12);
   }
 
   .systems-title {
@@ -91,7 +93,7 @@
     font-size: 14px;
     font-weight: 500;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .title-text {
@@ -105,6 +107,7 @@
   }
 
   .system-name {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -116,19 +119,19 @@
     padding: 0;
     font-size: 14px;
     line-height: 22px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
     background: transparent;
     border: none;
     align-items: center;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
 
     &:hover {
       opacity: .85;
     }
 
     &:disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
       opacity: 1;
     }

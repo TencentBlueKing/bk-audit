@@ -1129,22 +1129,21 @@
   display: flex;
   padding: 0 !important;
   flex-wrap: wrap;
-  align-items: center;
-  border: 1px solid #ccc;
+  align-items: center;border: 1px solid var(--bk-theme-border-strong);
 }
 
 /* 禁用时候的样式 */
 .ql-disabled {
-  background-color: #fafbfd !important;
+  background-color: var(--bk-theme-table-header-bg) !important;
 }
 
 .editor-wrap[active='false'] .ql-toolbar {
-  background-color: #fafbfd !important;
+  background-color: var(--bk-theme-table-header-bg) !important;
 }
 
 /* toolbar 激活样式 */
 .editor-wrap[active='true'] .ql-toolbar {
-  background-color: #fff !important;
+  background-color: var(--bk-theme-surface-default) !important;
 }
 
 .editor-wrap {
@@ -1165,7 +1164,7 @@
 
 .ql-container.ql-snow {
   min-height: 120px;
-  padding-bottom: 10px;
+  padding-bottom: var(--bk-theme-space-12);
 }
 
 /* parent 模式：原地增高，保持在文档流内 */
@@ -1208,24 +1207,22 @@
   position: fixed;
   z-index: 9999;
   display: flex;
-  padding: 12px 16px;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
   margin: 0;
   overflow: hidden;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
   box-shadow: 0 0 16px 0 rgb(0 0 0 / 12%);
   box-sizing: border-box;
   flex-direction: column;
 
   .ql-editor {
-    color: black;
-    border: 1px solid #ccc;
+    color: black;border: 1px solid var(--bk-theme-border-strong);
   }
 
   .ql-toolbar {
     flex-shrink: 0;
-    padding: 8px 0 !important;
-    background: #fff !important;
-    border-bottom: 1px solid #ccc;
+    padding: var(--bk-theme-space-8) 0 !important;
+    background: var(--bk-theme-surface-default) !important;border-bottom: 1px solid var(--bk-theme-border-strong);
   }
 
   .ql-container.ql-snow {
@@ -1241,11 +1238,11 @@
     position: absolute;
     right: 20px;
     bottom: 16px;
-    padding: 4px 8px;
+    padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     background: rgb(255 255 255 / 90%);
-    border-radius: 4px;
+    border-radius: var(--bk-theme-tag-radius);
   }
 }
 
@@ -1257,8 +1254,8 @@
   display: inline-block;
   width: 16px;
   height: 16px;
-  margin-top: 1px;
-  margin-left: -10px;
+  margin-top: var(--bk-theme-space-2);
+  margin-left: -var(--bk-theme-space-12);
   font-size: 16px;
   line-height: 1;
   vertical-align: top;
@@ -1278,8 +1275,8 @@
   display: inline-block;
   width: 16px;
   height: 16px;
-  margin-top: 1px;
-  margin-left: -10px;
+  margin-top: var(--bk-theme-space-2);
+  margin-left: -var(--bk-theme-space-12);
   font-size: 16px;
   line-height: 1;
   vertical-align: top;
@@ -1294,8 +1291,8 @@
   display: inline-block;
   width: 16px;
   height: 16px;
-  margin-top: 1px;
-  margin-left: -10px;
+  margin-top: var(--bk-theme-space-2);
+  margin-left: -var(--bk-theme-space-12);
   font-size: 16px;
   line-height: 1;
   vertical-align: top;
@@ -1307,40 +1304,39 @@
 }
 
 .editor-wrap--report .ql-editor .ql-report-table {
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
 }
 
 .editor-wrap--report .ql-editor table {
   width: 100%;
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
   font-size: 14px;
   border-collapse: collapse;
   table-layout: auto;
 }
 
 .editor-wrap--report .ql-editor th,
-.editor-wrap--report .ql-editor td {
-  padding: 10px 12px;
-  color: #313238;
+.editor-wrap--report .ql-editor td {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  color: var(--bk-theme-text-strong);
   text-align: left;
   vertical-align: top;
-  border: 1px solid #dcdee5;
+  border: 1px solid var(--bk-theme-border-default);
 }
 
 .editor-wrap--report .ql-editor thead th {
   font-weight: 600;
-  color: #313238;
-  background: #f5f7fa;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-subtle);
 }
 
 .editor-wrap--report .ql-toolbar .editor-variable-btn,
 .editor-wrap--report .ql-toolbar .editor-table-btn {
   width: auto !important;
-  padding: 0 8px !important;
-  margin: 0 4px;
+  padding: 0 var(--bk-theme-space-8) !important;
+  margin: 0 var(--bk-theme-space-4);
   font-size: 14px !important;
   line-height: 24px !important;
-  color: #3a84ff !important;
+  color: var(--bk-theme-color-brand-2) !important;
   cursor: pointer;
   background: transparent !important;
   border: none !important;

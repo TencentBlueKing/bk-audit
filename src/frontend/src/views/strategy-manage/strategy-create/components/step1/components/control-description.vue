@@ -28,10 +28,10 @@
         </div>
       </auth-collapse-panel>
       <auth-collapse-panel
-        class="mt24"
+       
         is-active
         :label="t('版本信息')"
-        title-style="height: 28px;line-height: 28px;background: #F0F1F5;">
+        title-style="height: 28px;line-height: 28px;background: #F0F1F5;" style="margin-top: var(--bk-theme-space-24)">
         <div class="diff-content">
           <p> {{ t('版本号') }} : {{ data.control_version ? `V${data.control_version}` : '--' }}</p>
           <div>
@@ -52,10 +52,10 @@
         </div>
       </auth-collapse-panel>
       <auth-collapse-panel
-        class="mt24"
+       
         is-active
         :label="t('方案输出')"
-        title-style="height: 28px;line-height: 28px;background: #F0F1F5;">
+        title-style="height: 28px;line-height: 28px;background: #F0F1F5;" style="margin-top: var(--bk-theme-space-24)">
         <div class="diff-content">
           <p
             v-for="item in data.output_config[0].fields"
@@ -105,9 +105,9 @@
   height: 100%;
   max-width: calc(100% - 1600px);
   min-width: 246px;
-  padding-left: 12px;
-  color: #63656e;
-  background: #f5f7fa;
+  padding-left: var(--bk-theme-space-12);
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-subtle);
   flex: 1;
 
 
@@ -115,7 +115,7 @@
     display: flex;
     height: 60%;
     padding-top: 240px;
-    margin-left: 20px;
+    margin-left: var(--bk-theme-space-16);
     text-align: center;
     align-items: center;
     justify-content: center;
@@ -123,12 +123,12 @@
 
     >.tip {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 
   .diff-content {
-    padding: 8px 16px;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
     line-height: 20px;
 
     .collapse-panel-title {
@@ -138,12 +138,12 @@
 
     .field-output {
       display: flex;
-      margin-bottom: 10px;
+      margin-bottom: var(--bk-theme-space-12);
       align-items: center;
 
       .field-type-icon {
         width: 46px;
-        margin-right: 6px;
+        margin-right: var(--bk-theme-space-6);
       }
 
     }
@@ -152,9 +152,9 @@
 
 
   .diff-text-title {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 14px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 }
 </style>

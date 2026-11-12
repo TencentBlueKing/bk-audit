@@ -16,7 +16,7 @@
 -->
 <template>
   <desc-popover
-    :width="345"
+    :width="312"
     @after-show="handleAfterShow">
     <render-field-text>
       {{ data.result_code }}

@@ -217,46 +217,46 @@
 .whitelist-apply {
   display: flex;
   flex-direction: column;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
 }
 
 .whitelist-apply__card {
-  padding: 8px 12px;
-  background: var(--audit-neutral-bg-03);
-  border-radius: var(--audit-radius-control);
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-card-radius);
 }
 
 .whitelist-apply__row {
   display: flex;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
   align-items: flex-start;
-  padding: 4px 0;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-01);
+  padding: var(--bk-theme-space-4) 0;
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-strong);
 }
 
 .whitelist-apply__label {
   flex: 0 0 84px;
-  color: var(--audit-neutral-text-02);
+  color: var(--bk-theme-text-default);
   text-align: right;
 }
 
 .whitelist-apply__link {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   align-items: center;
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
 }
 
 .whitelist-apply__status {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   align-items: center;
 }
 
 .rotate-loading {
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   animation: whitelist-spin 1s linear infinite;
 }
 

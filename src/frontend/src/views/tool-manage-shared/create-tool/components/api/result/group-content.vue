@@ -71,9 +71,9 @@
               </div>
               <div class="popover-delete-button-group">
                 <bk-button
-                  class="mr8"
+                 
                   theme="danger"
-                  @click.stop="handleDelete(element.key)">
+                  @click.stop="handleDelete(element.key)" style="margin-right: var(--bk-theme-space-8)">
                   {{ t('删除') }}
                 </bk-button>
                 <bk-button
@@ -276,45 +276,45 @@
 .draggable-box {
   .draggable-element {
     position: relative;
-    padding-top: 16px;
+    padding-top: var(--bk-theme-space-16);
     cursor: pointer;
 
     .draggable-heard {
       display: flex;
       height: 32px;
-      padding: 0 10px;
+      padding: 0 var(--bk-theme-space-12);
       vertical-align: middle;
-      background: #f0f1f5;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
 
       .move {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: move;
       }
 
       .angle-fill-down {
         display: inline-block;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       .heard-title {
-        margin-left: 5px;
+        margin-left: var(--bk-theme-space-4);
         font-size: 12px;
         font-weight: 700;
         line-height: 20px;
         letter-spacing: 0;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       .edit-fill {
-        margin-left: 5px;
+        margin-left: var(--bk-theme-space-4);
         font-size: 16px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: pointer;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
@@ -322,7 +322,7 @@
         position: absolute;
         right: 5px;
         font-size: 16px;
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
         cursor: pointer;
       }
     }
@@ -333,20 +333,20 @@
   font-size: 16px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .popover-delete-text {
-  margin-top: 5px;
+  margin-top: var(--bk-theme-space-4);
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .popover-delete-button-group {
   display: flex;
-  margin-top: 5px;
+  margin-top: var(--bk-theme-space-4);
   justify-content: flex-end;
   align-items: center;
 }

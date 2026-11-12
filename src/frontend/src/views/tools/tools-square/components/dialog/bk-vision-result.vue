@@ -87,6 +87,9 @@
   }>();
 
   let app: any;
+  let loadedExecuteKey = '';
+  let currentExecuteKey = '';
+  let initializing = false;
 
   const panelRef = ref<HTMLElement | null>(null);
   const panelId = ref('');
@@ -100,20 +103,41 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      if (data?.data?.panel_id) {
-        panelId.value = data.data.panel_id;
-        initBK(panelId.value);
+      if (!data?.data?.panel_id) {
+        isExecuting.value = false;
+        emit('executed');
+        return;
       }
-      emit('executed');
+      initializing = true;
+      panelId.value = data.data.panel_id;
+      initBK(panelId.value).then(() => {
+        loadedExecuteKey = currentExecuteKey;
+      })
+        .finally(() => {
+          initializing = false;
+          isExecuting.value = false;
+          emit('executed');
+        });
     },
     onFinally: () => {
-      isExecuting.value = false;
+      if (!initializing) isExecuting.value = false;
     },
+  });
+
+  const buildExecuteKey = () => JSON.stringify({
+    uid: props.toolDetails?.uid || props.uid,
+    variables: props.searchList.map(item => ({
+      raw_name: item.raw_name,
+      value: item.value,
+    })),
+    drill: props.isDrillDownOpen ? props.drillDownItemConfig : [],
   });
 
   // 执行工具（使用 toolDetails.uid 作为真实工具uid来调用后端API）
   const executeTool = () => {
-    if (isExecuting.value) return;
+    const executeKey = buildExecuteKey();
+    if (isExecuting.value || executeKey === loadedExecuteKey) return;
+    currentExecuteKey = executeKey;
     isExecuting.value = true;
     fetchToolsExecute({
       uid: props.toolDetails?.uid || props.uid,
@@ -133,6 +157,7 @@
       app.unmount();
       app = null;
     }
+    loadedExecuteKey = '';
   };
 
   // 加载脚本

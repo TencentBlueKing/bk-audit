@@ -203,15 +203,14 @@
 
 <style scoped lang="postcss">
 .game-record-tab {
-  padding-top: 5px;
+  padding-top: var(--bk-theme-space-4);
 }
 
 /* 图表区域容器 */
 .chart-section-wrapper {
   position: relative;
-  padding: 8px 12px 12px;
-  background: #fff;
-  border-radius: 2px 2px 0 0;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12) var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-default);border-radius: var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0 0;
 
   /* 与下方明细之间的分割线 */
   &::after {
@@ -220,7 +219,7 @@
     bottom: 0;
     left: 16px;
     height: 1px;
-    background: #eaebf0;
+    background: var(--bk-theme-border-weak);
     content: '';
   }
 }
@@ -229,21 +228,21 @@
 .chart-overview-header {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--bk-theme-space-8);
   cursor: pointer;
   user-select: none;
 
   .collapse-icon {
-    margin-right: 6px;
+    margin-right: var(--bk-theme-space-6);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .chart-overview-title {
     font-size: 13px;
     font-weight: 700;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 }
 
@@ -262,22 +261,21 @@
   align-items: center;
   justify-content: center;
   min-height: 260px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
 
   .chart-empty-text {
-    margin-top: 4px;
+    margin-top: var(--bk-theme-space-4);
     font-size: 12px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
 /* 表格区域 loading */
 .table-loading-wrapper {
   min-height: 200px;
-  background: #fff;
-  border-radius: 0 0 2px 2px;
+  background: var(--bk-theme-surface-default);border-radius: 0 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius);
 }
 
 .table-loading-placeholder {
@@ -289,10 +287,10 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0;
-  margin-bottom: 8px;
+  margin-bottom: var(--bk-theme-space-8);
   overflow: hidden;
-  background: #fff;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
 
   &:last-child {
     margin-bottom: 0;
@@ -300,9 +298,9 @@
 
   :deep(.record-pie-chart) {
     min-width: 0;
-    padding: 8px 12px 0;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12) 0;
     background: transparent;
-    border-right: 1px solid #dcdee5;
+    border-right: 1px solid var(--bk-theme-border-default);
     border-radius: 0;
   }
 
@@ -322,7 +320,7 @@
     grid-template-columns: repeat(3, 1fr);
 
     :deep(.record-pie-chart:nth-child(2n)) {
-      border-right: 1px solid #dcdee5;
+      border-right: 1px solid var(--bk-theme-border-default);
     }
 
     :deep(.record-pie-chart:nth-child(3n)) {
@@ -344,26 +342,25 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 0;
     overflow: hidden;
-    background: #fff;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     .charts-section {
       display: contents;
 
       :deep(.record-pie-chart) {
-        min-width: 0;
-        padding: 5px 12px 0;
+        min-width: 0;padding: var(--bk-theme-space-4) var(--bk-theme-space-12) 0;
         background: transparent;
-        border-right: 1px solid #dcdee5;
+        border-right: 1px solid var(--bk-theme-border-default);
         border-radius: 0;
       }
 
       :deep(.record-pie-chart:nth-child(2n)) {
-        border-right: 1px solid #dcdee5;
+        border-right: 1px solid var(--bk-theme-border-default);
       }
 
       :deep(.record-pie-chart:last-child) {
-        border-right: 1px solid #dcdee5;
+        border-right: 1px solid var(--bk-theme-border-default);
       }
     }
 
@@ -380,7 +377,7 @@
 
     :deep(.record-pie-chart) {
       border-right: none;
-      border-bottom: 1px solid #f0f1f5;
+      border-bottom: 1px solid var(--bk-theme-surface-muted);
     }
 
     :deep(.record-pie-chart:nth-child(2n)) {

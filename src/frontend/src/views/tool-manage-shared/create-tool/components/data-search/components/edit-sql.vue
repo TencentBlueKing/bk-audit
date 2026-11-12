@@ -46,14 +46,14 @@
               @click="handleUpload" />
             <audit-icon
               v-bk-tooltips="t('复制')"
-              class="ml16 icon"
+              class="icon"
               type="copy"
-              @click.stop="handleCopy" />
+              @click.stop="handleCopy" style="margin-left: var(--bk-theme-space-16)" />
             <audit-icon
               v-bk-tooltips="t('全屏')"
-              class="ml16 icon"
+              class="icon"
               type="full-screen"
-              @click.stop="handleToggleFullScreen" />
+              @click.stop="handleToggleFullScreen" style="margin-left: var(--bk-theme-space-16)" />
           </span>
         </div>
         <div
@@ -63,7 +63,7 @@
           <audit-icon
             v-if="showExit"
             v-bk-tooltips="t('退出全屏')"
-            class="ml16 exit-icon"
+            class="exit-icon"
             type="un-full-screen-2"
             @click="handleExitFullScreen" />
         </div>
@@ -72,9 +72,9 @@
     <template #footer>
       <div style="padding-left: 16px;">
         <bk-button
-          class="mr8"
+         
           :loading="btnLoading || editBtnLoading"
-          style="width: 102px;"
+          style="width: 102px; margin-right: var(--bk-theme-space-8)"
           theme="primary"
           @click="handleConfirm">
           {{ t('保存并解析') }}
@@ -290,35 +290,34 @@
 <style scoped lang="postcss">
 .tip-button {
   width: 211px;
-  padding: 5px;
-  margin-top: 10px;
-  margin-left: 32px;
+  padding: var(--bk-theme-space-4);
+  margin-top: var(--bk-theme-space-12);
+  margin-left: var(--bk-theme-space-32);
   font-size: 14px;
   letter-spacing: 0;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   text-align: center;
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #3a84ff;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-color-brand-2);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
-.edit-container {
-  padding: 16px 40px;
+.edit-container {padding: var(--bk-theme-space-16) var(--bk-theme-space-32);
 
   .sql-editor {
     height: 75vh;
     min-width: 550px;
-    padding-bottom: 5px;
-    margin-top: 16px;
+    padding-bottom: var(--bk-theme-space-4);
+    margin-top: var(--bk-theme-space-16);
     line-height: 40px;
 
     .title {
       display: flex;
       height: 40px;
-      padding: 0 25px;
+      padding: 0 var(--bk-theme-space-24);
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       background: #fbfbfc;
 
       .icon {
@@ -331,12 +330,13 @@
       position: relative;
 
       .exit-icon {
+        margin-left: var(--bk-theme-space-16);
         position: absolute;
         top: 10px;
         right: 20px;
         z-index: 11111;
         font-size: 20px;
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: pointer;
       }
     }

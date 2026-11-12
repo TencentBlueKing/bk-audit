@@ -48,9 +48,9 @@
         class="flex-center"
         style="margin-top: 40px;">
         <card
-          class="mr16"
+         
           :column="oldInfoColumn"
-          title="版本信息" />
+          title="版本信息" style="margin-right: var(--bk-theme-space-16)" />
         <card
           :column="newInfoColumn"
           title="版本信息" />
@@ -58,12 +58,12 @@
       <!-- 方案输入 -->
       <div
         id="strategyUpgradeInput"
-        class="flex-center mb16">
+        class="flex-center" style="margin-bottom: var(--bk-theme-space-16)">
         <card
-          class="mr16"
+         
           :column="inputFieldsColumn"
           :input-fields-map="oldInputFieldsMap"
-          title="方案输入" />
+          title="方案输入" style="margin-right: var(--bk-theme-space-16)" />
         <card
           :column="inputFieldsColumn"
           :input-fields-map="newInputFieldsMap"
@@ -73,11 +73,11 @@
       <!-- 方案输出 -->
       <div
         id="strategyUpgradeOutput"
-        class="flex-center mb16">
+        class="flex-center" style="margin-bottom: var(--bk-theme-space-16)">
         <card
-          class="mr16"
+         
           :column="oldOutputsFields"
-          title="方案输出" />
+          title="方案输出" style="margin-right: var(--bk-theme-space-16)" />
         <card
           :column="newOutputsFields"
           title="方案输出" />
@@ -91,8 +91,8 @@
         {{ t('下一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -574,7 +574,7 @@
     }
 
     .bk-tab-header-item+.bk-tab-header-item {
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
     }
   }
 }
@@ -582,7 +582,7 @@
 .flex-center {
   display: flex;
   padding-right: 110px;
-  margin-top: 16px;
+  margin-top: var(--bk-theme-space-16);
 
   .strategy-upgrade-card {
     flex: 1;
@@ -595,30 +595,30 @@
   top: -15px;
   left: 0;
   width: 100%;
-  padding-left: 24px;
-  background: #dcdee5;
+  padding-left: var(--bk-theme-space-24);
+  background: var(--bk-theme-border-default);
 
   .top-title {
     flex: 1;
     width: 491px;
     height: 40px;
-    margin-right: 16px;
+    margin-right: var(--bk-theme-space-16);
     font-size: 14px;
     line-height: 40px;
-    color: #000;
+    color: var(--bk-theme-text-strong);
 
     >.block {
       display: inline-block;
       height: 22px;
-      padding: 0 8px;
-      margin-right: 8px;
+      padding: 0 var(--bk-theme-space-8);
+      margin-right: var(--bk-theme-space-8);
       font-size: 12px;
       font-weight: 700;
       line-height: 22px;
-      color: #fff;
+      color: var(--bk-theme-surface-default);
       text-align: center;
-      background: #979ba5;
-      border-radius: 2px;
+      background: var(--bk-theme-text-weak);
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 }

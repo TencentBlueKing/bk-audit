@@ -176,8 +176,7 @@
     left: 0;
     z-index: 1111;
     display: flex;
-    height: 52px;
-    background: #fff;
+    height: 52px;background: var(--bk-theme-surface-default);
     box-shadow: 0 -2px 4px 0 rgb(0 0 0 / 6%);
     align-items: center;
   }

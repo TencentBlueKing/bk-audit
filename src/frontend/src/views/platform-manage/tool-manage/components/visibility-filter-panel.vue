@@ -275,7 +275,7 @@
   .visibility-menu {
     width: 280px;
     max-height: 360px;
-    padding: 2px 0;
+    padding: var(--bk-theme-space-2) 0;
     overflow: hidden auto;
 
     &::-webkit-scrollbar {
@@ -283,8 +283,8 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: #c4c6cc;
-      border-radius: 2px;
+      background-color: var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     &::-webkit-scrollbar-track {
@@ -293,29 +293,29 @@
   }
 
   .group-header {
-    padding: 6px 12px 2px;
+    padding: var(--bk-theme-space-6) var(--bk-theme-space-12) var(--bk-theme-space-2);
     font-size: 12px;
     font-weight: 500;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .menu-item {
     display: flex;
     align-items: center;
     height: 32px;
-    padding: 0 12px;
+    padding: 0 var(--bk-theme-space-12);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
 
     &:hover:not(.is-disabled) {
-      color: #3a84ff;
-      background-color: #f5f7fa;
+      color: var(--bk-theme-color-brand-2);
+      background-color: var(--bk-theme-surface-subtle);
     }
 
     &.is-disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
 
       .checkbox {
@@ -324,35 +324,35 @@
       }
 
       &:hover {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         background-color: transparent;
       }
     }
 
     &.sub-item {
-      padding-left: 28px;
+      padding-left: var(--bk-theme-space-32);
     }
 
     .checkbox {
       width: 14px;
       height: 14px;
-      margin-right: 8px;
-      background-color: #fff;
-      border: 1px solid #c4c6cc;
-      border-radius: 2px;
+      margin-right: var(--bk-theme-space-8);
+      background-color: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
       box-sizing: border-box;
       flex-shrink: 0;
 
       &.is-checked {
-        background-color: #3a84ff;
-        border-color: #3a84ff;
+        background-color: var(--bk-theme-color-brand-2);
+        border-color: var(--bk-theme-color-brand-2);
       }
 
       .check-icon {
         display: block;
         width: 12px;
         height: 12px;
-        fill: #fff;
+        fill: var(--bk-theme-surface-default);
       }
     }
 
@@ -366,7 +366,7 @@
 
   .menu-divider {
     height: 1px;
-    margin: 4px 0;
-    background-color: #f0f1f5;
+    margin: var(--bk-theme-space-4) 0;
+    background-color: var(--bk-theme-surface-muted);
   }
 </style>

@@ -101,9 +101,9 @@
 </script>
 <style scoped lang="postcss">
   .other-table-detail {
-    padding: 8px 16px;
-    margin-top: 8px;
-    background-color: #f5f7fa;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-8);
+    background-color: var(--bk-theme-surface-subtle);
 
     .title {
       display: flex;
@@ -113,7 +113,7 @@
 
     .info-block {
       display: grid;
-      margin-bottom: 12px;
+      margin-bottom: var(--bk-theme-space-12);
       grid-template-columns: repeat(3, 1fr);
       grid-gap: 12px;
     }

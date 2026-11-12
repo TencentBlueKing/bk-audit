@@ -33,9 +33,9 @@
         :model="formData"
         :rules="rules">
         <bk-form-item
-          class="is-required mr16"
+          class="is-required"
           :label="t('处理人')"
-          property="new_operators">
+          property="new_operators" style="margin-right: var(--bk-theme-space-16)">
           <audit-user-selector-tenant
             v-model="formData.new_operators"
             multiple />
@@ -129,5 +129,6 @@
   });
 </script>
 <!-- <style scoped>
+
 
 </style> -->

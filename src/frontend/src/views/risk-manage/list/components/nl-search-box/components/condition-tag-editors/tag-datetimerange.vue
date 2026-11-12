@@ -431,10 +431,10 @@
       align-items: center;
       width: auto;
       max-width: fit-content;
-      padding: 4px;
+      padding: var(--bk-theme-space-4);
       white-space: nowrap;
       cursor: pointer;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       transition: background .15s;
 
       .tag-date-display-text {
@@ -451,7 +451,7 @@
         font-size: 12px;
         font-weight: 700;
         line-height: 22px;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
         white-space: nowrap;
         pointer-events: none;
         transform: translateY(-50%);
@@ -485,7 +485,7 @@
             width: auto !important;
             height: 22px;
             min-width: 40px;
-            padding: 4px;
+            padding: var(--bk-theme-space-4);
             font-size: 12px;
             font-weight: 700;
             line-height: 22px;
@@ -517,8 +517,8 @@
     /* 面板打开时（is-editing 状态）value 区域蓝色高亮 */
     &.is-editing {
       .tag-value-date-wrapper {
-        background: #e1ecff;
-        border-radius: 2px;
+        background: var(--bk-theme-fill-selected);
+        border-radius: var(--bk-theme-tag-radius);
 
         :deep(.bk-date-picker) {
           .bk-date-picker-rel {
@@ -529,7 +529,7 @@
         }
 
         .tag-date-display-text-editing {
-          color: #1768ef;
+          color: var(--bk-theme-color-brand-1);
         }
       }
     }
@@ -540,7 +540,7 @@
       top: 0;
       left: 0;
       height: 0;
-      padding: 0 4px;
+      padding: 0 var(--bk-theme-space-4);
       overflow: hidden;
       font-family: inherit;
       font-size: 12px;

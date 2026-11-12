@@ -31,8 +31,8 @@
           style="padding-top: 3px;color: #b34747;"
           type="delete-fill" />
         <span
-          class="ml8"
-          style="line-height: 20px;">{{ item }}</span>
+         
+          style="line-height: 20px; margin-left: var(--bk-theme-space-8)">{{ item }}</span>
       </div>
     </div>
   </div>
@@ -75,8 +75,7 @@
     bottom: 0;
     z-index: 999;
     width: 100%;
-    max-height: 500px;
-    padding: 6px 20px;
+    max-height: 500px;padding: var(--bk-theme-space-6) var(--bk-theme-space-16);
     overflow-y: auto;
     background: #212121;
     border-left: 4px solid #b34747;
@@ -89,7 +88,7 @@
       width: 26px;
       height: 6px;
       cursor: ns-resize;
-      border-radius: 3px;
+      border-radius: var(--bk-theme-tag-radius);
       transform: translateY(-50%);
       align-items: center;
       justify-content: center;
@@ -104,16 +103,16 @@
       left: 2px;
       width: 100%;
       height: 0;
-      border-bottom: 3px dotted #63656e;
+      border-bottom: 3px dotted var(--bk-theme-text-default);
       content: ' ';
     }
 
     .problem {
-      padding: 6px 0;
+      padding: var(--bk-theme-space-6) 0;
 
       .problem-item {
         display: flex;
-        color: #fff;
+        color: var(--bk-theme-surface-default);
       }
     }
   }

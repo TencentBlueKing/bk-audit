@@ -44,22 +44,22 @@
     transition: all .15s;
 
     &:hover {
-      background: #dcdee5;
+      background: var(--bk-theme-border-default);
     }
   }
 
   .collspan-box-extend-action {
-    margin: 0 -14px;
+    margin: 0 -var(--bk-theme-space-12);
 
     & > * {
       height: 32px;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
       line-height: 32px;
       cursor: pointer;
 
       &:hover {
-        color: #3a84ff;
-        background: #f5f6fa;
+        color: var(--bk-theme-color-brand-2);
+        background: var(--bk-theme-surface-subtle);
       }
     }
   }

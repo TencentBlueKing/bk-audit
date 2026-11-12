@@ -24,11 +24,11 @@
 </script>
 <style lang="postcss" scoped>
   .render-info-block {
-    margin-bottom: 20px;
-    color: #979ba5;
+    margin-bottom: var(--bk-theme-space-16);
+    color: var(--bk-theme-text-weak);
 
     &:nth-child(n+2) {
-      margin-top: 8px;
+      margin-top: var(--bk-theme-space-8);
     }
   }
 </style>

@@ -235,14 +235,14 @@
 .table-fields {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   align-items: center;
 
   .icon-group {
     width: 36px;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
   }
 }
 </style>

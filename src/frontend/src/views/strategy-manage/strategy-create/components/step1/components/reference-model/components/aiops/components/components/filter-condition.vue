@@ -141,8 +141,8 @@
             <div
               v-if="formData.filter_config.length > 1"
               v-bk-tooltips="t('删除')"
-              class="ml8"
-              @click="handleRemoveCondition(index)">
+             
+              @click="handleRemoveCondition(index)" style="margin-left: var(--bk-theme-space-8)">
               <audit-icon type="reduce-fill" />
             </div>
           </div>
@@ -365,7 +365,7 @@
 .filter-conditon {
   .condition-item {
     display: flex;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     justify-content: space-between;
 
 
@@ -394,16 +394,16 @@
       display: inline-block;
       width: 120px;
       height: 32px;
-      margin: 0 8px;
+      margin: 0 var(--bk-theme-space-8);
 
       /* font-weight: bold; */
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       text-align: center;
-      background: #fff;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
 
       :deep(.bk-input--text) {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
@@ -419,9 +419,9 @@
 
     .condition-icon {
       display: flex;
-      margin-left: 8px;
+      margin-left: var(--bk-theme-space-8);
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
     }
 
@@ -434,11 +434,11 @@
       position: absolute;
       top: 10px;
       right: 8px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
     :deep(.bk-form-item.is-error .bk-tag-input-trigger) {
-      border-color: #ea3636;
+      border-color: var(--bk-theme-color-danger-2);
     }
   }
 }

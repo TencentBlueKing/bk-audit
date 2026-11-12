@@ -18,7 +18,7 @@
   <div
     v-for="(condition, index) in localConditions.conditions"
     :key="`${conditionsIndex}-${index}`"
-    class="rule-item-field"
+    class="rule-item-field bk-theme-form--inline"
     :style="{ marginBottom: index === conditions.conditions.length -1 ? '0px' : '8px' }">
     <!-- 一级横线 -->
     <div
@@ -581,7 +581,7 @@
   position: relative;
   display: grid;
   grid-template-columns: 300px 180px 1fr minmax(65px, auto);
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   align-items: center;
 
   :deep(.bk-form-error) {
@@ -589,26 +589,25 @@
   }
 
   :deep(.bk-form-item) {
-    margin-bottom: 0;
   }
 
   :deep(.bk-form-item.is-error .consition-value:not(.user-selector-value) .bk-tag-input-trigger) {
-    border-color: #ea3636;
+    border-color: var(--bk-theme-color-danger-2);
   }
 
   :deep(.user-selector-value.bk-user-selector),
   :deep(.user-selector-value .bk-user-selector) {
     .bk-select-trigger,
     .bk-tag-input-trigger {
-      border-color: #c4c6cc;
+      border-color: var(--bk-theme-border-strong);
     }
 
     .bk-select-tag,
     .custom-tag,
     .bk-tag {
-      color: #63656e;
-      background-color: #f0f1f5;
-      border-color: #f0f1f5;
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-surface-muted);
+      border-color: var(--bk-theme-surface-muted);
     }
   }
 
@@ -618,7 +617,7 @@
     left: -25px;
     width: 25px;
     height: 0;
-    border-top: 1px dashed #dcdee5;
+    border-top: 1px dashed var(--bk-theme-border-default);
   }
 
   .column-line {
@@ -627,17 +626,17 @@
     left: -25px;
     width: 0;
     height: 40px;
-    border-left: 1px dashed #dcdee5;
+    border-left: 1px dashed var(--bk-theme-border-default);
   }
 
   .icon-group {
     display: flex;
-    gap: 10px;
+    gap: var(--bk-theme-space-12);
     align-items: center;
     height: 32px;
     font-size: 14px;
     line-height: 1;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
 
     .expr-action-icon {
       display: inline-flex;
@@ -654,12 +653,10 @@
   left: 14px;
   width: 28px;
   height: 28px;
-  line-height: 28px;
-  color: #f5b401;
+  line-height: 28px;color: var(--bk-theme-color-warn-2);
   text-align: center;
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #f5b401;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-default);border: 1px solid var(--bk-theme-color-warn-2);
+  border-radius: var(--bk-theme-tag-radius);
 }
 </style>

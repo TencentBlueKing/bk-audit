@@ -6,11 +6,11 @@
     data-testid="batch-handle-button">
     <auth-button
       action-id="process_risk"
+      class="risk-toolbar-secondary"
       :disabled="!availability.enabled"
       :loading="opening"
       outline
       :permission="permission"
-      theme="primary"
       @click="handleOpen">
       {{ t('批量处理') }}
     </auth-button>

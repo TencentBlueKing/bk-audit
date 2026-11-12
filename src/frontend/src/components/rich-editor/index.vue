@@ -272,11 +272,11 @@
 
 
 .ql-editor ul li:not(.ql-direction-rtl) {
-  padding-left: 10px;
+  padding-left: var(--bk-theme-space-12);
 }
 
 .ql-editor ol li:not(.ql-direction-rtl) {
-  padding-left: 15px;
+  padding-left: var(--bk-theme-space-16);
 }
 
 .ql-editor {
@@ -288,21 +288,21 @@
 
 /* 禁用时候的样式 */
 .ql-disabled {
-  background-color: #fafbfd !important;
+  background-color: var(--bk-theme-table-header-bg) !important;
 }
 
 :deep(.editor-wrap[active='false'] .ql-toolbar) {
-  background-color: #fafbfd;
+  background-color: var(--bk-theme-table-header-bg);
 }
 
 /* toolbar 激活样式 */
 :deep(.editor-wrap[active='true'] .ql-toolbar) {
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
 }
 
 .editor-wrap {
   position: relative;
-  padding: 5px 0;
+  padding: var(--bk-theme-space-4) 0;
   box-sizing: border-box;
 
   .editor-tip-len {
@@ -318,34 +318,33 @@
 
 .ql-container.ql-snow {
   min-height: 120px;
-  padding-bottom: 10px;
+  padding-bottom: var(--bk-theme-space-12);
 }
 
 .editor-wrap--table .ql-editor .ql-report-table {
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
 }
 
 .editor-wrap--table .ql-editor table {
   width: 100%;
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
   font-size: 14px;
   border-collapse: collapse;
   table-layout: auto;
 }
 
 .editor-wrap--table .ql-editor th,
-.editor-wrap--table .ql-editor td {
-  padding: 10px 12px;
-  color: #313238;
+.editor-wrap--table .ql-editor td {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  color: var(--bk-theme-text-strong);
   text-align: left;
   vertical-align: top;
-  border: 1px solid #dcdee5;
+  border: 1px solid var(--bk-theme-border-default);
 }
 
 .editor-wrap--table .ql-editor thead th {
   font-weight: 600;
-  color: #313238;
-  background: #f5f7fa;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-subtle);
 }
 
 .editor-wrap--table .ql-editor h1,
@@ -354,25 +353,25 @@
 .editor-wrap--table .ql-editor h4,
 .editor-wrap--table .ql-editor h5,
 .editor-wrap--table .ql-editor h6 {
-  margin: 16px 0 12px;
+  margin: var(--bk-theme-space-16) 0 var(--bk-theme-space-12);
   font-weight: 600;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .editor-wrap--table .ql-editor p {
-  margin: 0 0 12px;
+  margin: 0 0 var(--bk-theme-space-12);
   line-height: 1.6;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .editor-wrap--table .ql-editor ul,
 .editor-wrap--table .ql-editor ol {
-  padding-left: 20px;
-  margin: 0 0 12px;
+  padding-left: var(--bk-theme-space-16);
+  margin: 0 0 var(--bk-theme-space-12);
 }
 
 .editor-wrap--table .ql-editor li {
-  margin-bottom: 4px;
+  margin-bottom: var(--bk-theme-space-4);
   line-height: 1.6;
 }
 
@@ -381,26 +380,26 @@
 }
 
 .editor-wrap--table .ql-editor blockquote {
-  padding: 8px 12px;
-  margin: 0 0 12px;
-  color: #313238;
-  background: #f5f7fa;
-  border-left: 4px solid #dcdee5;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  margin: 0 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-subtle);
+  border-left: 4px solid var(--bk-theme-border-default);
 }
 
 .editor-wrap--table .ql-editor hr {
-  margin: 16px 0;
+  margin: var(--bk-theme-space-16) 0;
   border: 0;
-  border-top: 1px solid #dcdee5;
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .editor-wrap--table .ql-toolbar .rich-editor-table-btn {
   width: auto !important;
-  padding: 0 8px !important;
-  margin: 0 4px;
+  padding: 0 var(--bk-theme-space-8) !important;
+  margin: 0 var(--bk-theme-space-4);
   font-size: 14px !important;
   line-height: 24px !important;
-  color: #3a84ff !important;
+  color: var(--bk-theme-color-brand-2) !important;
   cursor: pointer;
   background: transparent !important;
   border: none !important;

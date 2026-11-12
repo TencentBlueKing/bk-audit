@@ -21,7 +21,7 @@
     <div
       ref="rootRef"
       class="tag-pop-ref">
-      <div class="mr8">
+      <div style="margin-right: var(--bk-theme-space-8)">
         {{ t(config.label) }}:
       </div>
       <div class="value-text">
@@ -263,14 +263,14 @@
   .search-value-tag {
     display: flex;
     height: 22px;
-    padding: 0 6px;
-    margin-right: 6px;
-    margin-bottom: 8px;
+    padding: 0 var(--bk-theme-space-6);
+    margin-right: var(--bk-theme-space-6);
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
-    background: #f0f1f5;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
     transition: all .15s;
     align-items: center;
 
@@ -279,8 +279,8 @@
     }
 
     &:hover {
-      color: #63656e;
-      background: #dcdee5;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-border-default);
     }
 
     .value-text {
@@ -292,7 +292,7 @@
     }
 
     .remove-btn {
-      margin-left: 8px;
+      margin-left: var(--bk-theme-space-8);
     }
   }
 </style>

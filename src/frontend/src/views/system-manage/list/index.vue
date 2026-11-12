@@ -15,12 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="systemList">
-    <div class="system-list-page">
-      <div class="mb16 action-header">
+  <div class="system-list-page bk-theme-card">
+    <div class="action-header bk-theme-list-toolbar">
         <system-access-dropdown />
         <bk-search-select
           v-model="searchValue"
@@ -40,12 +36,12 @@
         :data-source="dataSource"
         :reverse-sort-fields="['system_id','status']"
         :settings="settings"
+        use-skeleton
         @clear-search="handleClearSearch"
         @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
-    </div>
-  </skeleton-loading>
+  </div>
 </template>
 <script setup lang="tsx">
   import type { Column } from 'bkui-vue/lib/table/props';
@@ -378,8 +374,6 @@
       placeholder: t('请输入系统ID'),
     },
   ];
-  const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
-
   const systemStatusMap = (status: string) => {
     const map: Record<string, string> = {
       incomplete: t('待完善'),
@@ -548,8 +542,7 @@
 </script>
 <style lang="postcss">
   .system-list-page {
-    padding: 24px;
-    background: #fff;
+    padding: var(--bk-theme-space-24);
 
     .action-header {
       display: flex;
@@ -568,7 +561,7 @@
 
       .table-new-tip {
         height: 14px;
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
       }
     }
   }

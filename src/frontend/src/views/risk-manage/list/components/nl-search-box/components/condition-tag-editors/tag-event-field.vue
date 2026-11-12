@@ -377,20 +377,19 @@
     .tag-operator-badge {
       display: inline-flex;
       height: 18px;
-      padding: 0 4px;
-      margin-right: 4px;
+      padding: 0 var(--bk-theme-space-4);
+      margin-right: var(--bk-theme-space-4);
       font-size: 12px;
       font-weight: 700;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       cursor: pointer;
       background: transparent;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       transition: all .15s;
       align-items: center;
 
       &:hover,
-      &.is-active {
-        background: #fdeed8;
+      &.is-active {background: var(--bk-theme-fill-warn);
       }
     }
   }
@@ -398,7 +397,7 @@
   .nl-tag-event-edit-zone {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: flex-start;
     max-width: 460px;
   }
@@ -415,22 +414,22 @@
     max-height: 200px;
     min-width: 120px;
     min-height: 20px;
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     overflow-y: auto;
     font-family: inherit;
     font-size: 12px;
     line-height: 18px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     word-break: break-all;
-    background: #fff;
-    border: 1px solid #3a84ff;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-color-brand-2);
+    border-radius: var(--bk-theme-tag-radius);
     outline: none;
     box-sizing: border-box;
     resize: none;
 
     &::placeholder {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
     }
 
     /* 窄灰色滚动条 */
@@ -439,8 +438,8 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #c4c6cc;
-      border-radius: 2px;
+      background: var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     &::-webkit-scrollbar-track {
@@ -454,7 +453,7 @@
     top: 0;
     left: 0;
     height: 0;
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     overflow: hidden;
     font-family: inherit;
     font-size: 12px;
@@ -467,28 +466,28 @@
   .nl-tag-event-multi-tags {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 2px;
+    gap: var(--bk-theme-space-2);
     align-items: center;
   }
 
   .nl-tag-event-multi-tag {
     display: inline-flex;
     height: 20px;
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     font-size: 12px;
-    color: #63656e;
-    background: #f0f1f5;
-    border-radius: 2px;
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
-    gap: 2px;
+    gap: var(--bk-theme-space-2);
 
     .multi-tag-close {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       cursor: pointer;
 
       &:hover {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
     }
   }
@@ -497,25 +496,25 @@
   /* 操作符下拉弹出层样式（非 scoped，因为 popover 内容挂在 body 上） */
   .nl-tag-operator-popover {
     min-width: 80px;
-    padding: 4px 0;
+    padding: var(--bk-theme-space-4) 0;
 
     .nl-tag-operator-item {
       display: flex;
       height: 32px;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       cursor: pointer;
       align-items: center;
       transition: background .15s;
 
       &:hover {
-        background: #f5f7fa;
+        background: var(--bk-theme-surface-subtle);
       }
 
       &.is-selected {
-        color: #3a84ff;
-        background: #e1ecff;
+        color: var(--bk-theme-color-brand-2);
+        background: var(--bk-theme-fill-selected);
       }
     }
   }

@@ -18,6 +18,7 @@
   <div ref="rootRef">
     <bk-form
       ref="formRef"
+      :class="densityClass"
       :model="model"
       v-bind="$attrs">
       <slot />
@@ -26,6 +27,7 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -34,12 +36,22 @@
 
   interface Props {
     model?: Record<string, any>,
+    /** default 用场景默认间距；compact / inline 挂公共表单场景类 */
+    density?: 'default' | 'compact' | 'inline',
   }
   interface Exposes {
     validate: (fields?: string | Array<string>) => Promise<Record<string, any>>,
     clearValidate: (fields?: string | Array<string>) => void,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    density: 'default',
+  });
+
+  const densityClass = computed(() => {
+    if (props.density === 'compact') return 'bk-theme-form--compact';
+    if (props.density === 'inline') return 'bk-theme-form--inline';
+    return '';
+  });
 
   const rootRef = ref();
   const formRef = ref();

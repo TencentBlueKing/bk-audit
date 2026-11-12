@@ -220,16 +220,16 @@
   .component {
     .lable {
       display: flex;
-      padding-bottom: 5px;
+      padding-bottom: var(--bk-theme-space-4);
       font-size: 12px;
       line-height: 20px;
       letter-spacing: 0;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
       justify-content: space-between;
       align-items: center;
 
       .title-right {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: pointer;
       }
     }
@@ -240,7 +240,7 @@
     top: 8px;
     right: 10px;
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
   }
 }

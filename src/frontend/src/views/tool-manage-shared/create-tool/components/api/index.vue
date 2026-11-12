@@ -844,24 +844,24 @@
 .auth-box {
   width: 50%;
   height: 100%;
-  padding: 10px 20px;
-  margin-top: 10px;
-  background: #f5f7fa;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+  margin-top: var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .item-headers {
-  padding-top: 24px;
+  padding-top: var(--bk-theme-space-24);
 }
 
 .headers-config {
   display: flex;
   width: 100%;
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
   align-items: center;
 
   .config-input {
-    margin-right: 10px;
+    margin-right: var(--bk-theme-space-12);
   }
 
   .value {
@@ -878,14 +878,14 @@
 
   .headers-reduce-fill {
     font-size: 16px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
   }
 }
 
 .item-headers-add {
-  margin-top: 10px;
-  color: #3a84ff;
+  margin-top: var(--bk-theme-space-12);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 
   .headers-plus-circle {
@@ -893,17 +893,17 @@
   }
 
   .plus-circle-text {
-    margin-left: 5px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 12px;
   }
 }
 
 .item-params {
-  margin-top: 24px;
+  margin-top: var(--bk-theme-space-24);
   cursor: pointer;
 
   .item-params-checkbox {
-    padding-bottom: 10px;
+    padding-bottom: var(--bk-theme-space-12);
   }
 
   .headers-plus-circle {
@@ -911,25 +911,25 @@
   }
 
   .plus-circle-text {
-    margin-left: 5px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 12px;
   }
 }
 
 .item-params-add {
-  padding-bottom: 10px;
-  margin-top: 12px;
+  padding-bottom: var(--bk-theme-space-12);
+  margin-top: var(--bk-theme-space-12);
 }
 
 .corret-fill {
-  margin-left: 17px;
+  margin-left: var(--bk-theme-space-16);
   font-size: 14px;
-  color: #2caf5e;
+  color: var(--bk-theme-color-success-2);
   cursor: none;
 }
 
 .delete-fill {
-  margin-left: 17px;
+  margin-left: var(--bk-theme-space-16);
   font-size: 14px;
   color: red;
   cursor: none;
@@ -953,7 +953,7 @@
   right: 12px; /* 调整位置，避免超出边界 */
   z-index: 10;
   font-size: 16px;
-  color: #ea3636;
+  color: var(--bk-theme-color-danger-2);
   cursor: pointer;
   transform: translateY(-50%);
 }

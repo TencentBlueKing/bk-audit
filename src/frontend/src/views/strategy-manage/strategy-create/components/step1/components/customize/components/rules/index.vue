@@ -259,21 +259,19 @@
       left: -38px;
       width: 28px;
       height: 28px;
-      line-height: 28px;
-      color: #f5b401;
+      line-height: 28px;color: var(--bk-theme-color-warn-2);
       text-align: center;
       cursor: pointer;
-      background: #fff;
-      border: 1px solid #f5b401;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);border: 1px solid var(--bk-theme-color-warn-2);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .rule-item {
       position: relative;
-      padding: 16px;
-      padding-right: 25px;
-      margin-bottom: 16px;
-      background: #f5f7fa;
+      padding: var(--bk-theme-space-16);
+      padding-right: var(--bk-theme-space-24);
+      margin-bottom: var(--bk-theme-space-16);
+      background: var(--bk-theme-surface-subtle);
       flex: 1;
 
       .row-line {
@@ -282,7 +280,7 @@
         left: -25px;
         width: 25px;
         height: 0;
-        border-top: 1px dashed #dcdee5;
+        border-top: 1px dashed var(--bk-theme-border-default);
       }
 
       .column-line {
@@ -290,7 +288,7 @@
         left: -25px;
         width: 0;
         height: calc(50% + 8px);
-        border-left: 1px dashed #dcdee5;
+        border-left: 1px dashed var(--bk-theme-border-default);
       }
 
       .column-line-top {
@@ -306,7 +304,7 @@
         position: absolute;
         top: 5px;
         right: 5px;
-        color: #979ba5;;
+        color: var(--bk-theme-text-weak);;
         cursor: pointer;
       }
     }
@@ -316,17 +314,17 @@
     display: inline-flex;
     width: fit-content;
     height: 32px;
-    padding: 0 12px 0 6px;
+    padding: 0 var(--bk-theme-space-12) 0 var(--bk-theme-space-6);
     font-size: 12px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
-    background: #fafbfd;
-    border: 1px dashed #dcdee5;
-    border-radius: 2px;
+    background: var(--bk-theme-table-header-bg);
+    border: 1px dashed var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
 
     .add-rule-icon {
-      margin: 0 6px;
+      margin: 0 var(--bk-theme-space-6);
       font-size: 16px;
     }
   }

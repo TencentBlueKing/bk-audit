@@ -28,9 +28,9 @@
           :model="formData"
           :rules="rules">
           <bk-form-item
-            class="is-required mr16"
+            class="is-required"
             :label="t('规则名称')"
-            property="name">
+            property="name" style="margin-right: var(--bk-theme-space-16)">
             <bk-input
               v-model.trim="formData.name"
               :placeholder="t('请输入')"
@@ -38,9 +38,9 @@
               style="width: 480px;" />
           </bk-form-item>
           <bk-form-item
-            class="is-required mr16"
+            class="is-required"
             :label="t('适用范围')"
-            property="scope">
+            property="scope" style="margin-right: var(--bk-theme-space-16)">
             <div
               v-for="(item, index) in formData.scope"
               :key="index"
@@ -158,8 +158,8 @@
                 <div
                   v-if="formData.scope.length > 1"
                   v-bk-tooltips="t('删除')"
-                  class="ml8"
-                  @click="handleRemoveCondition(Number(index))">
+                 
+                  @click="handleRemoveCondition(Number(index))" style="margin-left: var(--bk-theme-space-8)">
                   <audit-icon type="reduce-fill" />
                 </div>
               </div>
@@ -176,9 +176,9 @@
             </div>
           </bk-form-item>
           <bk-form-item
-            class="is-required mr16"
+            class="is-required"
             :label="t('处理套餐')"
-            property="pa_id">
+            property="pa_id" style="margin-right: var(--bk-theme-space-16)">
             <div style="display: flex;align-items: center;">
               <bk-select
                 v-model="formData.pa_id"
@@ -207,8 +207,8 @@
                 }">
                 <audit-icon
                   v-bk-tooltips="t('查看套餐详情')"
-                  class="ml8"
-                  style="font-size: 16px;color: #979ba5;"
+                 
+                  style="font-size: 16px;color: #979ba5; margin-left: var(--bk-theme-space-8)"
                   type="audit" />
               </router-link>
             </div>
@@ -216,9 +216,9 @@
           <bk-loading :loading="detailLoading">
             <bk-form-item
               v-if="hasUserInputParams"
-              class="mr16"
+             
               :label="t('套餐参数')"
-              property="pa_params">
+              property="pa_params" style="margin-right: var(--bk-theme-space-16)">
               <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
                 <template
                   v-for="(val, index) in Object.values(sortByIndex (paramsDetailData))"
@@ -282,8 +282,8 @@
           </bk-loading>
 
           <bk-form-item
-            class="mr16"
-            label="">
+           
+            label="" style="margin-right: var(--bk-theme-space-16)">
             <bk-checkbox v-model="formData.auto_close_risk">
               <span style="font-size: 12px;">{{ t('套餐执行成功后自动关单') }}</span>
             </bk-checkbox>
@@ -299,8 +299,8 @@
           {{ isEditMode ? t('保存') : t('提交') }}
         </bk-button>
         <bk-button
-          class="ml8 w88"
-          @click="handleCancel">
+          class="w88"
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -785,13 +785,12 @@
   });
 </script>
 <style scoped  lang="postcss">
-.create-strategy-page {
-  padding: 28px 24px;
-  background-color: #fff;
+.create-strategy-page {padding: var(--bk-theme-space-32) var(--bk-theme-space-24);
+  background-color: var(--bk-theme-surface-default);
 
   .condition-item {
     display: flex;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     justify-content: space-between;
 
     :deep(.bk-form-error) {
@@ -819,16 +818,16 @@
       display: inline-block;
       width: 120px;
       height: 32px;
-      margin: 0 8px;
+      margin: 0 var(--bk-theme-space-8);
 
       /* font-weight: bold; */
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       text-align: center;
-      background: #fff;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
 
       :deep(.bk-input--text) {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
@@ -843,9 +842,9 @@
 
     .condition-icon {
       display: flex;
-      margin-left: 8px;
+      margin-left: var(--bk-theme-space-8);
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
     }
 
@@ -857,11 +856,11 @@
       position: absolute;
       top: 10px;
       right: 8px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
     :deep(.bk-form-item.is-error .bk-tag-input-trigger) {
-      border-color: #ea3636;
+      border-color: var(--bk-theme-color-danger-2);
     }
   }
 }
@@ -893,13 +892,13 @@
 .label-name::after {
   position: absolute;
   top: 0;
-  margin-left: 5px;
-  color: #ea3636;
+  margin-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-color-danger-2);
   text-align: center;
   content: '*';
 }
 
 .underline {
-  border-bottom: 1px dashed #c4c6cc;
+  border-bottom: 1px dashed var(--bk-theme-border-strong);
 }
 </style>

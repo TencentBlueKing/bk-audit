@@ -108,7 +108,7 @@
           v-if="showPagination"
           v-model="pagination.modelValue"
           align="center"
-          class="mt8"
+          class="selector-pagination"
           :count="pagination.count"
           :limit="pagination.limit"
           :show-limit="false"
@@ -276,26 +276,25 @@
 
       .topo-tree-container {
         height: 473px;
-        margin-top: 8px;
+        margin-top: var(--bk-theme-space-8);
         overflow: auto;
       }
     }
 
     .topo-node-list {
       width: 0;
-      padding-left: 20px;
+      padding-left: var(--bk-theme-space-16);
       overflow: hidden;
       flex: 0 0 480px;
 
       table {
         width: 100%;
-        margin-top: 12px;
+        margin-top: var(--bk-theme-space-12);
         font-size: 12px;
         text-align: left;
         table-layout: fixed;
 
-        tr {
-          border-bottom: 1px solid #e7e8ed;
+        tr {border-bottom: 1px solid var(--bk-theme-border-weak);
         }
 
         th {
@@ -303,13 +302,13 @@
           font-weight: normal;
           line-height: 20px;
           vertical-align: middle;
-          background: #f5f6fa;
+          background: var(--bk-theme-surface-subtle);
         }
 
         th,
         td {
           height: 40px;
-          padding: 0 8px;
+          padding: 0 var(--bk-theme-space-8);
         }
 
         tbody {
@@ -329,4 +328,5 @@
       }
     }
   }
+  .selector-pagination { margin-top: var(--bk-theme-space-8); }
 </style>

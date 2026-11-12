@@ -80,12 +80,12 @@
 
 <style lang="postcss" scoped>
 .editor-variable-inset__body {
-  margin-top: 10px;
+  margin-top: var(--bk-theme-space-12);
 }
 
 .editor-variable-inset {
   :deep(.bk-modal-body) {
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
   }
 
   :deep(.bk-tab-content) {
@@ -93,7 +93,7 @@
   }
 
   :deep(.bk-tab-header) {
-    margin-left: 40px;
+    margin-left: var(--bk-theme-space-32);
   }
 }
 </style>

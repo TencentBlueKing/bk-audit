@@ -19,12 +19,12 @@
     <template #content>
       <div class="flex-center">
         <bk-form-item
-          class="is-required mr16"
+          class="is-required"
           :label="t('工具名称')"
           label-width="160"
           property="name"
           required
-          style="flex: 1;">
+          style="flex: 1; margin-right: var(--bk-theme-space-16)">
           <bk-input
             v-model.trim="formData.name"
             :maxlength="32"

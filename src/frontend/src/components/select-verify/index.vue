@@ -89,17 +89,14 @@
     top: 27%;
     right: 8px;
     font-size: 16px;
-    line-height: 1;
-    color: #ea3636;
+    line-height: 1;color: var(--bk-theme-color-danger-2);
   }
 }
 
-.is-errored.is-background-errored-tip .bk-select .bk-input {
-  border: 1px solid #ea3636 !important;
+.is-errored.is-background-errored-tip .bk-select .bk-input {border: 1px solid var(--bk-theme-color-danger-2) !important;
 }
 
 .is-errored.is-background-errored-tip .bk-cascader,
-.is-errored.is-background-errored-tip .bk-select-tag {
-  border-color: #ea3636 !important;
+.is-errored.is-background-errored-tip .bk-select-tag {border-color: var(--bk-theme-color-danger-2) !important;
 }
 </style>

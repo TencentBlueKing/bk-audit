@@ -144,14 +144,14 @@
                 </bk-form>
                 <div v-if="source === ''">
                   <bk-button
-                    class="mr8"
+                   
                     theme="primary"
-                    @click.stop="submit">
+                    @click.stop="submit" style="margin-right: var(--bk-theme-space-8)">
                     查询
                   </bk-button>
                   <bk-button
-                    class="mr8"
-                    @click.stop="handleReset">
+                   
+                    @click.stop="handleReset" style="margin-right: var(--bk-theme-space-8)">
                     重置
                   </bk-button>
                 </div>
@@ -919,15 +919,15 @@
 }
 
 .dialog-tool {
-  padding-left: 24px;
+  padding-left: var(--bk-theme-space-24);
 
   /* width: 100%; */
-  background: #fafbfd;
+  background: var(--bk-theme-table-header-bg);
 }
 
 .header {
   display: flex;
-  padding: 0 24px;
+  padding: 0 var(--bk-theme-space-24);
 
   .header-left {
     position: absolute;
@@ -944,14 +944,14 @@
   .top-left-icon {
     width: 48px;
     height: 48px;
-    border-radius: 4px;
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .top-right {
     display: flex;
 
     .top-right-box {
-      margin-left: 5px;
+      margin-left: var(--bk-theme-space-4);
 
       .top-right-title {
         display: flex;
@@ -961,7 +961,7 @@
         font-weight: 700;
         line-height: 24px;
         letter-spacing: 0;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
         text-overflow: ellipsis;
         white-space: nowrap;
         align-items: center;
@@ -969,23 +969,23 @@
         .top-right-name {
           display: inline-block;
           max-width: 300px;
-          margin-right: 5px;
+          margin-right: var(--bk-theme-space-4);
           overflow: hidden;
           text-overflow: ellipsis;
           align-items: center;
         }
 
         .desc-tag {
-          margin-right: 5px;
+          margin-right: var(--bk-theme-space-4);
           font-size: 12px;
           font-weight: 500;
           line-height: 22px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
           text-align: left
         }
 
         .desc-tag-info {
-          color: #1768ef;
+          color: var(--bk-theme-color-brand-1);
           cursor: pointer;
         }
       }
@@ -994,7 +994,7 @@
         font-size: 14px;
         line-height: 22px;
         letter-spacing: 0;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
     }
 
@@ -1008,38 +1008,37 @@
 .top-line {
   width: 100%;
   height: 1px;
-  margin-top: 10px;
-  background: #d8d8d8;
+  margin-top: var(--bk-theme-space-12);background: var(--bk-theme-border-default);
 }
 
 .top-search {
-  margin-top: 32px;
+  margin-top: var(--bk-theme-space-32);
 
   .top-search-title {
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .top-search-result {
     position: relative;
     height: auto;
-    padding-right: 16px;
-    margin-top: 12px;
+    padding-right: var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-12);
 
     .top-search-table-title {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 12px;
       line-height: 20px;
       letter-spacing: 0;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
   }
 
   .example {
-    margin-top: 10px;
+    margin-top: var(--bk-theme-space-12);
 
     .formref-item {
       display: flex;
@@ -1047,18 +1046,18 @@
 
       .formref-item-item {
         width: 300px;
-        margin-right: 15px;
+        margin-right: var(--bk-theme-space-16);
       }
     }
   }
 
   .list-data {
-    margin-top: 10px;
+    margin-top: var(--bk-theme-space-12);
   }
 }
 
 :deep(.bk-table .bk-table-head .col-resize-drag) {
-  background-color: #fafbfd;
+  background-color: var(--bk-theme-table-header-bg);
 }
 </style>
 <style lang="postcss">
@@ -1076,21 +1075,21 @@
   }
 
   .bk-card {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
 
     .bk-card-head {
       height: 32px;
       line-height: 32px;
-      background-color: #f0f1f5;
+      background-color: var(--bk-theme-surface-muted);
     }
 
     .bk-card-body {
-      padding: 0 16px;
-      background-color: #fafbfd;
+      padding: 0 var(--bk-theme-space-16);
+      background-color: var(--bk-theme-table-header-bg);
     }
 
     .card-content {
-      padding: 16px 0;
+      padding: var(--bk-theme-space-16) 0;
     }
   }
 

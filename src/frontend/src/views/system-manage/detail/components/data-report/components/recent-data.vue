@@ -290,35 +290,35 @@
 </script>
 <style lang="postcss">
   .recent-data-card {
-    /* padding: 16px 24px;
+    /* padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
     overflow: hidden;
-    background-color: #fff;
-    border-radius: 2px;
+    background-color: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%); */
 
     .title {
       display: flex;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
       font-size: 14px;
       line-height: 22px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
 
       .refresh-btn {
         width: 22px;
         margin-left: auto;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         text-align: right;
         cursor: pointer;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
     }
 
     .bk-table .bk-table-body table td {
-      padding: 8px 0 !important;
-      border-bottom: 1px solid #dcdee5;
+      padding: var(--bk-theme-space-8) 0 !important;
+      border-bottom: 1px solid var(--bk-theme-border-default);
     }
 
     /* .bk-table.bordered-row td .cell {
@@ -328,11 +328,11 @@
     .bk-table .bk-table-body table td .cell {
       height: auto !important;
       min-height: 40px !important;
-      padding: 0 15px !important;
+      padding: 0 var(--bk-theme-space-16) !important;
       overflow: hidden !important;
       font-size: 12px;
       line-height: 20px !important;
-      color: #63656e !important;
+      color: var(--bk-theme-text-default) !important;
       text-align: left !important;
       text-overflow: ellipsis !important;
       white-space: unset !important;

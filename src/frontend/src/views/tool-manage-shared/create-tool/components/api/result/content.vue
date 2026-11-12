@@ -479,18 +479,18 @@
 <style lang="postcss" scoped>
 
 .content-item {
-  margin-top: 16px;
+  margin-top: var(--bk-theme-space-16);
 
   .content-lable {
     font-size: 12px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 }
 
 .underline-dashed {
   text-decoration: underline;
   text-decoration-style: dashed;
-  text-decoration-color: #c4c6cc;
+  text-decoration-color: var(--bk-theme-border-strong);
   text-underline-offset: 2px;
 }
 
@@ -498,7 +498,7 @@
 <style lang="postcss">
 .api-tree-ref {
   .bk-node-row.is-selected {
-    background-color: #fff !important;
+    background-color: var(--bk-theme-surface-default) !important;
   }
 }
 </style>

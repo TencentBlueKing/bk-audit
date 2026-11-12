@@ -6,7 +6,7 @@
 .sec-chat-page *,
 .show-tooltips-text-popup {
   scrollbar-width: thin;
-  scrollbar-color: #dcdee5 transparent;
+  scrollbar-color: var(--bk-theme-border-default) transparent;
 }
 
 .sec-chat-page *::-webkit-scrollbar,
@@ -22,13 +22,13 @@
 
 .sec-chat-page *::-webkit-scrollbar-thumb,
 .show-tooltips-text-popup::-webkit-scrollbar-thumb {
-  background: #dcdee5;
-  border-radius: 4px;
+  background: var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .sec-chat-page *::-webkit-scrollbar-thumb:hover,
 .show-tooltips-text-popup::-webkit-scrollbar-thumb:hover {
-  background: #c4c6cc;
+  background: var(--bk-theme-border-strong);
 }
 
 .sec-chat-page *::-webkit-scrollbar-button,

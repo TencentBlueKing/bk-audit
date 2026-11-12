@@ -17,7 +17,7 @@
 <template>
   <desc-popover
     ref="popoverRef"
-    :width="588"
+    :width="392"
     @after-show="handleAfterShow">
     <render-field-text>
       {{ data.username || '--' }}
@@ -129,21 +129,13 @@
       value: '--',
     },
     {
-      id: 'gender',
-      key: '性别',
-      value: '--',
-    },
-    {
-      id: 'departmentText',
-      key: '组织架构',
-      value: '--',
-      colspan: 3,
-    },
-  ];
-  const initColDataRight = () => [
-    {
       id: 'postname',
       key: '职位',
+      value: '--',
+    },
+    {
+      id: 'gender',
+      key: '性别',
       value: '--',
     },
     {
@@ -151,7 +143,13 @@
       key: '直接上级',
       value: '--',
     },
+    {
+      id: 'departmentText',
+      key: '组织架构',
+      value: '--',
+    },
   ];
+  const initColDataRight = () => [] as Array<IResult>;
   const initUserInfoDataLeft = () => [
     {
       id: 'username',
@@ -160,31 +158,13 @@
       value: '--',
     },
     {
-      id: 'leader_username',
-      key: '上级员工',
-      value: '--',
-    },
-    {
-      id: 'staff_status',
-      key: '员工状态',
-      value: '--',
-    },
-    {
-      id: 'manager_unit_name',
-      key: '签约主体',
-      value: '--',
-    },
-    {
-      id: 'department_full_name',
-      key: '主岗全称',
-      value: '--',
-      colspan: 3,
-    },
-  ];
-  const initUserInfoDataRight = () => [
-    {
       id: 'gender',
       key: '性别',
+      value: '--',
+    },
+    {
+      id: 'leader_username',
+      key: '上级员工',
       value: '--',
     },
     {
@@ -193,8 +173,18 @@
       value: '--',
     },
     {
+      id: 'staff_status',
+      key: '员工状态',
+      value: '--',
+    },
+    {
       id: 'staff_type',
       key: '员工类型',
+      value: '--',
+    },
+    {
+      id: 'manager_unit_name',
+      key: '签约主体',
       value: '--',
     },
     {
@@ -202,7 +192,13 @@
       key: '管理职级',
       value: '--',
     },
+    {
+      id: 'department_full_name',
+      key: '主岗全称',
+      value: '--',
+    },
   ];
+  const initUserInfoDataRight = () => [] as Array<IResult>;
   const colDataLeft = ref<Array<IResult>>(initColDataLeft());
   const colDataRight = ref<Array<IResult>>(initColDataRight());
 

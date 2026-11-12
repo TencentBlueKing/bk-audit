@@ -49,7 +49,7 @@
 | 能力 | 实现 |
 | --- | --- |
 | 国际化 | `vue-i18n`，中英双语；公共文案 `src/language/lang/`，模块文案 `src/views/<模块>/language/`，由 `src/language/index.js` 合并 |
-| 主题变量 | `src/css/tokens.css`（设计变量）+ `reset.css` + `common.css` |
+| 主题变量 | `src/css/tokens.css` 为唯一色值来源；`theme/` 覆盖 bkui 与 TDesign。顺序见 [全局主题](./theme.md) |
 | 指令 | `v-cursor`（`src/directives/cursor/`）、`v-bk-tooltips`（来自 bkui-vue） |
 | 前端监控 | Aegis，按 `config.aegis_id` 启用，上报接口与静态资源测速 |
 | 页面水印 | `utils/assist/water-mark.ts`，按 `EntryManageService.watermark()` 返回启用 |

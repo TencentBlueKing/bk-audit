@@ -104,35 +104,35 @@
 
   .wild-card-header {
     display: flex;
-    padding: 12px 16px;
-    border-bottom: 1px solid #f0f1f5;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    border-bottom: 1px solid var(--bk-theme-surface-muted);
 
     .wild-card-title {
       font-size: 16px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .close-icon {
       margin-left: auto;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
     }
   }
 
   .wild-card-item {
-    margin-bottom: 24px;
+    margin-bottom: var(--bk-theme-space-24);
 
     .wild-card-value {
       font-size: 14px;
       font-weight: bold;
       line-height: 22px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .wild-card-text {
       font-size: 12px;
       line-height: 20px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 }

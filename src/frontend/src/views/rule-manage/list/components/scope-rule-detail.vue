@@ -19,10 +19,10 @@
     <render-list
       ref="scopeListRef"
       :border="['row']"
-      class="audit-highlight-table mt16 rule-table"
+      class="audit-highlight-table rule-table"
       :columns="scopeTableColumn"
       :data-source="scopeRiskDataSource"
-      :need-empty-search-tip="false" />
+      :need-empty-search-tip="false" style="margin-top: var(--bk-theme-space-16)" />
   </div>
 </template>
 
@@ -94,6 +94,6 @@
 </script>
 <style scoped lang="postcss">
 .rule-table :deep(thead th) {
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
 }
 </style>

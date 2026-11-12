@@ -68,34 +68,34 @@
 
 <style lang="postcss" scoped>
 .custom-constant-trigger {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   text-align: center;
   flex: 1;
   cursor: pointer;
 
   .plus-icon {
-    margin-right: 5px;
+    margin-right: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 }
 
 .custom-constant-input {
   display: flex;
   width: 100%;
-  padding: 0 5px;
+  padding: 0 var(--bk-theme-space-4);
   align-items: center;
 
   .confirm-icon {
-    padding: 0 5px;
+    padding: 0 var(--bk-theme-space-4);
     font-size: 15px;
-    color: #2caf5e;
+    color: var(--bk-theme-color-success-2);
     cursor: pointer;
   }
 
   .cancel-icon {
     font-size: 15px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
   }
 }

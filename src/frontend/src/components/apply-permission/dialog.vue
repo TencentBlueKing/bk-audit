@@ -39,7 +39,7 @@
         {{ t('已申请') }}
       </bk-button>
       <bk-button
-        class="ml8"
+        class="permission-cancel"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -136,4 +136,5 @@
       z-index: 9999 !important;
     }
   }
+  .permission-cancel { margin-left: var(--bk-theme-space-8); }
 </style>

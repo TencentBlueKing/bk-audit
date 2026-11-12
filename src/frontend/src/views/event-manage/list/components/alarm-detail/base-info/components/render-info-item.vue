@@ -39,13 +39,13 @@
     .info-label {
       width: 80px;
       font-weight: bold;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: right;
     }
 
     .info-value {
-      padding-left: 8px;
-      color: #63656e;
+      padding-left: var(--bk-theme-space-8);
+      color: var(--bk-theme-text-default);
     }
   }
 </style>

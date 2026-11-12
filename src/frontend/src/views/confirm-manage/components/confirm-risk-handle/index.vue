@@ -306,7 +306,7 @@
     grid-template-columns: var(--timeline-icon-size) minmax(0, 1fr);
     grid-template-rows: auto auto;
     column-gap: var(--timeline-icon-gap);
-    padding: 0 0 24px !important;
+    padding: 0 0 var(--bk-theme-space-24) !important;
     margin-top: 0 !important;
     overflow: visible;
     font-size: 12px;
@@ -322,7 +322,7 @@
       bottom: 0;
       left: calc(var(--timeline-icon-size) / 2 - .5px);
       width: 1px;
-      background: #dcdee5;
+      background: var(--bk-theme-border-default);
       content: '';
     }
 
@@ -359,7 +359,7 @@
     grid-column: 2;
     grid-row: 1;
     align-self: start;
-    padding-bottom: 12px;
+    padding-bottom: var(--bk-theme-space-12);
     margin-top: 0;
     font-size: 12px;
     line-height: 20px;
@@ -390,7 +390,7 @@
   :deep(.confirm-risk-handle-timeline-tag) {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     margin: 0;
   }
 
@@ -398,13 +398,13 @@
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   :deep(.confirm-risk-handle-timeline-tag__time) {
     font-size: 12px;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   :deep(.confirm-risk-handle-timeline-icon) {
@@ -426,7 +426,7 @@
   :deep(.bk-timeline-content .risk-experience-wrap) {
     padding: 0;
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     background: transparent;
     border: none;
     border-radius: 0;
@@ -438,12 +438,12 @@
   :deep(.bk-timeline-content .risk-experience-wrap > .mis-content) {
     display: grid;
     grid-template-columns: max-content auto minmax(0, 1fr);
-    row-gap: 8px;
+    row-gap: var(--bk-theme-space-8);
     align-items: start;
-    padding: 12px 8px 12px 12px;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-8) var(--bk-theme-space-12) var(--bk-theme-space-12);
     margin-top: 0;
-    background: #f5f7fa;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
 
     .render-info-item {
       display: contents;
@@ -463,7 +463,7 @@
     }
 
     .render-info-item .info-value {
-      padding-left: 4px;
+      padding-left: var(--bk-theme-space-4);
       line-height: 20px;
     }
   }

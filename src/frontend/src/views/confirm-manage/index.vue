@@ -26,8 +26,8 @@
       @parsing="handleParsing"
       @sync="handleSearchSync" />
     <div
-      class="risk-manage-list">
-      <div class="add-button">
+      class="risk-manage-list bk-theme-card">
+      <div class="add-button bk-theme-list-toolbar">
         <span
           v-bk-tooltips="{
             content: batchConfirmDisabledReason ? t(batchConfirmDisabledReason) : '',
@@ -49,6 +49,7 @@
       </div>
       <tdesign-list
         ref="listRef"
+        use-skeleton
         :columns="tableColumns"
         :data-source="dataSource"
         enable-cross-page-select
@@ -453,19 +454,16 @@
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
   position: relative;
-  padding-bottom: 44px;
+  padding-bottom: var(--bk-theme-space-32);
   overflow-x: hidden;
 
   .risk-manage-list {
-    padding: 5px 20px;
-    margin-top: 16px;
-    background-color: white;
+    padding: var(--bk-theme-space-24);
+    margin-top: var(--bk-theme-space-16);
 
     .add-button {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding-bottom: 5px;
     }
 
     .batch-confirm-btn-wrapper {

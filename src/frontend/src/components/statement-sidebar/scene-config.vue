@@ -20,7 +20,6 @@
     <div class="scene-selector-wrapper">
       <scene-system-selector
         v-model="selectedScene"
-        dark
         :is-all-secen="false"
         is-default-select-first
         :list-scope="['scene']"
@@ -252,14 +251,13 @@
   .scene-selector-wrapper {
     box-sizing: border-box;
     width: 100%;
-    padding: 0 12px;
-    margin: 10px 0 16px;
+    padding: 0 var(--bk-theme-space-12);margin: var(--bk-theme-space-8) 0 var(--bk-theme-space-16);
   }
 
   .menu-item-icon {
     display: inline-flex;
     width: 16px;
-    margin-right: 10px;
+    margin-right: var(--bk-theme-space-12);
     font-size: 16px;
     justify-content: center;
     flex-shrink: 0;
@@ -268,33 +266,33 @@
   :deep(.top-level-menu-item) {
     display: flex;
     align-items: center;
-    padding: 0 22px;
+    padding: 0 var(--bk-theme-space-24);
   }
 
   .side-group {
-    margin-bottom: 2px;
+    margin-bottom: var(--bk-theme-space-2);
   }
 
   .side-group-header {
     display: flex;
     align-items: center;
     height: 40px;
-    padding: 0 22px;
+    padding: 0 var(--bk-theme-space-24);
     font-size: 14px;
-    color: #acb9d1;
+    color: var(--bk-theme-nav-side-text);
     cursor: pointer;
 
     &:hover {
-      background: #253047;
+      background: var(--bk-theme-surface-subtle);
     }
   }
 
   .side-group-icon {
     display: inline-flex;
     width: 16px;
-    margin-right: 10px;
+    margin-right: var(--bk-theme-space-12);
     font-size: 16px;
-    color: #acb9d1;
+    color: var(--bk-theme-nav-side-text);
     justify-content: center;
     flex-shrink: 0;
   }
@@ -308,7 +306,7 @@
 
   .side-group-arrow {
     font-size: 12px;
-    color: #acb9d1;
+    color: var(--bk-theme-nav-side-text);
     transition: transform .2s ease;
 
     &.expanded {
@@ -323,7 +321,7 @@
   .side-group-children {
     :deep(.audit-menu-item) {
       position: relative;
-      padding-left: 36px;
+      padding-left: var(--bk-theme-space-32);
     }
   }
 
@@ -331,15 +329,15 @@
     display: inline-block;
     width: 6px;
     height: 6px;
-    margin-right: 12px;
-    background: #505562;
+    margin-right: var(--bk-theme-space-12);
+    background: var(--bk-theme-nav-side-icon);
     border-radius: 50%;
     flex-shrink: 0;
   }
 
   :deep(.audit-menu-item.active) {
     .side-child-dot {
-      background: #fff;
+      background: var(--bk-theme-color-brand-2);
     }
   }
 </style>

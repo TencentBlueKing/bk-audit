@@ -84,9 +84,9 @@
                         :resource="route.params.id">
                         <audit-icon
                           v-bk-tooltips="t('复制')"
-                          class="ml12"
+                         
                           type="copy"
-                          @click.stop="() => execCopy(token.token, t('复制成功'))" />
+                          @click.stop="() => execCopy(token.token, t('复制成功'))" style="margin-left: var(--bk-theme-space-12)" />
                       </auth-component>
                     </span>
                   </div>
@@ -106,9 +106,9 @@
                     <div class="operation-icon">
                       <audit-icon
                         v-bk-tooltips="t('复制')"
-                        class="ml12"
+                       
                         type="copy"
-                        @click.stop="execCopy(data.hosts.map((item: string)=>item).join('\n'))" />
+                        @click.stop="execCopy(data.hosts.map((item: string)=>item).join('\n'))" style="margin-left: var(--bk-theme-space-12)" />
                     </div>
                   </div>
                 </div>
@@ -642,9 +642,8 @@
 .log-report-list {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 14px 6px;
-  background: #fff;
+  height: 100%;padding: var(--bk-theme-space-16) var(--bk-theme-space-6);
+  background: var(--bk-theme-surface-default);
 }
 
 .log-report-skeleton {
@@ -652,31 +651,31 @@
 }
 
 .header {
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
 
   .title {
     display: flex;
-    margin-bottom: 14px;
+    margin-bottom: var(--bk-theme-space-12);
     align-items: center;
 
     .title-text {
       font-size: 18px;
       font-weight: 600;
       line-height: 26px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .title-desc {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       vertical-align: middle;
     }
 
     .title-desc-line {
       width: 1px;
       height: 12px;
-      margin: 0 10px;
-      background: #979ba5;
+      margin: 0 var(--bk-theme-space-12);
+      background: var(--bk-theme-text-weak);
     }
   }
 }
@@ -691,30 +690,29 @@
 }
 
 :deep(.data-list) {
-  height: 100%;
-  padding: 20px 16px;
-  background: #f5f7fa;
+  height: 100%;padding: var(--bk-theme-space-16) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-subtle);
 
   .scroll-faker-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--bk-theme-space-12);
   }
 
   .data-card {
     position: relative;
     display: flex;
-    padding: 16px;
-    background: #fff;
-    border-radius: 8px;
+    padding: var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-message-radius);
 
     /* box-shadow: 0 2px 4px 0 #0d191929; */
     flex-direction: column;
-    gap: 16px;
+    gap: var(--bk-theme-space-16);
 
     .card-main {
       display: flex;
-      gap: 16px;
+      gap: var(--bk-theme-space-16);
 
       .card-icon {
         display: flex;
@@ -727,56 +725,56 @@
         flex: 1;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: var(--bk-theme-space-8);
 
         .card-title .name {
           font-size: 14px;
           font-weight: 700;
-          color: #313238;
+          color: var(--bk-theme-text-strong);
         }
 
         .card-title .sub-name {
           display: block;
-          margin-top: 4px;
+          margin-top: var(--bk-theme-space-4);
           font-size: 14px;
           line-height: 18px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
         }
 
         .card-api-push-info {
           display: flex;
-          gap: 8px;
+          gap: var(--bk-theme-space-8);
 
           .field-token,
           .field-endpoint {
             display: flex;
             min-width: 400px;
-            padding: 6px 12px;
+            padding: var(--bk-theme-space-6) var(--bk-theme-space-12);
             font-size: 12px;
-            color: #63656e;
-            background-color: #f5f7fa;
+            color: var(--bk-theme-text-default);
+            background-color: var(--bk-theme-surface-subtle);
             align-items: center;
-            gap: 6px;
+            gap: var(--bk-theme-space-6);
 
             .encryption {
               display: inline-block;
               width: 5px;
               height: 5px;
-              margin-right: 5px;
+              margin-right: var(--bk-theme-space-4);
               cursor: pointer;
-              background-color: #63656e;
+              background-color: var(--bk-theme-text-default);
               border-radius: 50%;
             }
 
             .operation-icon {
               display: none;
-              padding: 0 12px;
+              padding: 0 var(--bk-theme-space-12);
               font-size: 14px;
-              color: #3a84ff;
+              color: var(--bk-theme-color-brand-2);
               cursor: pointer;
 
               .ml12 {
-                margin-left: 12px;
+                margin-left: var(--bk-theme-space-12);
               }
             }
 
@@ -798,9 +796,9 @@
             flex: 1;
 
             .endpoint-item {
-              margin-bottom: 4px;
+              margin-bottom: var(--bk-theme-space-4);
               line-height: 20px;
-              color: #313238;
+              color: var(--bk-theme-text-strong);
 
               &:last-child {
                 margin-bottom: 0;
@@ -815,37 +813,36 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 16px;
+      gap: var(--bk-theme-space-16);
 
       .card-status {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--bk-theme-space-8);
       }
 
       .status-text {
         font-size: 12px;
 
-        /* color: #63656e; */
+        /* color: var(--bk-theme-text-default); */
       }
 
       .status-success {
-        color: #2caf5e;
+        color: var(--bk-theme-color-success-2);
       }
 
-      .status-warning {
-        color: #f59500;
+      .status-warning {color: var(--bk-theme-color-warn-2);
       }
 
       .status-danger {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
 
       .card-extra {
         display: flex;
         align-items: center;
-        gap: 8px;
-        color: #63656e;
+        gap: var(--bk-theme-space-8);
+        color: var(--bk-theme-text-default);
       }
 
       .latest-label {
@@ -854,7 +851,7 @@
 
       .pending-label {
         font-size: 12px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
     }
 

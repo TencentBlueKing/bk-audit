@@ -4,7 +4,7 @@
 -->
 <template>
   <div
-    class="confirm-deal-form-wrap"
+    class="confirm-deal-form-wrap bk-theme-form--compact"
     :class="{ 'is-editor-boosted': isDockEditorBoosted }">
     <audit-form
       ref="formRef"
@@ -311,11 +311,11 @@
 <style scoped lang="postcss">
 .confirm-deal-form-wrap {
   width: 100%;
-  padding: 16px;
+  padding: var(--bk-theme-space-16);
   font-size: 12px;
-  background: #f5f7fa;
-  border: 1px solid #eaebf0;
-  border-radius: 4px;
+  background: var(--bk-theme-surface-subtle);
+  border: 1px solid var(--bk-theme-border-weak);
+  border-radius: var(--bk-theme-tag-radius);
   box-sizing: border-box;
 }
 
@@ -327,30 +327,28 @@
 }
 
 .confirm-deal-form-wrap :deep(.bk-form-item) {
-  margin-bottom: 16px;
 }
 
 .confirm-deal-form-wrap :deep(.bk-form-item:last-child) {
-  margin-bottom: 0;
 }
 
 .confirm-deal-form-wrap :deep(.bk-form-label) {
   font-size: 12px;
   line-height: 20px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .confirm-deal-form__radios {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: var(--bk-theme-space-8) var(--bk-theme-space-24);
 }
 
 .confirm-deal-form__radios :deep(.bk-radio) {
   font-size: 12px;
   font-weight: 400;
   line-height: 20px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 :deep(.confirm-deal-rich-editor),
@@ -362,18 +360,18 @@
 }
 
 .submit-actions-form-item {
-  margin-top: 8px !important;
+  margin-top: var(--bk-theme-space-8) !important;
   margin-bottom: 0 !important;
 }
 
 .whitelist-together {
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
   font-size: 12px;
 }
 
 .whitelist-apply-hint,
 .misreport-alert {
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
 }
 
 :deep(.await-deal-rich-editor),

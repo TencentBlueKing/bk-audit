@@ -598,15 +598,15 @@
 
 <style scoped lang="postcss">
 .bkvision-param-config {
-  margin-bottom: 16px;
-  background: #fff;
-  border-radius: 2px;
+  margin-bottom: var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
   box-shadow: 0 1px 2px 0 #00000029;
 }
 
 .param-empty-state {
   min-height: 180px;
-  padding: 16px 0;
+  padding: var(--bk-theme-space-16) 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -625,20 +625,20 @@
 .param-card-title {
   display: flex;
   height: 52px;
-  padding: 0 24px;
+  padding: 0 var(--bk-theme-space-24);
   font-size: 14px;
   font-weight: 600;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   align-items: center;
 }
 
 .param-card-body {
-  padding: 0 24px 16px;
+  padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-16);
 }
 
 .param-section {
   & + .param-section {
-    margin-top: 8px;
+    margin-top: var(--bk-theme-space-8);
   }
 }
 
@@ -647,13 +647,13 @@
   align-items: center;
   width: 100%;
   min-height: 32px;
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
   cursor: pointer;
 
   .section-arrow {
     flex: 0 0 auto;
     font-size: 12px;
-    color: #4D4F56;
+    color: var(--bk-theme-text-default);
     transition: transform .2s ease;
 
     &.is-collapsed {
@@ -665,13 +665,13 @@
     flex: 0 0 auto;
     font-size: 12px;
 
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .title-info-icon {
     width: 14px;
     height: 14px;
-    margin-left: 3px; /* 与标题间距 9px（含父级 gap 6px） */
+    margin-left: var(--bk-theme-space-4); /* 与标题间距 9px（含父级 gap 6px） */
     flex: 0 0 auto;
   }
 
@@ -680,7 +680,7 @@
     overflow: hidden;
     font-size: 12px;
     line-height: 18px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -689,8 +689,8 @@
 .param-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
+  gap: var(--bk-theme-space-12);
+  margin-top: var(--bk-theme-space-12);
 }
 
 .param-item {
@@ -701,16 +701,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 5px;
+  padding-bottom: var(--bk-theme-space-4);
   font-size: 12px;
   line-height: 20px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .title-right {
   flex: 0 0 auto;
-  margin-left: 8px;
-  color: #313238 !important;
+  margin-left: var(--bk-theme-space-8);
+  color: var(--bk-theme-text-strong) !important;
   cursor: pointer;
 
   :deep(.bk-checkbox) {
@@ -720,8 +720,8 @@
 
   :deep(.bk-checkbox-label),
   :deep(span) {
-    margin-left: 4px;
-    color: #313238 !important;
+    margin-left: var(--bk-theme-space-4);
+    color: var(--bk-theme-text-strong) !important;
   }
 }
 
@@ -753,7 +753,7 @@
   top: 8px;
   right: 10px;
   font-size: 14px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   cursor: pointer;
 }
 
@@ -762,17 +762,17 @@
   padding: 0;
 
   .default-value-tip-text {
-    margin: 0 8px 12px;
+    margin: 0 var(--bk-theme-space-8) var(--bk-theme-space-12);
     font-size: 12px;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     white-space: normal;
   }
 
   .default-value-tip-actions {
     display: flex;
     justify-content: flex-end;
-    padding: 0 8px 8px;
+    padding: 0 var(--bk-theme-space-8) var(--bk-theme-space-8);
   }
 }
 </style>

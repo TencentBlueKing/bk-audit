@@ -65,13 +65,13 @@
   height: 40px;
   font-size: 14px;
   line-height: 40px;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   text-align: center;
   cursor: pointer;
-  background: #fafbfd;
+  background: var(--bk-theme-table-header-bg);
 }
 
 .setting-filed:hover {
-  background-color: #f0f1f5;
+  background-color: var(--bk-theme-surface-muted);
 }
 </style>
