@@ -223,6 +223,29 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
                 )
 
     @mock.patch("core.utils.tools.get_app_info")
+    def test_retrieve_risk_strategy_info_apigw_filters_invisible_drill_tools(self, mock_get_app_info):
+        """
+        测试 APIGW 口径回归：场景不可见工具的 drill 条目被剔除，且不输出 is_visible/tool_name/tool_type 附加键
+        """
+        mock_get_app_info.return_value = {"app_code": "test_app"}
+        # 解除 user-tool 的场景绑定 → 对风险归属场景不可见
+        BindingMetadataHelper.delete_resource_binding("user-tool", ResourceVisibilityType.TOOL)
+
+        result = RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "lite_mode": False})
+
+        # operator 仅配置了 user-tool，不可见后 drill 条目被剔除（字段保留）
+        operator_field = next(f for f in result["event_data_field_configs"] if f["field_name"] == "operator")
+        self.assertEqual(operator_field["drill_config"], [])
+        # 可见工具条目保留，且不携带 web 口径附加键
+        event_id_field = next(f for f in result["event_basic_field_configs"] if f["field_name"] == "event_id")
+        self.assertEqual(len(event_id_field["drill_config"]), 1)
+        entry = event_id_field["drill_config"][0]
+        self.assertEqual(entry["tool"]["uid"], "test-tool")
+        self.assertNotIn("is_visible", entry)
+        self.assertNotIn("tool_name", entry)
+        self.assertNotIn("tool_type", entry)
+
+    @mock.patch("core.utils.tools.get_app_info")
     def test_retrieve_risk_strategy_info_apigw_calls_get_app_info(self, mock_get_app_info):
         """
         测试接口调用 get_app_info 进行 app_code 鉴权
