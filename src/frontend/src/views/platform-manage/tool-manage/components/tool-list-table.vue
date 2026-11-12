@@ -118,6 +118,7 @@
     sceneOptions?: SceneOption[];
     systemOptions?: SystemOption[];
     strategyList?: StrategyOption[];
+    globalStrategyIds?: number[];
     tagsEnums?: TagItem[];
   }
 
@@ -139,6 +140,7 @@
     sceneOptions: () => [],
     systemOptions: () => [],
     strategyList: () => [],
+    globalStrategyIds: () => [],
     tagsEnums: () => [],
   });
   const emit = defineEmits<Emits>();
@@ -250,9 +252,12 @@
     return strategy ? strategy.label : `${strategyId}`;
   };
 
+  const isGlobalStrategy = (strategyId: number) => props.globalStrategyIds
+    .some(id => String(id) === String(strategyId));
+
   const handleStrategyClick = (strategyId: number) => {
     const url = router.resolve({
-      name: 'strategyList',
+      name: isGlobalStrategy(strategyId) ? 'platformStrategyList' : 'strategyList',
       query: { strategy_id: String(strategyId) },
     }).href;
     window.open(url, '_blank');
