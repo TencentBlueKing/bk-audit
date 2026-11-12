@@ -28,11 +28,18 @@ from api.domains import BKSEC_API_URL
 
 # Mock 数据文件路径（WeSec API 完整响应，仅 BKAPP_BKSEC_MOCK_ENABLED=True 时使用）
 _MOCK_DATA_FILE = os.path.join(os.path.dirname(__file__), "risk_type_list.json")
+_PREVIEW_MOCK_DATA_FILE = os.path.join(os.path.dirname(__file__), "preview_ticket_fields.json")
 
 
 def _load_mock_data():
     """加载 Mock 数据（WeSec risk_access_list API 完整响应）"""
     with open(_MOCK_DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _load_preview_mock_data():
+    """加载 BKSEC 工单字段预览 Mock 数据"""
+    with open(_PREVIEW_MOCK_DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -120,3 +127,32 @@ class RiskAccessListAsPlatform(RiskAccessList):
 
     name = "查询风险类型列表（平台身份）"
     platform_authorization = True
+
+
+class PreviewTicketFields(BKSec):
+    """预览 BKSEC 工单实际字段（用户身份）"""
+
+    name = "预览工单字段"
+    method = "POST"
+    action = "/api/v1/risk/preview_ticket_fields/"
+    platform_authorization = False
+
+    def _mock_request(self, validated_request_data):
+        """用样例数据模拟 BKSEC 返回，请求中的标准字段和 extra 会覆盖样例值。"""
+        mock_data = _load_preview_mock_data()
+        mock_fields = mock_data.get("fields") or []
+
+        dynamic_values = {}
+        for key in ("target", "target_type", "operator", "source_type", "timestamp"):
+            if key in validated_request_data:
+                dynamic_values[key] = validated_request_data.get(key)
+        dynamic_values.update(validated_request_data.get("extra") or {})
+
+        result = []
+        for item in mock_fields:
+            if not isinstance(item, dict) or not item.get("key"):
+                continue
+            key = item["key"]
+            result.append({**item, "value": dynamic_values.get(key, item.get("value"))})
+
+        return {"fields": result}
