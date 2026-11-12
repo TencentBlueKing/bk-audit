@@ -1410,7 +1410,10 @@ class TestBkSecResources:
         assert "risk_context_keys" not in result
         assert "ticket_header" not in result
         assert "risk_attribute" not in result["ticket"]
-        assert result["ticket"]["fields"] == {"title": "预览标题", "operator": "admin"}
+        assert result["ticket"]["fields"] == [
+            {"key": "title", "name": "工单标题", "value": "预览标题"},
+            {"key": "operator", "name": "初始责任人", "value": "admin"},
+        ]
 
         params = preview_api.call_args.args[0]
         assert params["project_id"] == config.project_id

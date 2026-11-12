@@ -294,7 +294,7 @@ def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
                 "risk_type": config.risk_type_id,
                 "source": "bk-audit",
                 "risk_id": "",
-                "fields": {},
+                "fields": [],
             },
             "warnings": [],
         }
@@ -324,11 +324,15 @@ def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
         logger.exception("[BkSecPreview] preview_ticket_fields failed, risk_id=%s", risk.risk_id)
         raise serializers.ValidationError(gettext_lazy("BKSEC 工单字段预览失败：%s") % err)
 
-    fields = {
-        str(item.get("key")): item.get("value")
+    fields = [
+        {
+            "key": str(item["key"]),
+            "name": item.get("name") or str(item["key"]),
+            "value": item.get("value"),
+        }
         for item in (result.get("fields") or [])
         if isinstance(item, dict) and item.get("key")
-    }
+    ]
     warnings = []
     if not operator.strip():
         warnings.append(gettext_lazy("初始责任人为空（该风险单无责任人且未配置安全接口人兜底），工单可能被 BKSEC 拒收，请到系统配置设置安全接口人或调整映射"))

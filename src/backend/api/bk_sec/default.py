@@ -149,16 +149,10 @@ class PreviewTicketFields(BKSec):
         dynamic_values.update(validated_request_data.get("extra") or {})
 
         result = []
-        seen_keys = set()
         for item in mock_fields:
             if not isinstance(item, dict) or not item.get("key"):
                 continue
             key = item["key"]
-            seen_keys.add(key)
             result.append({**item, "value": dynamic_values.get(key, item.get("value"))})
-
-        for key, value in dynamic_values.items():
-            if key not in seen_keys:
-                result.append({"key": key, "name": key, "value": value, "type": "STRING"})
 
         return {"fields": result}
