@@ -27,9 +27,11 @@
         display-key="name"
         has-delete-icon
         :list="tagOptions"
+        :max-result="maxResult"
         :placeholder="t('请输入并Enter结束')"
         save-key="id"
         search-key="name"
+        :tag-tpl="renderTagItem"
         trigger="focus" />
       <div class="audit-inline-tag__actions">
         <audit-icon
@@ -73,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue';
+  import { computed, h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useMessage from '@hooks/use-message';
@@ -120,6 +122,14 @@
     }
     return res;
   }, [] as Array<{ id: string; name: string }>));
+
+  // bk-tag-input 默认每页只展示 10 条且滚动加载不稳定，一次性展示全部候选
+  const maxResult = computed(() => Math.max(tagOptions.value.length, 10));
+
+  // bk-tag-input 内置的标签渲染会缓存首次文案且列表无 key，删除中间标签后文案错位，看起来像删了最后一个
+  const renderTagItem = (node: { name: string }) => h('div', { class: 'tag' }, [
+    h('span', { class: 'text', title: node.name }, node.name),
+  ]);
 
   watch(() => props.isEditing, (editing) => {
     if (editing) {
