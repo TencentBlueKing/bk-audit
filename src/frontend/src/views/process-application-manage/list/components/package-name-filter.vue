@@ -104,7 +104,7 @@
 }
 
 .package-name-filter-search {
-  margin-bottom: 8px;
+  margin-bottom: var(--bk-theme-space-8);
 }
 
 .package-name-filter-list {
@@ -122,7 +122,7 @@
   display: block;
   width: 100%;
   height: 32px;
-  padding: 0 4px;
+  padding: 0 var(--bk-theme-space-4);
   line-height: 32px;
 
   :deep(.bk-checkbox) {
@@ -140,10 +140,10 @@
 }
 
 .package-name-filter-empty {
-  padding: 8px 0 4px;
+  padding: var(--bk-theme-space-8) 0 var(--bk-theme-space-4);
   font-size: 12px;
   line-height: 20px;
-  color: var(--audit-neutral-text-03);
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 </style>

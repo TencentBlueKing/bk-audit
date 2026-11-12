@@ -85,7 +85,7 @@
                   {{ t('确认') }}
                 </bk-button>
                 <bk-button
-                  class="ml16"
+                  class="column-cancel"
                   size="small"
                   @click="handleColumnCancel">
                   {{ t('取消') }}
@@ -172,12 +172,12 @@
               style="height: 280px;padding-top: 40px;"
               type="search-empty">
               <div>
-                <div style="color: #63656e;">
+                <div style="color: var(--bk-theme-text-default);">
                   {{ t('搜索结果为空') }}
                 </div>
                 <div
                   v-if="!isNeedHideClearSearchTip"
-                  style="margin-top: 8px; color: #979ba5;">
+                  style="margin-top: 8px; color: var(--bk-theme-text-weak);">
                   {{ t('可以尝试调整关键词') }} {{ t('或') }}
                   <bk-button
                     text
@@ -191,7 +191,7 @@
             <bk-exception
               v-else
               scene="part"
-              style="height: 280px;padding-top: 40px;color: #63656e;"
+              style="height: 280px;padding-top: 40px;color: var(--bk-theme-text-default);"
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>
@@ -252,7 +252,6 @@
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
-  import '@blueking/tdesign-ui/vue3/index.css';
   import { getSceneSystemParams, isSceneSelectorSentinelId } from '@/utils/assist/scene-system-params';
 
   export interface IPagination {
@@ -1518,8 +1517,8 @@
     if (resizeTimer) clearTimeout(resizeTimer);
   });
 
-  const TABLE_HEADER_HEIGHT = 44;
-  const TABLE_ROW_HEIGHT = 44;
+  const TABLE_HEADER_HEIGHT = 42;
+  const TABLE_ROW_HEIGHT = 42;
   const TABLE_PADDING = 8;
 
   /** 根据传入的表格高度计算可显示行数 */
@@ -1729,7 +1728,19 @@
 
 .audit-tdesign-list {
   position: relative;
-  border: 1px solid #e1e6f0;
+  overflow: hidden;
+  border: var(--bk-theme-table-frame-border);
+  border-radius: var(--bk-theme-table-frame-radius);
+
+  /* 表格区与分页都贴外层，用外层裁切保证首尾圆角；齿轮浮层挂在 body 不受影响。
+     放进 .bk-theme-card 后 table-frame 场景变量被改写为 0 / none，外框自动消失 */
+  > .bk-nested-loading > .tdesign-list-table-area {
+    border-radius: var(--bk-theme-table-frame-radius) var(--bk-theme-table-frame-radius) 0 0;
+  }
+
+  .tdesign-list-pagination {
+    border-radius: 0 0 var(--bk-theme-table-frame-radius) var(--bk-theme-table-frame-radius);
+  }
 }
 
 .setings {
@@ -1737,20 +1748,36 @@
   top: 0;
   right: 0;
   z-index: 1000;
-  height: 42px;
-  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--bk-theme-table-row-height);
+  overflow: hidden;
+  background-color: var(--bk-theme-table-header-bg);
+  border-bottom: 1px solid var(--bk-theme-table-header-divider);
+  border-radius: var(--bk-theme-tag-radius);
+  box-sizing: border-box;
+
+  .bk-popover,
+  .bk-popover-reference {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
 
   .setting-btn-icon {
-    display: block;
-    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    height: 16px;
+    padding: 0 var(--bk-theme-space-4);
     font-size: 16px;
-    line-height: 42px;
-    color: #c4c6cc;
+    line-height: 1;
+    color: var(--bk-theme-text-disabled);
     cursor: pointer;
-    background-color: #fafbfd;
 
     &:hover {
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 }
@@ -1759,12 +1786,12 @@
 .audit-tdesign-list .tdesign-list tr.new-row {
   td,
   th {
-    background-color: #e4faf0 !important;
+    background-color: var(--bk-theme-table-row-new-bg) !important;
   }
 
   &:hover td,
   &:hover th {
-    background-color: #d8f5e6 !important;
+    background-color: var(--bk-theme-table-row-new-hover-bg) !important;
   }
 }
 
@@ -1772,14 +1799,14 @@
 .tdesign-list-filter-result {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 .tdesign-list-pagination {
   width: 100%;
-  padding: 12px 16px;
-  margin-top: 16px;
-  background-color: #fff;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+  margin-top: var(--bk-theme-table-pagination-gap);
+  background-color: var(--bk-theme-surface-default);
 
   .bk-pagination {
     .is-last {
@@ -1798,11 +1825,11 @@
     padding: 0;
     margin-left: auto;
     font-size: 16px;
-    color: #c4c6cc;
+    color: var(--bk-theme-text-disabled);
     cursor: pointer;
 
     &:hover {
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 }
@@ -1816,12 +1843,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
 
   .column-popover-title {
     font-size: 18px;
     font-weight: 500;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .column-popover-close {
@@ -1830,13 +1857,13 @@
     height: 24px;
     padding: 0;
     font-size: 16px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     cursor: pointer;
     align-items: center;
     justify-content: center;
 
     &:hover {
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 }
@@ -1845,18 +1872,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
 
   .column-popover-section-title {
     font-size: 14px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 }
 
 .column-popover-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 5px 0;
+  gap: var(--bk-theme-space-4) 0;
   overflow-y: auto;
   align-items: start;
 
@@ -1869,9 +1896,9 @@
 .column-popover-footer {
   display: flex;
   width: 100%;
-  padding: 12px 16px 0;
-  margin-top: 16px;
-  border-top: 1px solid #dcdee5;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-16) 0;
+  margin-top: var(--bk-theme-space-16);
+  border-top: 1px solid var(--bk-theme-border-default);
   justify-content: end;
 }
 
@@ -1900,22 +1927,22 @@
 .tdesign-list-table-area.has-select-banner :deep(.t-table__content tr.t-table__first-full-row > td) {
   height: 32px !important;
   padding: 0 !important;
-  background-color: #f0f5ff !important;
-  border-bottom-color: #f0f5ff !important;
+  background-color: var(--bk-theme-table-select-banner-bg) !important;
+  border-bottom-color: var(--bk-theme-table-select-banner-bg) !important;
 }
 
 .tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-left),
 .tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-right),
 .tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-left-last),
 .tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-right-first) {
-  background-color: #f0f5ff !important;
+  background-color: var(--bk-theme-table-select-banner-bg) !important;
 }
 
 .tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__row-full-inner),
 .tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__row-full-element) {
   height: 32px;
   min-height: 32px;
-  background-color: #f0f5ff;
+  background-color: var(--bk-theme-table-select-banner-bg);
 }
 
 .tdesign-list-select-banner-bar {
@@ -1924,24 +1951,24 @@
   left: 0;
   z-index: 35;
   display: flex;
-  padding: 0 16px;
+  padding: 0 var(--bk-theme-space-16);
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   pointer-events: auto;
   cursor: default;
-  background: #f0f5ff;
+  background: var(--bk-theme-table-select-banner-bg);
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 }
 
 .tdesign-list-select-banner-clear {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 
   &:hover {
-    color: #699df4;
+    color: var(--bk-theme-color-brand-3);
   }
 }
 
@@ -1996,7 +2023,7 @@
   margin: 0;
   transform: translateY(-50%);
   align-items: center;
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
 }
 
 :deep(.tdesign-list-select-banner-placeholder) {
@@ -2004,11 +2031,11 @@
 }
 
 :deep(.cross-page-select-header) {
-  gap: 6px;
+  gap: var(--bk-theme-space-6);
 
   .pop-menu {
     z-index: 3000;
   }
 }
-
+  .column-cancel { margin-left: var(--bk-theme-space-16); }
 </style>

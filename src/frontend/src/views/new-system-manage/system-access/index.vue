@@ -53,7 +53,7 @@
         <div class="btn">
           <div
             class="btn-icon"
-            :style="pendingList.length > 0 ? '' : 'background: #F5F7FA;'">
+            :style="pendingList.length > 0 ? '' : 'background: #f5f7fa;'">
             <img
               class="btn-icon-add"
               :src="pendingList.length > 0 ? ImportActiveSvg : ImportSvg">
@@ -302,7 +302,7 @@
   position: relative;
   width: 100vw;
   height: 100vh;
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
   transition: width .3s;
 
   &.with-sidebar {
@@ -327,7 +327,7 @@
     height: 31px;
     font-size: 24px;
     letter-spacing: 0;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     transform: translateX(-50%);
   }
 
@@ -339,11 +339,11 @@
     font-size: 14px;
     line-height: 22px;
     letter-spacing: 0;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     transform: translateX(-50%);
 
     .text-link {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: progress;
     }
   }
@@ -355,7 +355,7 @@
     display: flex;
     font-size: 14px;
     letter-spacing: 0;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     transform: translateX(-50%);
 
     .btn {
@@ -363,26 +363,26 @@
       width: 488px;
       height: 124px;
       cursor: pointer;
-      background: #fff;
-      border-radius: 3px;
-      box-shadow: 0 2px 4px 0 #1919290d;
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
+      box-shadow: var(--bk-theme-card-shadow);
 
       .btn-icon {
         position: relative;
         top: 30px;
         width: 64px;
         height: 64px;
-        margin-left: 20px;
+        margin-left: var(--bk-theme-space-16);
         cursor: pointer;
-        background: #e1ecff;
-        border-radius: 8px;
+        background: var(--bk-theme-fill-selected);
+        border-radius: var(--bk-theme-message-radius);
 
         .btn-icon-add {
           position: absolute;
           top: 50%;
           left: 50%;
           font-size: 33px;
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
           transform: translate(-50%, -50%);
         }
       }
@@ -392,47 +392,47 @@
 
         .access-text-top {
           height: 24px;
-          margin-top: 24px;
-          margin-left: 15px;
+          margin-top: var(--bk-theme-space-24);
+          margin-left: var(--bk-theme-space-16);
           font-size: 16px;
           font-weight: 700;
           line-height: 24px;
           letter-spacing: 0;
-          color: #313238;
+          color: var(--bk-theme-text-strong);
 
           .text-top-num {
             display: inline-block;
             height: 24px;
-            padding-right: 5px;
-            padding-left: 5px;
-            margin-left: 10px;
+            padding-right: var(--bk-theme-space-4);
+            padding-left: var(--bk-theme-space-4);
+            margin-left: var(--bk-theme-space-12);
             font-size: 10px;
             line-height: 24px;
-            color: #1768ef;
+            color: var(--bk-theme-color-brand-1);
             text-align: center;
-            background-color: #e1ecff;
-            border-radius: 2px;
+            background-color: var(--bk-theme-fill-selected);
+            border-radius: var(--bk-theme-tag-radius);
           }
         }
 
         .access-text-bottom {
           width: 95%;
           height: 24px;
-          margin-top: 8px;
-          margin-left: 15px;
+          margin-top: var(--bk-theme-space-8);
+          margin-left: var(--bk-theme-space-16);
           font-size: 14px;
           line-height: 22px;
           letter-spacing: 0;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
       }
     }
 
     .btn-right {
-      margin-left: 10px;
+      margin-left: var(--bk-theme-space-12);
 
       .bk-select {
-        margin-top: 5px;
+        margin-top: var(--bk-theme-space-4);
 
       }
 
@@ -443,19 +443,19 @@
 
     .select-input {
       width: 488px;
-      margin-top: 5px;
-      background-color: #fff;
+      margin-top: var(--bk-theme-space-4);
+      background-color: var(--bk-theme-surface-default);
 
       .btn-icon-search1 {
-        margin-top: 8px;
+        margin-top: var(--bk-theme-space-8);
         font-size: 20px;
-        color: #979ba5;
-        background-color: #fff;
+        color: var(--bk-theme-text-weak);
+        background-color: var(--bk-theme-surface-default);
       }
 
       .list {
         height: 20vh;
-        margin-top: 5px;
+        margin-top: var(--bk-theme-space-4);
         overflow: auto;
 
         .list-btn {
@@ -465,17 +465,17 @@
           font-size: 12px;
           line-height: 32px;
           letter-spacing: 0;
-          color: #63656e;
+          color: var(--bk-theme-text-default);
           cursor: pointer;
           justify-content: space-between;
 
           &:hover {
-            background: #f5f7fa;
+            background: var(--bk-theme-surface-subtle);
           }
 
           &.list-btn-active {
-            color: #3a84ff;
-            background: #e1ecff;
+            color: var(--bk-theme-color-brand-2);
+            background: var(--bk-theme-fill-selected);
           }
 
           .list-btn-name {
@@ -494,14 +494,14 @@
 
             .list-btn-id {
               display: inline-block;
-              margin-left: 5px;
-              color: #c4c6cc;
+              margin-left: var(--bk-theme-space-4);
+              color: var(--bk-theme-border-strong);
             }
           }
 
           .list-btn-source {
             margin-right: 1%;
-            color: #c4c6cc;
+            color: var(--bk-theme-border-strong);
           }
 
         }
@@ -517,14 +517,14 @@
       .list-empty {
         position: relative;
         height: 20vh;
-        margin-top: 5px;
+        margin-top: var(--bk-theme-space-4);
         overflow: auto;
 
         .empty {
           position: absolute;
           top: 50%;
           left: 50%;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           transform: translate(-50%,-50%);
         }
       }

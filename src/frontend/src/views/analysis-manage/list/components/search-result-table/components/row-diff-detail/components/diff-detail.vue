@@ -110,16 +110,16 @@
 </script>
 <style lang="postcss">
 .diff-content {
-  padding: 28px 40px;
+  padding: var(--bk-theme-space-32) var(--bk-theme-space-32);
 
   .is-diff {
-    padding: 0 20px;
-    margin: 0 -20px;
+    padding: 0 var(--bk-theme-space-16);
+    margin: 0 -var(--bk-theme-space-16);
     background-color: rgb(255 232 195 / 20%);
   }
 
   .is-diff.active-color {
-    color: #ff9c01;
+    color: var(--bk-theme-color-warn-2);
   }
 }
 

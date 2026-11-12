@@ -373,16 +373,16 @@
 }
 
 .title {
-  padding-bottom: 10px;
+  padding-bottom: var(--bk-theme-space-12);
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .item {
   .item-child {
-    margin-left: 24px;
+    margin-left: var(--bk-theme-space-24);
   }
 }
 
@@ -390,25 +390,25 @@
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .item-child-content {
-  margin-left: 24px;
+  margin-left: var(--bk-theme-space-24);
 
 }
 
 .div-margin {
-  margin-top: 10px;
+  margin-top: var(--bk-theme-space-12);
 }
 
 .dot {
   display: inline-block;
   width: 10px;
   height: 10px;
-  margin-top: 10px;
-  margin-right: 10px;
-  background-color: #3a84ff;
+  margin-top: var(--bk-theme-space-12);
+  margin-right: var(--bk-theme-space-12);
+  background-color: var(--bk-theme-color-brand-2);
   border-radius: 50%
 }
 
@@ -416,35 +416,35 @@
   display: inline-block;
   width: 5px;
   height: 5px;
-  margin-top: 10px;
-  margin-right: 10px;
-  margin-left: 40px;
-  background-color: #c4c6cc;
+  margin-top: var(--bk-theme-space-12);
+  margin-right: var(--bk-theme-space-12);
+  margin-left: var(--bk-theme-space-32);
+  background-color: var(--bk-theme-border-strong);
   border-radius: 50%
 }
 
 .desc {
   font-size: 12px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .desc-tag {
   display: inline-block;
-  padding: 2px 4px;
-  margin-right: 5px;
-  margin-left: 5px;
+  padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
+  margin-right: var(--bk-theme-space-4);
+  margin-left: var(--bk-theme-space-4);
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
   color: #7f879b;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-tag-radius);
 
 }
 
 .span-color {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .span-color2 {
@@ -453,21 +453,20 @@
 
 .component-table {
   width: 98%;
-  font-family: Arial, sans-serif;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  font-family: Arial, sans-serif;border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .table-header {
   display: flex;
   font-weight: bold;
   background-color: #f5f5f5;
-  border-bottom: 1px solid #dcdee5;
+  border-bottom: 1px solid var(--bk-theme-border-default);
 }
 
 .table-row {
   display: flex;
-  border-bottom: 1px solid #dcdee5;
+  border-bottom: 1px solid var(--bk-theme-border-default);
 }
 
 .table-row:last-child {
@@ -475,43 +474,42 @@
 }
 
 .header-cell,
-.table-cell {
-  padding: 12px 15px;
+.table-cell {padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
   word-break: break-word;
   flex: 1;
 }
 
 .cell-middle {
-  border-right: 1px solid #dcdee5;
-  border-left: 1px solid #dcdee5;
+  border-right: 1px solid var(--bk-theme-border-default);
+  border-left: 1px solid var(--bk-theme-border-default);
 
 }
 
 .function-link {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
 .sql {
   width: 100%;
-  padding: 10px 5px;
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-4);
   font-size: 16px;
   line-height: 25px;
   letter-spacing: 0;
-  color: #c4c6cc;
+  color: var(--bk-theme-border-strong);
   background: #0f0503;
-  border-radius: 8px;
+  border-radius: var(--bk-theme-message-radius);
 }
 
 .sql-where {
-  margin-left: 16px;
+  margin-left: var(--bk-theme-space-16);
 }
 
 .sql-desc {
-  margin-left: 34px;
+  margin-left: var(--bk-theme-space-32);
 }
 </style>

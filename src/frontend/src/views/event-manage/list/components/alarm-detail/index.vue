@@ -18,8 +18,7 @@
   <div class="alarm-detail">
     <base-info :alarm-data="alarmData" />
     <base-table
-      :alarm-data="alarmData"
-      class="mt24" />
+      :alarm-data="alarmData" style="margin-top: var(--bk-theme-space-24)" />
   </div>
 </template>
 <script setup lang="ts">
@@ -36,6 +35,6 @@
 </script>
 <style lang="postcss" scoped>
   .alarm-detail {
-    padding: 24px;
+    padding: var(--bk-theme-space-24);
   }
 </style>

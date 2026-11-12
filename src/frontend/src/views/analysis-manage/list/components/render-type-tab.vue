@@ -56,23 +56,23 @@
 <style lang="postcss">
   .render-type-tab {
     display: flex;
-    padding: 3px;
+    padding: var(--bk-theme-space-4);
     margin-left: auto;
-    background: #eaebf0;
-    border-radius: 2px;
+    background: var(--bk-theme-border-weak);
+    border-radius: var(--bk-theme-tag-radius);
 
     .render-item {
       width: 100px;
       font-size: 14px;
       line-height: 26px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: center;
       cursor: pointer;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
 
       &.active {
         cursor: default;
-        background: #fff;
+        background: var(--bk-theme-surface-default);
       }
     }
   }

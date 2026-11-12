@@ -19,8 +19,8 @@
     <div class="mis-title">
       <span style="color: #313238">{{ data.operator }}</span>
       <span
-        class="ml8"
-        style="color: #979ba5">{{ data.time }}</span>
+       
+        style="color: #979ba5; margin-left: var(--bk-theme-space-8)">{{ data.time }}</span>
     </div>
     <div class="mis-content">
       <render-info-item
@@ -46,8 +46,8 @@
       </template>
       <render-info-item
         v-else
-        class="mt8"
-        :label="t('处理说明')">
+       
+        :label="t('处理说明')" style="margin-top: var(--bk-theme-space-8)">
         <!-- eslint-disable vue/no-v-html -->
         <div
           class="description-html"
@@ -306,22 +306,21 @@
   ]);
 </script>
 <style scoped lang="postcss">
-.reopen-mis-report-wrap {
-  padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #eaebf0;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px 0 #0000000a;
+.reopen-mis-report-wrap {padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-weak);
+  border-radius: var(--bk-theme-control-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 
   .mis-title {
     font-size: 12px;
   }
 
   >.mis-content {
-    padding: 12px 0;
-    margin-top: 8px;
-    background: #f5f7fa;
-    border-radius: 4px;
+    padding: var(--bk-theme-space-12) 0;
+    margin-top: var(--bk-theme-space-8);
+    background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
 
     .render-info-item {
       align-items: flex-start;
@@ -343,7 +342,7 @@
 
       :deep(.info-value) {
         min-width: 0;
-        padding-left: 4px;
+        padding-left: var(--bk-theme-space-4);
         line-height: 20px;
         flex: 1;
       }
@@ -361,36 +360,35 @@
   white-space: normal;
 
   :deep(p) {
-    margin: 0 0 8px;
+    margin: 0 0 var(--bk-theme-space-8);
   }
 
   :deep(.ql-report-table) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
   }
 
   :deep(table),
   :deep(.report-table) {
     width: 100%;
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
     font-size: 12px;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
     border-collapse: collapse;
     table-layout: auto;
   }
 
   :deep(th),
-  :deep(td) {
-    padding: 8px 10px;
-    color: #313238;
+  :deep(td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+    color: var(--bk-theme-text-strong);
     text-align: left;
     vertical-align: top;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(thead th) {
     font-weight: 600;
-    color: #313238;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
   }
 
   :deep(h1),
@@ -399,24 +397,23 @@
   :deep(h4),
   :deep(h5),
   :deep(h6) {
-    margin: 8px 0;
+    margin: var(--bk-theme-space-8) 0;
     font-weight: 600;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   :deep(ul),
   :deep(ol) {
-    padding-left: 20px;
-    margin: 0 0 8px;
+    padding-left: var(--bk-theme-space-16);
+    margin: 0 0 var(--bk-theme-space-8);
   }
 
   :deep(blockquote),
-  :deep(.report-blockquote) {
-    padding: 6px 10px;
-    margin: 0 0 8px;
-    color: #63656e;
-    background: #f0f1f5;
-    border-left: 4px solid #dcdee5;
+  :deep(.report-blockquote) {padding: var(--bk-theme-space-6) var(--bk-theme-space-8);
+    margin: 0 0 var(--bk-theme-space-8);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
+    border-left: 4px solid var(--bk-theme-border-default);
   }
 
   :deep(img) {
@@ -429,7 +426,7 @@
 
   :deep(iframe) {
     max-width: 100%;
-    margin: 8px 0;
+    margin: var(--bk-theme-space-8) 0;
   }
 }
 
@@ -447,4 +444,5 @@
     display: none;
   }
 }
+
 </style>

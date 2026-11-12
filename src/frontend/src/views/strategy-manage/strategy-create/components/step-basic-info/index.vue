@@ -16,7 +16,7 @@
 -->
 <template>
   <smart-action
-    class="create-strategy-page"
+    class="create-strategy-page bk-theme-form--inline"
     :offset-target="getSmartActionOffsetTarget">
     <div class="create-strategy-main">
       <audit-form
@@ -30,10 +30,10 @@
             <div class="basic-info-fields">
                 <div class="basic-info-row flex-center">
                   <bk-form-item
-                    class="is-required mr16"
+                    class="is-required"
                     :label="t('策略名称')"
                     property="strategy_name"
-                    style="flex: 1;">
+                    style="flex: 1; margin-right: var(--bk-theme-space-16)">
                     <bk-input
                       v-model.trim="formData.strategy_name"
                       :maxlength="32"
@@ -123,20 +123,20 @@
         </bk-button>
         <bk-button
           v-if="showSaveDraftButton"
-          class="ml8"
-          @click="handleSaveDraft">
+         
+          @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
           {{ t('保存草稿') }}
         </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
-          class="ml8"
+         
           theme="primary"
-          @click="handleSaveCurrentStep">
+          @click="handleSaveCurrentStep" style="margin-left: var(--bk-theme-space-8)">
           {{ t('提交') }}
         </bk-button> -->
         <bk-button
-          class="ml8"
-          @click="handleCancel">
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
     </template>
@@ -741,7 +741,7 @@
   .flex-center {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: var(--bk-theme-space-16);
   }
 
   .basic-info-fields {
@@ -759,6 +759,7 @@
   }
 
   .scheme-fields {
+    --bk-theme-form-item-gap: var(--bk-theme-space-24);
     width: 100%;
 
     :deep(.bk-form-content) {
@@ -781,7 +782,6 @@
     :deep(.schedule-period-row .bk-form-item),
     :deep(.schedule-period-row .bk-form-content) {
       width: auto;
-      margin-bottom: 0;
     }
   }
 
@@ -791,15 +791,14 @@
     :deep(.bk-form-item) {
       flex: 1;
       min-width: 0;
-      margin-bottom: var(--audit-space-24);
     }
   }
 
   .create-strategy-main {
     display: flex;
-    padding-top: 4px;
-    padding-bottom: 1px;
-    margin-bottom: 24px;
+    padding-top: var(--bk-theme-space-4);
+    padding-bottom: var(--bk-theme-space-2);
+    margin-bottom: var(--bk-theme-space-24);
 
     .strategt-form {
       flex: 1;
@@ -807,33 +806,31 @@
       overflow: visible;
 
       :deep(.bk-form-item) {
-        margin-bottom: var(--audit-space-24);
         overflow: visible;
       }
 
       :deep(.basic-info-desc.bk-form-item),
       :deep(.dispatch-section .bk-form-item) {
-        margin-bottom: 0;
       }
 
       :deep(.bk-form-label) {
         height: auto;
         padding-bottom: 0;
-        margin-bottom: 6px;
-        font-size: var(--audit-font-size-sm);
-        line-height: var(--audit-line-height-sm);
-        color: var(--audit-neutral-text-02);
+        margin-bottom: var(--bk-theme-space-6);
+        font-size: var(--bk-theme-font-size-sm);
+        line-height: var(--bk-theme-line-height-sm);
+        color: var(--bk-theme-text-default);
       }
 
       :deep(.bk-form-item.is-required .bk-form-label::after) {
-        color: var(--audit-danger-02);
+        color: var(--bk-theme-color-danger-2);
       }
 
       :deep(.data-source-form-item),
       :deep(.expected-result-form-item) {
         width: 624px;
         max-width: 100%;
-        margin-bottom: var(--audit-space-24);
+        margin-bottom: var(--bk-theme-space-24);
       }
 
       :deep(.data-source-form-item:has(+ .other-table-detail)),
@@ -843,8 +840,8 @@
 
       :deep(.other-table-detail),
       :deep(.link-data-detail) {
-        margin-top: var(--audit-space-8);
-        margin-bottom: var(--audit-space-24);
+        margin-top: var(--bk-theme-space-8);
+        margin-bottom: var(--bk-theme-space-24);
       }
 
       :deep(.expected-result-form-item) {
@@ -888,7 +885,7 @@
 
       :deep(.bk-button-group) {
         .bk-button {
-          padding: 0 35px;
+          padding: 0 var(--bk-theme-space-32);
           font-size: 12px;
         }
       }
@@ -897,36 +894,36 @@
         :deep(.bk-button-group) {
           .bk-button {
             &:first-child:hover:not(.is-disabled, .is-selected) {
-              color: #ea3636;
-              border-color: #ea3636;
+              color: var(--bk-theme-color-danger-2);
+              border-color: var(--bk-theme-color-danger-2);
             }
 
             &:first-child.is-selected {
-              color: #fff;
-              background-color: #ea3636;
-              border-color: #ea3636;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-color-danger-2);
+              border-color: var(--bk-theme-color-danger-2);
             }
 
             &:nth-child(2):hover:not(.is-disabled, .is-selected) {
-              color: #ff9c01;
-              border-color: #ff9c01;
+              color: var(--bk-theme-color-warn-2);
+              border-color: var(--bk-theme-color-warn-2);
             }
 
             &:nth-child(2).is-selected {
-              color: #fff;
-              background-color: #ff9c01;
-              border-color: #ff9c01;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-color-warn-2);
+              border-color: var(--bk-theme-color-warn-2);
             }
 
             &:hover:not(.is-disabled, .is-selected) {
-              color: #979ba5;
-              border-color: #979ba5;
+              color: var(--bk-theme-text-weak);
+              border-color: var(--bk-theme-text-weak);
             }
 
             &.is-selected {
-              color: #fff;
-              background-color: #979ba5;
-              border-color: #979ba5;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-text-weak);
+              border-color: var(--bk-theme-text-weak);
             }
           }
         }
@@ -943,7 +940,7 @@
   }
 
   :deep(.tag-list .remove-tag) {
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .content {
@@ -955,14 +952,14 @@
 }
 
 .create_notice_group {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .refresh {
-  padding: 0 12px;
-  color: #979ba5;
+  padding: 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
 }
 
 .is-disabled {

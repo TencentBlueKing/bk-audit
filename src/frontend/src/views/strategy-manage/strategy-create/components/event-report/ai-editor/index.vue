@@ -794,9 +794,8 @@
 .rich-text-editor-container {
   display: flex;
   overflow: hidden;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  background: white;border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
   flex-direction: column;
 }
 
@@ -862,22 +861,22 @@
   display: flex;
   width: 100%;
   min-height: auto;
-  padding: 4px 12px;
+  padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
   margin: 0;
-  background: #f5f7fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: var(--bk-theme-surface-subtle);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-message-radius);
   align-items: center;
 }
 
 :deep(.ai-agent-content) {
   display: flex;
   height: 80px;
-  padding-top: 10px;
-  margin-left: 35px;
+  padding-top: var(--bk-theme-space-12);
+  margin-left: var(--bk-theme-space-32);
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
 }
 
 :deep(.ai-agent-label) {
@@ -886,7 +885,7 @@
   font-weight: 700;
   line-height: 22px;
   letter-spacing: 0;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 :deep(.ai-agent-prompt) {
@@ -896,7 +895,7 @@
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
   text-align: justify;
   text-overflow: ellipsis;
   word-break: break-word;
@@ -910,7 +909,7 @@
   top: 20px;
   right: 8px;
   display: flex;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 :deep(.ai-agent-edit),
@@ -934,15 +933,13 @@
 
 /* Quill编辑器样式调整 */
 :deep(.ql-editor) {
-  min-height: 400px;
-  padding: 12px 20px;
+  min-height: 400px;padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
 }
 
 :deep(.ql-editor.ql-blank::before) {
-  font-style: normal;
-  color: #999;
+  font-style: normal;color: var(--bk-theme-text-weak);
 }
 
 /* 移除AI智能体块周围的默认间距 */
@@ -952,7 +949,7 @@
 }
 
 :deep(.ql-editor p) {
-  margin: 0 0 12px;
+  margin: 0 0 var(--bk-theme-space-12);
   line-height: 1.5;
 }
 
@@ -964,43 +961,42 @@
 :deep(.ql-editor h6),
 :deep(.ql-editor ul),
 :deep(.ql-editor ol) {
-  margin: 0 0 12px;
+  margin: 0 0 var(--bk-theme-space-12);
 }
 
 :deep(.ql-editor ul),
 :deep(.ql-editor ol) {
-  padding-left: 20px;
+  padding-left: var(--bk-theme-space-16);
 }
 
 :deep(.ql-editor li) {
-  margin-bottom: 4px;
+  margin-bottom: var(--bk-theme-space-4);
 }
 
 :deep(.ql-editor .ql-report-table) {
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
 }
 
 :deep(.ql-editor table) {
   width: 100%;
-  margin: 0 0 16px;
+  margin: 0 0 var(--bk-theme-space-16);
   font-size: 14px;
   border-collapse: collapse;
   table-layout: auto;
 }
 
 :deep(.ql-editor th),
-:deep(.ql-editor td) {
-  padding: 10px 12px;
-  color: #313238;
+:deep(.ql-editor td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+  color: var(--bk-theme-text-strong);
   text-align: left;
   vertical-align: top;
-  border: 1px solid #dcdee5;
+  border: 1px solid var(--bk-theme-border-default);
 }
 
 :deep(.ql-editor thead th) {
   font-weight: 600;
-  color: #313238;
-  background: #f5f7fa;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-subtle);
 }
 
 /* 自定义工具栏按钮样式 - 文字按钮 */
@@ -1008,11 +1004,11 @@
 :deep(.ql-toolbar .ql-aiagent),
 :deep(.ql-toolbar .ql-table) {
   width: auto !important;
-  padding: 0 8px !important;
-  margin: 0 4px;
+  padding: 0 var(--bk-theme-space-8) !important;
+  margin: 0 var(--bk-theme-space-4);
   font-size: 14px !important;
   line-height: 24px !important;
-  color: #3a84ff !important;
+  color: var(--bk-theme-color-brand-2) !important;
   cursor: pointer;
   background: transparent !important;
   border: none !important;
@@ -1024,7 +1020,7 @@
 :deep(.ql-toolbar .ql-variable:hover),
 :deep(.ql-toolbar .ql-aiagent:hover),
 :deep(.ql-toolbar .ql-table:hover) {
-  color: #3a84ff !important;
+  color: var(--bk-theme-color-brand-2) !important;
   background-color: transparent !important;
   opacity: 80%;
 }
@@ -1032,7 +1028,7 @@
 :deep(.ql-toolbar .ql-fullscreen) {
   width: 28px !important;
   height: 24px !important;
-  padding: 0 4px !important;
+  padding: 0 var(--bk-theme-space-4) !important;
 }
 
 :deep(.ql-toolbar .ql-fullscreen .fullscreen-icon) {
@@ -1046,14 +1042,14 @@
 :deep(.ql-toolbar.toolbar-disabled .ql-variable),
 :deep(.ql-toolbar.toolbar-disabled .ql-aiagent),
 :deep(.ql-toolbar.toolbar-disabled .ql-table) {
-  color: #c4c6cc !important;
+  color: var(--bk-theme-border-strong) !important;
   cursor: not-allowed !important;
 }
 
 :deep(.ql-toolbar.toolbar-disabled .ql-variable:hover),
 :deep(.ql-toolbar.toolbar-disabled .ql-aiagent:hover),
 :deep(.ql-toolbar.toolbar-disabled .ql-table:hover) {
-  color: #c4c6cc !important;
+  color: var(--bk-theme-border-strong) !important;
   opacity: 100% !important;
 }
 

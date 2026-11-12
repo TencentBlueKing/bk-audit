@@ -7,7 +7,7 @@
     width="720"
     @closed="handleClosed">
     <div
-      class="batch-confirm-wrap"
+      class="batch-confirm-wrap bk-theme-form--compact"
       data-testid="batch-confirm-dialog">
       <bk-form
         ref="formRef"
@@ -111,9 +111,9 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         :disabled="isSubmitting"
-        @click="handleCancel">
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -326,33 +326,31 @@
   }
 
   .batch-confirm-wrap :deep(.bk-form-item) {
-    margin-bottom: 16px;
   }
 
   .batch-confirm-wrap :deep(.bk-form-item:last-child) {
-    margin-bottom: 0;
   }
 
   .batch-confirm-wrap :deep(.bk-form-label) {
     padding-bottom: 0;
-    margin-bottom: 6px;
+    margin-bottom: var(--bk-theme-space-6);
     font-size: 12px;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .batch-confirm-radios {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 24px;
+    gap: var(--bk-theme-space-8) var(--bk-theme-space-24);
   }
 
   .misreport-alert {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
   }
 
   .whitelist-together {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
   }
 
   .whitelist-together-wrap.is-disabled :deep(.bk-checkbox) {
@@ -364,7 +362,7 @@
     font-size: 12px;
     font-weight: 400;
     line-height: 20px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 
   :deep(.await-deal-rich-editor),
@@ -380,13 +378,13 @@
   }
 
   .batch-confirm-failures {
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
     font-size: 12px;
     line-height: 20px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 
   .batch-confirm-failures__title {
-    margin-bottom: 4px;
+    margin-bottom: var(--bk-theme-space-4);
   }
 </style>

@@ -35,7 +35,7 @@
     user-select: none;
 
     .loading-icon {
-      margin-right: 8px;
+      margin-right: var(--bk-theme-space-8);
       font-size: 14px;
       vertical-align: middle;
     }

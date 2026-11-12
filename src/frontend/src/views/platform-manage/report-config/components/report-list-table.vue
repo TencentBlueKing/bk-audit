@@ -8,6 +8,7 @@
     :columns="tableColumns"
     :data-source="dataSource"
     need-empty-search-tip
+    use-skeleton
     :row-class-name="rowClassName"
     row-key="id"
     @request-success="handleRequestSuccess" />
@@ -598,18 +599,18 @@
 <style lang="postcss" scoped>
   .action-cell {
     display: flex;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
   }
 
   .more-action-btn {
-    padding: 0 4px;
+    padding: 0 var(--bk-theme-space-4);
     font-size: 16px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     cursor: pointer;
 
     &:hover {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
@@ -619,7 +620,7 @@
     }
 
     :deep(.t-table__row--hover) {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
 
     :deep(.t-table td) {
@@ -647,9 +648,9 @@
 
   :deep(.jump-link) {
     flex-shrink: 0;
-    padding-left: 4px;
+    padding-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
   }
 
@@ -661,18 +662,18 @@
     .visibility-edit-icon {
       flex-shrink: 0;
       font-size: 14px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       cursor: pointer;
       visibility: hidden;
 
       &:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
 
     .visibility-empty {
       display: inline-flex;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
       align-items: center;
     }
 
@@ -711,26 +712,25 @@
 
     .action-item {
       display: block;
-      width: 100%;
-      padding: 8px 15px;
+      width: 100%;padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       cursor: pointer;
 
       &:hover {
-        background-color: #f5f7fa;
+        background-color: var(--bk-theme-surface-subtle);
       }
 
       &.danger {
-        color: #ea3636;
+        color: var(--bk-theme-color-danger-2);
       }
 
       &.disableddel {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: not-allowed;
 
         &:hover {
-          color: #c4c6cc;
+          color: var(--bk-theme-border-strong);
           background-color: transparent;
         }
       }

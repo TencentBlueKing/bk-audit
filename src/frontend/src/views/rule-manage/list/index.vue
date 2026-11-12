@@ -15,22 +15,18 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="strategyList">
-    <div
-      ref="rootRef"
-      class="rule-manage-wrap">
-      <div class="action-header">
+  <div
+    ref="rootRef"
+    class="rule-manage-wrap bk-theme-card">
+    <div class="action-header bk-theme-list-toolbar">
         <div class="btns-wrap">
           <auth-button
             action-id="create_rule_v2"
-            class="mr8"
+           
             :permission="permissionCheckData.create_rule_v2"
             resource-is-scene
             theme="primary"
-            @click="handleCreate">
+            @click="handleCreate" style="margin-right: var(--bk-theme-space-8)">
             <audit-icon
               style="margin-right: 8px;font-size: 14px;"
               type="add" />
@@ -61,7 +57,7 @@
       </div>
       <render-list
         ref="listRef"
-        class="audit-highlight-table mt16"
+        class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
         is-need-scene-id
@@ -69,9 +65,9 @@
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
+        use-skeleton
         @request-success="handleRequestSuccess" />
-    </div>
-  </skeleton-loading>
+  </div>
 
 
   <!-- 规则详情页 -->
@@ -89,8 +85,8 @@
         <span> {{ t('规则详情') }}</span>
         <div style="display: flex;align-items: center;">
           <span
-            class="mr8"
-            style="margin-left: 24px;font-size: 14px;color: #63656e;">
+           
+            style="margin-left: 24px;font-size: 14px;color: #63656e; margin-right: var(--bk-theme-space-8)">
             {{ t('启/停') }}
           </span>
           <auth-switch
@@ -119,16 +115,16 @@
           </template>
           <auth-button
             action-id="edit_rule_v2"
-            class="mr8 ml8"
+           
             :permission="permissionCheckData.edit_rule_v2"
             resource-is-scene
             theme="primary"
-            @click="()=>handleEdit(riskRuleDetailItem)">
+            @click="()=>handleEdit(riskRuleDetailItem)" style="margin-right: var(--bk-theme-space-8); margin-left: var(--bk-theme-space-8)">
             {{ t('编辑') }}
           </auth-button>
           <bk-button
-            class="mr8"
-            @click="()=>handleShowScopeRiskDetail(riskRuleDetailItem)">
+           
+            @click="()=>handleShowScopeRiskDetail(riskRuleDetailItem)" style="margin-right: var(--bk-theme-space-8)">
             {{ t('查看命中风险') }}
           </bk-button>
 
@@ -510,7 +506,6 @@
   const batchPrioritySliderRef = ref();
   const isSearching = ref(false);
   const rootRef = ref();
-  const isLoading = ref(false);
 
   const isNeedShowDetail = ref(false);
   const isNeedShowBatchPriorityIndexSldier = ref(false);
@@ -888,7 +883,7 @@
 }
 
 .rule-table :deep(thead th) {
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-subtle);
 }
 
 .rule-table :deep(.bk-table-body) {
@@ -896,8 +891,7 @@
 }
 
 .rule-manage-wrap {
-  padding: 16px;
-  background: #fff;
+  padding: var(--bk-theme-space-24);
 
   .action-header {
     display: flex;

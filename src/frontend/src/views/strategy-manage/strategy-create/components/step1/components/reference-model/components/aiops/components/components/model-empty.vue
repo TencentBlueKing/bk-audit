@@ -33,10 +33,10 @@
 </script>
 <style lang="postcss">
 .no-module {
-  padding-bottom: 24px;
+  padding-bottom: var(--bk-theme-space-24);
   font-size: 12px;
   line-height: 22px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 </style>

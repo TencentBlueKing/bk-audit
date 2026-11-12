@@ -45,10 +45,10 @@
 
         <div style="margin-top: 33px;">
           <bk-button
-            class="w88 mr8"
+            class="w88"
             :loading="saveLoading"
             theme="primary"
-            @click="handleSavePriorityIndex">
+            @click="handleSavePriorityIndex" style="margin-right: var(--bk-theme-space-8)">
             {{ t('保存') }}
           </bk-button>
           <bk-button
@@ -367,14 +367,14 @@
   max-height: calc(100vh - 280px);
 
   td {
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 
 }
 
 .bk-table .bk-table-head table tbody tr td.is-last,
 .bk-table .bk-table-body table tbody tr td.is-last {
-  border-bottom: 1px solid #dcdee5;
+  border-bottom: 1px solid var(--bk-theme-border-default);
 }
 
 /* 修改拖拽的icon的样式 */
@@ -384,11 +384,11 @@ tr.sortable-chosen {
   box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%), 0 2px 4px 0 rgb(25 25 41 / 5%);
 
   td {
-    background-color: #f0f5ff !important;
+    background-color: var(--bk-theme-select-banner-bg) !important;
   }
 
   .audit-icon {
-    color: #3a84ff !important;
+    color: var(--bk-theme-color-brand-2) !important;
   }
 
   td:nth-of-type(1) {

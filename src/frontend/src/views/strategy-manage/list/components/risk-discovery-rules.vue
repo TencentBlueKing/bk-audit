@@ -242,14 +242,14 @@
 </script>
 <style scoped lang="postcss">
 .risk-discovery-rules {
-  background: var(--audit-neutral-bg-04);
+  background: var(--bk-theme-surface-default);
 
   .rule-item-card {
-    margin-bottom: var(--audit-space-16);
+    margin-bottom: var(--bk-theme-space-16);
     overflow: hidden;
-    background: var(--audit-neutral-bg-02);
-    border: 1px solid var(--audit-neutral-border-02);
-    border-radius: var(--audit-radius-control);
+    background: var(--bk-theme-table-header-bg);
+    border: 1px solid var(--bk-theme-border-weak);
+    border-radius: var(--bk-theme-control-radius);
 
     &:last-child {
       margin-bottom: 0;
@@ -260,30 +260,30 @@
     display: flex;
     align-items: center;
     height: 32px;
-    padding: 0 var(--audit-space-16);
-    background: var(--audit-neutral-bg-01);
+    padding: 0 var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-muted);
   }
 
   .rule-name {
-    font-size: var(--audit-font-size-sm);
-    font-weight: var(--audit-font-weight-bold);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-size: var(--bk-theme-font-size-sm);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
   }
 
   .rule-item-content {
-    padding: var(--audit-space-16);
-    background: var(--audit-neutral-bg-02);
+    padding: var(--bk-theme-space-16);
+    background: var(--bk-theme-table-header-bg);
   }
 
   .rule-field-row {
     display: flex;
-    gap: var(--audit-space-8);
+    gap: var(--bk-theme-space-8);
     align-items: flex-start;
     min-height: 32px;
-    padding: 6px 0;
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
+    padding: var(--bk-theme-space-6) 0;
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
 
     &:last-child {
       margin-bottom: 0;
@@ -295,7 +295,7 @@
     width: 84px;
     min-width: 84px;
     overflow: visible;
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
     text-align: right;
     white-space: nowrap;
   }
@@ -303,7 +303,7 @@
   .rule-field-value {
     flex: 1 1 auto;
     min-width: 0;
-    color: var(--audit-neutral-text-01);
+    color: var(--bk-theme-text-strong);
     word-break: normal;
     overflow-wrap: break-word;
     white-space: normal;
@@ -329,18 +329,18 @@
   }
 
   .notice-group-tag {
-    margin: 0 4px 4px 0;
+    margin: 0 var(--bk-theme-space-4) var(--bk-theme-space-4) 0;
   }
 
   .risk-level-tag {
     display: inline-flex;
     align-items: center;
     height: 22px;
-    padding: 0 var(--audit-space-8);
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-bg-04);
-    border-radius: var(--audit-radius-control);
+    padding: 0 var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-inverse);
+    border-radius: var(--bk-theme-control-radius);
   }
 
   .risk-discovery-rules-empty {

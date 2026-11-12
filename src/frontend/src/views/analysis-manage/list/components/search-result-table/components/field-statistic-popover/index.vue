@@ -16,15 +16,19 @@
 -->
 <template>
   <bk-popover
+    ext-cls="field-statistic-popover"
     placement="bottom"
     theme="light"
-    trigger="click">
+    trigger="click"
+    @after-hidden="statisticActive = false"
+    @after-show="statisticActive = true">
     <template #default>
       <audit-icon
         v-bk-tooltips="{
           content: t('查看该字段数据统计'),
         }"
-        style=" padding-left: 6px;color: #3a84ff"
+        class="field-statistic-icon"
+        :class="{ 'is-active': statisticActive }"
         type="shujutongji"
         @click="handleClick" />
     </template>
@@ -33,86 +37,72 @@
         <div
           v-if="statisticData.results"
           class="statistic-content">
-          <div class="statistic-title">
-            <span>
-              {{ t('总行数') }}:
-              <span class="statistic-title-value">{{ statisticData.results.total_rows[0].total_rows }}</span>
+          <div class="statistic-overview">
+            <span class="overview-item">
+              <span class="overview-label">{{ t('总行数') }}:</span>
+              <span class="overview-value">{{ totalRows }}</span>
             </span>
-            <span style="margin: 0 32px;">
-              {{ t('出现行数') }}:
-              <span class="statistic-title-value">{{ statisticData.results.non_empty_rows[0].non_empty_rows }}</span>
+            <span class="overview-item">
+              <span class="overview-label">{{ t('出现行数') }}:</span>
+              <span class="overview-value">{{ nonEmptyRows }}</span>
             </span>
-            <span>
-              {{ t('日志条数') }}:
-              <span class="statistic-title-value">
-                {{ ((statisticData.results.non_empty_rows[0].non_empty_rows
-                  /statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
-              </span>
+            <span class="overview-item">
+              <span class="overview-label">{{ t('日志占比') }}:</span>
+              <span class="overview-value">{{ logRatio }}</span>
             </span>
           </div>
-          <template v-if="statisticData.results.max_value">
+          <template v-if="numberStats.length">
+            <div class="statistic-divider" />
             <div class="values-container">
-              <div class="item">
-                {{ t('最大值') }} <span class="item-count">{{ statisticData.results.max_value[0].max_value }}</span>
-              </div>
-              <div class="item">
-                {{ t('最小值') }} <span class="item-count">{{ statisticData.results.min_value[0].min_value }}</span>
-              </div>
-              <div class="item">
-                {{ t('平均值') }} <span class="item-count">{{ statisticData.results.avg_value[0].avg_value }}</span>
-              </div>
-              <div class="item">
-                {{ t('中位数') }} <span class="item-count">{{ statisticData.results.median_value[0].median_value }}</span>
+              <div
+                v-for="item in numberStats"
+                :key="item.label"
+                class="item">
+                {{ item.label }} <span class="item-count">{{ item.value }}</span>
               </div>
             </div>
           </template>
-          <template v-else>
-            <div class="statistic-stack">
-              <div
-                id="main"
-                style="height: 200px;" />
-              <ul class="legend">
-                <li
-                  v-for="(item, index) in statisticData.results.top_5_echarts_time_series.series"
-                  :key="item.name"
-                  class="legend-item">
-                  <div style="display: flex; align-items: center;">
-                    <div
-                      :style="{
-                        background: option.color[index],
-                        width: '12px',
-                        height: '12px',
-                        marginRight: '6px',
-                      }" />
-                    {{ item.name }}
-                  </div>
-                </li>
-              </ul>
-            </div>
+          <template v-if="chartSeries.length">
+            <div class="statistic-divider" />
+            <p class="statistic-chart-title">
+              {{ t('TOP5时序图') }}
+            </p>
+            <div
+              ref="chartRef"
+              class="statistic-chart" />
+            <ul class="statistic-legend">
+              <li
+                v-for="(item, index) in chartSeries"
+                :key="item.name"
+                class="legend-item">
+                <span
+                  class="legend-mark"
+                  :style="{ background: chartColors[index % chartColors.length] }" />
+                <span>{{ item.name }}</span>
+              </li>
+            </ul>
+          </template>
+          <template v-if="sortedValues.length">
+            <div class="statistic-divider" />
             <div class="statistic-field">
               <div class="title">
                 {{ t('去重后字段统计') }}
-                <span class="values-number">{{ statisticData.results.top_5_values.length }}</span>
+                <span class="values-number">{{ sortedValues.length }}</span>
               </div>
               <ul class="field-list">
                 <li
-                  v-for="(item, index) in statisticData.results.top_5_values"
+                  v-for="(item, index) in sortedValues"
                   :key="index"
                   class="field-list-item">
-                  <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <span>{{ item[props.fieldName] }}</span>
-                    <div style="color: #2dcb56;">
-                      <span>{{ item.count }}{{ t('条') }}</span>
-                      <span style="margin-left: 4px;">
-                        {{ ((item.count / statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
-                      </span>
-                    </div>
+                  <div class="field-row">
+                    <span class="field-name">{{ item[props.fieldName] }}</span>
+                    <span class="field-count">{{ item.count }}{{ t('条') }} {{ valuePercent(item.count) }}</span>
                   </div>
-                  <bk-progress
-                    :percent="(item.count / statisticData.results.total_rows[0].total_rows) * 100"
-                    :show-text="false"
-                    size="small"
-                    theme="success" />
+                  <div class="field-bar">
+                    <div
+                      class="field-bar-fill"
+                      :style="{ width: valuePercent(item.count) }" />
+                  </div>
                 </li>
               </ul>
             </div>
@@ -135,14 +125,16 @@
   import { LineChart } from 'echarts/charts';
   import {
     GridComponent,
-    LegendComponent,
-    TitleComponent,
-    ToolboxComponent,
     TooltipComponent } from 'echarts/components';
   import * as echarts from 'echarts/core';
   import { UniversalTransition } from 'echarts/features';
   import { CanvasRenderer } from 'echarts/renderers';
-  import { nextTick, ref } from 'vue';
+  import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import EsQueryService from '@service/es-query';
@@ -158,59 +150,27 @@
 
   const props = defineProps<Props>();
   const { t } = useI18n();
+  const statisticActive = ref(false);
+  const chartRef = ref<HTMLDivElement>();
+  let chartInstance: echarts.ECharts | null = null;
 
   echarts.use([
-    TitleComponent,
-    ToolboxComponent,
     TooltipComponent,
     GridComponent,
-    LegendComponent,
     LineChart,
     CanvasRenderer,
     UniversalTransition,
   ]);
 
-  const option = ref({
-    title: {
-      text: t('TOP5时序图'),
-    },
-    tooltip: {
-      trigger: 'axis',
-    },
-    grid: {
-      left: '5%',
-      right: '5%',
-      bottom: '5%',
-      containLabel: true,
-    },
-    color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'],
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: [] as string[],
-    },
-    yAxis: {
-      type: 'value',
-    },
-    series: [] as echarts.EChartsCoreOption['series'],
-  });
+  const readToken = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-  const setChart = () => {
-    const chart = document.getElementById('main');
-    const myChart = echarts.init(chart);
-    option.value.xAxis.data = statisticData.value.results.top_5_echarts_time_series.times.map((timestamp) => {
-      const date = new Date(timestamp);
-      return `${date.getHours().toString()
-        .padStart(2, '0')}:${date.getMinutes().toString()
-        .padStart(2, '0')}`;
-    });
-    option.value.series = statisticData.value.results.top_5_echarts_time_series.series.map(value => ({
-      name: value.name,
-      type: 'line',
-      data: value.data,
-    }));
-    option.value && myChart.setOption(option.value);
-  };
+  const chartColors = [
+    readToken('--bk-theme-color-brand-2'),
+    readToken('--bk-theme-color-success-2'),
+    readToken('--bk-theme-color-warn-2'),
+    readToken('--bk-theme-color-danger-2'),
+    readToken('--bk-theme-color-brand-3'),
+  ];
 
   // 获取统计数据
   const {
@@ -226,6 +186,78 @@
     },
   });
 
+  const totalRows = computed(() => statisticData.value.results?.total_rows?.[0]?.total_rows ?? 0);
+  const nonEmptyRows = computed(() => statisticData.value.results?.non_empty_rows?.[0]?.non_empty_rows ?? 0);
+  const logRatio = computed(() => {
+    if (!totalRows.value) return '--';
+    return `${((nonEmptyRows.value / totalRows.value) * 100).toFixed(2)}%`;
+  });
+  const chartSeries = computed(() => statisticData.value.results?.top_5_echarts_time_series?.series || []);
+  const sortedValues = computed(() => {
+    const values = statisticData.value.results?.top_5_values || [];
+    return [...values].sort((prev, next) => Number(next.count) - Number(prev.count));
+  });
+  const numberStats = computed(() => {
+    const results = statisticData.value.results;
+    if (!results?.max_value) return [];
+    return [
+      { label: t('最大值'), value: results.max_value[0]?.max_value },
+      { label: t('最小值'), value: results.min_value?.[0]?.min_value },
+      { label: t('平均值'), value: results.avg_value?.[0]?.avg_value },
+      { label: t('中位数'), value: results.median_value?.[0]?.median_value },
+    ];
+  });
+
+  const valuePercent = (count: number) => {
+    if (!totalRows.value) return '0.00%';
+    return `${((count / totalRows.value) * 100).toFixed(2)}%`;
+  };
+
+  const setChart = () => {
+    const series = chartSeries.value;
+    if (!chartRef.value || !series.length) return;
+    const textColor = readToken('--bk-theme-text-weak');
+    const lineColor = readToken('--bk-theme-border-weak');
+    const times = statisticData.value.results.top_5_echarts_time_series.times || [];
+    if (!chartInstance) {
+      chartInstance = echarts.init(chartRef.value);
+    }
+    chartInstance.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: {
+        left: 8,
+        right: 8,
+        top: 8,
+        bottom: 8,
+        containLabel: true,
+      },
+      color: chartColors,
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: lineColor } },
+        axisLabel: { color: textColor, fontSize: 12 },
+        data: times.map((timestamp) => {
+          const date = new Date(timestamp);
+          return `${date.getHours().toString()
+            .padStart(2, '0')}:${date.getMinutes().toString()
+            .padStart(2, '0')}`;
+        }),
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: textColor, fontSize: 12 },
+        splitLine: { lineStyle: { color: lineColor } },
+      },
+      series: series.map(value => ({
+        name: value.name,
+        type: 'line',
+        showSymbol: false,
+        data: value.data,
+      })),
+    });
+  };
+
   // 处理点击事件
   const handleClick = () => {
     const params = {
@@ -234,76 +266,196 @@
     };
     fetchSearchStatistic(params);
   };
+
+  onBeforeUnmount(() => {
+    chartInstance?.dispose();
+  });
 </script>
 
+<style lang="postcss">
+.bk-popover.bk-pop2-content.field-statistic-popover[data-theme^='light'] {
+  padding: 0;
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-overlay-radius);
+  box-shadow: var(--bk-theme-card-shadow);
+}
+
+.bk-popover.bk-pop2-content.field-statistic-popover[data-theme^='light'] .bk-pop2-arrow {
+  background: var(--bk-theme-surface-default);
+}
+</style>
 <style lang="postcss" scoped>
-.statistic-content {
-  .statistic-title {
-    padding-bottom: 10px;
-    border-bottom: 1px solid #dcdee5;
+.field-statistic-icon {
+  padding-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-text-weak);
+  cursor: pointer;
 
-    .statistic-title-value {
-      font-weight: 700;
-    }
-  }
-
-  .values-container {
-    display: flex;
-    margin-top: 12px;
-    flex-wrap: wrap;
-    gap: 10px;
-
-    .item {
-      height: 32px;
-      line-height: 32px;
-      text-align: center;
-      background: #f0f0f0;
-      box-sizing: border-box;
-      flex: 0 0 calc(50% - 5px);
-
-      .item-count {
-        font-weight: 700;
-      }
-    }
-  }
-
-  .statistic-stack {
-    margin-top: 12px;
-    border-bottom: 1px solid #dcdee5;
-
-    .legend {
-      padding: 0 10px;
-      padding-bottom: 10px;
-
-      .legend-item {
-        padding: 2px 0;
-        font-weight: 700;
-      }
-    }
-  }
-
-  .statistic-field {
-    margin-top: 12px;
-
-    .title {
-      margin-bottom: 12px;
-      font-weight: 700;
-
-      .values-number {
-        padding: 0 10px;
-        color: #979ba5;
-        background-color: #f0f1f5;
-        border-radius: 10px;
-      }
-    }
+  &:hover,
+  &.is-active {
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
-.statistic-empty {
+.statistic-content {
   display: flex;
-  justify-content: center;
+  width: 360px;
+  padding: var(--bk-theme-space-24);
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-overlay-radius);
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: var(--bk-theme-space-16);
+}
+
+.statistic-overview {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  gap: var(--bk-theme-space-8);
+}
+
+.overview-item {
+  display: flex;
+  gap: var(--bk-theme-space-4);
+  white-space: nowrap;
+}
+
+.overview-label {
+  color: var(--bk-theme-text-weak);
+}
+
+.overview-value {
+  font-weight: var(--bk-theme-font-weight-bold);
+}
+
+.statistic-divider {
+  height: 1px;
+  background: var(--bk-theme-border-default);
+}
+
+.statistic-chart-title {
+  margin: 0;
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-bold);
+  line-height: var(--bk-theme-line-height-base);
+}
+
+.statistic-chart {
+  width: 100%;
+  height: 160px;
+}
+
+.statistic-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bk-theme-space-16);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.legend-item {
+  display: flex;
   align-items: center;
-  height: 100px;
-  color: #979ba5;
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  gap: var(--bk-theme-space-8);
+}
+
+.legend-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--bk-theme-tag-radius);
+}
+
+.values-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bk-theme-space-8);
+
+  .item {
+    height: 32px;
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: 32px;
+    text-align: center;
+    background: var(--bk-theme-surface-muted);
+    box-sizing: border-box;
+    flex: 0 0 calc(50% - 4px);
+  }
+
+  .item-count {
+    font-weight: var(--bk-theme-font-weight-bold);
+  }
+}
+
+.statistic-field {
+  .title {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--bk-theme-space-16);
+    font-size: var(--bk-theme-font-size-sm);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-sm);
+    gap: var(--bk-theme-space-8);
+  }
+
+  .values-number {
+    display: inline-flex;
+    height: 18px;
+    padding: 0 var(--bk-theme-space-4);
+    font-size: var(--bk-theme-font-size-sm);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: 18px;
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tab-pill-radius);
+  }
+}
+
+.field-list {
+  display: flex;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  flex-direction: column;
+  gap: var(--bk-theme-space-16);
+}
+
+.field-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bk-theme-space-4);
+}
+
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  gap: var(--bk-theme-space-8);
+}
+
+.field-name {
+  color: var(--bk-theme-text-strong);
+}
+
+.field-count {
+  color: var(--bk-theme-text-default);
+  white-space: nowrap;
+}
+
+.field-bar {
+  height: 6px;
+  overflow: hidden;
+  background: var(--bk-theme-surface-muted);
+  border-radius: var(--bk-theme-tab-pill-radius);
+}
+
+.field-bar-fill {
+  height: 6px;
+  background: var(--bk-theme-color-success-2);
+  border-radius: var(--bk-theme-tab-pill-radius);
 }
 </style>

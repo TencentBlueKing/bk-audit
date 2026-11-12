@@ -266,38 +266,36 @@
 .head-tip {
   width: 96%;
   height: 32px;
-  margin-top: 10px;
+  margin-top: var(--bk-theme-space-12);
   margin-left: 2%;
   line-height: 32px;
-  background: #f0f5ff;
-  border: 1px solid #a3c5fd;
-  border-radius: 2px;
+  background: var(--bk-theme-select-banner-bg);
+  border: 1px solid var(--bk-theme-color-brand-4);
+  border-radius: var(--bk-theme-tag-radius);
 
   .info-fill {
-    margin-left: 5px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 
   .tip-title {
-    margin-left: 5px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 12px;
 
     .add {
-      color: #2caf5e;
+      color: var(--bk-theme-color-success-2);
     }
 
-    .del {
-      color: #e02020;
+    .del {color: var(--bk-theme-color-danger-2);
     }
 
-    .update {
-      color: #f59500;
+    .update {color: var(--bk-theme-color-warn-2);
     }
   }
 
   .title-add {
-    margin-left: 10px;
+    margin-left: var(--bk-theme-space-12);
     font-size: 12px;
   }
 
@@ -307,7 +305,7 @@
   width: 96%;
   height: auto;
   max-height: 85vh;
-  margin-top: 10px;
+  margin-top: var(--bk-theme-space-12);
   margin-left: 2%;
   overflow: auto;
 }
@@ -317,23 +315,23 @@
   bottom: 20px;
   width: 100%;
   height: 48px;
-  background: #fafbfd;
-  box-shadow: 0 -1px 0 0 #dcdee5;
+  background: var(--bk-theme-table-header-bg);
+  border-top: 1px solid var(--bk-theme-border-default);
 
   .primary {
     height: 32px;
-    padding-right: 20px;
-    padding-left: 20px;
-    margin-top: 20px;
-    margin-left: 20px;
+    padding-right: var(--bk-theme-space-16);
+    padding-left: var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-16);
+    margin-left: var(--bk-theme-space-16);
   }
 
   .close {
     height: 32px;
-    padding-right: 20px;
-    padding-left: 20px;
-    margin-top: 20px;
-    margin-left: 20px;
+    padding-right: var(--bk-theme-space-16);
+    padding-left: var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-16);
+    margin-left: var(--bk-theme-space-16);
   }
 }
 </style>

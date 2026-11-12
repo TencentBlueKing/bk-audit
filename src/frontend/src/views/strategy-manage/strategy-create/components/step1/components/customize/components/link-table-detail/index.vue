@@ -345,12 +345,12 @@
 </script>
 <style scoped lang="postcss">
 .link-data-detail {
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
 
   .detail-wrapper {
-    padding: 16px;
-    margin-top: 8px;
-    background-color: #f5f7fa;
+    padding: var(--bk-theme-space-16);
+    margin-top: var(--bk-theme-space-8);
+    background-color: var(--bk-theme-surface-subtle);
 
     .detail-table {
       display: flex;
@@ -361,29 +361,27 @@
     .detail-table-body {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
       flex: 1;
 
       .right-name,
-      .left-name {
-        padding: 5px 8px;
-        background-color: #eaebf0;
-        border: 1px solid #dcdee5;
+      .left-name {padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
+        background-color: var(--bk-theme-border-weak);
+        border: 1px solid var(--bk-theme-border-default);
       }
 
       .right-field,
-      .left-field {
-        padding: 5px 8px;
-        background-color: #fff;
-        border: 1px solid #dcdee5;
+      .left-field {padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
+        background-color: var(--bk-theme-surface-default);
+        border: 1px solid var(--bk-theme-border-default);
       }
 
       .join-type {
         display: flex;
         height: 80%;
-        padding: 0 5px;
+        padding: 0 var(--bk-theme-space-4);
         margin: auto;
-        background-color: #e1ecff;
+        background-color: var(--bk-theme-fill-selected);
         align-items: center
       }
     }

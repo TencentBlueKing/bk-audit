@@ -203,7 +203,7 @@
   font-size: 14px;
   line-height: 22px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
   align-items: center;
 
   .top-icon {
@@ -212,9 +212,9 @@
     height: 42px;
     padding: 0;
     cursor: pointer;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
 
-    /* border: 1px solid #dcdee5; */
+    /* border: 1px solid var(--bk-theme-border-default); */
   }
 
   .left-icon {
@@ -244,21 +244,21 @@
       height: 100%;
       max-width: 180px;
       min-width: 100px;
-      padding: 0 15px;
+      padding: 0 var(--bk-theme-space-16);
       overflow: hidden;
       line-height: 42px;
       text-align: center;
       text-overflow: ellipsis;
       white-space: nowrap;
       cursor: pointer;
-      background: #fafbfd;
-      border: 1px solid #dcdee5;
+      background: var(--bk-theme-table-header-bg);
+      border: 1px solid var(--bk-theme-border-default);
       border-top: none;
     }
 
     .active-item {
-      color: #3a84ff;
-      background: #fff;
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-surface-default);
       border: none;
     }
   }

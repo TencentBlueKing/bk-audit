@@ -72,6 +72,9 @@
         offset: [0, 8],
         zIndex: 99999,
         hideOnClick: false,
+        onCreate(instance) {
+          instance.popper.classList.add('analysis-desc-popper');
+        },
         onShow() {
           emits('afterShow');
         },
@@ -91,27 +94,53 @@
   });
 </script>
 <style lang="postcss">
+  .analysis-desc-popper .tippy-box[data-theme~='light'] {
+    color: var(--bk-theme-text-strong);
+    background-color: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-overlay-radius);
+    box-shadow: var(--bk-theme-card-shadow);
+  }
+
+  .analysis-desc-popper .tippy-box[data-theme~='light'] > .tippy-arrow::before {
+    border-right-color: var(--bk-theme-surface-default);
+    border-left-color: var(--bk-theme-surface-default);
+  }
+
+  .analysis-desc-popper .tippy-content {
+    padding: 0;
+  }
+
   .analysis-row-popover {
-    font-size: 12px;
+    /* width 是内容宽，和主题前一致。全局 border-box 会把内边距吃进宽度，时间列会被挤换行。 */
+    box-sizing: content-box;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
 
     .hover-table {
-      padding: 11px 2px;
+      padding: 0;
 
       .hover-table-content {
         width: 100%;
       }
 
       .hover-table-title {
-        color: #979ba5;
-        text-align: center;
-        background-color: #fafbfd;
+        padding: var(--bk-theme-space-4) 0;
+        color: var(--bk-theme-text-weak);
+        text-align: right;
+        background-color: transparent;
       }
 
       .hover-table-value {
         position: relative;
-        padding: 5px 12px;
-        color: #63656e;
-        word-break: break-all;
+        padding: var(--bk-theme-space-4) 0 var(--bk-theme-space-4) var(--bk-theme-space-8);
+        color: var(--bk-theme-text-strong);
+        word-break: normal;
+        overflow-wrap: anywhere;
+
+        a {
+          color: var(--bk-theme-color-brand-2);
+        }
 
         .max-line-clamp {
           display: -webkit-box;
@@ -122,33 +151,33 @@
 
         .copy-btn {
           position: absolute;
-          right: 12px;
-          bottom: 5px;
+          right: 0;
+          bottom: var(--bk-theme-space-4);
           cursor: pointer;
 
           &:hover {
-            color: #3a84ff;
+            color: var(--bk-theme-color-brand-2);
           }
         }
       }
 
       .hover-table-content tr td {
-        height: 36px;
-        border-top: 1px solid #dcdee5;
-        border-right: 1px solid #dcdee5;
-        border-left: 1px solid #dcdee5;
+        height: auto;
+        vertical-align: top;
+        border: none;
+      }
+    }
+
+    /* 资源实例字段名来自接入 schema，84px 放不下「是否开启系统诊断推送」这类 10 字标签。
+       标签单行，值列至少放下完整时间，长 URL 在列内换行。 */
+    .instance-hover-table {
+      .hover-table-title {
+        white-space: nowrap;
       }
 
-      .hover-table-content tr .border-left-none {
-        border-left: none;
-      }
-
-      .hover-table-content tr .border-bottom {
-        border-bottom: 1px solid #dcdee5;
-      }
-
-      .hover-table-content tr:last-child td {
-        border-bottom: 1px solid #dcdee5;
+      .hover-table-value {
+        min-width: calc(var(--bk-theme-space-32) * 4);
+        max-width: calc(var(--bk-theme-space-32) * 8);
       }
     }
   }

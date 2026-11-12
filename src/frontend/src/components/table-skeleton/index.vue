@@ -147,8 +147,7 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    overflow: hidden;
-    border-radius: 4px 4px 0 0;
+    overflow: hidden;border-radius: var(--bk-theme-tag-radius) var(--bk-theme-tag-radius) 0 0;
     animation: audit-skeleton-fade-in 0.3s ease-in-out;
   }
 
@@ -156,17 +155,13 @@
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    width: 100%;
-    background: #f0f4fa;
-    border-bottom: 1px solid #e4e9f2;
+    width: 100%;background: var(--bk-theme-surface-subtle);border-bottom: 1px solid var(--bk-theme-border-weak);
   }
 
   .audit-table-skeleton__header-bar {
     flex-shrink: 0;
     max-width: 100%;
-    height: 14px;
-    background: #e4e9f2;
-    border-radius: 4px;
+    height: 14px;background: var(--bk-theme-border-weak);border-radius: var(--bk-theme-tag-radius);
   }
 
   .audit-table-skeleton__body {
@@ -177,18 +172,15 @@
   .audit-table-skeleton__row {
     display: flex;
     align-items: center;
-    width: 100%;
-    border-bottom: 1px solid #e4e9f2;
+    width: 100%;border-bottom: 1px solid var(--bk-theme-border-weak);
   }
 
   .audit-table-skeleton__cell-bar {
     flex-shrink: 0;
     max-width: 100%;
-    height: 14px;
-    background: linear-gradient(90deg, #f2f6fc 0%, #e4e9f2 50%, #f2f6fc 100%);
+    height: 14px;background: linear-gradient(90deg, var(--bk-theme-surface-subtle) 0%, var(--bk-theme-border-weak) 50%, var(--bk-theme-surface-subtle) 100%);
     background-position: -200% 0;
-    background-size: 200% 100%;
-    border-radius: 4px;
+    background-size: 200% 100%;border-radius: var(--bk-theme-tag-radius);
     animation: audit-skeleton-shimmer 1.5s ease-in-out infinite;
   }
 </style>

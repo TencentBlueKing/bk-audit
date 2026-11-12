@@ -7,7 +7,7 @@
     :width="dialogWidth"
     @closed="handleClosed">
     <div
-      class="risk-await-deal-wrap"
+      class="risk-await-deal-wrap bk-theme-form--compact"
       data-testid="batch-process-dialog">
       <p class="batch-process-hint">
         {{ t('已选择') }} {{ count }} {{ t('条风险，提交后将按相同处理方法统一执行。') }}
@@ -246,9 +246,9 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         :disabled="isSubmitting"
-        @click="handleCancel">
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -688,18 +688,18 @@
   }
 
   .batch-process-hint {
-    margin: 0 0 16px;
+    margin: 0 0 var(--bk-theme-space-16);
     font-size: 12px;
     line-height: 20px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .misreport-alert {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
   }
 
   .whitelist-together {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
   }
 
   .whitelist-together-wrap.is-disabled :deep(.bk-checkbox) {
@@ -718,32 +718,30 @@
   }
 
   .risk-await-deal-wrap :deep(.bk-form-item) {
-    margin-bottom: 16px;
   }
 
   .risk-await-deal-wrap :deep(.bk-form-item:last-child) {
-    margin-bottom: 0;
   }
 
   .risk-await-deal-wrap :deep(.bk-form-error) {
     position: static;
     display: block;
-    padding-top: 4px;
+    padding-top: var(--bk-theme-space-4);
     line-height: 18px;
   }
 
   .risk-await-deal-wrap :deep(.bk-form-label) {
     padding-bottom: 0;
-    margin-bottom: 6px;
+    margin-bottom: var(--bk-theme-space-6);
     font-size: 12px;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .risk-await-deal-method__group {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 24px;
+    gap: var(--bk-theme-space-8) var(--bk-theme-space-24);
   }
 
   .risk-await-deal-method__group :deep(.bk-radio),
@@ -751,19 +749,19 @@
     font-size: 12px;
     font-weight: 400;
     line-height: 20px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 
   .risk-await-deal-method__group :deep(.bk-radio.is-disabled),
   .risk-await-deal-method__group :deep(.bk-radio.is-disabled .bk-radio-label) {
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: not-allowed;
   }
 
   .risk-await-deal-method__group :deep(.bk-radio.is-disabled .bk-radio-input) {
     cursor: not-allowed;
-    background-color: #fafbfd;
-    border-color: #dcdee5;
+    background-color: var(--bk-theme-table-header-bg);
+    border-color: var(--bk-theme-border-default);
   }
 
   .risk-await-deal-wrap :deep(.bk-select),
@@ -801,7 +799,7 @@
   }
 
   .pa-params-form-item {
-    margin-top: 24px !important;
+    margin-top: var(--bk-theme-space-24) !important;
     margin-bottom: 0 !important;
   }
 
@@ -810,18 +808,18 @@
   }
 
   .auto-close-risk-form-item {
-    margin-top: 24px !important;
+    margin-top: var(--bk-theme-space-24) !important;
     margin-bottom: 0 !important;
   }
 
   .pa-params-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    padding: 16px 12px;
-    background: #f0f1f5;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    gap: var(--bk-theme-space-16);
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-12);
+    background: var(--bk-theme-surface-muted);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .pa-params-grid :deep(.bk-select),
@@ -878,19 +876,19 @@
   }
 
   .label-name::after {
-    margin-left: 5px;
-    color: #ea3636;
+    margin-left: var(--bk-theme-space-4);
+    color: var(--bk-theme-color-danger-2);
     content: '*';
   }
 
   .underline {
-    border-bottom: 1px dashed #c4c6cc;
+    border-bottom: 1px dashed var(--bk-theme-border-strong);
   }
 
   .batch-process-failures {
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
     font-size: 12px;
     line-height: 20px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
   }
 </style>

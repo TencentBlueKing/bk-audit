@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="analysis-search-box">
+  <div class="analysis-search-box bk-theme-card bk-theme-card--flush">
     <keep-alive>
       <component
         :is="renderComponent"
@@ -29,7 +29,7 @@
           <span
             v-if="isReassignment"
             v-bk-tooltips="{ content: reassignmentTooltip, disabled: !reassignmentDisabled || !reassignmentTooltip }"
-            class="reassignment-btn-wrapper mr8"
+            class="reassignment-btn-wrapper"
             :class="{ 'is-reassignment-disabled': reassignmentDisabled }">
             <bk-button
               :disabled="reassignmentDisabled"
@@ -39,7 +39,6 @@
           </span>
           <risk-export-button
             v-if="isExport"
-            button-class="mr8"
             :disabled="exportDisabled"
             :export-fn="handleExport"
             :tooltip="resolvedExportTooltip" />
@@ -107,9 +106,9 @@
             }"
             @change="handleSelectChange">
             <template #trigger>
-              <span style="color: #3884ff; cursor: pointer;">
+              <span class="search-add-condition">
                 <audit-icon
-                  style="margin-right: 5px;"
+                  class="search-add-condition-icon"
                   type="add" />
                 <span>{{ t('添加关联事件条件') }}</span>
               </span>
@@ -659,11 +658,24 @@
 
 </script>
 <style lang="postcss">
+.search-add-condition {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-color-brand-2);
+  cursor: pointer;
+}
+
+.search-add-condition-icon {
+  display: inline-flex;
+  margin-right: var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: 1;
+}
+
 .analysis-search-box {
   position: relative;
-  background-color: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
   .panel-toggle-btn {
     position: absolute;
@@ -675,16 +687,16 @@
     justify-content: center;
     align-items: center;
     font-size: 12px;
-    color: #fff;
+    color: var(--bk-theme-surface-default);
     text-align: center;
     cursor: pointer;
-    background: #dcdee5;
-    border-radius: 0 0 8px 8px;
+    background: var(--bk-theme-border-default);
+    border-radius: 0 0 var(--bk-theme-table-frame-radius) var(--bk-theme-table-frame-radius);
     transform: translate(-50%, 100%);
     transition: all .15s;
 
     &:hover {
-      background: #c4c6cc;
+      background: var(--bk-theme-border-strong);
     }
 
     &.is-floded {
@@ -698,9 +710,9 @@
 
 .box-row {
   display: grid;
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px 16px;
+  gap: var(--bk-theme-space-16) var(--bk-theme-space-16);
 
   .more-list-item {
     .list-item-lable {
@@ -712,12 +724,12 @@
       .item-label {
         font-size: 12px;
         line-height: 20px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         vertical-align: top;
       }
 
       .close-btn {
-        color: #63656e;
+        color: var(--bk-theme-text-default);
         cursor: pointer;
       }
     }
@@ -725,13 +737,14 @@
 
     .item-value {
       display: flex;
-      padding-top: 6px;
+      padding-top: var(--bk-theme-space-6);
     }
   }
 }
 
 .reassignment-btn-wrapper {
   display: inline-flex;
+  margin-right: var(--bk-theme-space-8);
 
   &.is-reassignment-disabled {
     cursor: not-allowed;

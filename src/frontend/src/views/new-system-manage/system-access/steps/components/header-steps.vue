@@ -51,24 +51,24 @@
       display: inline-flex;
       width: 24px;
       height: 24px;
-      font-size: 14px;
-      color: #64656c;
-      background-color: #eaebf0;
+      font-size: var(--bk-theme-font-size-sm);
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-border-weak);
       border-radius: 50%;
       align-items: center;
       justify-content: center;
     }
 
     .active-item-icon {
-      color: #fff;
-      background-color: #3a84ff;
+      color: var(--bk-theme-surface-default);
+      background-color: var(--bk-theme-color-brand-2);
     }
 
     .item-title {
-      margin-left: 5px;
-      font-size: 14px;
+      margin-left: var(--bk-theme-space-4);
+      font-size: var(--bk-theme-font-size-sm);
       letter-spacing: 0;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
     }
 
     .item-line {
@@ -76,18 +76,18 @@
       top: 1px; /* 微调线条垂直位置 */
       width: 136px;
       height: 1px;
-      margin-right: 5px;
-      margin-left: 5px;
-      background-color: #eaebf0;
+      margin-right: var(--bk-theme-space-4);
+      margin-left: var(--bk-theme-space-4);
+      background-color: var(--bk-theme-border-weak);
     }
 
     .active-item-line {
-      background-color: #3a84ff;
+      background-color: var(--bk-theme-color-brand-2);
     }
 
     .active-check-line {
-      color: #3a84ff;
-      background-color: #e1ecff;
+      color: var(--bk-theme-color-brand-2);
+      background-color: var(--bk-theme-fill-selected);
     }
   }
 

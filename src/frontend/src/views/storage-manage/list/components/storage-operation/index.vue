@@ -193,7 +193,7 @@
 </script>
 <style lang="postcss">
   .storage-operation-box {
-    padding: 28px 40px;
+    padding: var(--bk-theme-space-32) var(--bk-theme-space-32);
 
     .form-item-row {
       display: flex;
@@ -203,7 +203,7 @@
       flex: 1;
 
       &:nth-child(2) {
-        margin-left: 24px;
+        margin-left: var(--bk-theme-space-24);
       }
     }
   }

@@ -432,26 +432,26 @@
   .preview-drawer-content {
     min-height: 100%;
     padding: 0;
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
 
     :deep(.top-search) {
-      border-radius: 4px;
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 
   .preview-header-info {
     display: flex;
-    padding: 16px 24px;
-    background: #fff;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+    background: var(--bk-theme-surface-default);
 
     .preview-tool-icon {
       width: 48px;
       height: 48px;
-      border-radius: 4px;
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .preview-tool-info {
-      margin-left: 8px;
+      margin-left: var(--bk-theme-space-8);
 
       .preview-tool-title {
         display: flex;
@@ -459,35 +459,35 @@
         font-size: 16px;
         font-weight: 700;
         line-height: 24px;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
 
         .preview-tool-name {
           max-width: 300px;
-          margin-right: 5px;
+          margin-right: var(--bk-theme-space-4);
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
 
         .desc-tag {
-          margin-right: 5px;
+          margin-right: var(--bk-theme-space-4);
           font-size: 12px;
           font-weight: 500;
           line-height: 22px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
 
         .desc-tag-info {
-          color: #1768ef;
+          color: var(--bk-theme-color-brand-1);
           cursor: pointer;
         }
       }
 
       .preview-tool-desc {
-        margin-top: 4px;
+        margin-top: var(--bk-theme-space-4);
         font-size: 14px;
         line-height: 22px;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
     }
   }
@@ -503,7 +503,7 @@
 <style lang="postcss">
   /* 覆盖抽屉内容区域背景色，确保灰色铺满 */
   .tool-preview-sideslider .bk-modal-body {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 
   .tool-preview-sideslider .bk-modal-content {

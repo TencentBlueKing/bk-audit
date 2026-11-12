@@ -65,16 +65,20 @@ import Exception from './exception.vue';
 
 // import BkTrace from '@blueking/bk-trace-core';
 
-import('tippy.js/dist/tippy.css');
-import('tippy.js/themes/light.css');
-import('bkui-vue/dist/style.variable.css');
-import('@lib/bk-icon/style.css');
-import('@lib/bk-icon/iconcool.js');
-import('@/css/reset.css');
-import('@/css/tokens.css');
-import('@/css/common.css');
-import('@blueking/notice-component/dist/style.css');
-import('@blueking/date-picker/vue3/vue3.css');
+import 'tippy.js/dist/tippy.css';
+import 'tippy.js/themes/light.css';
+import 'bkui-vue/dist/style.variable.css';
+import '@lib/bk-icon/style.css';
+import '@lib/bk-icon/iconcool.js';
+import '@blueking/notice-component/dist/style.css';
+import '@blueking/date-picker/vue3/vue3.css';
+import 'tdesign-vue-next/es/table/style/index.css';
+import 'tdesign-vue-next/es/pagination/style/index.css';
+import '@blueking/tdesign-ui/vue3/index.css';
+import '@/css/tokens.css';
+import '@/css/reset.css';
+import '@/css/common.css';
+import '@/css/theme/index.css';
 
 window.changeConfirm = false;
 

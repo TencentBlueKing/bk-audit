@@ -50,8 +50,8 @@
         {{ t('确认') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -102,12 +102,13 @@
 </script>
 <style lang="postcss" scoped>
 .insert-table-form {
-  padding-top: 8px;
+  padding-top: var(--bk-theme-space-8);
 }
 
 .insert-table-tip {
   margin: 0;
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
+
 </style>

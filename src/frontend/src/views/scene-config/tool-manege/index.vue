@@ -15,28 +15,23 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="storageList">
-    <div class="report-config">
-      <!-- 头部操作区 -->
-      <div class="report-config-header">
+  <div class="report-config bk-theme-card">
+    <div class="report-config-header bk-theme-list-toolbar">
         <div class="header-left">
           <bk-button
-            class="mr8"
+           
             theme="primary"
-            @click="handleCreateReport">
+            @click="handleCreateReport" style="margin-right: var(--bk-theme-space-8)">
             <audit-icon
-              class="mr8"
-              type="add" />
+             
+              type="add" style="margin-right: var(--bk-theme-space-8)" />
             {{ t('新建工具') }}
           </bk-button>
         </div>
         <div class="header-right">
           <bk-radio-group
             v-model="statusFilter"
-            class="status-filter mr16"
+            class="status-filter"
             type="capsule"
             @change="handleStatusFilterChange">
             <bk-radio-button label="all">
@@ -96,11 +91,9 @@
           @delete="handleDelete"
           @edit="handleEdit"
           @preview="handlePreview"
-          @request-success="handleRequestSuccess"
           @toggle-status="handleToggleStatus" />
-      </div>
     </div>
-  </skeleton-loading>
+  </div>
 
   <!-- 工具预览抽屉 -->
   <tool-preview-drawer
@@ -181,7 +174,6 @@
   } = useRecordPage;
   const LIST_PAGE_KEY = 'sceneToolManege';
   const SEARCH_STATE_KEY = 'scene-tool-manage-search-state';
-  const isLoading = ref(true);
   // bk-search-select 搜索值
   const searchValue = ref<SearchKey[]>([]);
 
@@ -457,10 +449,6 @@
     return hasKey;
   };
 
-  const handleRequestSuccess = () => {
-    isLoading.value = false;
-  };
-
   // 获取全局状态统计（分别请求各状态数量）
   const fetchStatusCounts = () => {
     const scopeParams = getSceneSystemParams();
@@ -583,17 +571,13 @@
   .report-config {
     position: relative;
     min-height: 85vh;
-    padding: 24px;
-    background-color: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+    padding: var(--bk-theme-space-24);
   }
 
   .report-config-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
   }
 
   .header-left {
@@ -607,31 +591,32 @@
   }
 
   .mr4 {
-    margin-right: 4px;
+    margin-right: var(--bk-theme-space-4);
   }
 
   .mr8 {
-    margin-right: 8px;
+    margin-right: var(--bk-theme-space-8);
   }
 
   .mr16 {
-    margin-right: 16px;
+    margin-right: var(--bk-theme-space-16);
   }
 
   .status-filter {
+    margin-right: var(--bk-theme-space-16);
     :deep(.bk-radio-button) {
       .bk-radio-button-label {
         display: flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
       }
     }
 
     :deep(.bk-radio-button:not(.is-checked)) {
       .status-count {
-        color: #979ba5;
-        background-color: #fff !important;
-        border-color: #fff !important;
+        color: var(--bk-theme-text-weak);
+        background-color: var(--bk-theme-surface-default) !important;
+        border-color: var(--bk-theme-surface-default) !important;
       }
     }
   }
@@ -639,8 +624,8 @@
   .status-count {
     height: 18px;
     min-width: 18px;
-    padding: 0 4px;
-    margin-left: 4px;
+    padding: 0 var(--bk-theme-space-4);
+    margin-left: var(--bk-theme-space-4);
     font-size: 12px;
     line-height: 18px;
     pointer-events: none;

@@ -61,12 +61,12 @@
             style="height: 280px;padding-top: 40px;"
             type="search-empty">
             <div>
-              <div style="color: #63656e;">
+              <div style="color: var(--bk-theme-text-default);">
                 {{ t('搜索结果为空') }}
               </div>
               <div
                 v-if="!isNeedHideClearSearchTip"
-                style="margin-top: 8px; color: #979ba5;">
+                style="margin-top: 8px; color: var(--bk-theme-text-weak);">
                 {{ t('可以尝试调整关键词') }} {{ t('或') }}
                 <bk-button
                   text
@@ -80,7 +80,7 @@
           <bk-exception
             v-else
             scene="part"
-            style="height: 280px;padding-top: 40px;color: #63656e;"
+            style="height: 280px;padding-top: 40px;color: var(--bk-theme-text-default);"
             type="empty">
             {{ t('暂无数据') }}
           </bk-exception>
@@ -899,7 +899,7 @@
   .render-list {
     :deep(.new-row) {
       td {
-        background-color: #e4faf0 !important;
+        background-color: var(--bk-theme-table-row-new-bg) !important;
       }
     }
   }

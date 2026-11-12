@@ -15,28 +15,23 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="storageList">
-    <div class="report-config">
-      <!-- 头部操作区 -->
-      <div class="report-config-header">
+  <div class="report-config bk-theme-card">
+    <div class="report-config-header bk-theme-list-toolbar">
         <div class="header-left">
           <bk-button
-            class="mr8"
+           
             theme="primary"
-            @click="handleCreateReport">
+            @click="handleCreateReport" style="margin-right: var(--bk-theme-space-8)">
             <audit-icon
-              class="mr8"
-              type="add" />
+             
+              type="add" style="margin-right: var(--bk-theme-space-8)" />
             {{ t('新建工具') }}
           </bk-button>
         </div>
         <div class="header-right tool-manage-search-area">
           <bk-radio-group
             v-model="statusFilter"
-            class="status-filter mr16"
+            class="status-filter"
             type="capsule"
             @change="handleStatusFilterChange">
             <bk-radio-button label="all">
@@ -102,11 +97,9 @@
           @edit="handleEdit"
           @edit-visibility="handleEditVisibility"
           @preview="handlePreview"
-          @request-success="handleRequestSuccess"
           @toggle-status="handleToggleStatus" />
-      </div>
     </div>
-  </skeleton-loading>
+  </div>
 
   <!-- 工具预览抽屉 -->
   <tool-preview-drawer
@@ -233,7 +226,6 @@
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
-  const isLoading = ref(true);
   const initialListSearchCache = loadListSearchCache();
   const searchValue = ref<SearchKey[]>(initialListSearchCache.search);
 
@@ -651,10 +643,6 @@
     toolListRef.value?.fetchData({ sort: ['name'] });
   };
 
-  const handleRequestSuccess = () => {
-    isLoading.value = false;
-  };
-
   const fetchStatusCounts = () => {
     const allPromise = ToolManageService.fetchToolsList({});
     const publishedPromise = ToolManageService.fetchToolsList({ status: ['published'] });
@@ -808,17 +796,13 @@
   .report-config {
     position: relative;
     min-height: 85vh;
-    padding: 24px;
-    background-color: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+    padding: var(--bk-theme-space-24);
   }
 
   .report-config-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
   }
 
   .header-left {
@@ -832,31 +816,32 @@
   }
 
   .mr4 {
-    margin-right: 4px;
+    margin-right: var(--bk-theme-space-4);
   }
 
   .mr8 {
-    margin-right: 8px;
+    margin-right: var(--bk-theme-space-8);
   }
 
   .mr16 {
-    margin-right: 16px;
+    margin-right: var(--bk-theme-space-16);
   }
 
   .status-filter {
+    margin-right: var(--bk-theme-space-16);
     :deep(.bk-radio-button) {
       .bk-radio-button-label {
         display: flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 var(--bk-theme-space-12);
       }
     }
 
     :deep(.bk-radio-button:not(.is-checked)) {
       .status-count {
-        color: #979ba5;
-        background-color: #fff !important;
-        border-color: #fff !important;
+        color: var(--bk-theme-text-weak);
+        background-color: var(--bk-theme-surface-default) !important;
+        border-color: var(--bk-theme-surface-default) !important;
       }
     }
   }
@@ -864,8 +849,8 @@
   .status-count {
     height: 18px;
     min-width: 18px;
-    padding: 0 4px;
-    margin-left: 4px;
+    padding: 0 var(--bk-theme-space-4);
+    margin-left: var(--bk-theme-space-4);
     font-size: 12px;
     line-height: 18px;
     pointer-events: none;
@@ -899,7 +884,7 @@
   /* 可见范围下拉：细滚动条并隐藏上下箭头（对齐工具跳转） */
   .bk-search-select-popover .bk-search-select-menu .menu-content {
     scrollbar-width: thin;
-    scrollbar-color: #c4c6cc transparent;
+    scrollbar-color: var(--bk-theme-border-strong) transparent;
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar {
@@ -912,12 +897,12 @@
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-thumb {
-    background-color: #c4c6cc;
-    border-radius: 2px;
+    background-color: var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-thumb:hover {
-    background-color: #979ba5;
+    background-color: var(--bk-theme-text-weak);
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-button,
@@ -970,14 +955,14 @@
     font-size: 12px;
     font-weight: 500;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     pointer-events: none;
     cursor: default;
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_scene__:hover,
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_system__:hover {
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     background-color: transparent;
   }
 
@@ -996,14 +981,14 @@
   }
 
   .tippy-box[data-theme~='tool-manage-search-tooltip'] {
-    color: #fff;
+    color: var(--bk-theme-surface-default);
     background-color: #000;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
   }
 
   .tippy-box[data-theme~='tool-manage-search-tooltip'] .tippy-content {
-    padding: 4px 8px;
+    padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
   }
 
   .tippy-box[data-theme~='tool-manage-search-tooltip'][data-placement^='top'] > .tippy-arrow::before {

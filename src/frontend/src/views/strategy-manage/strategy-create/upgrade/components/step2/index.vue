@@ -43,15 +43,15 @@
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         :loading="submitLoading"
         theme="primary"
-        @click="handleSubmit">
+        @click="handleSubmit" style="margin-left: var(--bk-theme-space-8)">
         {{ t('确认升级') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -319,5 +319,4 @@
 
 </script>
 <!-- <style scoped>
-
 </style> -->

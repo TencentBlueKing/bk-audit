@@ -368,22 +368,22 @@
 </script>
 <style lang="postcss" scoped>
   .risk-whitelist-page {
-    padding: 24px;
-    background: var(--audit-neutral-bg-04);
+    padding: var(--bk-theme-space-24);
+    background: var(--bk-theme-surface-default);
   }
 
   .risk-whitelist-create {
     width: 124px;
     display:flex;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
     align-items: center;
     .audit-icon-add {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
     }
   }
   .page-toolbar {
     display: flex;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
   }
 
   .page-search {
@@ -393,7 +393,7 @@
 
   .list-empty {
     padding: 80px 0;
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
     text-align: center;
   }
 
@@ -406,6 +406,11 @@
     white-space: nowrap;
   }
 
+  :deep(td:has(.scope-cell)) {
+    height: auto;
+    padding: var(--bk-theme-space-8);
+  }
+
   :deep(.scope-cell) {
     max-width: 100%;
     min-width: 0;
@@ -414,7 +419,7 @@
 
   :deep(.row-actions) {
     display: flex;
-    gap: 12px;
+    gap: var(--bk-theme-space-12);
     align-items: center;
   }
 
@@ -425,7 +430,7 @@
     width: 24px;
     height: 24px;
     padding: 0;
-    color: var(--audit-neutral-text-03);
+    color: var(--bk-theme-text-weak);
     cursor: pointer;
     background: transparent;
     border: 0;
@@ -434,10 +439,10 @@
   :deep(.more-trigger:hover),
   :deep(.more-trigger:focus),
   :deep(.more-trigger:active) {
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
   }
 
   :deep(.hit-zero) {
-    color: var(--audit-neutral-text-03);
+    color: var(--bk-theme-text-weak);
   }
 </style>

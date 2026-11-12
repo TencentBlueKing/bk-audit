@@ -562,8 +562,8 @@
     {
       title: () => t('触发方式'),
       colKey: 'trigger_type',
-      width: 104,
-      minWidth: 104,
+      width: 128,
+      minWidth: 128,
       filter: enumFilter(t('触发方式'), [
         { label: t('手动'), value: 'manual' },
         { label: t('自动'), value: 'auto' },
@@ -787,7 +787,7 @@
 /* 时间范围弹层挂在 body 上，默认层级低于侧滑 */
 .__bk-date-picker-popover__.__bk-date-picker-popover__execution-records-range {
   z-index: 10060 !important;
-  margin-left: 32px !important;
+  margin-left: var(--bk-theme-space-32) !important;
 }
 </style>
 <style lang="postcss" scoped>
@@ -797,7 +797,7 @@
   flex-direction: column;
   height: calc(100vh - 52px);
   min-height: 0;
-  padding: var(--audit-space-24);
+  padding: var(--bk-theme-space-24);
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -805,7 +805,7 @@
 .execution-toolbar {
   display: flex;
   flex-shrink: 0;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
   align-items: center;
   width: 100%;
 }
@@ -833,9 +833,13 @@
   flex: 1;
   width: 100%;
   min-height: 0;
-  margin-top: var(--audit-space-16);
+  margin-top: var(--bk-theme-space-16);
   overflow: hidden;
   border: 0;
+
+  :deep(.t-table__th-trigger_type .t-table__th-cell-inner) {
+    white-space: nowrap;
+  }
 
   :deep(.audit-tdesign-list),
   :deep(.bk-nested-loading) {
@@ -913,15 +917,15 @@
   .execution-search-empty-text {
     width: max-content;
     max-width: 100%;
-    color: var(--audit-neutral-text-02, #63656e);
+    color: var(--bk-theme-text-default);
     line-height: 22px;
     text-align: center;
     white-space: normal;
   }
 
   .execution-search-empty-tip {
-    margin-top: 8px;
-    color: var(--audit-neutral-text-04, #979ba5);
+    margin-top: var(--bk-theme-space-8);
+    color: var(--bk-theme-text-disabled);
   }
 
   :deep(.tdesign-list-pagination) {
@@ -939,7 +943,7 @@
 
   :deep(.t-table thead tr),
   :deep(.t-table thead th) {
-    background-color: var(--audit-neutral-bg-02);
+    background-color: var(--bk-theme-table-header-bg);
   }
 
   :deep(.t-table thead th) {
@@ -953,7 +957,7 @@
 :deep(.copy-cell) {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
   width: 100%;
   min-width: 0;
 }
@@ -986,7 +990,7 @@
 }
 
 :deep(.task-link) {
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -995,7 +999,7 @@
   flex: 0 0 auto;
   padding: 0;
   font-size: 16px;
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -1007,7 +1011,7 @@
 }
 
 :deep(.status-failed-text) {
-  border-bottom: 1px dashed var(--audit-neutral-text-02);
+  border-bottom: 1px dashed var(--bk-theme-text-default);
   cursor: pointer;
 }
 
@@ -1016,7 +1020,7 @@
   padding: 0;
   font-size: 16px;
   line-height: 1;
-  color: var(--audit-brand-02);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -1030,10 +1034,10 @@
 :deep(.record-status) {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: var(--audit-font-size-sm);
+  gap: var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
   line-height: 20px;
-  color: var(--audit-neutral-text-02);
+  color: var(--bk-theme-text-default);
   white-space: nowrap;
 }
 
@@ -1069,7 +1073,7 @@
 }
 
 :deep(.status-dot.is-failed .status-dot-inner) {
-  background: var(--audit-danger-02);
+  background: var(--bk-theme-color-danger-2);
 }
 
 :deep(.status-dot.is-success .status-dot-outer) {
@@ -1077,7 +1081,7 @@
 }
 
 :deep(.status-dot.is-success .status-dot-inner) {
-  background: var(--audit-success-02);
+  background: var(--bk-theme-color-success-2);
 }
 
 :deep(.status-loading) {
@@ -1094,8 +1098,8 @@
 
 .execution-error-tip-body {
   max-height: 240px;
-  margin-right: -10px;
-  padding-right: 8px;
+  margin-right: -var(--bk-theme-space-12);
+  padding-right: var(--bk-theme-space-8);
   overflow-x: hidden;
   overflow-y: auto;
   word-break: break-all;
@@ -1110,7 +1114,7 @@
 
 .execution-error-tip-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.45);
-  border-radius: 3px;
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .execution-error-tip-body::-webkit-scrollbar-track {

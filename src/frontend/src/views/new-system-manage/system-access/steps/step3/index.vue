@@ -63,7 +63,7 @@
       .step3-box {
         position: relative;
         left: auto;
-        margin: 10px auto 0;
+        margin: var(--bk-theme-space-12) auto 0;
         transform: none;
       }
     }
@@ -72,12 +72,12 @@
       position: absolute;
       left: 50%;
       width: 60%;
-      margin-top: 10px;
+      margin-top: var(--bk-theme-space-12);
       transform: translateX(-50%);
     }
 
     .step3-box-with-sidebar {
-      padding-bottom: 5px;
+      padding-bottom: var(--bk-theme-space-4);
     }
   }
 </style>

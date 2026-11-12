@@ -193,10 +193,10 @@
                 placement="top"
                 theme="black">
                 <bk-button
-                  class="ml8"
+                 
                   text
                   theme="primary"
-                  @click="handleUseTool(fieldItem)">
+                  @click="handleUseTool(fieldItem)" style="margin-left: var(--bk-theme-space-8)">
                   <span class="drill-count-badge">
                     {{ getFieldDrill(fieldItem).length }}
                   </span>
@@ -208,13 +208,13 @@
                       :key="config.tool?.uid">
                       {{ config.drill_name || getToolNameAndType(config.tool?.uid).name }}
                       <bk-button
-                        class="ml8"
+                       
                         text
                         theme="primary"
                         @click="(e: Event) => {
                           e.stopPropagation();
                           handleUseTool(fieldItem, config.tool?.uid);
-                        }">
+                        }" style="margin-left: var(--bk-theme-space-8)">
                         {{ t('去查看') }}
                         <audit-icon
                           class="mr-18"
@@ -626,7 +626,7 @@
 </script>
 <style lang="postcss" scoped>
 .base-info-form {
-  margin-bottom: 10px;
+  margin-bottom: var(--bk-theme-space-12);
 }
 
 .risk-field-value-wrap {
@@ -638,7 +638,7 @@
 }
 
 .risk-field-value.is-drill {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -647,11 +647,10 @@
   word-break: break-word;
 }
 
-.drill-count-badge {
-  padding: 2px 10px;
-  color: #3a84ff;
+.drill-count-badge {padding: var(--bk-theme-space-2) var(--bk-theme-space-8);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
-  background-color: #cddffe;
-  border-radius: 8px;
+  background-color: var(--bk-theme-color-brand-5);
+  border-radius: var(--bk-theme-message-radius);
 }
 </style>

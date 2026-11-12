@@ -18,99 +18,104 @@
   <div
     class="tools-square"
     :class="{ 'is-animating': isSidebarAnimating }">
-    <!-- 正在使用中的工具提示条（置顶全宽） -->
     <div
-      v-if="activeToolsInScene.length > 0 && !hasOpenedTools"
-      class="tool-using-tip">
-      <img
-        class="tip-icon"
-        :src="infoBlueSvg">
-      <span class="tip-text">
-        {{ t('你有') }} <strong class="tip-count">{{ activeToolsInScene.length }}</strong> {{ t('个工具正在使用中') }}
-      </span>
-      <span
-        class="tip-link"
-        @click="handleContinueUsingTool">
-        {{ t('点击继续') }}
-      </span>
-    </div>
-    <div class="tools-square-body">
-      <!-- 左侧标签 -->
-      <div
-        v-show="!hasOpenedTools"
-        class="sidebar-wrapper"
-        :class="{ 'is-collapsed': isSidebarCollapsed }">
-        <!-- 收缩状态 -->
-        <div
-          v-show="isSidebarCollapsed"
-          class="sidebar-collapsed"
-          @click="isSidebarCollapsed = false">
-          <div class="collapsed-inner">
-            <span class="collapsed-text">快捷筛选</span>
-            <img
-              class="collapsed-toggle-icon"
-              :src="foldRightIcon">
-          </div>
-        </div>
-        <!-- 展开状态 -->
-        <div
-          v-show="!isSidebarCollapsed"
-          class="sidebar-expanded">
-          <!-- 场景系统选择器 -->
-          <div class="scene-selector-wrapper">
-            <scene-system-selector
-              v-model="selectedScene"
-              :list-scope="['scene','system']"
-              :popover-width="228"
-              scene-permission="view_scene"
-              system-permission="view_system"
-              width="228px"
-              @change="handleSceneChange" />
-          </div>
-          <div class="sidebar-header">
-            <span class="sidebar-title">快捷筛选</span>
-            <img
-              class="sidebar-toggle-icon"
-              :src="foldLeftIcon"
-              @click="isSidebarCollapsed = true">
-          </div>
-          <render-label
-            ref="renderLabelRef"
-            active="-3"
-            :final="4"
-            :labels="strategyLabelList"
-            :render-style="renderStyle"
-            :total="0"
-            :upgrade-total="0"
-            @checked="handleChecked" />
-        </div>
+      v-show="!hasOpenedTools"
+      class="square-page">
+      <div class="page-title-row">
+        <h1 class="page-title">
+          {{ t('工具广场') }}
+        </h1>
+        <scene-system-selector
+          v-model="selectedScene"
+          class="page-scene-selector"
+          :list-scope="['scene','system']"
+          :popover-width="208"
+          scene-permission="view_scene"
+          system-permission="view_system"
+          width="208px"
+          @change="handleSceneChange" />
       </div>
-
-      <!-- 右侧内容-->
-      <div
-        class="content-content"
-        :class="{ 'has-shadow': hasOpenedTools }">
-        <div class="content-card">
-          <div
-            v-show="!hasOpenedTools"
-            class="content-card-wrapper">
-            <content-card
-              ref="ContentCardRef"
-              :accessible-scene-ids="accessibleSceneIds"
-              :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
-              :is-cross-system="scopeParams.scope_type === 'cross_system'"
-              :my-created="tagId === '-4'"
-              :recent-used="tagId === '-5'"
-              :scene-name-map="sceneNameMap"
-              :scope-params="scopeParams"
-              :system-name-map="systemNameMap"
-              :tag-id="tagId"
-              :tags-enums="tagsEnums"
-              @change="handleChange"
-              @open-tool="handleOpenTool" />
-          </div>
-          <tool-info-panel
-            v-show="hasOpenedTools"
+      <div class="page-toolbar">
+        <div
+          class="capsule-tabs"
+          role="tablist">
+          <button
+            v-for="tab in capsuleTabs"
+            :key="tab.tag_id"
+            :aria-selected="isCapsuleActive(tab.tag_id)"
+            class="capsule-tab"
+            :class="{ 'is-active': isCapsuleActive(tab.tag_id) }"
+            role="tab"
+            type="button"
+            @click="handleChecked(tab.tag_id)">
+            <span>{{ t(tab.tag_name) }}</span>
+            <span
+              v-if="tab.countReady"
+              class="capsule-count">{{ tab.tool_count }}</span>
+            <span
+              v-else
+              class="capsule-count is-skeleton"
+              aria-hidden="true" />
+          </button>
+        </div>
+        <bk-select
+          class="tag-filter"
+          :clearable="true"
+          :filterable="true"
+          :model-value="labelFilterValue"
+          :placeholder="t('标签：选择标签进行筛选')"
+          @clear="handleLabelFilterClear"
+          @update:model-value="handleLabelFilterChange">
+          <bk-option
+            v-for="item in labelFilterOptions"
+            :id="item.tag_id"
+            :key="item.tag_id"
+            :name="item.tag_name" />
+        </bk-select>
+        <div
+          id="tools-square-search-anchor"
+          class="search-anchor" />
+      </div>
+      <bk-alert
+        v-if="activeToolsInScene.length > 0"
+        class="using-alert"
+        :show-icon="true"
+        theme="warning">
+        <template #title>
+          <span class="using-alert-title">
+            <span>{{ t('你有') }} {{ activeToolsInScene.length }} {{ t('个工具正在使用中') }}</span>
+            <button
+              class="using-alert-link"
+              type="button"
+              @click="handleContinueUsingTool">
+              {{ t('继续操作') }}
+            </button>
+          </span>
+        </template>
+      </bk-alert>
+      <div class="square-list">
+        <content-card
+          ref="ContentCardRef"
+          :accessible-scene-ids="accessibleSceneIds"
+          :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
+          :is-cross-system="scopeParams.scope_type === 'cross_system'"
+          :my-created="tagId === '-4'"
+          :recent-used="tagId === '-5'"
+          :scene-name-map="sceneNameMap"
+          :scope-params="scopeParams"
+          :single-scope-group="singleScopeGroup"
+          :system-name-map="systemNameMap"
+          :tag-id="tagId"
+          :tags-enums="tagsEnums"
+          @change="handleChange"
+          @open-tool="handleOpenTool" />
+      </div>
+    </div>
+    <div
+      v-show="hasOpenedTools"
+      class="content-content has-shadow">
+      <div class="content-card">
+        <tool-info-panel
             ref="toolInfoPanelRef"
             :accessible-scene-ids="accessibleSceneIds"
             :active-uid="activeToolUid"
@@ -124,7 +129,6 @@
             @close-tab="handleCloseTab"
             @go-home="handleGoHomePage"
             @switch-tab="handleSwitchTab" />
-        </div>
       </div>
     </div>
   </div>
@@ -143,8 +147,6 @@
 
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
-  import RenderLabel from '@views/strategy-manage/list/components/render-label.vue';
-
   import ContentCard from './square-content/concent-card.vue';
   import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
@@ -153,9 +155,6 @@
   import type { DrillDownParams } from '@/hooks/use-tool-tabs';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import type { ToolDetailOverrideContext } from '@/utils/assist/scene-system-params';
-  import foldLeftIcon from '@/images/fold-left.svg';
-  import foldRightIcon from '@/images/fold-right.svg';
-  import infoBlueSvg from '@/images/info-blue.svg';
   import {
     buildGameDetailTabLabel,
     getRouteQueryValue,
@@ -176,7 +175,6 @@
     type: 'aggregate' | 'scene' | 'system';
   }
 
-  const renderLabelRef = ref();
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
   const toolInfoPanelRef = ref<InstanceType<typeof ToolInfoPanel>>();
 
@@ -234,9 +232,36 @@
     }
   });
   const strategyLabelList = ref<Array<TagItem>>([]);
-  const renderStyle = ref({
-    backgroundColor: '#fff',
-  });
+  const capsuleTagIds = ['-3', '-5', '-6', '-4'];
+  const capsuleTabFallbacks = [
+    { tag_id: '-3', tag_name: '全部工具' },
+    { tag_id: '-5', tag_name: '最近使用' },
+    { tag_id: '-6', tag_name: '我的收藏' },
+    { tag_id: '-4', tag_name: '我创建的' },
+  ];
+  const capsuleTabs = computed(() => capsuleTabFallbacks.map((fallback) => {
+    const loaded = strategyLabelList.value.find(item => item.tag_id === fallback.tag_id);
+    if (loaded) {
+      return {
+        tag_id: loaded.tag_id,
+        tag_name: loaded.tag_name,
+        tool_count: loaded.tool_count,
+        countReady: true,
+      };
+    }
+    return {
+      tag_id: fallback.tag_id,
+      tag_name: fallback.tag_name,
+      tool_count: 0,
+      countReady: false,
+    };
+  }));
+  const isCapsuleActive = (id: string) => tagId.value === id || (!tagId.value && id === '-3');
+  const labelFilterOptions = computed(() => strategyLabelList.value
+    .filter(item => !capsuleTagIds.includes(item.tag_id)));
+  const labelFilterValue = computed(() => (
+    labelFilterOptions.value.some(item => item.tag_id === tagId.value) ? tagId.value : ''
+  ));
   const isSidebarCollapsed = ref(false);
   const isSidebarAnimating = ref(false);
   let sidebarAnimateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -284,6 +309,16 @@
     return {
       scope_type: item.type, // 'scene' | 'system'
       scope_id: item.id,
+    };
+  });
+
+  const singleScopeGroup = computed(() => {
+    const item = selectedScene.value;
+    if (!item || item.type === 'aggregate') return null;
+    return {
+      groupKey: String(item.id),
+      groupName: item.name,
+      groupId: item.id,
     };
   });
 
@@ -387,10 +422,6 @@
     if (isActualChange) {
       tagId.value = '-3';
       ContentCardRef.value?.clearSearch();
-      // 更新UI选中状态为"全部工具"
-      nextTick(() => {
-        renderLabelRef.value?.setLabel('-3');
-      });
     }
     refreshTagsList();
     ContentCardRef.value?.getToolsList(tagId.value);
@@ -451,10 +482,24 @@
     if (hasOpenedTools.value) {
       isProgrammaticReset.value = true;
     }
-    renderLabelRef.value?.resetAll([]);
+    if (!tagId.value || tagId.value === '-3') {
+      handleChecked('-3');
+    }
     nextTick(() => {
       isProgrammaticReset.value = false;
     });
+  };
+
+  const handleLabelFilterChange = (value: string | number | null) => {
+    const next = value === undefined || value === null || value === '' ? '' : String(value);
+    if (next === labelFilterValue.value) return;
+    handleChecked(next || '-3');
+  };
+
+  const handleLabelFilterClear = () => {
+    if (!capsuleTagIds.includes(tagId.value)) {
+      handleChecked('-3');
+    }
   };
 
   const handleChecked = async (name: string) => {
@@ -500,7 +545,7 @@
         item: { tag_id: string; tag_name: string; tool_count: number },
         icon: string,
       ): TagItem => ({
-        tag_id: item.tag_id,
+        tag_id: String(item.tag_id),
         tag_name: item.tag_name,
         tool_count: item.tool_count ?? 0,
         strategy_count: item.tool_count ?? 0,
@@ -513,16 +558,11 @@
       tagsEnums.value = strategyLabelList.value;
       // 工具已打开时，仅更新标签数据，不重置标签选中状态（侧边栏已收起，避免触发 goHome）
       if (hasOpenedTools.value) return;
-      // 初始化阶段才 resetAll（active=-3 时会 emit checked 拉列表）；
-      // 从详情 keep-alive 返回时只更新数量，避免重新请求把滚动重置到顶部
+      // 初始化阶段才按当前标签拉列表；从详情返回时只更新数量，避免滚动回到顶部
       if (isInitialSceneSetup.value || lastSceneKey.value === null || !tagId.value) {
-        renderLabelRef.value?.resetAll([]);
         if ((isInitialSceneSetup.value || lastSceneKey.value === null) && tagId.value) {
-          // 初始化阶段且 tagId 有值（从 sessionStorage 恢复）：直接设置选中状态并加载对应列表
-          renderLabelRef.value?.setLabel(tagId.value);
           ContentCardRef.value?.getToolsList(tagId.value);
         } else {
-          // 其他情况（初始化阶段 tagId 为空，或场景切换阶段 tagId 为空）：调用 safeResetLabels 触发 checked 事件
           safeResetLabels();
         }
         isInitialSceneSetup.value = false;
@@ -590,8 +630,6 @@
     goHome();
     syncRouteToUrl();
     await nextTick();
-    // 保持用户之前选择的标签，不强制重置为"全部工具"
-    renderLabelRef.value?.setLabel(tagId.value || '-3');
     if (tagId.value === '-5') {
       ContentCardRef.value?.getToolsList(tagId.value || '-3', true);
     } else {
@@ -651,11 +689,6 @@
     if (val || isReturningHome.value || isRestoringListScroll.value) return;
     nextTick(() => {
       safeResetLabels();
-      if (hasOpenedTools.value) {
-        renderLabelRef.value?.setLabel('');
-      } else {
-        renderLabelRef.value?.setLabel((!tagId.value || tagId.value === '-3') ? '-3' : tagId.value);
-      }
     });
   });
 
@@ -721,196 +754,167 @@
   position: absolute;
   display: flex;
   flex-direction: column;
-  width: 100vw;
   height: 100%;
-  background-color: #f5f7fa;
+  background-color: var(--bk-theme-surface-page);
   inset: 0;
 
-  .tool-using-tip {
-    position: relative;
-    z-index: 2;
+  .square-page {
     display: flex;
-    width: calc(100% - 2px);
-    height: 40px;
-    padding: 0 12px;
-    margin: 0 1px;
-    font-size: 12px;
-    line-height: 36px;
-    color: #4d4f56;
-    background: #f0f5ff;
-    border: 1px solid #cddffe;
-    border-top: none;
-    box-shadow: 0 2px 4px 0 #e1e8f4;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: var(--bk-theme-page-padding);
+    gap: var(--bk-theme-page-gap);
+  }
+
+  .page-title-row {
+    display: flex;
     align-items: center;
+    gap: var(--bk-theme-space-16);
+  }
+
+  .page-title {
+    margin: 0;
+    padding: 0;
+    font-size: var(--bk-theme-font-size-xl);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-xl);
+    color: var(--bk-theme-text-strong);
+  }
+
+  .page-scene-selector {
+    width: 208px;
+    box-shadow: var(--bk-theme-overlay-shadow);
+  }
+
+  .page-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-theme-space-12);
+  }
+
+  .capsule-tabs {
+    display: flex;
     flex-shrink: 0;
+    align-items: center;
+    height: var(--bk-theme-space-32);
+    padding: var(--bk-theme-space-2);
+    background: var(--bk-theme-collapse-bg);
+    border-radius: var(--bk-theme-tab-pill-radius);
+  }
 
-    .tip-icon {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      margin-right: 6px;
-      flex-shrink: 0;
+  .capsule-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 var(--bk-theme-space-16);
+    font-size: var(--bk-theme-font-size-base);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-default);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: var(--bk-theme-tab-pill-radius);
+    gap: var(--bk-theme-space-4);
+
+    &:not(.is-active)::after {
+      position: absolute;
+      top: var(--bk-theme-space-6);
+      right: 0;
+      width: 1px;
+      height: var(--bk-theme-space-16);
+      background: var(--bk-theme-border-strong);
+      content: '';
     }
 
-    .tip-text {
-      margin-right: 8px;
+    &:last-child::after,
+    &.is-active::after,
+    &:has(+ .is-active)::after {
+      display: none;
     }
 
-    .tip-link {
-      color: #5897ff;
-      cursor: pointer;
-
-      &:hover {
-        color: #1768ef;
-      }
+    &.is-active {
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-surface-default);
+      box-shadow: var(--bk-theme-overlay-shadow);
     }
   }
 
-  .tools-square-body {
-    display: flex;
-    width: 100%;
+  .capsule-count {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 var(--bk-theme-space-6);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-tab-pill-radius);
+  }
+
+  .capsule-tab.is-active .capsule-count {
+    color: var(--bk-theme-color-brand-1);
+    background: var(--bk-theme-fill-info);
+  }
+
+  .capsule-count.is-skeleton,
+  .capsule-tab.is-active .capsule-count.is-skeleton {
+    width: var(--bk-theme-space-16);
+    height: var(--bk-theme-space-16);
+    padding: 0;
+    background: var(--bk-theme-border-strong);
+  }
+
+  .tag-filter {
+    flex-shrink: 0;
+    width: 200px;
+  }
+
+  .search-anchor {
+    flex: 1;
+    min-width: 0;
+
+    :deep(.card-search),
+    :deep(.search-input) {
+      width: 100%;
+    }
+
+    :deep(.bk-search-select-container) {
+      min-height: var(--bk-theme-space-32);
+      background-color: var(--bk-theme-surface-default);
+      border-color: var(--bk-theme-control-border-color);
+      border-radius: var(--bk-theme-control-radius);
+    }
+
+    :deep(.bk-search-select-container.is-focus) {
+      background-color: var(--bk-theme-surface-default);
+    }
+  }
+
+  .using-alert {
+    flex-shrink: 0;
+  }
+
+  .using-alert-title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bk-theme-space-8);
+  }
+
+  .using-alert-link {
+    padding: 0;
+    font-size: inherit;
+    line-height: inherit;
+    color: var(--bk-theme-color-brand-2);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+  }
+
+  .square-list {
     flex: 1;
     min-height: 0;
-  }
-
-  .sidebar-wrapper {
-    height: 100%;
-    padding: 20px;
-    overflow: hidden;
-    background-color: #f5f7fa;
-    transition: width .3s ease;
-    will-change: width;
-    contain: layout style;
-
-    /* position: relative; */
-    flex-shrink: 0;
-
-    &.is-collapsed {
-      width: 100px;
-    }
-
-    &:not(.is-collapsed) {
-      width: 282px;
-    }
-  }
-
-  .sidebar-collapsed {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    padding-top: 16px;
-    cursor: pointer;
-    border-radius: 8px;
-    opacity: 100%;
-    transition: opacity .2s ease .1s;
-
-    .collapsed-inner {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 52px;
-      padding: 20px 0;
-      background-color: #fff;
-      border-radius: 4px;
-      gap: 2px;
-      box-shadow: 0 0 10px 0 rgb(0 0 0 / 10%);
-    }
-
-    .collapsed-text {
-      font-size: 14px;
-      line-height: 1.8;
-      letter-spacing: 10px;
-      color: #313238;
-      writing-mode: vertical-rl;
-    }
-
-    .collapsed-toggle-icon {
-      width: 16px;
-      height: 16px;
-    }
-  }
-
-  .sidebar-expanded {
-    position: relative;
-    width: 260px;
-    height: 100%;
-    background-color: #fff;
-    border-radius: 4px;
-    opacity: 100%;
-    box-shadow: 0  2px 4px  0 rgb(25 25 41 / 5%);
-    transition: opacity .2s ease .1s;
-
-    .scene-selector-wrapper {
-      display: flex;
-      justify-content: center;
-      padding: 16px 16px 0;
-    }
-
-    .sidebar-header {
-      position: relative;
-      display: flex;
-      height: 52px;
-      padding: 0 16px 0 26px;
-      align-items: center;
-      justify-content: space-between;
-
-      &::after {
-        position: absolute;
-        right: 16px;
-        bottom: 0;
-        left: 16px;
-        border-bottom: 1px solid #eaebf0;
-        content: '';
-      }
-
-      .sidebar-title {
-        font-size: 14px;
-        font-weight: 500;
-        color: #313238;
-      }
-
-      .sidebar-toggle-icon {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-      }
-    }
-
-    :deep(.render-label-box) {
-      height: calc(100% - 52px - 48px);
-
-      .render-label {
-        min-width: unset;
-        padding: 0;
-
-        .label-item {
-          width: 100%;
-          padding: 0 16px 0 26px;
-
-          &.final {
-            position: relative;
-            border-bottom: none;
-
-            &::after {
-              position: absolute;
-              right: 16px;
-              bottom: 0;
-              left: 16px;
-              border-bottom: 1px solid #eaebf0;
-              content: '';
-            }
-          }
-        }
-
-      }
-
-      .operation-box {
-        display: none;
-      }
-    }
-
   }
 
   .content-content {

@@ -417,37 +417,35 @@
 
 <style lang="postcss" scoped>
 .ai-analyzes-dialog-content {
-  padding-bottom: 8px;
+  padding-bottom: var(--bk-theme-space-8);
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 
   .subtitle {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 12px;
 
     .highlight {
-      margin: 0 2px;
+      margin: 0 var(--bk-theme-space-2);
       font-weight: bold;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .report-card {
-    position: relative;
-    padding: 16px 20px;
-    margin-bottom: 12px;
+    position: relative;padding: var(--bk-theme-space-16) var(--bk-theme-space-16);
+    margin-bottom: var(--bk-theme-space-12);
     overflow: hidden;
     cursor: pointer;
-    background: linear-gradient(90deg, #f0f1f5 0%, #fafbfd 100%);
-    background-color: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    background: linear-gradient(90deg, var(--bk-theme-surface-muted) 0%, var(--bk-theme-table-header-bg) 100%);
+    background-color: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
     transition: all .2s;
 
-    &:hover {
-      background: linear-gradient(90deg, #eaf3ff 0%, #fafdff 100%);
-      border-color: #3a84ff;
-      box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%);
+    &:hover {background: linear-gradient(90deg, var(--bk-theme-fill-selected) 0%, #fafdff 100%);
+      border-color: var(--bk-theme-color-brand-2);
+      box-shadow: var(--bk-theme-card-shadow);
 
     }
 
@@ -461,13 +459,13 @@
       }
 
       &:hover {
-        background: linear-gradient(90deg, #f0f1f5 0%, #fafbfd 100%);
-        border-color: #dcdee5;
+        background: linear-gradient(90deg, var(--bk-theme-surface-muted) 0%, var(--bk-theme-table-header-bg) 100%);
+        border-color: var(--bk-theme-border-default);
         box-shadow: none;
       }
 
       &.recommend:hover {
-        border-color: #c4d9ff;
+        border-color: var(--bk-theme-color-brand-4);
       }
     }
 
@@ -482,7 +480,7 @@
     }
 
     &.recommend {
-      border-color: #c4d9ff;
+      border-color: var(--bk-theme-color-brand-4);
 
       .report-title {
         font-weight: bold;
@@ -490,16 +488,16 @@
     }
 
     .report-title {
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 14px;
       font-weight: 700;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .report-desc {
-      padding-right: 60px; /* 留出图标位置 */
+      padding-right: var(--bk-theme-space-32); /* 留出图标位置 */
       line-height: 18px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
 
     .report-icon {
@@ -514,25 +512,25 @@
   }
 
   .section-title {
-    margin: 24px 0 16px;
+    margin: var(--bk-theme-space-24) 0 var(--bk-theme-space-16);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .divider-wrapper {
     display: flex;
     align-items: center;
-    margin: 24px 0 16px;
+    margin: var(--bk-theme-space-24) 0 var(--bk-theme-space-16);
 
     .divider-line {
       flex: 1;
       height: 1px;
-      background-color: #dcdee5;
+      background-color: var(--bk-theme-border-default);
     }
 
     .divider-text {
-      padding: 0 16px;
-      color: #979ba5;
+      padding: 0 var(--bk-theme-space-16);
+      color: var(--bk-theme-text-weak);
     }
   }
 
@@ -550,33 +548,33 @@
       }
 
       .collapse-icon {
-        margin-right: 6px;
+        margin-right: var(--bk-theme-space-6);
         font-size: 16px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         transition: transform .2s;
       }
 
       .custom-title {
         font-size: 14px;
         font-weight: 700;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       .custom-desc {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
 
     .custom-content {
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
 
       .custom-input-wrapper {
         position: relative;
         display: flex;
         align-items: flex-end; /* 改为底部对齐 */
         width: 100%;
-        border: 1px solid #dcdee5;
-        border-radius: 2px;
+        border: 1px solid var(--bk-theme-border-default);
+        border-radius: var(--bk-theme-tag-radius);
         transition: all .2s;
 
         &:focus-within {
@@ -594,7 +592,7 @@
           :deep(.bk-textarea) {
             min-height: 80px;
             padding-right: 80px; /* 留出按钮位置 */
-            padding-bottom: 40px; /* 给底部留出空间，避免文字与按钮重叠 */
+            padding-bottom: var(--bk-theme-space-32); /* 给底部留出空间，避免文字与按钮重叠 */
             background: transparent;
             border: none;
             resize: none;

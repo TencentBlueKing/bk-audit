@@ -79,8 +79,8 @@
           {{ isEditMode ? t('提交') : t('创建') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="handleCancel">
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </template>

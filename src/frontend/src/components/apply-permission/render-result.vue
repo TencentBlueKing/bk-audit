@@ -78,7 +78,7 @@
 </script>
 <style lang="postcss" scoped>
   .no-permission-tips {
-    padding-top: 30px;
+    padding-top: var(--bk-theme-space-32);
     text-align: center;
 
     .lock {
@@ -86,35 +86,31 @@
       height: 100px;
     }
 
-    .tips-text {
-      margin: 8px 0 22px;
+    .tips-text {margin: var(--bk-theme-space-8) 0 var(--bk-theme-space-24);
       font-size: 20px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 
   .permission-list {
-    margin-bottom: 26px;
+    margin-bottom: var(--bk-theme-space-24);
 
     table {
-      width: 100%;
-      border: 1px solid #dfe0e5;
+      width: 100%;border: 1px solid var(--bk-theme-border-default);
     }
 
     th,
     td {
       height: 40px;
-      padding: 0 16px;
+      padding: 0 var(--bk-theme-space-16);
       font-size: 14px;
       font-weight: normal;
-      line-height: 40px;
-      color: #575961;
-      text-align: left;
-      border-bottom: 1px solid #dfe0e5;
+      line-height: 40px;color: var(--bk-theme-text-default);
+      text-align: left;border-bottom: 1px solid var(--bk-theme-border-default);
     }
 
     th {
-      background: #fafbfd;
+      background: var(--bk-theme-table-header-bg);
     }
   }
 
@@ -122,8 +118,7 @@
     display: flex;
     height: 40px;
     align-items: center;
-    justify-content: center;
-    border: 1px solid #dfe0e5;
+    justify-content: center;border: 1px solid var(--bk-theme-border-default);
     border-top: none;
   }
 </style>

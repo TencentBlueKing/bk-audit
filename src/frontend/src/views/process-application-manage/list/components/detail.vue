@@ -246,12 +246,12 @@
 </script>
 <style scoped lang="postcss">
 .process-detail-wrap {
-  padding: 24px 32px;
+  padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
 
   .approve-config-wrap {
-    padding: 16px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
     padding-left: 0;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
 
     .render-info-item .info-label {
       /* flex: 0 0 120px !important; */
@@ -263,8 +263,8 @@
     display: inline-block;
     height: 12px;
     vertical-align: middle;
-    background: var(--audit-neutral-border-01);
-    border-radius: var(--audit-radius-control);
+    background: var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-control-radius);
     animation: package-detail-skeleton 1.2s ease-in-out infinite;
   }
 
@@ -290,25 +290,25 @@
   .approve-skeleton-label {
     display: flex;
     justify-content: flex-end;
-    padding-right: 12px;
+    padding-right: var(--bk-theme-space-12);
   }
 
   .approve-empty {
     min-height: 32px;
-    padding-left: 12px;
+    padding-left: var(--bk-theme-space-12);
     line-height: 32px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 }
 
 @keyframes package-detail-skeleton {
   0%,
   100% {
-    background: var(--audit-neutral-border-01);
+    background: var(--bk-theme-border-default);
   }
 
   50% {
-    background: var(--audit-neutral-bg-01);
+    background: var(--bk-theme-surface-muted);
   }
 }
 </style>

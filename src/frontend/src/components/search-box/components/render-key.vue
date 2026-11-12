@@ -33,13 +33,14 @@
         </template>
         <div class="show-more-condition-btn">
           <bk-button
+            class="show-more-condition-action"
             text
             theme="primary"
             @click="handleShowMore">
             {{ t('更多选项') }}
             <audit-icon
+              class="show-more-condition-icon"
               :class="{ active: isShowMore }"
-              style=" margin-left: 4px;"
               type="angle-double-down" />
           </bk-button>
         </div>
@@ -66,15 +67,15 @@
       <slot name="more-button" />
     </div>
 
-    <div class="mt16">
+    <div class="key-actions">
       <bk-button
-        class="mr8"
+        class="key-action"
         theme="primary"
         @click="handleSubmit">
         {{ t('查询') }}
       </bk-button>
       <bk-button
-        class="mr8"
+        class="key-action"
         @click="handleReset">
         {{ t('重置') }}
       </bk-button>
@@ -252,7 +253,7 @@
 <style lang="postcss">
   .render-form-serach-key {
     position: relative;
-    padding: 16px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
     .render-form-serach-top {
       max-height: 40vh;
@@ -261,9 +262,9 @@
 
     .box-row {
       display: grid;
-      margin-bottom: 12px;
+      margin-bottom: var(--bk-theme-space-12);
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px 16px;
+      gap: var(--bk-theme-space-16) var(--bk-theme-space-16);
 
       .box-column {
         display: inline-block;
@@ -271,8 +272,20 @@
     }
 
     .show-more-condition-btn {
-      display: inline-block;
-      margin-top: 35px;
+      display: flex;
+      align-items: flex-end;
+
+      .show-more-condition-action {
+        height: 32px;
+        font-size: var(--bk-theme-font-size-sm);
+        line-height: var(--bk-theme-line-height-sm);
+      }
+
+      .show-more-condition-icon {
+        margin-left: var(--bk-theme-space-4);
+        font-size: var(--bk-theme-font-size-sm);
+        line-height: 1;
+      }
 
       .active {
         transform: rotateZ(-180deg);
@@ -280,4 +293,6 @@
       }
     }
   }
+  .key-actions { margin-top: var(--bk-theme-space-16); }
+  .key-action { margin-right: var(--bk-theme-space-8); }
 </style>

@@ -33,11 +33,11 @@
             <template #content>
               <div class="flex-center">
                 <bk-form-item
-                  class="is-required mr16"
+                  class="is-required"
                   :label="t('策略名称')"
                   label-width="160"
                   property="strategy_name"
-                  style="flex: 1;">
+                  style="flex: 1; margin-right: var(--bk-theme-space-16)">
                   <bk-input
                     v-model.trim="formData.strategy_name"
                     :maxlength="32"
@@ -111,11 +111,11 @@
               </bk-form-item>
               <div class="flex">
                 <bk-form-item
-                  class="mr16"
+                 
                   :label="t('风险危害')"
                   label-width="160"
                   property="risk_hazard"
-                  style="flex: 1;">
+                  style="flex: 1; margin-right: var(--bk-theme-space-16)">
                   <bk-input
                     v-model.trim="formData.risk_hazard"
                     autosize
@@ -214,14 +214,14 @@
         </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
-          class="ml8"
+         
           theme="primary"
-          @click="handleSaveCurrentStep">
+          @click="handleSaveCurrentStep" style="margin-left: var(--bk-theme-space-8)">
           {{ t('提交') }}
         </bk-button> -->
         <bk-button
-          class="ml8"
-          @click="handleCancel">
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -777,9 +777,9 @@
 
   .create-strategy-main {
     display: flex;
-    padding-top: 4px;
-    padding-bottom: 1px;
-    margin-bottom: 24px;
+    padding-top: var(--bk-theme-space-4);
+    padding-bottom: var(--bk-theme-space-2);
+    margin-bottom: var(--bk-theme-space-24);
 
     .strategt-form {
       flex: 1;
@@ -788,7 +788,7 @@
 
       :deep(.bk-button-group) {
         .bk-button {
-          padding: 0 35px;
+          padding: 0 var(--bk-theme-space-32);
           font-size: 12px;
         }
       }
@@ -797,36 +797,36 @@
         :deep(.bk-button-group) {
           .bk-button {
             &:first-child:hover:not(.is-disabled, .is-selected) {
-              color: #ea3636;
-              border-color: #ea3636;
+              color: var(--bk-theme-color-danger-2);
+              border-color: var(--bk-theme-color-danger-2);
             }
 
             &:first-child.is-selected {
-              color: #fff;
-              background-color: #ea3636;
-              border-color: #ea3636;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-color-danger-2);
+              border-color: var(--bk-theme-color-danger-2);
             }
 
             &:nth-child(2):hover:not(.is-disabled, .is-selected) {
-              color: #ff9c01;
-              border-color: #ff9c01;
+              color: var(--bk-theme-color-warn-2);
+              border-color: var(--bk-theme-color-warn-2);
             }
 
             &:nth-child(2).is-selected {
-              color: #fff;
-              background-color: #ff9c01;
-              border-color: #ff9c01;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-color-warn-2);
+              border-color: var(--bk-theme-color-warn-2);
             }
 
             &:hover:not(.is-disabled, .is-selected) {
-              color: #979ba5;
-              border-color: #979ba5;
+              color: var(--bk-theme-text-weak);
+              border-color: var(--bk-theme-text-weak);
             }
 
             &.is-selected {
-              color: #fff;
-              background-color: #979ba5;
-              border-color: #979ba5;
+              color: var(--bk-theme-surface-default);
+              background-color: var(--bk-theme-text-weak);
+              border-color: var(--bk-theme-text-weak);
             }
           }
         }
@@ -843,7 +843,7 @@
   }
 
   :deep(.tag-list .remove-tag) {
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 
   .content {
@@ -855,14 +855,14 @@
 }
 
 .create_notice_group {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .refresh {
-  padding: 0 12px;
-  color: #979ba5;
+  padding: 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
 }
 
 .is-disabled {

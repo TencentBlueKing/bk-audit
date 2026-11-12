@@ -153,25 +153,25 @@
     padding-top: 148px;
     font-size: 14px;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     text-align: center;
 
     .result-text {
       display: flex;
       justify-content: center;
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
     }
 
     .go-app-detail {
       display: inline-flex;
       width: 120px;
       height: 32px;
-      margin-top: 24px;
+      margin-top: var(--bk-theme-space-24);
       font-size: 14px;
-      color: #fff;
+      color: var(--bk-theme-surface-default);
       cursor: pointer;
-      background: #3a84ff;
-      border-radius: 2px;
+      background: var(--bk-theme-color-brand-2);
+      border-radius: var(--bk-theme-tag-radius);
       justify-content: center;
       align-items: center;
     }

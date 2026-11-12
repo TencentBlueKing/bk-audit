@@ -34,8 +34,8 @@
         <bk-button
           disabled>
           <audit-icon
-            class="mr8"
-            type="add" />
+           
+            type="add" style="margin-right: var(--bk-theme-space-8)" />
           {{ t('添加目标') }}
         </bk-button>
       </span>
@@ -74,3 +74,6 @@
     emits('change', result);
   };
 </script>
+
+<style scoped lang="postcss">
+</style>

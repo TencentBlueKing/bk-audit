@@ -110,7 +110,7 @@
   const { t } = useI18n();
   const interactive = computed(() => props.status === 'pending' || props.status === 'rejected');
   const label = computed(() => WHITELIST_STATUS_TEXT[props.status] || props.status);
-  const dotColor = computed(() => STATUS_DOT_TOKEN[props.status] || 'var(--audit-neutral-text-03)');
+  const dotColor = computed(() => STATUS_DOT_TOKEN[props.status] || 'var(--bk-theme-text-weak)');
   const flow = computed(() => props.flow || {
     itsm_sn: '',
     itsm_url: '',
@@ -127,12 +127,12 @@
 <style lang="postcss" scoped>
   .status-text {
     display: inline-flex;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
   }
 
   .status-label.is-link {
-    border-bottom: 1px dashed var(--audit-neutral-text-03);
+    border-bottom: 1px dashed var(--bk-theme-text-weak);
     cursor: pointer;
   }
 
@@ -144,29 +144,29 @@
     background: var(--dot-color);
     border-radius: 50%;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot-color) 24%, transparent);
-    margin-right: 4px;
+    margin-right: var(--bk-theme-space-4);
   }
 
   .flow-title {
-    margin-bottom: 8px;
-    font-weight: var(--audit-font-weight-bold);
+    margin-bottom: var(--bk-theme-space-8);
+    font-weight: var(--bk-theme-font-weight-bold);
   }
 
   .flow-row {
     display: flex;
-    gap: 8px;
-    margin-top: 6px;
-    line-height: var(--audit-line-height-base);
+    gap: var(--bk-theme-space-8);
+    margin-top: var(--bk-theme-space-6);
+    line-height: var(--bk-theme-line-height-base);
   }
 
   .flow-label {
     width: 84px;
     flex-shrink: 0;
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
     text-align: right;
   }
 
   .flow-link {
-    color: var(--audit-brand-02);
+    color: var(--bk-theme-color-brand-2);
   }
 </style>

@@ -111,8 +111,8 @@
                 @change="handleSpaceChange" />
               <bk-button
                 v-show="goBkVisionBtn && configUid.length > 0"
-                class="ml8"
-                @click="handleGoBkvision">
+               
+                @click="handleGoBkvision" style="margin-left: var(--bk-theme-space-8)">
                 {{ t('跳转至 BKVision') }}
               </bk-button>
               <audit-icon
@@ -506,8 +506,8 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
-    margin-right: 5px;
-    border-radius: 2px;
+    margin-right: var(--bk-theme-space-4);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .chart-cascade {
@@ -516,9 +516,8 @@
 
   .vision-refresh {
     display: flex;
-    margin-left: 10px;
-    font-size: 18px;
-    color: #87888f;
+    margin-left: var(--bk-theme-space-12);
+    font-size: 18px;color: var(--bk-theme-text-weak);
     cursor: pointer;
     transition: transform .3s ease;
     align-items: center;
@@ -540,11 +539,10 @@
   }
 
   .permission {
-    font-size: 12px;
-    color: #e71818;
+    font-size: 12px;color: var(--bk-theme-color-danger-2);
 
     .permission-link {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
     }
   }

@@ -150,15 +150,15 @@
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         :loading="isSubmiting"
         theme="primary"
-        @click="handleNext">
+        @click="handleNext" style="margin-left: var(--bk-theme-space-8)">
         {{ t('下一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -439,24 +439,24 @@
     .section-header {
       display: flex;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
 
       .section-title {
         font-size: 14px;
         font-weight: 600;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       .section-divider {
         width: 1px;
         height: 12px;
-        margin: 0 10px;
-        background: #979ba5;
+        margin: 0 var(--bk-theme-space-12);
+        background: var(--bk-theme-text-weak);
       }
 
       .section-desc {
         font-size: 12px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
   }
@@ -477,7 +477,7 @@
       width: 20px;
       height: 20px;
       font-size: 12px;
-      color: #fff;
+      color: var(--bk-theme-surface-default);
       background: #6366f1;
       border-radius: 50%;
       align-items: center;
@@ -490,45 +490,44 @@
   width: 66%;
 
   .recommend-text {
-    padding: 2px 4px;
+    padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
     font-size: 10px;
-    color: #fff;
-    background: #f59500;
-    border-radius: 2px;
+    color: var(--bk-theme-surface-default);background: var(--bk-theme-color-warn-2);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .description-box {
     width: 300px;
-    padding: 0 8px;
-    margin-top: 8px;
+    padding: 0 var(--bk-theme-space-8);
+    margin-top: var(--bk-theme-space-8);
     font-size: 12px;
-    color: #979ba5;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-weak);
+    background: var(--bk-theme-surface-subtle);
   }
 
   .sdk-support {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
 
     .sdk-support-desc {
       font-size: 12px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
 
     .sdk-support-footer {
-      padding: 0 12px;
-      margin-top: 6px;
+      padding: 0 var(--bk-theme-space-12);
+      margin-top: var(--bk-theme-space-6);
       font-size: 12px;
-      color: #4d4f56;
-      background-color: #f5f7fa;
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-surface-subtle);
     }
   }
 
   .log-create-notice {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
   }
 }
 </style>

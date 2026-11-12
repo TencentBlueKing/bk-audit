@@ -73,10 +73,10 @@
 <style lang="postcss" scoped>
   .status-tag {
     display: inline-block;
-    padding: 2px 4px;
+    padding: var(--bk-theme-space-2) var(--bk-theme-space-4);
     font-weight: bold;
     line-height: 16px;
     text-align: center;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
   }
 </style>

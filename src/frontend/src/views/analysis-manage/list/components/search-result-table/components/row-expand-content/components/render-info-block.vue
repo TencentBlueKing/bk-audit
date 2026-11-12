@@ -24,8 +24,8 @@
 </script>
 <style lang="postcss" scoped>
   .render-info-block {
-    padding-right: 48px;
-    padding-left: 20px;
+    padding-right: var(--bk-theme-space-32);
+    padding-left: var(--bk-theme-space-16);
     flex: 1;
   }
 </style>

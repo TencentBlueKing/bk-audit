@@ -53,10 +53,10 @@
 <style lang="postcss">
   .collector-deploy-log {
     height: calc(100vh - 60px);
-    padding: 16px 24px;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
     font-size: 12px;
     line-height: 22px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     background: #242424;
 
     .deploy-log-content {

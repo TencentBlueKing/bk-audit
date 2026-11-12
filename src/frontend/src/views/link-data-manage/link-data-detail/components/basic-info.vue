@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="link-data-basic-info">
-    <render-info-block class="mt16">
+    <render-info-block style="margin-top: var(--bk-theme-space-16)">
       <render-info-item :label="t('联表数据名称')">
         {{ data.name }}
       </render-info-item>
@@ -74,6 +74,6 @@
 </script>
 <style scoped lang="postcss">
 .link-data-basic-info {
-  padding: 0 25px;
+  padding: 0 var(--bk-theme-space-24);
 }
 </style>

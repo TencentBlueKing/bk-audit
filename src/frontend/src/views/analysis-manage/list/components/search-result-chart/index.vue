@@ -19,11 +19,11 @@
     <event-time-ratio />
     <div class="result-row">
       <operator-ratio class="result-col" />
-      <app-operation-count class="result-col ml16" />
+      <app-operation-count class="result-col" style="margin-left: var(--bk-theme-space-16)" />
     </div>
     <div class="result-row">
       <operation-event-ratio class="result-col" />
-      <operation-event-name class="result-col ml16" />
+      <operation-event-name class="result-col" style="margin-left: var(--bk-theme-space-16)" />
     </div>
   </div>
 </template>
@@ -36,11 +36,11 @@
 </script>
 <style lang="postcss">
   .search-result-chart {
-    margin-top: 4px;
+    margin-top: var(--bk-theme-space-4);
 
     .result-row {
       display: flex;
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
     }
 
     .result-col {

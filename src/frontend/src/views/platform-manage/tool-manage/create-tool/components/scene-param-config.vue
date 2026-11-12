@@ -1446,7 +1446,7 @@
     --param-name-col-width: 18%;
     --param-display-col-width: 18%;
 
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
   }
 
   .scene-param-config .render-field.is-two-col {
@@ -1454,11 +1454,11 @@
   }
 
   .param-config-block {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     overflow: hidden;
-    background-color: #fafbfd;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    background-color: var(--bk-theme-table-header-bg);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     &:last-child {
       margin-bottom: 0;
@@ -1467,29 +1467,29 @@
 
   .block-header {
     height: 42px;
-    padding: 0 16px;
+    padding: 0 var(--bk-theme-space-16);
     font-size: 12px;
     font-weight: 600;
     line-height: 42px;
-    color: #313238;
-    background-color: #f0f1f5;
-    box-shadow: 0 1px 0 0 #dcdee5;
+    color: var(--bk-theme-text-strong);
+    background-color: var(--bk-theme-surface-muted);
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 
   .block-body {
-    padding: 16px;
-    background-color: #fafbfd;
+    padding: var(--bk-theme-space-16);
+    background-color: var(--bk-theme-table-header-bg);
   }
 
   .override-section {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
 
     .form-label {
       display: block;
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 12px;
       line-height: 20px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
 
     /* 与下方表格参数名列同宽 */
@@ -1520,8 +1520,8 @@
       min-height: 32px;
       overflow: hidden;
       font-size: 12px;
-      background-color: #fff;
-      border-color: #c4c6cc;
+      background-color: var(--bk-theme-surface-default);
+      border-color: var(--bk-theme-border-strong);
       box-sizing: border-box;
     }
 
@@ -1535,7 +1535,7 @@
 
     .bk-select-tag-wrapper {
       flex-wrap: wrap;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
       height: 30px;
       overflow: hidden;
     }
@@ -1543,19 +1543,19 @@
     .bk-tag {
       flex-shrink: 0;
       margin: 0;
-      color: #63656e;
-      background-color: #f0f1f5;
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .bk-select-overflow-tag {
       flex-shrink: 0;
       margin: 0;
-      color: #63656e;
-      background-color: #f0f1f5;
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 
@@ -1579,11 +1579,11 @@
       height: 42px !important;
       min-height: 42px !important;
       max-height: 42px !important;
-      padding: 0 40px 0 10px;
+      padding: 0 var(--bk-theme-space-32) 0 var(--bk-theme-space-12);
       overflow: hidden;
       flex-wrap: nowrap;
       align-items: center;
-      background-color: #fff;
+      background-color: var(--bk-theme-surface-default);
       border: none;
       border-radius: 0;
       box-sizing: border-box;
@@ -1591,7 +1591,7 @@
 
     .bk-select-trigger .bk-select-tag-wrapper {
       display: flex;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
       width: 100%;
       height: 100%;
       padding: 0;
@@ -1608,13 +1608,13 @@
       height: 22px;
       margin: 0;
       overflow: hidden;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       white-space: nowrap;
       align-items: center;
-      background-color: #f0f1f5;
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      background-color: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
       box-sizing: border-box;
     }
 
@@ -1623,12 +1623,12 @@
       flex-shrink: 0;
       height: 22px;
       margin: 0;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       cursor: pointer;
       align-items: center;
-      background-color: #f0f1f5;
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      background-color: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
       box-sizing: border-box;
     }
 
@@ -1641,7 +1641,7 @@
       min-width: 0;
       overflow: hidden;
       flex: 1 1 0;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
       align-items: center;
     }
 
@@ -1657,7 +1657,7 @@
       width: max-content;
       pointer-events: none;
       visibility: hidden;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
     }
 
     .bk-select-trigger .override-tags-measure .bk-tag {
@@ -1674,18 +1674,18 @@
   .field-row .col-default.is-error {
     :deep(.override-default-multiselect .bk-select-trigger .bk-select-tag),
     :deep(.override-default-multiselect .bk-select-trigger .bk-select-tag:not(.collapse-tag)) {
-      border: 1px solid #ea3636 !important;
+      border: 1px solid var(--bk-theme-color-danger-2) !important;
     }
 
     :deep(.bk-input) {
-      border: 1px solid #ea3636 !important;
+      border: 1px solid var(--bk-theme-color-danger-2) !important;
     }
 
     :deep(.override-time-range-picker),
     :deep(.override-time-picker),
     :deep(.bk-date-picker-editor),
     :deep(.override-tag-input .bk-tag-input-trigger) {
-      border: 1px solid #ea3636 !important;
+      border: 1px solid var(--bk-theme-color-danger-2) !important;
     }
   }
 
@@ -1703,13 +1703,13 @@
 
   .render-field {
     overflow: hidden;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
     user-select: none;
   }
 
   .usage-restriction-field {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
   }
 
   .field-header-row,
@@ -1745,25 +1745,25 @@
     height: 42px;
     font-size: 12px;
     line-height: 40px;
-    color: #313238;
-    background: #f0f1f5;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-muted);
 
     .col-name,
     .col-display,
     .col-default,
     .col-action {
       height: 42px;
-      padding-left: 8px;
+      padding-left: var(--bk-theme-space-8);
     }
 
     .col-display,
     .col-default,
     .col-action {
-      border-left: 1px solid #dcdee5;
+      border-left: 1px solid var(--bk-theme-border-default);
     }
 
     .col-action {
-      background: #f0f1f5;
+      background: var(--bk-theme-surface-muted);
     }
 
     .col-default-label {
@@ -1773,10 +1773,10 @@
 
     .required-mark {
       display: inline-block;
-      margin-left: 2px;
+      margin-left: var(--bk-theme-space-2);
       font-size: 12px;
       line-height: 12px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
       vertical-align: top;
     }
   }
@@ -1785,14 +1785,13 @@
     overflow: hidden;
     font-size: 12px;
     line-height: 42px;
-    color: #63656e;
-    border-right: 1px solid #dcdee5;
-    border-bottom: 1px solid #dcdee5;
+    color: var(--bk-theme-text-default);
+    border-right: 1px solid var(--bk-theme-border-default);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     transition: background-color .2s;
 
     &:hover {
-      color: #313238;
-      background: #eff5ff;
+      color: var(--bk-theme-text-strong);background: var(--bk-theme-fill-selected);
     }
 
     .col-name,
@@ -1806,36 +1805,34 @@
     }
 
     .col-name {
-      background: #fafbfd;
+      background: var(--bk-theme-table-header-bg);
     }
 
     .col-display {
-      background: #fafbfd;
-      border-left: 1px solid #dcdee5;
+      background: var(--bk-theme-table-header-bg);
+      border-left: 1px solid var(--bk-theme-border-default);
     }
 
     .col-default {
-      background: #fff;
-      border-left: 1px solid #dcdee5;
+      background: var(--bk-theme-surface-default);
+      border-left: 1px solid var(--bk-theme-border-default);
       /* 默认值控件按内容宽度展示，垂直居中，不强制铺满列宽 */
       justify-content: flex-start;
     }
 
     .col-action {
-      background: #fafbfd;
-      border-left: 1px solid #dcdee5;
+      background: var(--bk-theme-table-header-bg);
+      border-left: 1px solid var(--bk-theme-border-default);
     }
   }
 
-  :deep(.field-row:hover .field-value) {
-    background: #eff5ff !important;
+  :deep(.field-row:hover .field-value) {background: var(--bk-theme-fill-selected) !important;
   }
 
   :deep(.field-row:hover .bk-input),
   :deep(.field-row:hover .bk-input .bk-input--text),
   :deep(.field-row:hover .bk-input input) {
-    color: #313238 !important;
-    background: #eff5ff !important;
+    color: var(--bk-theme-text-strong) !important;background: var(--bk-theme-fill-selected) !important;
     border-color: transparent !important;
     transition: none !important;
   }
@@ -1844,25 +1841,24 @@
   :deep(.field-row:hover .override-time-picker),
   :deep(.field-row:hover .bk-date-picker-editor),
   :deep(.field-row:hover .override-tag-input .bk-tag-input-trigger) {
-    color: #313238 !important;
-    background: #eff5ff !important;
+    color: var(--bk-theme-text-strong) !important;background: var(--bk-theme-fill-selected) !important;
     border-color: transparent !important;
   }
 
   :deep(.field-row:hover .col-default.is-error .bk-input),
   :deep(.field-row:hover .col-default.is-error .bk-input .bk-input--text),
   :deep(.field-row:hover .col-default.is-error .bk-input input) {
-    border-color: #ea3636 !important;
+    border-color: var(--bk-theme-color-danger-2) !important;
   }
 
   :deep(.field-row:hover .col-default.is-error .override-default-multiselect .bk-select-trigger .bk-select-tag) {
-    border-color: #ea3636 !important;
+    border-color: var(--bk-theme-color-danger-2) !important;
   }
 
   :deep(.field-row:hover .col-default.is-error .override-time-range-picker),
   :deep(.field-row:hover .col-default.is-error .override-time-picker),
   :deep(.field-row:hover .col-default.is-error .bk-date-picker-editor) {
-    border-color: #ea3636 !important;
+    border-color: var(--bk-theme-color-danger-2) !important;
   }
 
   :deep(.field-value) {
@@ -1870,11 +1866,11 @@
       display: block;
       width: 100%;
       max-width: 100%;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       overflow: hidden;
       font-size: 12px;
       line-height: 42px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       white-space: nowrap;
       box-sizing: border-box;
@@ -1925,9 +1921,9 @@
     }
 
     .override-default-input.is-focused:not(.is-readonly) {
-      border: 1px solid #3a84ff;
+      border: 1px solid var(--bk-theme-color-brand-2);
       outline: 0;
-      box-shadow: 0 0 3px #a3c5fd;
+     
     }
 
     .bk-date-picker.override-time-picker,
@@ -1986,7 +1982,7 @@
       max-width: 100%;
       min-width: 0;
       /* 给绝对定位的清除按钮留空，避免贴着/挡住文案 */
-      padding-right: 28px !important;
+      padding-right: var(--bk-theme-space-32) !important;
       line-height: 20px;
       border: none;
       box-sizing: border-box;
@@ -1998,32 +1994,32 @@
       right: 10px;
       z-index: 2;
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
       transform: translateY(-50%);
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
   }
 
   .field-operation {
     justify-content: center;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 
   .field-header-row .field-operation {
-    background: #f0f1f5;
+    background: var(--bk-theme-surface-muted);
   }
 
   .field-icon {
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
 
     &:hover {
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
   }
 </style>
@@ -2051,7 +2047,7 @@
     max-width: 100%;
     min-width: 0;
     height: 32px;
-    padding-right: 28px !important;
+    padding-right: var(--bk-theme-space-32) !important;
     overflow: hidden;
     line-height: 20px;
     border: none !important;
@@ -2092,13 +2088,12 @@
   }
 
   .scene-param-config .field-row:hover .override-person-select .tags-container,
-  .scene-param-config .field-row:hover .time-range-select-wrapper .__bk_date_picker__ {
-    background: #eff5ff !important;
+  .scene-param-config .field-row:hover .time-range-select-wrapper .__bk_date_picker__ {background: var(--bk-theme-fill-selected) !important;
   }
 
   .scene-param-config .field-row .col-default.is-error .override-person-select .tags-container,
   .scene-param-config .field-row .col-default.is-error .time-range-select-wrapper .__bk_date_picker__ {
-    border: 1px solid #ea3636 !important;
+    border: 1px solid var(--bk-theme-color-danger-2) !important;
   }
 
   /* 显示名 / 默认值溢出 tips：侧滑内需高于 9999 */
@@ -2117,7 +2112,7 @@
 
   .bk-popper.override-selected-tips-wrap .override-selected-tips-list {
     max-height: 300px;
-    padding: 8px 12px;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
     overflow-x: hidden;
     overflow-y: auto;
     font-size: 12px;
@@ -2125,7 +2120,7 @@
     word-break: break-all;
     white-space: normal;
     scrollbar-width: thin;
-    scrollbar-color: #63656e transparent;
+    scrollbar-color: var(--bk-theme-text-default) transparent;
   }
 
   .bk-popper.override-selected-tips-wrap .override-selected-tips-list::-webkit-scrollbar {
@@ -2133,8 +2128,8 @@
   }
 
   .bk-popper.override-selected-tips-wrap .override-selected-tips-list::-webkit-scrollbar-thumb {
-    background-color: #63656e;
-    border-radius: 2px;
+    background-color: var(--bk-theme-text-default);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .bk-popper.override-selected-tips-wrap .override-selected-tips-list::-webkit-scrollbar-track {

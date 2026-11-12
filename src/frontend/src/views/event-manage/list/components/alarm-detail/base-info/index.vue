@@ -87,12 +87,12 @@
     position: absolute;
     top: -16px;
     right: 0;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
   }
 
   .edit-strategy {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 </style>

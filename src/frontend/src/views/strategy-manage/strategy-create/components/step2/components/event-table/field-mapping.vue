@@ -159,14 +159,14 @@
   :deep(.bk-select .bk-input.is-focused),
   :deep(.bk-select:hover .bk-input.is-simplicity),
   :deep(.bk-select.is-focus .bk-input.is-simplicity) {
-    background-color: #fff;
-    border-color: #c4c6cc;
+    background-color: var(--bk-theme-surface-default);
+    border-color: var(--bk-theme-border-strong);
     box-shadow: none;
   }
 
   :deep(.bk-select.is-focus .bk-input),
   :deep(.bk-select .bk-input.is-focused) {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
   }
 }
 
@@ -176,7 +176,7 @@
   justify-content: flex-start;
   width: 100%;
   height: 100%;
-  padding: 0 12px;
+  padding: 0 var(--bk-theme-space-12);
   box-sizing: border-box;
 }
 </style>

@@ -16,7 +16,7 @@
 -->
 <template>
   <bk-loading :loading="pageLoading">
-    <div class="risk-manage-detail-wrap mb12">
+    <div class="risk-manage-detail-wrap">
       <div class="left">
         <!-- {{ detailData }} -->
         <base-info
@@ -452,12 +452,13 @@
 </script>
 <style scoped lang="postcss">
 .risk-manage-detail-wrap {
+  margin-bottom: var(--bk-theme-space-12);
   .left {
     width: 100%;
     padding-right: 0;
 
     .risk-detail-tab {
-      margin-top: 16px;
+      margin-top: var(--bk-theme-space-16);
       overflow: visible;
 
       :deep(.bk-tab-header),
@@ -481,7 +482,7 @@
       /* 无调查报告时隐藏 bk-tab-panel 页签头，避免与内容区「关联事件列表」标题重复 */
       &.risk-detail-tab--hide-panel-header {
         /* 与上方基本信息区间距 16px；内部顶距由 link-event .body padding-top 提供 */
-        margin-top: 16px;
+        margin-top: var(--bk-theme-space-16);
 
         :deep(.bk-tab-header) {
           display: none;
@@ -494,5 +495,6 @@
     }
   }
 }
+
 
 </style>

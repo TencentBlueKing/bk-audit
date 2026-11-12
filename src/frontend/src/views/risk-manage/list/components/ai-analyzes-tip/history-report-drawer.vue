@@ -637,12 +637,12 @@
 <style lang="postcss" scoped>
 .history-report-drawer-content {
   max-height: calc(100vh - 150px);
-  margin-top: 16px;
-  margin-right: 50px;
-  margin-left: 50px;
+  margin-top: var(--bk-theme-space-16);
+  margin-right: var(--bk-theme-space-32);
+  margin-left: var(--bk-theme-space-32);
 
   :deep(.audit-tdesign-list) {
-    background-color: #fff;
+    background-color: var(--bk-theme-surface-default);
 
     .show-tooltips-text {
       max-width: 100%;
@@ -655,25 +655,23 @@
     .t-table__header--fixed > tr > th,
     .t-table th,
     .t-table td {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
   }
 }
 
 :deep(.audit-tdesign-list .tdesign-list tr.new-row) {
   td,
-  th {
-    background-color: #e4faf0 !important;
+  th {background-color: var(--bk-theme-status-success-bg) !important;
   }
 
   &:hover td,
-  &:hover th {
-    background-color: #d8f5e6 !important;
+  &:hover th {background-color: var(--bk-theme-table-row-new-hover-bg) !important;
   }
 }
 
 .search-row {
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
 }
 
 .search-input {
@@ -691,15 +689,15 @@
 
 @media (width >= 1600px) {
   .history-report-drawer-content {
-    margin-right: 32px;
-    margin-left: 32px;
+    margin-right: var(--bk-theme-space-32);
+    margin-left: var(--bk-theme-space-32);
   }
 }
 
 :deep(.report-status-cell-wrap) {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 }
 
 :deep(.report-status-failed) {
@@ -713,7 +711,7 @@
   height: 20px;
   min-width: 20px;
   padding: 0;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -726,7 +724,7 @@
 :deep(.report-status-cell) {
   display: inline-flex;
   line-height: 20px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   align-items: center;
 
   .report-status-icon-wrap {
@@ -736,7 +734,7 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    margin-right: 6px;
+    margin-right: var(--bk-theme-space-6);
   }
 
   .report-status-icon {
@@ -752,15 +750,15 @@
 :deep(.risk-count-cell) {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 
   .info-icon {
     font-size: 14px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   .risk-count-link {
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     text-decoration: underline;
     cursor: pointer;
     text-underline-offset: 2px;
@@ -768,7 +766,7 @@
 
   .link-icon {
     font-size: 12px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
     visibility: hidden;
   }

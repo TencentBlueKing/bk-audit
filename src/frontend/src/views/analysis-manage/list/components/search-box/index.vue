@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="analysis-search-box">
+  <div class="analysis-search-box bk-theme-card bk-theme-card--flush">
     <keep-alive>
       <component
         :is="renderComponent"
@@ -272,9 +272,6 @@
 <style lang="postcss">
   .analysis-search-box {
     position: relative;
-    background-color: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
     .panel-toggle-btn {
       position: absolute;
@@ -286,16 +283,16 @@
       justify-content: center;
       align-items: center;
       font-size: 12px;
-      color: #fff;
+      color: var(--bk-theme-surface-default);
       text-align: center;
       cursor: pointer;
-      background: #dcdee5;
-      border-radius: 0 0 8px 8px;
+      background: var(--bk-theme-border-default);
+      border-radius: 0 0 var(--bk-theme-table-frame-radius) var(--bk-theme-table-frame-radius);
       transform: translate(-50%, 100%);
       transition: all .15s;
 
       &:hover {
-        background: #c4c6cc;
+        background: var(--bk-theme-border-strong);
       }
 
       &.is-floded {

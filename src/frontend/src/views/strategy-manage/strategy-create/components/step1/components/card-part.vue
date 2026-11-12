@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-create-card-part">
+  <div class="strategy-create-card-part bk-theme-card bk-theme-card--flush">
     <div
       class="card-part-title"
       @click="handleChangeCollapse">
@@ -66,19 +66,15 @@
 
 <style scoped lang="postcss">
 .strategy-create-card-part {
-  margin-bottom: var(--audit-space-16);
-  background: var(--audit-neutral-bg-04);
-  border-radius: var(--audit-radius-container);
-  box-shadow: var(--audit-shadow-card);
+  margin-bottom: var(--bk-theme-space-16);
 
   >.card-part-title {
     display: flex;
-    height: auto;
-    padding: 12px var(--audit-space-24) var(--audit-space-16);
-    font-size: var(--audit-font-size-base);
-    font-weight: var(--audit-font-weight-bold);
-    line-height: var(--audit-line-height-base);
-    color: var(--audit-neutral-text-01);
+    height: auto;padding: var(--bk-theme-space-12) var(--bk-theme-space-24) var(--bk-theme-space-16);
+    font-size: var(--bk-theme-font-size-base);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-strong);
     cursor: pointer;
     align-items: center;
 
@@ -89,9 +85,9 @@
 
     .card-part-collapse-icon {
       display: inline-block;
-      margin-right: var(--audit-space-8);
-      font-size: var(--audit-font-size-base);
-      color: var(--audit-neutral-text-02);
+      margin-right: var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-base);
+      color: var(--bk-theme-text-default);
       transition: transform .2s ease;
 
       &.is-collapsed {
@@ -106,9 +102,9 @@
   }
 
   >.card-part-content {
-    padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
     overflow: visible;
-    border-top: 1px solid var(--audit-neutral-border-02);
+    border-top: 1px solid var(--bk-theme-border-weak);
   }
 }
 </style>

@@ -127,7 +127,7 @@
   position: relative;
 
   &:nth-child(n+2) {
-    margin-top: 8px;
+    margin-top: var(--bk-theme-space-8);
   }
 
   .path-actions {
@@ -141,15 +141,15 @@
   .path-btn {
     display: flex;
     height: 32px;
-    padding: 0 5px;
+    padding: 0 var(--bk-theme-space-4);
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
     align-items: center;
     justify-content: center;
 
     &:hover {
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
     }
   }
 }
@@ -157,7 +157,7 @@
 .collector-path-tips {
   font-size: 12px;
   line-height: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 /* 进入之前和离开后的样式 */

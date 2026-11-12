@@ -19,14 +19,20 @@
     <div
       v-for="card in cardList"
       :key="card.key"
-      class="stat-card">
+      class="stat-card bk-theme-card">
       <div class="stat-card-content">
         <div class="stat-info">
           <div class="stat-label">
             {{ card.label }}
           </div>
           <div class="stat-value">
-            {{ card.value }}
+            <audit-skeleton
+              v-if="loading"
+              :height="40"
+              :width="72" />
+            <template v-else>
+              {{ card.value }}
+            </template>
           </div>
         </div>
         <div class="stat-right">
@@ -66,6 +72,7 @@
 
   const props = defineProps<{
     sceneData: SceneData;
+    loading?: boolean;
   }>();
 
   const emit = defineEmits<{
@@ -116,8 +123,8 @@
   .stat-cards {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: var(--bk-theme-space-16);
+    margin-bottom: var(--bk-theme-space-24);
   }
 
   .stat-card {
@@ -125,11 +132,8 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    min-width: 0;
-    padding: 20px 24px;
-    background-color: #fff;
-    border: 1px solid #e1e6f0;
-    border-radius: 2px;
+    min-width: 0;padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   .stat-card-content {
@@ -153,17 +157,17 @@
   }
 
   .stat-label {
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 14px;
     line-height: 20px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 
   .stat-value {
     font-size: 32px;
     font-weight: 700;
     line-height: 40px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .stat-icon {
@@ -174,7 +178,7 @@
   .stat-link {
     position: relative;
     z-index: 1;
-    margin-bottom: -16px;
+    margin-bottom: -var(--bk-theme-space-16);
     font-size: 12px;
   }
 </style>

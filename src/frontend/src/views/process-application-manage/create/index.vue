@@ -27,9 +27,9 @@
           :model="formData"
           :rules="rules">
           <bk-form-item
-            class="is-required mr16"
+            class="is-required"
             :label="t('套餐名称')"
-            property="name">
+            property="name" style="margin-right: var(--bk-theme-space-16)">
             <bk-input
               v-model.trim="formData.name"
               :placeholder="t('请输入')"
@@ -179,8 +179,8 @@
           {{ isEditMode ? t('保存') : t('提交') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="retToList">
+         
+          @click="retToList" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -441,19 +441,18 @@
 </script>
 
 <style scoped lang="postcss">
-.process-create-wrap {
-  padding: 28px 24px;
-  background-color: #fff;
+.process-create-wrap {padding: var(--bk-theme-space-32) var(--bk-theme-space-24);
+  background-color: var(--bk-theme-surface-default);
 
   .approve-config-wrap {
-    padding: 16px 24px;
-    background-color: #f5f7fa;
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
+    background-color: var(--bk-theme-surface-subtle);
   }
 
   :deep(.config-form-item .bk-form-label) {
     padding-right: 0;
 
-    /* margin-right: 8px; */
+    /* margin-right: var(--bk-theme-space-8); */
   }
 }
 </style>

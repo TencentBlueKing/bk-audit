@@ -30,13 +30,13 @@
       </bk-button>
       <bk-button
         v-if="isShowButton"
-        class="ml8"
-        @click="handleSubmit(false)">
+       
+        @click="handleSubmit(false)" style="margin-left: var(--bk-theme-space-8)">
         {{ t('保持人工编辑') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -86,3 +86,6 @@
     hide,
   });
   </script>
+
+<style scoped lang="postcss">
+</style>

@@ -27,13 +27,13 @@
       :rules="rules">
       <div class="flex-center">
         <bk-form-item
-          class="is-required mr16"
+          class="is-required"
           :disabled="isEdit"
           :label="t('操作ID')"
           label-width="100"
           property="action_id"
           required
-          style="flex: 1;">
+          style="flex: 1; margin-right: var(--bk-theme-space-16)">
           <bk-input
             v-model.trim="formData.action_id"
             :disabled="isEdit"
@@ -41,12 +41,12 @@
             style="width: 100%;" />
         </bk-form-item>
         <bk-form-item
-          class="is-required mr16"
+          class="is-required"
           :label="t('操作名称')"
           label-width="100"
           property="name"
           required
-          style="flex: 1;">
+          style="flex: 1; margin-right: var(--bk-theme-space-16)">
           <bk-input
             v-model.trim="formData.name"
             :placeholder="t('请输入操作名称')"
@@ -297,11 +297,10 @@
   });
 </script>
 <style scoped lang="postcss">
-.add-single-resource {
-  padding: 14px 24px;
+.add-single-resource {padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
   .customize-form {
-    margin-top: 24px;
+    margin-top: var(--bk-theme-space-24);
 
     .flex-center {
       display: flex;
@@ -312,80 +311,80 @@
       :deep(.bk-button-group) {
         .bk-button {
           &:first-child:hover:not(.is-disabled, .is-selected) {
-            color: #979ba5;
-            border-color: #979ba5;
+            color: var(--bk-theme-text-weak);
+            border-color: var(--bk-theme-text-weak);
           }
 
           &:first-child.is-selected {
-            color: #fff;
-            background-color: #979ba5 ;
-            border-color: #979ba5;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-text-weak) ;
+            border-color: var(--bk-theme-text-weak);
           }
 
           &:nth-child(2):hover:not(.is-disabled, .is-selected) {
-            color: #2caf5e;
-            border-color: #2caf5e ;
+            color: var(--bk-theme-color-success-2);
+            border-color: var(--bk-theme-color-success-2) ;
           }
 
           &:nth-child(2).is-selected {
-            color: #fff;
-            background-color: #2caf5e;
-            border-color: #2caf5e;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-color-success-2);
+            border-color: var(--bk-theme-color-success-2);
           }
 
           &:nth-child(3):hover:not(.is-disabled, .is-selected) {
-            color: #2caf5e;
-            border-color: #2caf5e ;
+            color: var(--bk-theme-color-success-2);
+            border-color: var(--bk-theme-color-success-2) ;
           }
 
           &:nth-child(3).is-selected {
-            color: #fff;
-            background-color: #2caf5e;
-            border-color: #2caf5e;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-color-success-2);
+            border-color: var(--bk-theme-color-success-2);
           }
 
           &:nth-child(4):hover:not(.is-disabled, .is-selected) {
-            color: #ff9c01;
-            border-color: #ff9c01;
+            color: var(--bk-theme-color-warn-2);
+            border-color: var(--bk-theme-color-warn-2);
           }
 
           &:nth-child(4).is-selected {
-            color: #fff;
-            background-color: #ff9c01;
-            border-color: #ff9c01;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-color-warn-2);
+            border-color: var(--bk-theme-color-warn-2);
           }
 
           &:nth-child(5):hover:not(.is-disabled, .is-selected) {
-            color: #ff9c01;
-            border-color: #ff9c01;
+            color: var(--bk-theme-color-warn-2);
+            border-color: var(--bk-theme-color-warn-2);
           }
 
           &:nth-child(5).is-selected {
-            color: #fff;
-            background-color: #ff9c01;
-            border-color: #ff9c01;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-color-warn-2);
+            border-color: var(--bk-theme-color-warn-2);
           }
 
           &:nth-child(6):hover:not(.is-disabled, .is-selected) {
-            color: #ea3636;
-            border-color: #ea3636;
+            color: var(--bk-theme-color-danger-2);
+            border-color: var(--bk-theme-color-danger-2);
           }
 
           &:nth-child(6).is-selected {
-            color: #fff;
-            background-color: #ea3636;
-            border-color: #ea3636;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-color-danger-2);
+            border-color: var(--bk-theme-color-danger-2);
           }
 
           &:nth-child(7):hover:not(.is-disabled, .is-selected) {
-            color: #ea3636;
-            border-color: #ea3636;
+            color: var(--bk-theme-color-danger-2);
+            border-color: var(--bk-theme-color-danger-2);
           }
 
           &:nth-child(7).is-selected {
-            color: #fff;
-            background-color: #ea3636;
-            border-color: #ea3636;
+            color: var(--bk-theme-surface-default);
+            background-color: var(--bk-theme-color-danger-2);
+            border-color: var(--bk-theme-color-danger-2);
           }
         }
       }

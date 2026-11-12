@@ -119,31 +119,31 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 .retry-title {
   font-size: 20px;
   font-weight: 400;
   line-height: 28px;
-  color: var(--audit-neutral-text-01);
+  color: var(--bk-theme-text-strong);
   white-space: nowrap;
 }
 
 .retry-split {
   width: 1px;
   height: 12px;
-  background: var(--audit-neutral-border-01);
+  background: var(--bk-theme-border-default);
   flex: none;
 }
 
 .retry-task {
   min-width: 0;
   overflow: hidden;
-  font-size: var(--audit-font-size-base);
+  font-size: var(--bk-theme-font-size-base);
   font-weight: 400;
   line-height: 22px;
-  color: var(--audit-neutral-text-03);
+  color: var(--bk-theme-text-weak);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -151,16 +151,16 @@
 .retry-row {
   display: flex;
   min-height: 32px;
-  padding: 6px 0;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
+  padding: var(--bk-theme-space-6) 0;
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
   align-items: flex-start;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
 }
 
 .retry-label {
-  height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   text-align: right;
   flex: 0 0 84px;
 }
@@ -173,7 +173,7 @@
   display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  color: var(--audit-neutral-text-01);
+  color: var(--bk-theme-text-strong);
   flex: 1;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -184,18 +184,18 @@
 </style>
 <style lang="postcss">
 .execution-retry-dialog .bk-dialog-content {
-  margin-top: 20px;
-  padding: 0 32px;
+  margin-top: var(--bk-theme-space-16);
+  padding: 0 var(--bk-theme-space-32);
 }
 
 .execution-retry-dialog .bk-dialog-footer {
   height: 48px;
-  background: var(--audit-neutral-bg-02);
-  border-top: 1px solid var(--audit-neutral-border-02);
+  background: var(--bk-theme-table-header-bg);
+  border-top: 1px solid var(--bk-theme-border-weak);
 }
 
 .execution-retry-dialog .bk-dialog-footer .bk-button + .bk-button,
 .execution-retry-dialog .retry-cancel {
-  margin-left: 8px;
+  margin-left: var(--bk-theme-space-8);
 }
 </style>

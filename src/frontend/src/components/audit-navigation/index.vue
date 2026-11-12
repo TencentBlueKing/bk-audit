@@ -29,7 +29,10 @@
     }">
     <div
       class="audit-navigation-side"
-      :class="{ 'is-side-collapsed': isSideCollapsed }"
+      :class="{
+        'is-side-collapsed': isSideCollapsed,
+        'is-side-hidden': hideSidebar,
+      }"
       :style="sideStyles">
       <div
         class="audit-navigation-header"
@@ -48,25 +51,25 @@
       </div>
       <slot name="sideAppendBefore" />
       <div
-        v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true')) && !route.meta?.hideSidebar"
+        v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true')) && !hideSidebar"
         class="none-side">
         <slot name="nodeSideContent" />
       </div>
       <div
-        v-if="(!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true') && !route.meta?.hideSidebar"
+        v-if="(!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true') && !hideSidebar"
         class="audit-side-menu"
         :class="{
           'show-notice-side-menu': showNotice.enabled && showAlert
         }"
         @mouseenter="handleSideMouseenter"
         @mouseleave="handleSideMouseleave">
-        <scroll-faker theme="dark">
+        <scroll-faker>
           <slot name="side" />
         </scroll-faker>
       </div>
       <div
         v-if="((!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true')
-          && !route.meta?.hideSidebar && !route.meta?.hideToggleBtn) || route.params?.isShowSideBar === 'true'"
+          && !hideSidebar && !route.meta?.hideToggleBtn) || route.params?.isShowSideBar === 'true'"
         class="audit-side-toggle-btn">
         <audit-icon
           class="fixed-flag"
@@ -86,7 +89,9 @@
         ref="headerTipsRef">
         <slot name="headerTips" />
       </div>
-      <div class="page-title">
+      <div
+        v-if="!hideSidebar"
+        class="page-title">
         <slot name="header" />
       </div>
       <!-- <div
@@ -117,7 +122,7 @@
     onMounted,
     ref,
   } from 'vue';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
@@ -131,11 +136,19 @@
   const { emit: emits } = useEventBus();
   const { feature: showNotice } = useFeature('bknotice');
   const route = useRoute();
+  const router = useRouter();
+  // 首屏路由守卫和页面包还没完成时，route.meta 还是空的，侧栏会先按 240px 画出来。
+  // 这时用地址直接匹配路由表，工具广场刷新不会先闪出空白菜单。
+  const hideSidebar = computed(() => {
+    if (route.meta?.hideSidebar) return true;
+    if (route.matched.length > 0) return false;
+    return Boolean(router.resolve(window.location.pathname).meta?.hideSidebar);
+  });
   const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
   // const TOGGLE_CACHE = 'navigation_toggle_status';
   const PAGE_MIN_WIDTH = 1366;
   const PAGE_MIDDLE_WIDTH = 1920;
-  const SIDE_LEFT_EXPAND_SMALL_WIDTH = 220;
+  const SIDE_LEFT_EXPAND_SMALL_WIDTH = 240;
   const SIDE_LEFT_EXPAND_BIG_WIDTH = 280;
   // 收起后只留图标和子级圆点，不再留文字和选择框的空位
   const SIDE_LEFT_INEXPAND_WIDTH = 48;
@@ -151,14 +164,14 @@
   const usesCustomSide = computed(() => (
     Boolean(route.meta?.nodeSideContent)
     && route.params?.isShowSideBar !== 'true'
-    && !route.meta?.hideSidebar
+    && !hideSidebar.value
   ));
   const isSideCollapsed = computed(() => (
     !usesCustomSide.value && !isSideMenuFixed.value && !isSideMenuHover.value
   ));
 
   const realSideWidth = computed(() => {
-    if (route.meta?.hideSidebar) {
+    if (hideSidebar.value) {
       return 0;
     }
     if (usesCustomSide.value || isSideMenuFixed.value) {
@@ -181,7 +194,6 @@
   });
 
   const mainStyles = computed(() => ({
-    paddingTop: '52px',
     marginLeft: `${realSideWidth.value}px`,
     zIndex: 1999,
   }));
@@ -195,7 +207,7 @@
   const scrollStyles = computed(() => {
     // 提示节点始终存在，没有内容时高度是 0，不能按 32px 预扣，否则滚动区比视口矮一截
     const headerTipsHeight = headerTipsRef.value?.offsetHeight ?? 0;
-    const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
+    const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 140 : 100;
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
       height: `calc(100vh - ${contentHeaderHeight + headerTipsHeight}px)`,
@@ -294,26 +306,22 @@
     }
 
     .audit-navigation-main {
-      margin-left: 220px;
+      margin-left: var(--bk-theme-nav-side-width);
     }
   }
 
   .page-title {
-    /* 解决投影被遮挡问题 */
     position: relative;
     z-index: 1;
     display: flex;
-    height: 52px;
-    padding: 0 20px;
-    margin-left: 1px;
-    font-size: 16px;
-    line-height: 52px;
-    color: #313238;
-    background: #fff;
-    transform: translate3d(0, 0, 0);
-
-    /* box-shadow: 0 1px 0 0 #eaebf0; */
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+    height: var(--bk-theme-page-title-height);
+    padding: 0 var(--bk-theme-space-24);
+    margin-top: var(--bk-theme-space-16);
+    font-size: var(--bk-theme-page-title-size);
+    font-weight: var(--bk-theme-page-title-weight);
+    line-height: var(--bk-theme-line-height-xl);
+    color: var(--bk-theme-page-title-color);
+    background: transparent;
     align-items: center;
   }
 
@@ -323,31 +331,40 @@
     right: 0;
     left: 0;
     display: flex;
-    height: 52px;
+    height: var(--bk-theme-nav-height);
     min-width: 1200px;
-    padding-right: 24px;
-    font-size: 14px;
-    color: #96a2b9;
-    background: #182132;
-    box-shadow: 0 1px 0 0 rgb(255 255 255 / 10%);
+    padding-right: var(--bk-theme-space-24);
+    font-size: var(--bk-theme-font-size-base);
+    color: var(--bk-theme-nav-top-text);
+    background: var(--bk-theme-nav-top-bg);
     align-items: center;
   }
 
   .audit-navigation-side {
     position: fixed;
-    top: 52px;
+    top: var(--bk-theme-nav-height);
     bottom: 0;
     left: 0;
     z-index: 2000;
     display: flex;
-    width: 220px;
-    font-size: 14px;
-    background: #242b3b;
+    width: var(--bk-theme-nav-side-width);
+    font-size: var(--bk-theme-font-size-base);
+    background: var(--bk-theme-nav-side-bg);
+    border-right: 1px solid var(--bk-theme-nav-side-border);
     transition: all .3s;
     flex-direction: column;
 
+    &.is-side-hidden {
+      width: 0;
+      overflow: hidden;
+      background: transparent;
+      border-right-width: 0;
+      transition: none;
+    }
+
     .audit-side-menu {
       width: 100%;
+      padding-top: var(--bk-theme-space-16);
       overflow: hidden;
       flex: 1 1 auto;
 
@@ -369,8 +386,7 @@
 
       .scene-selector-wrapper {
         display: flex;
-        justify-content: center;
-        padding: 10px 0 6px;
+        justify-content: center;padding: var(--bk-theme-space-8) 0 var(--bk-theme-space-6);
         margin: 0;
       }
 
@@ -446,21 +462,21 @@
       display: flex;
       height: 56px;
       margin-top: auto;
-      margin-left: 16px;
-      font-size: 16px;
-      color: #747e94;
+      margin-left: var(--bk-theme-space-16);
+      font-size: var(--bk-theme-font-size-lg);
+      color: var(--bk-theme-nav-side-icon);
       align-items: center;
 
       .fixed-flag {
-        padding: 8px;
+        padding: var(--bk-theme-space-8);
         cursor: pointer;
-        border-radius: 50%;
+        border-radius: var(--bk-theme-tag-radius);
         transform: rotateZ(0deg);
         transition: all .15s;
 
         &:hover {
-          color: #d3d9e4;
-          background: linear-gradient(270deg, #253047, #263247);
+          color: var(--bk-theme-nav-side-text);
+          background: var(--bk-theme-surface-subtle);
         }
       }
 
@@ -474,17 +490,16 @@
     position: fixed;
     top: 0;
     right: 0;
-    left: 220px;
+    left: var(--bk-theme-nav-side-width);
     z-index: 1999;
     display: flex;
     align-items: center;
-    height: 52px;
-    padding-right: 24px;
-    padding-left: 24px;
-    font-size: 16px;
-    color: #313238;
-    background: #fff;
-    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%);
+    height: var(--bk-theme-nav-height);
+    padding-right: var(--bk-theme-space-24);
+    padding-left: var(--bk-theme-space-24);
+    font-size: var(--bk-theme-font-size-lg);
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-default);
   }
 
   .audit-navigation-body-header-right {
@@ -500,14 +515,14 @@
       position: relative;
       box-sizing: border-box;
       height: 100%;
-      padding: 20px 24px 0;
+      padding: var(--bk-theme-page-padding);
     }
   }
 
   .audit-logo {
     display: flex;
     align-items: center;
-    min-width: 238px;
+    min-width: var(--bk-theme-nav-side-width);
   }
 }
 
@@ -521,16 +536,21 @@
 }
 
 .show-notice-side-menu {
-  padding-top: 40px;
+  padding-top: var(--bk-theme-space-32);
 }
 
 .show-notice-navigation-header {
   top: 40px !important;
 }
 
+.audit-navigation-main {
+  padding-top: var(--bk-theme-nav-height);
+  background: var(--bk-theme-surface-page);
+}
+
 .none-side {
   width: 100vw;
   height: 100%;
-  background: #fff;
+  background: var(--bk-theme-nav-side-bg);
 }
 </style>

@@ -46,7 +46,7 @@
       <div
         class="content-section"
         style="width: 460px; padding-left: 24px; border-left: 1px solid rgb(0 0 0 / 16%);"
-        :title="t('输入数据')">
+        v-bk-tooltips="t('输入数据')">
         <div class="section-header">
           <span class="section-title">{{ t('原始日志') }}</span>
           <span class="section-divider" />
@@ -91,8 +91,8 @@
                     :src="noLogDataSvg"
                     style="width: 68px; margin-left: 16px;">
                   <div
-                    class="ml8"
-                    style="line-height: 50px;">
+                   
+                    style="line-height: 50px; margin-left: var(--bk-theme-space-8)">
                     <span>{{ t('获取数据中') }}</span>
                     <bk-button
                       class="refresh-btn"
@@ -214,13 +214,13 @@
         {{ isEditMode ? t('保存') : t('提交') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleLast">
+       
+        @click="handleLast" style="margin-left: var(--bk-theme-space-8)">
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancle">
+       
+        @click="handleCancle" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -472,31 +472,31 @@
 .collector-field-extraction-page {
   .step4-content {
     display: flex;
-    gap: 24px;
+    gap: var(--bk-theme-space-24);
   }
 
   .content-section {
     .section-header {
       display: flex;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
 
       .section-title {
         font-size: 14px;
         font-weight: 600;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       .section-divider {
         width: 1px;
         height: 12px;
-        margin: 0 10px;
-        background: #979ba5;
+        margin: 0 var(--bk-theme-space-12);
+        background: var(--bk-theme-text-weak);
       }
 
       .section-desc {
         font-size: 12px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
   }
@@ -505,8 +505,8 @@
     display: flex;
     min-height: 86px;
     overflow: hidden;
-    color: #63656e;
-    border-radius: 2px;
+    color: var(--bk-theme-text-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     .original-data {
       display: flex;
@@ -514,30 +514,30 @@
 
       .original-data-text {
         flex: 1;
-        padding: 10px;
+        padding: var(--bk-theme-space-12);
         line-height: 18px;
         word-break: break-all;
-        background: #f5f7fa;
+        background: var(--bk-theme-surface-subtle);
       }
     }
 
     .no-data {
       display: flex;
       margin: auto;
-      color: #63656e;
-      background: #f5f7fa;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-subtle);
     }
   }
 
   .bg-color {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 
   .refresh-btn {
     height: 16px;
-    padding-left: 8px;
+    padding-left: var(--bk-theme-space-8);
     line-height: 16px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     word-break: keep-all;
     white-space: nowrap;
     cursor: pointer;

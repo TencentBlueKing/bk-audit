@@ -318,30 +318,30 @@
 .strategy-table {
   @mixin cell-base {
     display: flex;
-    padding: 0 12px;
-    border-right: 1px solid #dcdee5;
-    border-bottom: 1px solid #dcdee5;
+    padding: 0 var(--bk-theme-space-12);
+    border-right: 1px solid var(--bk-theme-border-default);
+    border-bottom: 1px solid var(--bk-theme-border-default);
     align-items: center;
   }
 
   display: flex;
-  margin-bottom: 10px;
-  color: #63656e;
-  border-top: 1px solid #dcdee5;
-  border-left: 1px solid #dcdee5;
+  margin-bottom: var(--bk-theme-space-12);
+  color: var(--bk-theme-text-default);
+  border-top: 1px solid var(--bk-theme-border-default);
+  border-left: 1px solid var(--bk-theme-border-default);
   flex-direction: column;
 
   .head {
     display: flex;
     height: 42px;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
 
     .header-cell {
       @include cell-base;
 
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
       font-weight: 500;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
 
       &.field-name {
         width: 250px;
@@ -366,18 +366,18 @@
   }
 
   .skeleton-rows {
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 
   .skeleton-row {
     display: flex;
     height: 42px;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
 
     .skeleton-cell {
       @include cell-base;
 
-      background: #fff;
+      background: var(--bk-theme-surface-default);
 
       &.field-name {
         width: 250px;
@@ -409,7 +409,7 @@
       @include cell-base;
 
       display: flex;
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
       align-items: center;
       justify-content: center;
     }

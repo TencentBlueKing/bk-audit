@@ -21,7 +21,7 @@
     :class="{ 'is-embedded': embedded }">
     <div
       v-if="!embedded"
-      class="title mb16">
+      class="title">
       {{ t('工单处理') }}
     </div>
     <div
@@ -31,18 +31,18 @@
         <!-- 标记误报 / 解除误报 -->
         <mark-misreport-btn
           v-if="showHeaderMisreportBtn"
-          class="mr16"
+         
           :data="data"
           :last-ticket-history="_.last(ticketHistory)"
           :user-info="userInfo"
-          @update="handleUpdate" />
+          @update="handleUpdate" style="margin-right: var(--bk-theme-space-16)" />
         <!-- 重开 -->
         <reopen-btn
           v-if="data.status==='closed' && data.risk_label ==='normal'"
-          class="mr16"
+         
           :data="data"
           :user-info="userInfo"
-          @update="handleUpdate" />
+          @update="handleUpdate" style="margin-right: var(--bk-theme-space-16)" />
         <!-- 跳转到风险总结的锚点 -->
         <span id="risk-manage-content-btn" />
         <!-- 风险总结 -->
@@ -567,7 +567,7 @@
 </script>
 <style scoped lang="postcss">
 .risk-manage-detail-handle-part {
-  padding: 0 14px 14px;
+  padding: 0 var(--bk-theme-space-12) var(--bk-theme-space-12);
 
   &.is-embedded {
     padding: 0;
@@ -578,15 +578,16 @@
   }
 
   .title {
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .header {
     display: flex;
-    padding-bottom: 12px;
+    padding-bottom: var(--bk-theme-space-12);
     justify-content: space-between;
     align-items: center;
   }
@@ -609,7 +610,7 @@
     grid-template-columns: var(--timeline-icon-size) minmax(0, 1fr);
     grid-template-rows: auto auto;
     column-gap: var(--timeline-icon-gap);
-    padding: 0 0 24px !important;
+    padding: 0 0 var(--bk-theme-space-24) !important;
     margin-top: 0 !important;
     overflow: visible;
     font-size: 12px;
@@ -625,7 +626,7 @@
       bottom: 0;
       left: calc(var(--timeline-icon-size) / 2 - .5px);
       width: 1px;
-      background: #dcdee5;
+      background: var(--bk-theme-border-default);
       content: '';
     }
 
@@ -675,7 +676,7 @@
     grid-column: 2;
     grid-row: 1;
     align-self: start;
-    padding-bottom: 12px;
+    padding-bottom: var(--bk-theme-space-12);
     margin-top: 0;
     font-size: 12px;
     line-height: 20px;
@@ -706,7 +707,7 @@
   :deep(.risk-handle-timeline-tag) {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     margin: 0;
   }
 
@@ -714,13 +715,13 @@
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   :deep(.risk-handle-timeline-tag__time) {
     font-size: 12px;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   :deep(.risk-handle-timeline-icon) {
@@ -749,7 +750,7 @@
   :deep(.bk-timeline-content .risk-experience-wrap) {
     padding: 0;
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     background: transparent;
     border: none;
     border-radius: 0;
@@ -761,12 +762,12 @@
   :deep(.bk-timeline-content .risk-experience-wrap > .mis-content) {
     display: grid;
     grid-template-columns: max-content auto minmax(0, 1fr);
-    row-gap: 8px;
+    row-gap: var(--bk-theme-space-8);
     align-items: start;
-    padding: 12px 8px 12px 12px;
-    margin-top: 8px;
-    background: #f5f7fa;
-    border-radius: 2px;
+    padding: var(--bk-theme-space-12) var(--bk-theme-space-8) var(--bk-theme-space-12) var(--bk-theme-space-12);
+    margin-top: var(--bk-theme-space-8);
+    background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
 
     .render-info-item {
       display: contents;
@@ -786,7 +787,7 @@
     }
 
     .render-info-item .info-value {
-      padding-left: 4px;
+      padding-left: var(--bk-theme-space-4);
       line-height: 20px;
     }
   }
@@ -796,4 +797,5 @@
     padding: 0;
   }
 }
+
 </style>

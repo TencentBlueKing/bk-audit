@@ -15,12 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="storageList">
-    <div class="storage-manage-list">
-      <div class="action-header">
+  <div class="storage-manage-list bk-theme-card">
+    <div class="action-header bk-theme-list-toolbar">
         <auth-button
           action-id="create_storage"
           style="width: 88px;"
@@ -38,8 +34,12 @@
           unique-select
           @update:model-value="handleSearch" />
       </div>
-      <bk-loading :loading="isLoading">
-        <bk-table
+      <table-skeleton
+        v-if="isLoading"
+        :column-count="6"
+        :row-count="8" />
+      <bk-table
+        v-else
           ref="listRef"
           :columns="tableColumn"
           :data="data"
@@ -75,7 +75,6 @@
             </bk-exception>
           </template>
         </bk-table>
-      </bk-loading>
       <audit-sideslider
         ref="sidesliderRef"
         v-bind="operationSidersliderInfo"
@@ -94,17 +93,17 @@
             <bk-button
               v-if="!disabled"
               v-bk-tooltips="t('请先完成连通性测试')"
-              class="mr8 is-disabled"
+              class="is-disabled"
               :loading="btnLoading"
-              style="width: 102px;"
+              style="width: 102px; margin-right: var(--bk-theme-space-8)"
               theme="primary">
               {{ isEditMode ? t('保存'): t('提交') }}
             </bk-button>
             <bk-button
               v-else
-              class="mr8"
+             
               :loading="btnLoading"
-              style="width: 102px;"
+              style="width: 102px; margin-right: var(--bk-theme-space-8)"
               theme="primary"
               @click="handleConfirm">
               {{ isEditMode ? t('保存'): t('提交') }}
@@ -117,8 +116,7 @@
           </div>
         </template>
       </audit-sideslider>
-    </div>
-  </skeleton-loading>
+  </div>
 </template>
 <script setup lang="tsx">
   import type { Column } from 'bkui-vue/lib/table/props';
@@ -500,12 +498,10 @@
 </script>
 <style lang="postcss">
 .storage-manage-list {
-  padding: 24px;
-  background: #fff;
+  padding: var(--bk-theme-space-24);
 
   .action-header {
     display: flex;
-    margin-bottom: 16px;
 
     .search-input {
       width: 480px;
@@ -520,10 +516,9 @@
 }
 
 .footer-fixed {
-  display: flex;
-  padding: 8px 10px;
-  background: #fafbfd;
+  display: flex;padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+  background: var(--bk-theme-table-header-bg);
   flex: 1;
-  border-top: 1px solid #dcdee5;
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 </style>

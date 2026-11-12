@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="render-field-text">
-    <div class="tips text">
+    <div class="bk-theme-cell-tip text">
       <slot />
     </div>
   </div>
@@ -25,18 +25,18 @@
 <style lang="postcss" scoped>
   .render-field-text {
     display: inline-flex;
-    height: 36px;
     max-width: 100%;
+    height: calc(var(--bk-theme-table-row-height) - var(--bk-theme-space-8) - var(--bk-theme-space-8));
+    vertical-align: top;
     cursor: pointer;
     align-items: center;
 
     .text {
-      height: 20px;
+      max-width: 100%;
       overflow: hidden;
-      font-size: 12px;
-      line-height: 20px;
-      color: #575961;
-      text-align: left;
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       white-space: nowrap;
     }

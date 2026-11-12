@@ -45,7 +45,7 @@
           <div
             class="filter-btn"
             :class="{ 'is-active': isDropdownShow }"
-            title="更多操作">
+            v-bk-tooltips="'更多操作'">
             <img
               alt=""
               class="filter-icon"
@@ -2224,7 +2224,7 @@
             padding: '12px 16px',
             marginBottom: '16px',
             lineHeight: '22px',
-            backgroundColor: '#f5f7fa',
+            backgroundColor: 'var(--bk-theme-surface-subtle)',
             borderRadius: '2px',
             fontSize: '14px',
             color: '#63656e',
@@ -2516,7 +2516,7 @@
             lineHeight: '22px',
             color: '#63656e',
             textAlign: 'left',
-            backgroundColor: '#f5f7fa',
+            backgroundColor: 'var(--bk-theme-surface-subtle)',
             borderRadius: '2px',
           },
         }, [
@@ -2606,7 +2606,7 @@
             lineHeight: '22px',
             color: '#63656e',
             textAlign: 'left',
-            backgroundColor: '#f5f7fa',
+            backgroundColor: 'var(--bk-theme-surface-subtle)',
             borderRadius: '2px',
           },
         }, [

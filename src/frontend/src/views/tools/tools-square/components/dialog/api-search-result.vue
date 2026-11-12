@@ -86,10 +86,10 @@
                           :key="config.tool.uid">
                           {{ config.drill_name || props.getToolNameAndType(config.tool.uid).name }}
                           <bk-button
-                            class="ml8"
+                           
                             text
                             theme="primary"
-                            @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)">
+                            @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)" style="margin-left: var(--bk-theme-space-8)">
                             {{ t('去查看') }}
                             <audit-icon
                               class="mr-18"
@@ -1114,21 +1114,21 @@
 <style scoped lang="postcss">
 /* stylelint-disable */
 :deep(.card-content) {
-  padding: 16px;
-  background-color: #fafbfd;
-  border: .5px solid #dcdee5;
-  border-bottom-right-radius: 2px;
-  border-bottom-left-radius: 2px;
+  padding: var(--bk-theme-space-16);
+  background-color: var(--bk-theme-table-header-bg);
+  border: .5px solid var(--bk-theme-border-default);
+  border-bottom-right-radius: var(--bk-theme-tag-radius);
+  border-bottom-left-radius: var(--bk-theme-tag-radius);
 
   .top-search-table-title {
-    margin: 10px 0;
+    margin: var(--bk-theme-space-12) 0;
     font-size: 12px;
   }
 
   .table-field-divider {
     height: 1px;
-    margin: 12px 16px;
-    background-color: #eaebf0;
+    margin: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    background-color: var(--bk-theme-border-weak);
   }
 
   .kv-field-item {
@@ -1143,7 +1143,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 8px 16px;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
 
     :deep(.bk-pagination) {
       display: flex;
@@ -1167,7 +1167,7 @@
 
 .single-content {
   padding: 0;
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
 }
 
 .top-search-table {
@@ -1200,7 +1200,7 @@
   :deep(.t-table__inner-wrapper),
   :deep(.t-table__scroll-container) {
     scrollbar-width: thin;
-    scrollbar-color: #c4c6cc transparent;
+    scrollbar-color: var(--bk-theme-border-strong) transparent;
   }
 
   /* WebKit: 固定尺寸，禁止 hover 变宽（覆盖 scroll-faker 组件的 14px !important） */
@@ -1233,15 +1233,15 @@
     &::-webkit-scrollbar-thumb,
     & .scrollbar-vertical::-webkit-scrollbar-thumb,
     & .scrollbar-horizontal::-webkit-scrollbar-thumb {
-      background-color: #c4c6cc !important;
-      border-radius: 3px !important;
+      background-color: var(--bk-theme-border-strong) !important;
+      border-radius: var(--bk-theme-tag-radius) !important;
     }
 
     &:hover::-webkit-scrollbar-thumb,
     & .scrollbar-vertical:hover::-webkit-scrollbar-thumb,
     & .scrollbar-horizontal:hover::-webkit-scrollbar-thumb {
       background-color: #a3a6ad !important;
-      border-radius: 3px !important;
+      border-radius: var(--bk-theme-tag-radius) !important;
     }
 
     &::-webkit-scrollbar-track,
@@ -1255,11 +1255,11 @@
 <style  lang="postcss">
 .api-search-result-table {
   :deep(.t-table--header-wrapper) {
-    background-color: #f0f1f5 !important;
+    background-color: var(--bk-theme-surface-muted) !important;
   }
 
   :deep(.t-table__footer) {
-    background-color: #fff;
+    background-color: var(--bk-theme-surface-default);
   }
 }
 

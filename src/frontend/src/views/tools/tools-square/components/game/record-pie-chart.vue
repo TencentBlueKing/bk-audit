@@ -509,33 +509,32 @@
 </script>
 
 <style scoped lang="postcss">
-.record-pie-chart {
-  padding: 5px 12px;
-  background: #fff;
-  border-radius: 2px;
+.record-pie-chart {padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
 
   .chart-header {
     display: flex;
     align-items: center;
-    margin-bottom: 4px;
-    gap: 16px;
+    margin-bottom: var(--bk-theme-space-4);
+    gap: var(--bk-theme-space-16);
   }
 
   .chart-title {
     font-size: 12px;
     font-weight: 700;
     line-height: 20px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .other-switch {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
 
     .switch-label {
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
   }
 

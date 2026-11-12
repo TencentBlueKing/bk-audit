@@ -18,7 +18,7 @@
   <div
     v-if="needApplyPermission"
     class="perimission-section">
-    <div class="perimission-section-container">
+    <div class="perimission-section-container bk-theme-card">
       <render-result :data="permissionResult" />
       <div class="perimission-section-footer">
         <bk-button
@@ -86,15 +86,11 @@
 
     .perimission-section-container {
       width: 768px;
-      padding: 24px;
-      margin: 60px auto;
-      background-color: #fff;
-      border-radius: 2px;
-      box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
+      margin: var(--bk-theme-space-32) auto;
     }
 
     .perimission-section-footer {
-      margin: 24px auto 6px;
+      margin: var(--bk-theme-space-24) auto var(--bk-theme-space-6);
       text-align: center;
     }
   }

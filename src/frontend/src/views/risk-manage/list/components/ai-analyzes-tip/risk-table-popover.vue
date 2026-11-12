@@ -185,7 +185,7 @@
 .risk-count-cell {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
 }
 
 .risk-count-num {
@@ -196,11 +196,11 @@
 }
 
 .risk-count-disabled {
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .risk-count {
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   text-decoration: underline;
   cursor: pointer;
   text-underline-offset: 2px;
@@ -217,7 +217,7 @@
 
 .link-icon {
   font-size: 12px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -226,7 +226,7 @@
 }
 
 :deep(.risk-id-link) {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 

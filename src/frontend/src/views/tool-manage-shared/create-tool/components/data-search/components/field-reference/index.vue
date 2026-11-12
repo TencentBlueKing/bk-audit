@@ -25,7 +25,7 @@
     width="1100"
     @update:is-show="handleUpdateIsShow">
     <template #header>
-      <div class="flex mr24 custom-title">
+      <div class="flex custom-title" style="margin-right: var(--bk-theme-space-24)">
         <span> {{ t('配置数据下钻') }}</span>
         <div class="line" />
         <span style="font-size: 12px; color: #979ba5;">
@@ -120,11 +120,11 @@
           </bk-loading>
         </bk-form-item>
         <bk-button
-          class="ml16"
+         
           :disabled="formData.selectTool.length === 0"
           text
           theme="primary"
-          @click="handleOpenTool">
+          @click="handleOpenTool" style="margin-left: var(--bk-theme-space-16)">
           {{ t('去使用') }}
         </bk-button>
       </div>
@@ -308,8 +308,8 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="closeDialog">
+       
+        @click="closeDialog" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -1051,13 +1051,11 @@
     .line {
       width: 1px;
       height: 12px;
-      margin: auto 10px;
-      background-color: #ccc;
+      margin: auto var(--bk-theme-space-12);background-color: var(--bk-theme-border-strong);
     }
   }
 
-  .field-reference-form {
-    padding: 16px 40px;
+  .field-reference-form {padding: var(--bk-theme-space-16) var(--bk-theme-space-32);
 
     :deep(.bk-form-error-tips) {
       z-index: 2;
@@ -1065,9 +1063,9 @@
 
     .filed-wrapper {
       position: relative;
-      padding: 10px;
-      margin-bottom: 16px;
-      background-color: #f5f7fa;
+      padding: var(--bk-theme-space-12);
+      margin-bottom: var(--bk-theme-space-16);
+      background-color: var(--bk-theme-surface-subtle);
 
       :deep(.collapse-panel) {
         border: none;
@@ -1076,8 +1074,8 @@
 
       .field-list {
         display: flex;
-        padding-left: 20px;
-        background: #f5f7fa;
+        padding-left: var(--bk-theme-space-16);
+        background: var(--bk-theme-surface-subtle);
         flex-direction: column;
       }
 
@@ -1087,13 +1085,13 @@
         right: 0;
         display: flex;
         align-items: center;
-        padding: 4px 2px;
+        padding: var(--bk-theme-space-4) var(--bk-theme-space-2);
         background: transparent;
         border: none;
 
         .field-title-icon-item {
           font-size: 13px;
-          color: #c4c6cc;
+          color: var(--bk-theme-border-strong);
           cursor: pointer;
           background: transparent;
           border: none;
@@ -1110,11 +1108,11 @@
       .field-item {
         display: flex;
         align-items: center;
-        margin: 5px 0;
+        margin: var(--bk-theme-space-4) 0;
 
         .field-reference-type {
           width: 100px;
-          margin: 0 10px;
+          margin: 0 var(--bk-theme-space-12);
         }
 
         .field-key,
@@ -1123,19 +1121,19 @@
         }
 
         .field-value {
-          color: #63656e;
+          color: var(--bk-theme-text-default);
 
-          /* border: 1px solid #c4c6cc; */
+          /* border: 1px solid var(--bk-theme-border-strong); */
 
           &:hover {
-            border-color: #979ba5;
+            border-color: var(--bk-theme-text-weak);
           }
         }
 
         .field-list-empty {
-          padding: 24px 0;
+          padding: var(--bk-theme-space-24) 0;
           font-size: 12px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           text-align: center;
         }
       }
@@ -1170,17 +1168,17 @@
 }
 
 .create-tool-group {
-  padding: 0 12px;
+  padding: 0 var(--bk-theme-space-12);
   text-align: center;
   flex: 1;
 }
 
 .refresh {
-  padding: 0 12px;
-  color: #3a84ff;
+  padding: 0 var(--bk-theme-space-12);
+  color: var(--bk-theme-color-brand-2);
   text-align: center;
   cursor: pointer;
-  border-left: 1px solid #dcdee5;
+  border-left: 1px solid var(--bk-theme-border-default);
   flex: 1;
 }
 </style>

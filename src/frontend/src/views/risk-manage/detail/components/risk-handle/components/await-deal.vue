@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    class="risk-await-deal-wrap"
+    class="risk-await-deal-wrap bk-theme-form--compact"
     :class="{ 'is-editor-boosted': isDockEditorBoosted }">
     <audit-form
       ref="formRef"
@@ -737,12 +737,12 @@
 .risk-await-deal-wrap {
   width: 100%;
   max-width: 100%;
-  padding: 16px;
+  padding: var(--bk-theme-space-16);
   margin: 0;
   font-size: 12px;
-  background: #f5f7fa;
-  border: 1px solid #eaebf0;
-  border-radius: 4px;
+  background: var(--bk-theme-surface-subtle);
+  border: 1px solid var(--bk-theme-border-weak);
+  border-radius: var(--bk-theme-tag-radius);
   box-sizing: border-box;
 }
 
@@ -754,44 +754,42 @@
 }
 
 .risk-await-deal-wrap :deep(.bk-form-item) {
-  margin-bottom: 16px;
 }
 
 .risk-await-deal-wrap :deep(.bk-form-item:last-child) {
-  margin-bottom: 0;
 }
 
 .risk-await-deal-wrap :deep(.bk-form-error) {
   position: static;
   display: block;
-  padding-top: 4px;
+  padding-top: var(--bk-theme-space-4);
   line-height: 18px;
 }
 
 .risk-await-deal-wrap :deep(.bk-form-label) {
   font-size: 12px;
   line-height: 20px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .risk-await-deal-method__group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: var(--bk-theme-space-8) var(--bk-theme-space-24);
 }
 
 .risk-await-deal-method__group :deep(.bk-radio) {
   font-size: 12px;
   font-weight: 400;
   line-height: 20px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .risk-await-deal-method__group :deep(.bk-radio .bk-radio-label) {
   font-size: 12px;
   font-weight: 400;
   line-height: 20px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 
 .risk-await-deal-wrap :deep(.bk-select),
@@ -822,21 +820,21 @@
 
 .misreport-alert,
 .whitelist-apply-hint {
-  margin-bottom: 16px;
+  margin-bottom: var(--bk-theme-space-16);
 }
 
 .whitelist-together {
-  margin-bottom: 16px;
-  font-size: var(--audit-font-size-sm);
-  color: var(--audit-neutral-text-02);
+  margin-bottom: var(--bk-theme-space-16);
+  font-size: var(--bk-theme-font-size-sm);
+  color: var(--bk-theme-text-default);
 }
 
 .risk-await-deal-wrap :deep(.risk-whitelist-form.is-embedded) {
-  margin-bottom: var(--audit-space-24);
+  margin-bottom: var(--bk-theme-space-24);
 }
 
 .pa-params-form-item {
-  margin-top: 24px !important;
+  margin-top: var(--bk-theme-space-24) !important;
   margin-bottom: 0 !important;
 
   :deep(.bk-form-content) {
@@ -849,12 +847,12 @@
 }
 
 .auto-close-risk-form-item {
-  margin-top: 24px !important;
-  margin-bottom: 24px !important;
+  margin-top: var(--bk-theme-space-24) !important;
+  margin-bottom: var(--bk-theme-space-24) !important;
 }
 
 .submit-actions-form-item {
-  margin-top: 8px !important;
+  margin-top: var(--bk-theme-space-8) !important;
   margin-bottom: 0 !important;
 }
 
@@ -865,11 +863,11 @@
 .pa-params-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  padding: 16px 12px;
-  background: #f0f1f5;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  gap: var(--bk-theme-space-16);
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-12);
+  background: var(--bk-theme-surface-muted);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
 
   /* 套餐参数组件统一高度 32px */
   :deep(.bk-select),
@@ -933,7 +931,6 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    margin-bottom: 12px;
 
     .bk-form-content {
       flex: 1;
@@ -969,21 +966,21 @@
 
 .risk-await-deal-wrap :deep(.risk-whitelist-form .bk-form-item.is-required .bk-form-label::after) {
   display: inline-block;
-  margin-left: 2px;
-  color: var(--audit-danger-02);
+  margin-left: var(--bk-theme-space-2);
+  color: var(--bk-theme-color-danger-2);
   content: '*';
 }
 
 .label-name::after {
   top: 0;
   width: 14px;
-  margin-left: 5px;
-  color: #ea3636;
+  margin-left: var(--bk-theme-space-4);
+  color: var(--bk-theme-color-danger-2);
   text-align: center;
   content: '*';
 }
 
 .underline {
-  border-bottom: 1px dashed #c4c6cc;
+  border-bottom: 1px dashed var(--bk-theme-border-strong);
 }
 </style>

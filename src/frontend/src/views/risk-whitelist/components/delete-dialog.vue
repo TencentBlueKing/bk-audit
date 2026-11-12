@@ -108,46 +108,46 @@
 </script>
 <style lang="postcss" scoped>
   .delete-body {
-    padding: 0 8px;
-    font-size: var(--audit-font-size-sm);
+    padding: 0 var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 20px;
   }
 
   .desc-row {
     box-sizing: border-box;
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: flex-start;
-    padding: 3px 0;
+    padding: var(--bk-theme-space-4) 0;
   }
 
   .desc-label {
     width: 84px;
     flex-shrink: 0;
-    font-family: var(--audit-font-family);
-    font-size: var(--audit-font-size-sm);
+    font-family: var(--bk-theme-font-family);
+    font-size: var(--bk-theme-font-size-sm);
     font-style: normal;
-    font-weight: var(--audit-font-weight-regular);
+    font-weight: var(--bk-theme-font-weight-regular);
     line-height: 20px;
-    color: var(--audit-neutral-text-02);
+    color: var(--bk-theme-text-default);
     text-align: right;
   }
 
   .desc-value {
-    font-size: var(--audit-font-size-sm);
-    font-weight: var(--audit-font-weight-regular);
+    font-size: var(--bk-theme-font-size-sm);
+    font-weight: var(--bk-theme-font-weight-regular);
     line-height: 20px;
-    color: var(--audit-neutral-text-01);
+    color: var(--bk-theme-text-strong);
   }
 
   .action-alert {
-    margin-top: 16px;
+    margin-top: var(--bk-theme-space-16);
   }
 
   .action-buttons {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     justify-content: center;
-    margin-top: 24px;
+    margin-top: var(--bk-theme-space-24);
   }
 </style>

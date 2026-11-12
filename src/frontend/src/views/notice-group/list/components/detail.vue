@@ -103,56 +103,54 @@
 </script>
 <style lang="postcss">
 .notice-group-detail {
-  padding: 24px 32px;
+  padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
 
-  .receiver-item {
-    padding: 3px 8px;
-    margin-right: 4px;
-    background: #f0f1f5;
-    border-radius: 2px;
+  .receiver-item {padding: var(--bk-theme-space-2) var(--bk-theme-space-8);
+    margin-right: var(--bk-theme-space-4);
+    background: var(--bk-theme-surface-muted);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .notice-table-content {
     width: 100%;
 
-    .notice-table-value {
-      padding: 5px 12px;
-      color: #63656e;
+    .notice-table-value {padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
+      color: var(--bk-theme-text-default);
       text-align: center;
 
       td {
-        padding: 10px;
+        padding: var(--bk-theme-space-12);
       }
 
       .check-icon {
         font-size: 14px;
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
     }
 
     .notice-table-title {
       height: 42px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: center;
-      background-color: #fafbfd;
+      background-color: var(--bk-theme-table-header-bg);
     }
 
     tr {
       td {
-        border-top: 1px solid #dcdee5;
-        border-right: 1px solid #dcdee5;
-        border-left: 1px solid #dcdee5;
+        border-top: 1px solid var(--bk-theme-border-default);
+        border-right: 1px solid var(--bk-theme-border-default);
+        border-left: 1px solid var(--bk-theme-border-default);
       }
     }
   }
 
   .notice-table-content tr:last-child td {
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--bk-theme-border-default);
   }
 
   .check-icon {
     font-size: 14px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 }
 </style>

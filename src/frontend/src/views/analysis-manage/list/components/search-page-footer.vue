@@ -41,16 +41,16 @@
     display: flex;
     height: 52px;
     font-size: 12px;
-    color: #63656e;
-    background: #f5f6fa;
-    background-color: #f5f6fa;
-    border-top: 1px solid #dcdee5;
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-subtle);
+    background-color: var(--bk-theme-surface-subtle);
+    border-top: 1px solid var(--bk-theme-border-default);
     align-items: center;
     flex-direction: column;
     justify-content: center;
 
     .y-axis {
-      color: #63656e;
+      color: var(--bk-theme-text-default);
     }
 
     .footer-content:first-child .y-axis {

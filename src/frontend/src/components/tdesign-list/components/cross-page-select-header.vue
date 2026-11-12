@@ -213,29 +213,29 @@
     display: inline-flex;
     vertical-align: middle;
     align-items: center;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
 
     &.disabled {
-      color: #dcdee5;
+      color: var(--bk-theme-border-default);
       pointer-events: none;
       cursor: not-allowed;
     }
   }
 
   .pop-menu {
-    margin: 0 -14px;
+    margin: 0 -var(--bk-theme-space-12);
     font-size: 12px;
     line-height: 32px;
     text-align: center;
     cursor: pointer;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
 
     .item {
-      padding: 0 14px;
+      padding: 0 var(--bk-theme-space-12);
 
       &:hover {
-        color: #3a84ff;
-        background: #f5f6fa;
+        color: var(--bk-theme-color-brand-2);
+        background: var(--bk-theme-surface-subtle);
       }
     }
   }

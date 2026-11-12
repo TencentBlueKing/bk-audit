@@ -397,27 +397,27 @@
   }
 
   .system-diagnosis-container {
-    padding: 24px;
-    margin-top: 24px;
-    background: #fff;
+    padding: var(--bk-theme-space-24);
+    margin-top: var(--bk-theme-space-24);
+    background: var(--bk-theme-surface-default);
 
     .main-title {
       font-size: 24px;
       font-weight: 700;
       letter-spacing: 0;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
 
       .main-sub-title {
-        margin-left: 20px;
+        margin-left: var(--bk-theme-space-16);
         font-size: 18px;
         font-weight: normal;
         letter-spacing: 0;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
     }
 
     .diagnostic-list {
-      margin-top: 40px;
+      margin-top: var(--bk-theme-space-32);
 
       .qa {
         font-size: 18px;
@@ -428,18 +428,18 @@
           text-indent: 2em;
 
           .blue {
-            color: #3a84ff;
+            color: var(--bk-theme-color-brand-2);
           }
         }
       }
 
       .item-list {
-        margin-top: 12px;
+        margin-top: var(--bk-theme-space-12);
         font-size: 16px;
 
         .item {
           display: flex;
-          margin: 16px 0;
+          margin: var(--bk-theme-space-16) 0;
           line-height: 24px;
 
           .item-index {
@@ -447,10 +447,10 @@
 
             span {
               padding: 0 5.2px;
-              margin-right: 8px;
+              margin-right: var(--bk-theme-space-8);
               font-size: 14px;
-              color: #fff;
-              background: #3a84ff;
+              color: var(--bk-theme-surface-default);
+              background: var(--bk-theme-color-brand-2);
               border-radius: 50%;
             }
           }
@@ -460,13 +460,12 @@
           }
 
           .item-info-list-item {
-            margin: 8px 0;
+            margin: var(--bk-theme-space-8) 0;
 
             &::before {
               display: inline-block;
               width: 8px;
-              height: 8px;
-              background-color: #d8d8d8; /* 设置项目符号的颜色 */
+              height: 8px;background-color: var(--bk-theme-border-default); /* 设置项目符号的颜色 */
               border-radius: 50%;
               content: ''; /* 使用项目符号 */
             }

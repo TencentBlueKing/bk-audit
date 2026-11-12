@@ -173,15 +173,15 @@
 <style lang="postcss" scoped>
   .expand-content {
     position: relative;
-    padding: 10px 0;
-    background-color: #fafbfd;
+    padding: var(--bk-theme-space-12) 0;
+    background-color: var(--bk-theme-table-header-bg);
 
     .flex {
       display: flex;
     }
 
     .content-block {
-      padding: 5px;
+      padding: var(--bk-theme-space-4);
     }
 
     .whole-log-btn {

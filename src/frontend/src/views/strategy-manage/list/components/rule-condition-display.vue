@@ -78,11 +78,11 @@
   display: flex;
 
   .mr4 {
-    margin-right: 4px;
+    margin-right: var(--bk-theme-space-4);
   }
 
   .mb4 {
-    margin-bottom: 4px;
+    margin-bottom: var(--bk-theme-space-4);
   }
 
   .condition-equation-wrap {
@@ -92,13 +92,12 @@
   }
 
   .condition-equation {
-    padding: 2px 8px;
+    padding: var(--bk-theme-space-2) var(--bk-theme-space-8);
     font-size: 12px;
     line-height: 20px;
-    color: #3a84ff;
-    text-align: center;
-    background: #edf4ff;
-    border-radius: 2px;
+    color: var(--bk-theme-color-brand-2);
+    text-align: center;background: var(--bk-theme-fill-selected);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .first-equation {
@@ -118,32 +117,31 @@
 
     .condition-key {
       height: 22px;
-      padding: 0 var(--audit-space-8);
-      font-size: var(--audit-font-size-sm);
+      padding: 0 var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 22px;
-      color: #326746;
-      background: #dde9de;
-      border-radius: var(--audit-radius-control);
+      color: #326746;background: var(--bk-theme-status-success-bg);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .condition-method {
       height: 22px;
-      padding: 0 var(--audit-space-8);
-      font-size: var(--audit-font-size-sm);
+      padding: 0 var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 22px;
-      color: var(--audit-warn-01);
-      background: var(--audit-warn-06);
-      border-radius: var(--audit-radius-control);
+      color: var(--bk-theme-color-warn-1);
+      background: var(--bk-theme-color-warn-6);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .condition-value {
       height: 22px;
-      padding: 0 var(--audit-space-8);
-      font-size: var(--audit-font-size-sm);
+      padding: 0 var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 22px;
-      color: var(--audit-neutral-text-02);
-      background: var(--audit-neutral-bg-01);
-      border-radius: var(--audit-radius-control);
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 }

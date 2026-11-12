@@ -104,13 +104,13 @@
 
 <style lang="postcss" scoped>
 .inset-var-content {
-  margin-top: 10px;
+  margin-top: var(--bk-theme-space-12);
 }
 
 .inset-var {
   :deep(.bk-modal-body) {
     position: relative;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
   }
 
   :deep(.bk-tab-content) {
@@ -119,17 +119,17 @@
 }
 
 .risk-panel {
-  margin-left: 30px;
-  background-color: #f5f7fa;
+  margin-left: var(--bk-theme-space-32);
+  background-color: var(--bk-theme-surface-subtle);
 }
 
 .inset-var-tab {
   :deep(.bk-tab-header) {
-    margin-left: 40px;
+    margin-left: var(--bk-theme-space-32);
   }
 
   :deep(.t-table__header--fixed:not(.t-table__header--multiple) > tr > th) {
-    background-color: #f0f1f5;
+    background-color: var(--bk-theme-surface-muted);
   }
 }
 

@@ -222,7 +222,7 @@
 
       &::-webkit-scrollbar-thumb {
         background-color: rgb(151 155 165 / 80%);
-        border-radius: 3px;
+        border-radius: var(--bk-theme-tag-radius);
       }
 
       &:hover {

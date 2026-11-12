@@ -65,13 +65,13 @@
           :confirm-handler="handleGoEdit"
           :content="t('采集下发完成后 24 小时之内，如无配置第 3 步”字段清洗“，任务会被强制停用。')"
           :title="t('确认返回上一步？')">
-          <bk-button class="ml8">
+          <bk-button style="margin-left: var(--bk-theme-space-8)">
             {{ t('上一步') }}
           </bk-button>
         </audit-popconfirm>
         <bk-button
-          class="ml8"
-          @click="handleGoAPPDetail">
+         
+          @click="handleGoAPPDetail" style="margin-left: var(--bk-theme-space-8)">
           {{ t('返回系统详情') }}
         </bk-button>
       </template>
@@ -430,49 +430,49 @@
 </script>
 <style lang="postcss">
   .collection-delivery-page {
-    padding: 24px;
-    margin-bottom: 16px;
-    background: #fff;
-    border-radius: 2px;
+    padding: var(--bk-theme-space-24);
+    margin-bottom: var(--bk-theme-space-16);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-tag-radius);
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
 
     .task-empty {
       display: flex;
       align-items: center;
       height: 218px;
-      margin-top: 16px;
-      background: #fff;
-      border: 1px dashed #c4c6cc;
-      border-radius: 2px;
+      margin-top: var(--bk-theme-space-16);
+      background: var(--bk-theme-surface-default);
+      border: 1px dashed var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .status-operation-box {
       display: flex;
-      margin: 16px 0;
+      margin: var(--bk-theme-space-16) 0;
       user-select: none;
     }
 
     .status-tab {
       display: flex;
-      padding: 3px;
+      padding: var(--bk-theme-space-4);
       font-size: 12px;
-      color: #63656e;
-      background: #f0f1f5;
-      border-radius: 2px;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .status-tab-item {
       display: flex;
       height: 26px;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       cursor: pointer;
-      border-radius: 2px;
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
       justify-content: center;
       transition: all .15s;
 
       &.active {
-        background: #fff;
+        background: var(--bk-theme-surface-default);
         box-shadow: 0 1px 2px 0 rgb(0 0 0 / 8%);
       }
     }

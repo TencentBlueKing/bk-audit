@@ -106,6 +106,6 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 10px;
+  gap: var(--bk-theme-space-12);
 }
 </style>

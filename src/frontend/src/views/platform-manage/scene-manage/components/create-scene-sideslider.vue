@@ -159,10 +159,10 @@
     </template>
     <template #footer>
       <bk-button
-        class="mr8"
+       
         :loading="submitLoading"
         theme="primary"
-        @click="handleSubmit">
+        @click="handleSubmit" style="margin-right: var(--bk-theme-space-8)">
         {{ t('提交') }}
       </bk-button>
       <bk-button @click="handleCancel">
@@ -513,19 +513,18 @@
 </script>
 
 <style lang="postcss" scoped>
-.create-scene-content {
-  padding: 24px 40px;
+.create-scene-content {padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
 
   .form-item-tips {
-    margin-top: 4px;
+    margin-top: var(--bk-theme-space-4);
     font-size: 12px;
     line-height: 20px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   :deep(.label-tips) {
     cursor: pointer;
-    border-bottom: 1px dashed #979ba5;
+    border-bottom: 1px dashed var(--bk-theme-text-weak);
   }
 
   .no-label :deep(.bk-form-label::after) {
@@ -538,12 +537,11 @@
 
   .select-group {
     :deep(.bk-form-item) {
-      margin-bottom: 0;
     }
   }
 }
 
 .mr8 {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
 }
 </style>

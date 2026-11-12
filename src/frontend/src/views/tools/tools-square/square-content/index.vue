@@ -144,8 +144,8 @@
     .heard-left {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 10px;
+      gap: var(--bk-theme-space-12);
+      margin-top: var(--bk-theme-space-12);
 
       &.collapsed {
         max-height: 30px;
@@ -156,21 +156,21 @@
     .heard-right {
       display: flex;
       width: 120px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       text-align: right;
       cursor: pointer;
       align-items: center;
       justify-content: center;
 
       &:hover {
-        color: #1768ef;
+        color: var(--bk-theme-color-brand-1);
       }
     }
   }
 
   :deep(.bk-tag) {
     &:hover {
-      background-color: #f0f1f5 !important;
+      background-color: var(--bk-theme-surface-muted) !important;
     }
   }
 }

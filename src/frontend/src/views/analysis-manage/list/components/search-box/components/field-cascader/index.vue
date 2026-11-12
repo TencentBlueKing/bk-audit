@@ -35,10 +35,10 @@
             <div style="display: flex; align-items: center;">
               <bk-checkbox
                 v-model="selectedItems[item.id]"
-                class="mr8"
+               
                 :disabled="item.disabled"
                 :indeterminate="indeterminateItems[item.id]"
-                @change="handleCheckboxChange(item)" />
+                @change="handleCheckboxChange(item)" style="margin-right: var(--bk-theme-space-8)" />
               <span>{{ item.name }}</span>
             </div>
             <audit-icon
@@ -97,11 +97,11 @@
               </div>
               <div style="margin-top: 8px; text-align: right;">
                 <bk-button
-                  class="mr8"
+                 
                   :disabled="!customFields"
                   size="small"
                   theme="primary"
-                  @click="handleConfirm(node)">
+                  @click="handleConfirm(node)" style="margin-right: var(--bk-theme-space-8)">
                   {{ t('确定') }}
                 </bk-button>
                 <bk-button
@@ -402,18 +402,17 @@
     width: auto;
     height: 350px;
     min-width: 290px;
-    padding: 4px 0;
-    background-color: #fff;
+    padding: var(--bk-theme-space-4) 0;
+    background-color: var(--bk-theme-surface-default);
 
     &.audit-field-cascader-panel-child {
-      height: 385px !important;
-      border-left: 1px solid #eee;
+      height: 385px !important;border-left: 1px solid var(--bk-theme-border-weak);
       transform: translateY(-35px);
     }
 
     .audit-field-cascader-node {
       display: flex;
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
       overflow: hidden;
       line-height: 32px;
       text-overflow: ellipsis;
@@ -423,22 +422,22 @@
       justify-content: space-between;
 
       &:hover {
-        background-color: #f5f7fa;
+        background-color: var(--bk-theme-surface-subtle);
       }
 
       &.active {
-        color: #3a84ff;
-        background-color: #f5f7fa;
+        color: var(--bk-theme-color-brand-2);
+        background-color: var(--bk-theme-surface-subtle);
       }
 
       &.disabled {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         cursor: not-allowed;
-        background-color: #fff;
+        background-color: var(--bk-theme-surface-default);
       }
 
       .audit-field-cascader-icon {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         transform: rotate(90deg);
       }
     }
@@ -449,22 +448,22 @@
       left: 0;
       z-index: 10;
       width: 100%;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       cursor: pointer;
-      background: #fafbfd;;
-      border-top: 1px solid #f0f1f5;
+      background: var(--bk-theme-table-header-bg);;
+      border-top: 1px solid var(--bk-theme-surface-muted);
 
       .add-icon {
-        margin-left: 5px;
-        color: #c4c6cc;
+        margin-left: var(--bk-theme-space-4);
+        color: var(--bk-theme-border-strong);
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
 
       .disabled-add-icon {
-        color: #dcdee5;
+        color: var(--bk-theme-border-default);
         cursor: not-allowed;
         user-select: none
       }

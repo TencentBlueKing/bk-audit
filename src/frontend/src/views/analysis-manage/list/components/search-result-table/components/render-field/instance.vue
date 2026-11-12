@@ -23,14 +23,12 @@
       {{ data.instance_name || '--' }} ({{ data.instance_id || '--' }})
     </render-field-text>
     <template #content>
-      <div class="flex hover-table">
+      <div class="flex hover-table instance-hover-table">
         <table class="hover-table-content">
           <tr
             v-for="(item, index) in colDataLeft"
             :key="index">
-            <td
-              class="hover-table-title"
-              style="width: 84px;">
+            <td class="hover-table-title">
               {{ item.key }}
             </td>
             <td class="hover-table-value">
@@ -42,16 +40,12 @@
                 target="_blank"
                 :to="item.value" />
             </td>
-            <template v-if="length>4">
+            <template v-if="length > 10">
               <template v-if="colDataRight[index]">
-                <td
-                  class="hover-table-title  border-bottom"
-                  style="width: 84px;">
+                <td class="hover-table-title border-bottom">
                   {{ colDataRight[index].key }}
                 </td>
-                <td
-                  class="hover-table-value border-bottom"
-                  style="width: 36%;word-break: break-all;">
+                <td class="hover-table-value border-bottom">
                   <!-- <multiple-line-clamp
                     :data="colDataRight[index].value" /> -->
                   <component
@@ -161,11 +155,14 @@
       type: 'other',
     }));
     /**
-     * 当有超过四条数据一行展示两个数据
+     * 超过 10 行改为一行两个，10 行及以内一行一个
      */
     length.value = data.length;
     colDataLeft.value = data;
-    if (length.value > 4) {
+    colDataRight.value = [];
+    // 主题前单列 325、双列 588，都是内容宽
+    poverWidth.value = 325;
+    if (length.value > 10) {
       poverWidth.value = 588;
       const middleIndex = Math.ceil(data.length / 2);
       colDataLeft.value = data.splice(0, middleIndex);

@@ -241,14 +241,14 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-page);
 
     .sec-chat-main {
       position: relative;
       display: flex;
       min-width: 0;
       overflow: hidden;
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-page);
       flex: 1;
       flex-direction: column;
 

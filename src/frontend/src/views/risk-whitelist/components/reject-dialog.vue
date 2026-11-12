@@ -63,8 +63,8 @@
         {{ t('驳回') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="isShow = false">
+       
+        @click="isShow = false" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -127,55 +127,55 @@
   .desc-list {
     display: flex;
     flex-direction: column;
-    margin: 16px 0 24px;
-    font-size: var(--audit-font-size-sm);
+    margin: var(--bk-theme-space-16) 0 var(--bk-theme-space-24);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 20px;
   }
 
   .desc-row {
     box-sizing: border-box;
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
     height: 26px;
-    padding: 3px 0;
+    padding: var(--bk-theme-space-4) 0;
   }
 
   .desc-label {
     flex-shrink: 0;
-    font-family: var(--audit-font-family);
-    font-size: var(--audit-font-size-sm);
+    font-family: var(--bk-theme-font-family);
+    font-size: var(--bk-theme-font-size-sm);
     font-style: normal;
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
     text-align: left;
   }
 
   .desc-value {
-    color: var(--audit-neutral-text-01);
+    color: var(--bk-theme-text-strong);
   }
 
   .reason-field {
     display: flex;
     flex: none;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
   }
 
   .reason-label {
-    font-family: var(--audit-font-family);
-    font-size: var(--audit-font-size-sm);
+    font-family: var(--bk-theme-font-family);
+    font-size: var(--bk-theme-font-size-sm);
     font-style: normal;
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
     text-align: left;
   }
 
   .reason-label::after {
-    margin-left: 2px;
-    color: var(--audit-danger-02);
+    margin-left: var(--bk-theme-space-2);
+    color: var(--bk-theme-color-danger-2);
     content: '*';
   }
 
@@ -190,6 +190,6 @@
 
   .field-error {
     width: 100%;
-    color: var(--audit-danger-02);
+    color: var(--bk-theme-color-danger-2);
   }
 </style>

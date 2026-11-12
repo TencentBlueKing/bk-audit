@@ -50,10 +50,10 @@
   .collapse-panel {
     .collapse-panel-title {
       height: 40px;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
       font-weight: 700;
       line-height: 40px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
       cursor: pointer;
     }
   }

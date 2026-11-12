@@ -94,11 +94,11 @@
   .form-search-item {
     font-size: 12px;
     line-height: 20px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     vertical-align: top;
 
     .search-item-lable {
-      margin-bottom: 6px;
+      margin-bottom: var(--bk-theme-space-6);
     }
 
     .bk-select {
@@ -113,7 +113,7 @@
   .analysis-mult-select-action {
     display: flex;
     width: 100%;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
 
     .action-item {
       display: flex;
@@ -123,11 +123,11 @@
       height: 32px;
 
       & ~ & {
-        border-left: 1px solid #dcdee5;
+        border-left: 1px solid var(--bk-theme-border-default);
       }
 
       &:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
         cursor: pointer;
       }
     }

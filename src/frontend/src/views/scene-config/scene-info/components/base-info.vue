@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="section">
+  <div class="section bk-theme-card">
     <div class="section-title">
       {{ t('基础信息') }}
     </div>
@@ -41,8 +41,12 @@
             </template>
           </td>
           <td class="info-value">
+            <audit-skeleton
+              v-if="loading"
+              :height="20"
+              :width="valueSkeletonWidth[row.key] || 160" />
             <!-- 人员选择字段：编辑态 -->
-            <template v-if="row.type === 'user-selector'">
+            <template v-else-if="row.type === 'user-selector'">
               <div
                 v-if="editingField === row.key"
                 :ref="(el: any) => setEditorRef(row.key, el)"
@@ -162,11 +166,22 @@
     updatedAt: string;
   }
 
-  const { sceneData, savingField, canEdit } = defineProps<{
+  const { sceneData, savingField, canEdit, loading = false } = defineProps<{
     sceneData: SceneData;
     savingField: string;
     canEdit: boolean;
+    loading?: boolean;
   }>();
+
+  const valueSkeletonWidth: Record<string, number> = {
+    id: 48,
+    name: 180,
+    description: 240,
+    manager: 120,
+    users: 96,
+    updatedBy: 100,
+    updatedAt: 160,
+  };
 
   const emit = defineEmits<{
     'update:sceneData': [value: SceneData, changedKey: string];
@@ -326,46 +341,43 @@
   }
 
   .section {
-    padding: 16px 24px 24px;
-    margin-bottom: 24px;
-    background-color: #fff;
-    border-radius: 2px;
+    margin-bottom: var(--bk-theme-page-gap);
   }
 
   .section-title {
     display: flex;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .dashed-underline {
     cursor: pointer;
-    border-bottom: 1px dashed #c4c6cc;
+    border-bottom: 1px dashed var(--bk-theme-border-strong);
   }
 
   .edit-icon {
     flex-shrink: 0;
-    margin-left: 4px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
 
     &:hover {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 
   .edit-loading {
     flex-shrink: 0;
-    margin-left: 4px;
+    margin-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     animation: spin 1s linear infinite;
   }
 
@@ -378,7 +390,7 @@
     display: flex;
     width: 480px;
     max-width: 100%;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: flex-start;
 
     :deep(.audit-user-selector),
@@ -398,14 +410,14 @@
   .edit-actions {
     display: inline-flex;
     flex-shrink: 0;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
     height: 32px;
   }
 
   .confirm-icon {
     font-size: 18px;
-    color: #2dcb56;
+    color: var(--bk-theme-color-success-2);
     cursor: pointer;
 
     &:hover {
@@ -415,7 +427,7 @@
 
   .cancel-icon {
     font-size: 18px;
-    color: #ea3636;
+    color: var(--bk-theme-color-danger-2);
     cursor: pointer;
 
     &:hover {
@@ -426,11 +438,11 @@
   /* 基础信息表格 */
   .info-table {
     width: 100%;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
     border-collapse: collapse;
 
     tr {
-      border-bottom: 1px solid #dcdee5;
+      border-bottom: 1px solid var(--bk-theme-border-default);
 
       &:last-child {
         border-bottom: none;
@@ -438,22 +450,21 @@
     }
 
     .info-label {
-      width: 160px;
-      padding: 8px 10px;
+      width: 160px;padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
       font-size: 12px;
       line-height: 20px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
       text-align: right;
       vertical-align: top;
-      background-color: #fafbfd;
-      border-right: 1px solid #dcdee5;
+      background-color: var(--bk-theme-table-header-bg);
+      border-right: 1px solid var(--bk-theme-border-default);
     }
 
     .info-value {
-      padding: 8px 16px;
+      padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
       font-size: 12px;
       line-height: 20px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
       vertical-align: top;
       overflow: visible;
     }
@@ -461,7 +472,7 @@
 
   .user-info {
     display: inline-flex;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
   }
 </style>

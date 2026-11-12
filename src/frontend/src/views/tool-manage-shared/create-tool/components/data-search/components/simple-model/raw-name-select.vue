@@ -79,10 +79,10 @@
       </bk-checkbox>
       <div>
         <bk-button
-          class="mr8"
+         
           theme="primary"
           type="primary"
-          @click="submit">
+          @click="submit" style="margin-right: var(--bk-theme-space-8)">
           {{ t('确定') }}
         </bk-button>
         <bk-button
@@ -173,10 +173,10 @@
     .list-head {
       display: flex;
       height: 40px;
-      margin-top: 10px;
+      margin-top: var(--bk-theme-space-12);
       font-size: 12px;
-      color: #979ba5;
-      background-color: #fafbfd;
+      color: var(--bk-theme-text-weak);
+      background-color: var(--bk-theme-table-header-bg);
       justify-content: space-between;
       align-items: center;
 
@@ -192,7 +192,7 @@
 
       .list-head-right {
         width: 70px;
-        margin-right: 10px;
+        margin-right: var(--bk-theme-space-12);
         text-align: right;
       }
     }
@@ -209,22 +209,22 @@
         flex-direction: column;
 
         :deep(.bk-radio.bk-radio) {
-          margin-left: 20px;
+          margin-left: var(--bk-theme-space-16);
           font-size: 12px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
 
         }
 
         :deep(.bk-radio-label) {
           font-size: 12px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
 
         .list-item-radio {
-          margin-top: 10px;
-          margin-left: 30px;
+          margin-top: var(--bk-theme-space-12);
+          margin-left: var(--bk-theme-space-32);
           font-size: 12px;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
       }
 
@@ -237,10 +237,10 @@
 
         .list-item-text {
           height: 20px;
-          margin-top: 10px;
-          margin-right: 5px;
+          margin-top: var(--bk-theme-space-12);
+          margin-right: var(--bk-theme-space-4);
           font-size: 12px;
-          color: #979ba5;
+          color: var(--bk-theme-text-weak);
           text-align: right;
 
         }
@@ -253,16 +253,16 @@
     width: 130px;
     height: 100%;
     overflow: auto;
-    background-color: #f5f7fa;
+    background-color: var(--bk-theme-surface-subtle);
 
     .right-title {
-      margin-top: 10px;
-      margin-left: 20px;
+      margin-top: var(--bk-theme-space-12);
+      margin-left: var(--bk-theme-space-16);
       font-size: 12px;
       font-weight: 700;
       line-height: 20px;
       letter-spacing: 0;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .algorithm-select {
@@ -270,23 +270,23 @@
       flex-direction: column;
 
       .algorithm-radio {
-        margin-top: 10px;
-        margin-left: 30px;
+        margin-top: var(--bk-theme-space-12);
+        margin-left: var(--bk-theme-space-32);
         font-size: 12px;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
       }
 
       :deep(.bk-radio.bk-radio) {
-        margin-top: 20px;
-        margin-left: 20px;
+        margin-top: var(--bk-theme-space-16);
+        margin-left: var(--bk-theme-space-16);
         font-size: 12px;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
 
       }
 
       :deep(.bk-radio-label) {
         font-size: 12px;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
       }
     }
   }
@@ -297,14 +297,14 @@
   display: flex;
   width: 100%;
   height: 42px;
-  padding: 0 20px;
-  margin-top: 10px;
-  margin-bottom: 10px;
+  padding: 0 var(--bk-theme-space-16);
+  margin-top: var(--bk-theme-space-12);
+  margin-bottom: var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
-  color: #4d4f56;
-  background: #fafbfd;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-table-header-bg);
   box-shadow: inset 0 1px 0 0 #0000001f;
   align-items: center;
   justify-content: space-between;
@@ -312,8 +312,8 @@
 }
 
 .search1 {
-  margin-top: 5px;
+  margin-top: var(--bk-theme-space-4);
   font-size: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 </style>

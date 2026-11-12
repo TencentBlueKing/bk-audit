@@ -605,26 +605,26 @@
 <style scoped lang="postcss">
 .risk-detection {
   .detail-info-card {
-    background: var(--audit-neutral-bg-04);
+    background: var(--bk-theme-surface-default);
   }
 
   .detail-section-title {
-    margin-bottom: var(--audit-space-12);
-    font-size: var(--audit-font-size-base);
-    font-weight: var(--audit-font-weight-bold);
-    line-height: var(--audit-line-height-base);
-    color: var(--audit-neutral-text-01);
+    margin-bottom: var(--bk-theme-space-12);
+    font-size: var(--bk-theme-font-size-base);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-strong);
   }
 
   .detail-section-divider {
-    margin: var(--audit-space-24) 0;
-    border-top: 1px solid var(--audit-neutral-border-01);
+    margin: var(--bk-theme-space-24) 0;
+    border-top: 1px solid var(--bk-theme-border-default);
   }
 
   .strategy-type-display {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--bk-theme-space-6);
   }
 
   .strategy-type-icon {
@@ -634,27 +634,27 @@
   }
 
   .strategy-type-text {
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-01);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-strong);
   }
 
   :deep(.audit-edit-tag__label.bk-tag) {
     height: 22px;
-    padding: 0 var(--audit-space-8);
-    font-size: var(--audit-font-size-sm);
+    padding: 0 var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 22px;
-    color: var(--audit-neutral-text-02);
-    background: var(--audit-neutral-bg-01);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
     border: 0;
-    border-radius: var(--audit-radius-control);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .panel-edit {
     position: relative;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--audit-space-8);
+    gap: var(--bk-theme-space-8);
     align-items: center;
     min-height: 22px;
     padding: 0;
@@ -663,13 +663,13 @@
     .query-field {
       position: relative;
       height: 22px;
-      padding: 0 var(--audit-space-8);
+      padding: 0 var(--bk-theme-space-8);
       margin: 0;
       line-height: 22px;
-      color: var(--audit-neutral-bg-04);
+      color: var(--bk-theme-text-inverse);
       white-space: nowrap;
       background: #30bc9e;
-      border-radius: var(--audit-radius-control);
+      border-radius: var(--bk-theme-tag-radius);
 
       &:hover {
         .query-field-remove {
@@ -678,12 +678,12 @@
       }
 
       .dragging-handle {
-        padding: 0 4px;
+        padding: 0 var(--bk-theme-space-4);
         cursor: move;
       }
 
       .query-field-remove {
-        padding: 0 4px;
+        padding: 0 var(--bk-theme-space-4);
         text-align: center;
         visibility: hidden;
       }

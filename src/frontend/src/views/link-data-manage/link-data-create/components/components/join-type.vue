@@ -77,11 +77,10 @@
     display: flex;
     width: 46px;
     height: 32px;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     cursor: pointer;
-    background: #e1ecff;
-    border: 1px solid #9bc0ff;
-    border-radius: 4px;
+    background: var(--bk-theme-fill-selected);border: 1px solid var(--bk-theme-color-brand-4);
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
     justify-content: center;
   }
@@ -89,21 +88,21 @@
   .join-type-list {
     display: flex;
     align-items: center;
-    padding: 12px;
+    padding: var(--bk-theme-space-12);
     cursor: pointer;
 
     &:hover {
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
     }
   }
 
   .active {
-    color: #3a84ff;
-    background-color: #e1ecff;
+    color: var(--bk-theme-color-brand-2);
+    background-color: var(--bk-theme-fill-selected);
   }
 </style>
 <style>
 .link-data-join-type {
-  padding: 4px 0 !important;
+  padding: var(--bk-theme-space-4) 0 !important;
 }
 </style>

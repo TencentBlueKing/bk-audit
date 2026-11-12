@@ -41,13 +41,13 @@
 .tool-status-creating {
   display: flex;
   height: 360px;
-  background-color: #fff;
+  background-color: var(--bk-theme-surface-default);
   flex-direction: column;
   justify-content: center;
   align-items: center;
 
   .tool-status-creating-icon {
-    margin-bottom: 10px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 64px;
     color: blue;
 

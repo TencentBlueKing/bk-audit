@@ -161,27 +161,27 @@
 </script>
 <style lang="postcss" scoped>
 .bksec-detail-empty {
-  margin-top: var(--audit-space-24);
+  margin-top: var(--bk-theme-space-24);
 }
 
 .bksec-detail-title {
-  margin-bottom: var(--audit-space-12);
-  font-size: var(--audit-font-size-base);
-  font-weight: var(--audit-font-weight-bold);
-  line-height: var(--audit-line-height-base);
-  color: var(--audit-neutral-text-01);
+  margin-bottom: var(--bk-theme-space-12);
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-bold);
+  line-height: var(--bk-theme-line-height-base);
+  color: var(--bk-theme-text-strong);
 }
 
 .bksec-detail-divider {
-  margin: var(--audit-space-24) 0;
-  border-top: 1px solid var(--audit-neutral-border-01);
+  margin: var(--bk-theme-space-24) 0;
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .bksec-detail-list {
   display: flex;
   flex-direction: column;
   width: 1000px;
-  font-size: var(--audit-font-size-sm);
+  font-size: var(--bk-theme-font-size-sm);
   line-height: 20px;
 }
 
@@ -191,8 +191,8 @@
   box-sizing: border-box;
   min-width: 0;
   min-height: 32px;
-  padding: 6px 0;
-  gap: var(--audit-space-8);
+  padding: var(--bk-theme-space-6) 0;
+  gap: var(--bk-theme-space-8);
 }
 
 .bksec-detail-label,
@@ -217,9 +217,9 @@
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  font-size: var(--audit-font-size-sm);
+  font-size: var(--bk-theme-font-size-sm);
   line-height: 20px;
-  color: var(--audit-neutral-text-02);
+  color: var(--bk-theme-text-default);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -232,14 +232,14 @@
   width: 0;
   min-width: 0;
   overflow: hidden;
-  color: var(--audit-neutral-text-01);
+  color: var(--bk-theme-text-strong);
 }
 
 .bksec-detail-value-text {
   display: block;
   width: 100%;
   margin: 0;
-  font-size: var(--audit-font-size-sm);
+  font-size: var(--bk-theme-font-size-sm);
   line-height: 20px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -247,7 +247,7 @@
 }
 
 .bksec-detail-value.is-type {
-  color: var(--audit-neutral-text-02);
+  color: var(--bk-theme-text-default);
 }
 
 .bksec-detail-row.is-status {

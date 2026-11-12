@@ -94,8 +94,8 @@
             {{ t('下一步') }}
           </bk-button>
           <bk-button
-            class="ml8"
-            @click="handleCancel">
+           
+            @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
             {{ t('取消') }}
           </bk-button>
         </template>
@@ -155,15 +155,15 @@
               disabled: !isApiDoneDeBug,
               content: t('请完成接口成功调试后再试')
             }"
-            class="w88 ml8"
+            class="w88"
             :disabled="isApiDoneDeBug"
             theme="primary"
-            @click="handleSubmit">
+            @click="handleSubmit" style="margin-left: var(--bk-theme-space-8)">
             {{ isEditMode ? t('提交') : t('提交') }}
           </bk-button>
           <bk-button
-            class="w88 ml8"
-            @click="handleCancel">
+            class="w88"
+            @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
             {{ t('取消') }}
           </bk-button>
         </template>
@@ -921,14 +921,14 @@
   }
 
   .step-content {
-    padding-top: 16px;
+    padding-top: var(--bk-theme-space-16);
   }
 
   .step2-content {
-    padding-top: 16px;
+    padding-top: var(--bk-theme-space-16);
 
     :deep(.card-part-content) {
-      background-color: #fafbfd;
+      background-color: var(--bk-theme-table-header-bg);
     }
   }
 
@@ -938,7 +938,7 @@
 
   /* 步骤2 操作按钮间距 */
   :deep(.smart-action-action) {
-    gap: 8px !important;
+    gap: var(--bk-theme-space-8) !important;
   }
 
   .create-tools-page {

@@ -15,8 +15,12 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading :loading="loading">
+  <div class="search-select">
+    <div
+      v-show="loading"
+      class="audit-skeleton search-select-skeleton" />
     <bk-select
+      v-show="!loading"
       :class="{
         'is-selected-all': selectedAll
       }"
@@ -52,7 +56,7 @@
         </div>
       </template>
     </bk-select>
-  </bk-loading>
+  </div>
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
@@ -69,6 +73,8 @@
   import type FieldMapModel from '@model/es-query/field-map';
 
   import useRequest from '@hooks/use-request';
+
+  import '@components/skeleton/skeleton.css';
 
   import { DateRange } from '@blueking/date-picker';
 
@@ -251,3 +257,14 @@
     },
   });
 </script>
+<style lang="postcss" scoped>
+  .search-select {
+    min-height: 32px;
+  }
+
+  .search-select-skeleton {
+    width: 100%;
+    height: 32px;
+    border-radius: var(--bk-theme-control-radius);
+  }
+</style>

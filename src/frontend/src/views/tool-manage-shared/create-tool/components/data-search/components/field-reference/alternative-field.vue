@@ -103,13 +103,13 @@
     width: 30%;
 
     /* max-width: 408px; */
-    margin-left: 16px;
+    margin-left: var(--bk-theme-space-16);
 
     .wrapper {
       height: 100%;
-      padding: 12px 16px;
-      background: #f5f7fa;
-      border-radius: 2px;
+      padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+      background: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-tag-radius);
 
       &.fixed {
         position: fixed;
@@ -119,54 +119,53 @@
 
     .title {
       display: flex;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
       line-height: 16px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
 
       .order-icon {
-        margin-right: 3px;
+        margin-right: var(--bk-theme-space-4);
         font-size: 15px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       .order-icon:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
 
       .text:hover,
       .text:hover .text-icon {
-        color: #3a84ff !important;
+        color: var(--bk-theme-color-brand-2) !important;
       }
 
       .text .text-icon {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
 
     .content-box {
       /* height: calc(100vh - 180px); */
-      padding: 0 8px;
+      padding: 0 var(--bk-theme-space-8);
     }
 
     .list-item {
       display: flex;
-      height: 36px;
-      padding: 10px 8px;
-      color: #63656e;
+      height: 36px;padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+      color: var(--bk-theme-text-default);
       cursor: pointer;
-      background: #fff;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
       box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
       user-select: none;
       align-items: center;
 
       &:nth-child(n+2) {
-        margin-top: 5px;
+        margin-top: var(--bk-theme-space-4);
       }
 
       .value {
         overflow: hidden;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         text-overflow: ellipsis;
         word-break: keep-all;
         white-space: nowrap;
@@ -182,6 +181,6 @@
   }
 
   .active {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 </style>

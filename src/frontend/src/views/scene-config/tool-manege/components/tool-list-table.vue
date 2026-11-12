@@ -21,6 +21,7 @@
     :columns="tableColumns"
     :data-source="dataSource"
     is-need-scene-params
+    use-skeleton
     need-empty-search-tip
     row-key="uid"
     :search-params="searchParams"
@@ -482,7 +483,7 @@
 <style lang="postcss" scoped>
   :deep(.tool-name-cell) {
     display: inline-flex;
-    gap: 7px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
     max-width: 100%;
   }
@@ -500,39 +501,39 @@
   :deep(.platform-binding-tag.bk-tag) {
     flex-shrink: 0;
     height: 18px;
-    padding: 0 8px;
+    padding: 0 var(--bk-theme-space-8);
     font-size: 12px;
     line-height: 18px;
-    color: #63656e;
-    background-color: #f0f1f5;
+    color: var(--bk-theme-text-default);
+    background-color: var(--bk-theme-surface-muted);
     border: none;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
 
     &:hover {
-      color: #63656e;
-      background-color: #f0f1f5;
+      color: var(--bk-theme-text-default);
+      background-color: var(--bk-theme-surface-muted);
     }
   }
 
   .action-cell {
     display: flex;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
     white-space: nowrap;
 
     .action-btn {
-      margin-right: 8px;
+      margin-right: var(--bk-theme-space-8);
     }
 
     .more-action-btn {
-      padding: 0 4px;
+      padding: 0 var(--bk-theme-space-4);
       font-size: 16px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       cursor: pointer;
 
       &:hover {
-        color: #3a84ff;
+        color: var(--bk-theme-color-brand-2);
       }
     }
   }
@@ -543,15 +544,15 @@
     }
 
     :deep(.t-table__row--hover) {
-      background-color: #fff !important;
+      background-color: var(--bk-theme-surface-default) !important;
     }
   }
 
   :deep(.jump-link) {
     flex-shrink: 0;
-    padding-left: 4px;
+    padding-left: var(--bk-theme-space-4);
     font-size: 14px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
   }
 
@@ -570,29 +571,29 @@
   .report-config-list .platform-binding-tag.bk-tag {
     flex-shrink: 0;
     height: 18px;
-    padding: 0 8px;
+    padding: 0 var(--bk-theme-space-8);
     font-size: 12px;
     line-height: 18px;
-    color: #4d4f56;
-    background-color: #f0f1f5;
+    color: var(--bk-theme-text-default);
+    background-color: var(--bk-theme-surface-muted);
     border: none;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .report-config-list .platform-binding-tag.bk-tag:hover {
-    color: #4d4f56;
-    background-color: #f0f1f5;
+    color: var(--bk-theme-text-default);
+    background-color: var(--bk-theme-surface-muted);
   }
 
   .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text,
   .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text.is-disabled {
-    color: #c4c6cc !important;
+    color: var(--bk-theme-border-strong) !important;
     cursor: not-allowed;
   }
 
   .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text:hover,
   .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text.is-disabled:hover {
-    color: #c4c6cc !important;
+    color: var(--bk-theme-border-strong) !important;
   }
 
   .tool-more-action-popover.bk-popover.bk-pop2-content {
@@ -606,48 +607,47 @@
 
     .mr8 {
       display: block;
-      width: 100%;
-      padding: 8px 15px;
+      width: 100%;padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
       font-size: 12px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
 
       &:hover {
-        background-color: #f5f7fa;
+        background-color: var(--bk-theme-surface-subtle);
       }
     }
 
     .mr8-disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
 
       &:hover {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         background-color: transparent;
       }
     }
   }
 
   .strategies-count {
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
-    border-bottom: 1px dashed #c4c6cc;
+    border-bottom: 1px dashed var(--bk-theme-border-strong);
   }
 
   .strategies-tooltip-content {
     .strategy-item {
       display: flex;
-      gap: 4px;
+      gap: var(--bk-theme-space-4);
       align-items: center;
-      padding: 4px 0;
+      padding: var(--bk-theme-space-4) 0;
       cursor: pointer;
     }
 
     .strategy-name {
-      color: #fff;
+      color: var(--bk-theme-surface-default);
     }
 
     .strategy-link-icon {
       font-size: 16px;
-      color: #699df4;
+      color: var(--bk-theme-color-brand-3);
     }
   }
 </style>

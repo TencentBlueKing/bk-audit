@@ -19,7 +19,7 @@
     <!-- 字段名 -->
     <template v-if="fieldKey === 'field_name'">
       <span
-        class="ml8">
+        style="margin-left: var(--bk-theme-space-8)">
         {{ localEventItem.field_name }}
       </span>
     </template>
@@ -27,7 +27,7 @@
     <!-- 字段显示名 -->
     <template v-else-if="fieldKey === 'display_name'">
       <span
-        class="ml8">
+        style="margin-left: var(--bk-theme-space-8)">
         {{ localEventItem.display_name }}
       </span>
     </template>
@@ -150,7 +150,7 @@
     <!-- 仅查看 -->
     <span
       v-else
-      class="ml8">
+      style="margin-left: var(--bk-theme-space-8)">
       {{ localEventItem[fieldKey] }}
     </span>
   </div>
@@ -322,7 +322,7 @@
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 var(--bk-theme-space-8);
     line-height: 33px;
     cursor: pointer;
 
@@ -341,7 +341,7 @@
       flex: none;
       align-items: center;
       margin-left: auto;
-      gap: 8px;
+      gap: var(--bk-theme-space-8);
 
       :deep(.audit-popconfirm) {
         display: inline-flex;
@@ -354,11 +354,11 @@
       display: none;
       font-size: 12px;
       line-height: 1;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       transition: all .15s;
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
 
       &.is-popconfirm-visible {
@@ -369,7 +369,7 @@
     .renew-tips {
       font-size: 14px;
       line-height: 1;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
   }
 }

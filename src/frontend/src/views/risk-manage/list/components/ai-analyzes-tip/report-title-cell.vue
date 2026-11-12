@@ -170,7 +170,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 
   :deep(.show-tooltips-text) {
@@ -178,7 +178,7 @@
   }
 
   &:hover {
-    color: #699df4;
+    color: var(--bk-theme-color-brand-3);
     text-decoration: underline;
   }
 }
@@ -187,7 +187,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
 }
 
 .report-title-input {
@@ -197,13 +197,13 @@
 
 .report-title-edit {
   flex-shrink: 0;
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 14px;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 
   &:hover {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 </style>

@@ -816,22 +816,22 @@
 
 <style scoped lang="postcss">
 .record-detail-table {
-  padding: 16px 16px 2px;
-  background: #fff;
-  border-radius: 2px;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-16) var(--bk-theme-space-2);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
 
   .detail-title {
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .detail-filter {
     display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: var(--bk-theme-space-12);
+    margin-bottom: var(--bk-theme-space-12);
 
     .date-picker {
       width: 200px;
@@ -847,27 +847,26 @@
     display: flex;
     flex: 1;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
-    height: 32px;
-    padding: 0 32px 0 10px;
+    height: 32px;padding: 0 var(--bk-theme-space-32) 0 var(--bk-theme-space-8);
     cursor: pointer;
-    background: #fff;
-    border: 1px solid #c4c6cc;
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
 
     &:hover {
-      border-color: #979ba5;
+      border-color: var(--bk-theme-text-weak);
     }
 
     &.is-active {
-      border-color: #3a84ff;
+      border-color: var(--bk-theme-color-brand-2);
     }
 
     .search-placeholder {
       overflow: hidden;
       font-size: 12px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -877,7 +876,7 @@
       top: 50%;
       right: 10px;
       font-size: 14px;
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       pointer-events: none;
       transform: translateY(-50%);
 
@@ -892,12 +891,12 @@
       right: 10px;
       display: none;
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
       transform: translateY(-50%);
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
 
@@ -907,45 +906,45 @@
 
     .condition-tag {
       display: inline-flex;
-      gap: 2px;
+      gap: var(--bk-theme-space-2);
       align-items: center;
       height: 22px;
-      padding: 0 4px;
+      padding: 0 var(--bk-theme-space-4);
       font-size: 12px;
       line-height: 22px;
       cursor: pointer;
-      background: #f0f1f5;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-tag-radius);
 
       .tag-field,
       .tag-value {
-        color: #63656e;
+        color: var(--bk-theme-text-default);
       }
 
       .tag-operator {
-        color: #ff9c01;
+        color: var(--bk-theme-color-warn-2);
       }
 
       &.is-editing {
-        background: #e1ecff;
+        background: var(--bk-theme-fill-selected);
 
         .tag-field,
         .tag-value {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
 
       }
 
       .tag-close {
-        margin-left: 4px;
+        margin-left: var(--bk-theme-space-4);
         font-size: 14px;
         font-style: normal;
         line-height: 1;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         cursor: pointer;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
     }
@@ -958,9 +957,9 @@
       display: flex;
       gap: 0;
       align-items: center;
-      padding: 8px;
-      background: #fff;
-      border-radius: 2px;
+      padding: var(--bk-theme-space-8);
+      background: var(--bk-theme-surface-default);
+      border-radius: var(--bk-theme-tag-radius);
       box-shadow: 0 2px 6px 0 rgb(0 0 0 / 10%);
 
       .field-select {
@@ -971,18 +970,18 @@
       .operator-select {
         width: 100px;
         flex-shrink: 0;
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
       }
 
       .value-input {
         width: 200px;
         flex-shrink: 0;
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
       }
 
       .confirm-btn {
         flex-shrink: 0;
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
       }
     }
   }

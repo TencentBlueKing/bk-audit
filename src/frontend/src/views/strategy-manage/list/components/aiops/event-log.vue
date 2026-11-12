@@ -27,21 +27,21 @@
       <auth-collapse-panel
         v-for="(item,index) in filterSystemIdList"
         :key="`${item}-${index}`"
-        class="mb16"
+       
         :is-active="isActive"
         :label="t(systemMap[item] || item)"
-        style="background: #f5f7fa;">
+        style="background: #f5f7fa; margin-bottom: var(--bk-theme-space-16)">
         <bk-loading :loading="commonLoading || selectFieldsLoading || actionIdLoading || actionValueLoading">
           <multi-render-field
             v-if="data.configs.data_source?.fields[item]"
             :action-id-map="actionIdMap[item]"
             :action-id-to-value-map="actionIdToValueMap[item]"
-            class="mb12"
+           
             :configs="inputFields"
             :data="data.configs.data_source.fields[item]"
             :mapping-type-map="mappingTypeMap"
             :select-fields-map="selectRtFieldsMap"
-            :system-id="item" />
+            :system-id="item" style="margin-bottom: var(--bk-theme-space-12)" />
         </bk-loading>
       </auth-collapse-panel>
     </render-info-item>
@@ -247,5 +247,4 @@
   });
 </script>
 <!-- <style scoped>
-
 </style> -->

@@ -66,8 +66,8 @@
 <style lang="postcss">
   .table-panel {
     .collapse-panel-title {
-      color: #63656e;
-      background: #eaebf0;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-border-weak);
     }
   }
 </style>

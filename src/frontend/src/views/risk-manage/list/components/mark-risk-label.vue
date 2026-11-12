@@ -81,10 +81,10 @@
         <template
           v-if="!isMisreport">
           <bk-form-item
-            class="is-required mr16"
+            class="is-required"
             :label="t('误报说明')"
             property="description"
-            style="margin-bottom: 6px;">
+            style="margin-bottom: 6px; margin-right: var(--bk-theme-space-16)">
             <bk-input
               v-model.trim="formData.description"
               :maxlength="2000"
@@ -103,9 +103,9 @@
 
         <bk-form-item
           v-else-if="data.status !== 'auto_process'"
-          class="is-required mr16"
+          class="is-required"
           :label="t('处理人')"
-          property="new_operators">
+          property="new_operators" style="margin-right: var(--bk-theme-space-16)">
           <audit-user-selector-tenant
             v-model="formData.new_operators"
             multiple />

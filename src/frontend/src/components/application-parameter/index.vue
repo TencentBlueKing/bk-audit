@@ -885,23 +885,23 @@
   }
 
   &:hover .field-insert-wrapper__suffix {
-    border-color: #979ba5;
+    border-color: var(--bk-theme-text-weak);
   }
 
   &:focus-within {
-    border-radius: 2px;
-    box-shadow: 0 0 3px 0 #a3c5fd;
+    border-radius: var(--bk-theme-tag-radius);
+    box-shadow: 0 0 3px 0 var(--bk-theme-color-brand-4);
   }
 
   &:focus-within :deep(.bk-input.field-insert-wrapper__control),
   &:focus-within :deep(.bk-textarea.field-insert-wrapper__control),
   &:focus-within :deep(.field-insert-wrapper__control.bk-date-picker .bk-date-picker-editor) {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
     box-shadow: none;
   }
 
   &:focus-within .field-insert-wrapper__suffix {
-    border-color: #3a84ff;
+    border-color: var(--bk-theme-color-brand-2);
   }
 }
 
@@ -956,7 +956,7 @@
     height: 32px;
     max-height: 200px;
     min-height: 32px;
-    padding-right: 30px !important;
+    padding-right: var(--bk-theme-space-32) !important;
     overflow: hidden hidden;
     line-height: 20px;
     box-sizing: border-box;
@@ -971,7 +971,7 @@
     height: 32px;
     max-height: 200px;
     min-height: 32px;
-    padding-right: 30px !important;
+    padding-right: var(--bk-theme-space-32) !important;
     overflow: hidden hidden;
     box-sizing: border-box;
     resize: none;
@@ -986,17 +986,16 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #c4c6cc;
-  border-left: 1px solid #c4c6cc;
-  border-radius: 0 2px 2px 0;
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-strong);
+  border-left: 1px solid var(--bk-theme-border-strong);border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
   box-sizing: border-box;
 
   &:hover,
   &.is-active {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
@@ -1020,21 +1019,21 @@
 
 .field-insert-panel {
   width: 300px;
-  padding: 0 0 4px;
+  padding: 0 0 var(--bk-theme-space-4);
 }
 
 .field-insert-panel__search {
   display: flex;
   align-items: center;
-  padding: 4px 12px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid #dcdee5;
+  padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
+  margin-bottom: var(--bk-theme-space-2);
+  border-bottom: 1px solid var(--bk-theme-border-default);
 }
 
 .field-insert-panel__search-icon {
-  margin-right: 6px;
+  margin-right: var(--bk-theme-space-6);
   font-size: 15px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   flex-shrink: 0;
 }
 
@@ -1043,14 +1042,14 @@
   height: 24px;
   padding: 0;
   font-size: 12px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   background: transparent;
   border: none;
   outline: none;
   flex: 1;
 
   &::placeholder {
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
   }
 }
 
@@ -1060,28 +1059,28 @@
 }
 
 .field-insert-group__title {
-  padding: 4px 12px;
+  padding: var(--bk-theme-space-4) var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .field-insert-item {
   display: flex;
   min-width: 0;
-  padding: 6px 12px;
+  padding: var(--bk-theme-space-6) var(--bk-theme-space-12);
   font-size: 12px;
   line-height: 20px;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   cursor: pointer;
   align-items: center;
 
   &:hover {
-    background: #f0f5ff;
+    background: var(--bk-theme-select-banner-bg);
   }
 
   &.is-disabled {
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: not-allowed;
 
     &:hover {
@@ -1090,19 +1089,19 @@
 
     .field-insert-item__name,
     .field-insert-item__value {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
     }
   }
 }
 
 .field-insert-item__name {
   flex-shrink: 0;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .field-insert-item__sep {
   flex-shrink: 0;
-  margin: 0 4px;
+  margin: 0 var(--bk-theme-space-4);
 }
 
 .field-insert-item__value {
@@ -1113,36 +1112,36 @@
 }
 
 .field-insert-panel__empty {
-  padding: 16px 12px;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-12);
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 
 .item-value {
   width: 100%;
   height: auto;
-  padding: 3px;
-  padding-bottom: 5px;
-  margin-top: 3px;
+  padding: var(--bk-theme-space-4);
+  padding-bottom: var(--bk-theme-space-4);
+  margin-top: var(--bk-theme-space-4);
   font-size: 12px;
   line-height: 16px;
   word-break: break-all;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
 }
 
 .current-value {
   height: auto;
   max-width: 50vw;
   max-height: 50vh;
-  padding: 3px;
-  padding-bottom: 5px;
-  margin-top: 3px;
+  padding: var(--bk-theme-space-4);
+  padding-bottom: var(--bk-theme-space-4);
+  margin-top: var(--bk-theme-space-4);
   overflow: auto;
   font-size: 12px;
   line-height: 16px;
   word-break: break-all;
-  background: #fff;
+  background: var(--bk-theme-surface-default);
 }
 </style>
 
@@ -1160,11 +1159,11 @@
 .bk-form-item.is-error .field-insert-wrapper.has-suffix .bk-input.field-insert-wrapper__control,
 .bk-form-item.is-error .field-insert-wrapper.has-suffix .bk-textarea.field-insert-wrapper__control,
 .bk-form-item.is-error .field-insert-wrapper.has-suffix .bk-date-picker-editor {
-  border-color: #ea3636;
+  border-color: var(--bk-theme-color-danger-2);
   box-shadow: none;
 }
 
 .bk-form-item.is-error .field-insert-wrapper.has-suffix .field-insert-wrapper__suffix {
-  border-color: #ea3636;
+  border-color: var(--bk-theme-color-danger-2);
 }
 </style>

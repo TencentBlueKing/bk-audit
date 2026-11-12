@@ -170,15 +170,15 @@
         {{ t('上一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
+       
         :loading="isSubmiting"
         theme="primary"
-        @click="handleNext">
+        @click="handleNext" style="margin-left: var(--bk-theme-space-8)">
         {{ t('下一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancel">
+       
+        @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -414,24 +414,24 @@
     .section-header {
       display: flex;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
 
       .section-title {
         font-size: 14px;
         font-weight: 600;
-        color: #313238;
+        color: var(--bk-theme-text-strong);
       }
 
       .section-divider {
         width: 1px;
         height: 12px;
-        margin: 0 10px;
-        background: #979ba5;
+        margin: 0 var(--bk-theme-space-12);
+        background: var(--bk-theme-text-weak);
       }
 
       .section-desc {
         font-size: 12px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
   }
@@ -456,7 +456,7 @@
       width: 20px;
       height: 20px;
       font-size: 12px;
-      color: #fff;
+      color: var(--bk-theme-surface-default);
       background: #6366f1;
       border-radius: 50%;
       align-items: center;

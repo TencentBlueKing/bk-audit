@@ -139,10 +139,10 @@
                         </div>
                         <div class="report-status-popover-actions">
                           <bk-button
-                            class="mr8"
+                           
                             size="small"
                             theme="primary"
-                            @click="handleConfirmEnable">
+                            @click="handleConfirmEnable" style="margin-right: var(--bk-theme-space-8)">
                             {{ t('启用') }}
                           </bk-button>
                           <bk-button
@@ -1157,47 +1157,47 @@
 <style lang="postcss" scoped>
 .report-create-content {
   min-height: 100%;
-  padding: 16px 24px 24px;
-  background: #f5f7fa;
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  background: var(--bk-theme-surface-subtle);
 }
 
 .report-card {
-  margin-bottom: 16px;
-  background: #fff;
-  border-radius: 2px;
+  margin-bottom: var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
   box-shadow: 0 1px 2px 0 #00000029;
 }
 
 .report-card-title {
   display: flex;
   height: 52px;
-  padding: 0 24px;
+  padding: 0 var(--bk-theme-space-24);
   font-size: 14px;
   font-weight: 600;
-  color: #313238;
+  color: var(--bk-theme-text-strong);
   align-items: center;
 }
 
 .report-card-body {
-  padding: 0 24px 16px;
+  padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-16);
 }
 
 .report-card-body--visibility {
-  padding-bottom: 24px;
+  padding-bottom: var(--bk-theme-space-24);
 }
 
 .ml4 {
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
 }
 
 .mr8 {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
 }
 
 .bkvision-select-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 
   :deep(.bk-select) {
     flex: 1;
@@ -1205,10 +1205,10 @@
 
   .preview-btn {
     flex-shrink: 0;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
 
     &:hover {
-      color: #699df4;
+      color: var(--bk-theme-color-brand-3);
     }
   }
 }
@@ -1227,12 +1227,12 @@
   }
 
   .preview-icon {
-    margin-left: 8px;
-    color: #3a84ff;
+    margin-left: var(--bk-theme-space-8);
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
 
     &:hover {
-      color: #699df4;
+      color: var(--bk-theme-color-brand-3);
     }
   }
 }
@@ -1240,31 +1240,31 @@
 .status-field {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--bk-theme-space-8);
 
   .status-label {
-    margin-left: 8px;
+    margin-left: var(--bk-theme-space-8);
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 }
 
 .report-enable-popover {
   width: 280px;
-  padding: 4px 0;
+  padding: var(--bk-theme-space-4) 0;
 
   .report-enable-popover-title {
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     font-size: 14px;
     font-weight: 700;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .report-enable-popover-text {
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     font-size: 12px;
     line-height: 20px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
   }
 }
 
@@ -1281,11 +1281,11 @@
 
 .visibility-param-loading {
   min-height: 120px;
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
 }
 
 .visibility-param-config {
-  margin-top: 8px;
+  margin-top: var(--bk-theme-space-8);
   margin-bottom: 0;
 
   /* 仅侧滑可见范围内去掉场景参数块外边框，不影响工具管理等其他场景 */
@@ -1300,7 +1300,7 @@
 
 .report-footer-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--bk-theme-space-8);
 }
 
 .footer-btn {
@@ -1316,16 +1316,16 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 
   .bk-modal-content {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
     scrollbar-width: thin;
-    scrollbar-color: #c4c6cc transparent;
+    scrollbar-color: var(--bk-theme-border-strong) transparent;
   }
 
   .bk-modal-content::-webkit-scrollbar {
@@ -1338,17 +1338,17 @@
   }
 
   .bk-modal-content::-webkit-scrollbar-thumb {
-    background-color: #c4c6cc;
-    border-radius: 3px;
+    background-color: var(--bk-theme-border-strong);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .bk-modal-content::-webkit-scrollbar-thumb:hover {
-    background-color: #979ba5;
+    background-color: var(--bk-theme-text-weak);
   }
 
   .bk-modal-footer {
     flex: none;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
     box-shadow: 0 -1px 3px 0 rgb(0 0 0 / 4%);
   }
 
@@ -1368,7 +1368,7 @@
 
   /* 补偿 date-picker 默认 alignmentAxis=-32，避免弹层相对触发器左偏 */
   .__bk-date-picker-popover__.__bk-date-picker-popover__scene-param-config {
-    margin-left: 32px !important;
+    margin-left: var(--bk-theme-space-32) !important;
   }
 
   /* date-picker 内置 tip（与 BKVision 一致），侧滑内抬高层级 */
@@ -1382,7 +1382,7 @@
   .bk-sideslider-footer {
     height: 52px;
     margin-top: 0;
-    background: #fafbfd;
+    background: var(--bk-theme-table-header-bg);
   }
 }
 
@@ -1409,7 +1409,7 @@ body > .bk-date-picker-dropdown.scene-param-date-picker-dropdown {
 
 /* 补偿 date-picker 默认 alignmentAxis=-32，避免弹层相对触发器左偏 */
 .__bk-date-picker-popover__.__bk-date-picker-popover__scene-param-config {
-  margin-left: 32px !important;
+  margin-left: var(--bk-theme-space-32) !important;
 }
 
 /* date-picker 内置 tip（与 BKVision 一致），侧滑内抬高层级 */

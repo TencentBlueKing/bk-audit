@@ -556,8 +556,8 @@
   flex-direction: column;
   width: 100%;
   max-height: 480px;
-  background: #fff;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-tag-radius);
   box-sizing: border-box;
 }
 
@@ -565,7 +565,7 @@
   display: flex;
   flex-shrink: 0;
   height: 52px;
-  border-bottom: 1px solid #dcdee5;
+  border-bottom: 1px solid var(--bk-theme-border-default);
 }
 
 .table-select-tab {
@@ -575,11 +575,11 @@
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 
   &.is-active {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
 
     &::after {
       position: absolute;
@@ -587,8 +587,8 @@
       bottom: -1px;
       left: 12px;
       height: 2px;
-      background: #3a84ff;
-      border-radius: 1px;
+      background: var(--bk-theme-color-brand-2);
+      border-radius: var(--bk-theme-tag-radius);
       content: '';
     }
   }
@@ -599,13 +599,13 @@
   flex-shrink: 0;
   align-items: center;
   height: 38px;
-  padding: 0 12px;
-  border-bottom: 1px solid #dcdee5;
+  padding: 0 var(--bk-theme-space-12);
+  border-bottom: 1px solid var(--bk-theme-border-default);
 
   .search-icon {
-    margin-right: 8px;
+    margin-right: var(--bk-theme-space-8);
     font-size: 16px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   :deep(.bk-input) {
@@ -618,13 +618,13 @@
   flex-shrink: 0;
   align-items: center;
   height: 44px;
-  padding: 0 16px;
+  padding: 0 var(--bk-theme-space-16);
   font-size: 14px;
-  color: #63656e;
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 
   &.is-active {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
 
     .all-data-icon {
       background: #3a84ff1f;
@@ -632,7 +632,7 @@
   }
 
   &:hover {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
@@ -642,16 +642,16 @@
   justify-content: center;
   width: 24px;
   height: 18px;
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
   font-size: 12px;
   font-weight: 700;
   color: #a3a7b1;
-  background: #f0f1f5;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-muted);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .table-tree-wrapper {
-  padding: 8px 12px 12px;
+  padding: var(--bk-theme-space-8) var(--bk-theme-space-12) var(--bk-theme-space-12);
   overflow: hidden auto;
   flex: 1;
 
@@ -666,7 +666,7 @@
 
 .table-tree-node {
   width: 100%;
-  padding-left: 8px;
+  padding-left: var(--bk-theme-space-8);
   margin: 0;
   overflow: hidden;
   line-height: 32px;

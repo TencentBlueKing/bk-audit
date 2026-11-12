@@ -28,10 +28,10 @@
             content: t('暂不支持变更，请前往权限中心变更'),
             disabled: canEditSystem,
           }"
-          class="mr8"
+         
           :disabled="!canEditSystem"
           theme="primary"
-          @click="handleCreate">
+          @click="handleCreate" style="margin-right: var(--bk-theme-space-8)">
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
@@ -568,9 +568,9 @@
 </script>
 <style lang="postcss">
   .access-model-resource-list {
-    padding: 6px 24px;
-    color: #313238;
-    background-color: #fff;
+    padding: var(--bk-theme-space-6) var(--bk-theme-space-24);
+    color: var(--bk-theme-text-strong);
+    background-color: var(--bk-theme-surface-default);
 
     .resource-list-header {
       display: flex;
@@ -578,7 +578,7 @@
 
     .resource-list-action-header {
       display: flex;
-      margin-bottom: 14px;
+      margin-bottom: var(--bk-theme-space-12);
       align-items: center;
       justify-content: space-between;
     }

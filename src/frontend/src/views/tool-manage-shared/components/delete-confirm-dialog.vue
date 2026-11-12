@@ -45,11 +45,11 @@
     </div>
     <template #footer>
       <bk-button
-        class="mr8 delete-action-btn"
+        class="delete-action-btn"
         :disabled="confirmInput !== deleteTarget?.name"
         :loading="deleteLoading"
         theme="danger"
-        @click="handleConfirmDelete">
+        @click="handleConfirmDelete" style="margin-right: var(--bk-theme-space-8)">
         {{ t('删除') }}
       </bk-button>
       <bk-button
@@ -150,13 +150,13 @@
   /* 删除弹窗公共样式 - 去掉 footer 分割线和背景色，按钮加宽 */
   .delete-confirm-dialog {
     .bk-dialog-footer {
-      padding: 0 24px 24px !important;
-      background: #fff !important;
+      padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-24) !important;
+      background: var(--bk-theme-surface-default) !important;
       border-top: none !important;
     }
 
     .bk-dialog-body {
-      padding-bottom: 8px !important;
+      padding-bottom: var(--bk-theme-space-8) !important;
     }
 
     .delete-action-btn {
@@ -169,7 +169,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 0 16px;
+    padding: var(--bk-theme-space-24) 0 var(--bk-theme-space-16);
 
     .tip-icon {
       position: absolute;
@@ -177,43 +177,43 @@
       left: 50%;
       width: 50px;
       height: 50px;
-      margin-bottom: 16px;
+      margin-bottom: var(--bk-theme-space-16);
       transform: translateX(-50%);
     }
 
     .delete-title {
-      margin-bottom: 24px;
+      margin-bottom: var(--bk-theme-space-24);
       font-size: 20px;
       font-weight: 700;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .delete-warning {
       width: 100%;
-      padding: 12px 16px;
-      margin-bottom: 16px;
+      padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+      margin-bottom: var(--bk-theme-space-16);
       font-size: 14px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: center;
-      background: #f5f7fa;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .danger-text {
       font-weight: 600;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
     .delete-confirm-tip {
       width: 100%;
-      margin-bottom: 8px;
+      margin-bottom: var(--bk-theme-space-8);
       font-size: 14px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: left;
     }
 
     .tool-name {
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
     }
 

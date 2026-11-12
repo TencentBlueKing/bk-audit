@@ -49,7 +49,7 @@
         </span>
         <span
           v-if="route.meta?.isShowSceneSelector"
-          class="ml24">
+          class="title-scene-selector">
           <scene-system-selector
             v-model="selectedScene"
             :is-all-secen="!route.meta?.hideAllScenes"
@@ -57,7 +57,7 @@
             :popover-width="400"
             scene-permission="view_scene"
             system-permission="view_system"
-            width="400px"
+            width="208px"
             @change="handleSceneChange" />
         </span>
         <div
@@ -261,76 +261,76 @@
 <style lang="postcss">
 .account-info-btn {
   height: 32px;
-  font-size: 14px;
+  font-size: var(--bk-theme-font-size-base);
   line-height: 32px;
-  color: #979ba5;
+  color: var(--bk-theme-nav-top-text);
   cursor: pointer;
 
   &:hover {
-    color: #3a84ff;
+    color: var(--bk-theme-nav-top-text-active);
   }
 }
 
-.logout-btn {
-  margin-left: 3px;
+.logout-btn {margin-left: var(--bk-theme-space-2);
   font-size: 12px;
 }
 
 .site-help-btn {
   display: flex;
   width: 32px;
-  height: 32px;
-  margin-right: 15px;
-  color: #979ba5;
+  height: 32px;margin-right: var(--bk-theme-space-16);
+  color: var(--bk-theme-nav-top-text);
   align-items: center;
   justify-content: center;
 
   &:hover {
-    color: #fff;
+    color: var(--bk-theme-nav-top-text-active);
     cursor: pointer;
-    background: #303d55;
-    border-radius: 100%;
+    background: var(--bk-theme-nav-top-hover);
+    border-radius: var(--bk-theme-radius-full);
   }
 }
 
 .site-top-dropdown-menu {
-  .bk-dropdown-menu {
-    margin-top: 5px;
+  .bk-dropdown-menu {margin-top: var(--bk-theme-space-4);
   }
 }
 
 .language-option-item {
   &:hover {
-    background: #e1ecff !important;
+    background: var(--bk-theme-fill-selected) !important;
   }
 
   &.active {
-    color: #3a84ff !important;
-    background: #e1ecff;
+    color: var(--bk-theme-color-brand-2) !important;
+    background: var(--bk-theme-fill-selected);
   }
 
-  i {
-    margin-right: 4px;
+  i {margin-right: var(--bk-theme-space-4);
     font-size: 14px;
   }
 }
 
+.title-scene-selector {
+  margin-left: var(--bk-theme-space-16);
+}
+
 .title-tip {
   display: inline-flex;
-  align-items: center;
-  margin-left: 5px;
-  font-size: 12px;
-  color: #979ba5;
+  align-items: center;margin-left: var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  color: var(--bk-theme-text-weak);
 }
 
 .title-tip-text {
   display: inline-block;
-  max-width: 400px;
-  margin-left: 5px;
+  max-width: 400px;margin-left: var(--bk-theme-space-4);
   overflow: hidden;
-  font-size: 12px;
-  line-height: 52px;
-  color: #979ba5;
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-nav-height);
+  color: var(--bk-theme-text-weak);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -339,14 +339,13 @@
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  margin-left: 8px;
-  font-size: 12px;
+  height: 22px;padding: 0 var(--bk-theme-space-8);margin-left: var(--bk-theme-space-8);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
   line-height: 20px;
-  color: #63656e;
-  background-color: #f0f1f5;
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-muted);
   border: none;
-  border-radius: 2px;
+  border-radius: var(--bk-theme-tag-radius);
 }
 </style>

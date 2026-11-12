@@ -68,21 +68,21 @@
 <style lang="postcss" scoped>
   .api-push-operation {
     display: flex;
-    padding-right: 12px;
+    padding-right: var(--bk-theme-space-12);
     margin-left: auto;
     font-size: 12px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
     flex-wrap: nowrap;
 
     .operation-btn {
-      padding-left: 18px;
+      padding-left: var(--bk-theme-space-16);
 
       .operation-icon {
         font-size: 16px;
         cursor: pointer;
 
         &:hover {
-          color: #3a84ff;
+          color: var(--bk-theme-color-brand-2);
         }
       }
     }
@@ -90,6 +90,6 @@
 
   .check-detail-content {
     height: calc(100vh - 114px);
-    padding: 22px 40px;
+    padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
   }
 </style>

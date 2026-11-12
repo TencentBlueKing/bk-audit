@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="nl-search-box">
+  <div class="nl-search-box bk-theme-search-card">
     <!-- 智能搜索标题 -->
     <div class="nl-search-header">
       <img
@@ -381,7 +381,7 @@
     }, values.map((value) => {
       const config = riskLevelStyleMap[String(value)];
       return h('span', {
-        style: `display:inline-flex;align-items:center;padding:3px 8px;border-radius:3px;color:#fff;background:${config?.color || '#c4c6cc'};line-height:18px;vertical-align:middle;`,
+        style: `display:inline-flex;align-items:center;padding:3px 8px;border-radius:var(--bk-theme-tag-radius);color:#fff;background:${config?.color || '#c4c6cc'};line-height:18px;vertical-align:middle;`,
       }, config?.label || value);
     }));
   };
@@ -1165,9 +1165,6 @@
     position: relative;
     z-index: 500;
     overflow: visible;
-    background: linear-gradient(90deg, #edeeff 54.99%, #ebe7ff 94.25%);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
     /* 右上角下层半圆色块 */
     &::before {
@@ -1204,40 +1201,38 @@
       position: relative;
       z-index: 1;
       display: flex;
-      padding: 16px 24px 0;
+      padding: var(--bk-theme-space-16) var(--bk-theme-space-24) 0;
       align-items: center;
 
       .nl-search-header-icon {
         width: 24px;
         height: 24px;
-        margin-right: 6px;
+        margin-right: var(--bk-theme-space-6);
       }
 
       .nl-search-header-title {
-        font-size: 16px;
-        font-weight: 700;
-        line-height: 22px;
-        color: #313238;
+        font-size: var(--bk-theme-font-size-lg);
+        font-weight: var(--bk-theme-font-weight-bold);
+        line-height: var(--bk-theme-line-height-base);
+        color: var(--bk-theme-text-strong);
       }
     }
 
     .nl-search-condition-area {
       position: relative;
       z-index: 1;
-      padding: 0 24px 16px;
+      padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-16);
     }
 
     .nl-search-warning-tips {
       position: relative;
       z-index: 1;
       display: flex;
-      padding: 6px 8px;
-      margin: 0 24px 8px;
-      font-size: 12px;
-      color: #4d4f56;
-      background: #ffeded;
-      border: 1px solid #f8b4b4;
-      border-radius: 2px;
+      padding: var(--bk-theme-space-6) var(--bk-theme-space-8);
+      margin: 0 var(--bk-theme-space-24) var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
+      color: var(--bk-theme-text-default);background: var(--bk-theme-fill-danger);border: 1px solid var(--bk-theme-color-danger-4);
+      border-radius: var(--bk-theme-tag-radius);
       align-items: center;
       justify-content: space-between;
 
@@ -1250,20 +1245,20 @@
       .nl-search-warning-icon {
         width: 14px;
         height: 14px;
-        margin-right: 4px;
+        margin-right: var(--bk-theme-space-4);
         flex-shrink: 0;
       }
 
       .nl-search-warning-close {
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
         font-size: 14px;
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
         cursor: pointer;
         flex-shrink: 0;
         transition: color .15s;
 
         &:hover {
-          color: #63656e;
+          color: var(--bk-theme-text-default);
         }
       }
     }

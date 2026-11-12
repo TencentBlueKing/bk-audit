@@ -1,0 +1,100 @@
+/* 场景公共类。只引用 tokens.css 场景层 token，不写字面量。
+   场景之间的嵌套关系用「父场景类改写子场景变量」表达，不逐页覆盖。
+   新增场景类前先读 bk-audit-theme/references/scene-workflow.md。 */
+
+/* ---------- card：主内容白卡片 ---------- */
+.bk-theme-card {
+  /* 卡片内的表格不再要外框和圆角（§3.3 圆角/8 备注） */
+  --bk-theme-table-frame-radius: 0;
+  --bk-theme-table-frame-border: none;
+
+  padding: var(--bk-theme-card-padding);
+  background: var(--bk-theme-card-bg);
+  border-radius: var(--bk-theme-card-radius);
+  box-shadow: var(--bk-theme-card-shadow);
+}
+
+.bk-theme-card--hoverable {
+  transition: box-shadow .2s;
+}
+
+.bk-theme-card--hoverable:hover {
+  box-shadow: var(--bk-theme-card-shadow-hover);
+}
+
+/* 内边距由内部结构自行控制（例如卡片标题条 + 折叠内容） */
+.bk-theme-card--flush {
+  padding: 0;
+}
+
+/* 无权限页等大卡片 */
+.bk-theme-card--lg {
+  border-radius: var(--bk-theme-card-radius-lg);
+}
+
+/* 卡片内纵向区块，间距走 card-gap */
+.bk-theme-card--stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bk-theme-card-gap);
+}
+
+.bk-theme-card__footer {
+  padding: var(--bk-theme-card-footer-padding);
+}
+
+/* ---------- search-card：智能搜索卡片 ---------- */
+.bk-theme-search-card {
+  background: var(--bk-theme-search-card-gradient), var(--bk-theme-search-card-bg);
+  border: 1px solid var(--bk-theme-search-card-border);
+  border-radius: var(--bk-theme-search-card-radius);
+  box-shadow: var(--bk-theme-card-shadow);
+}
+
+/* 填充搜索。bkui 没有填充类，实现搜索框时挂到 bk-input 或 bk-search-select 上。
+   线框不要挂。不要和 behavior="simplicity" 同时用。 */
+.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled) {
+  background-color: var(--bk-theme-search-filled-bg);
+}
+
+.bk-theme-search-filled:not(.is-simplicity):not(.is-disabled):hover {
+  background-color: var(--bk-theme-search-filled-hover-bg);
+}
+
+/* ---------- select-banner：表格已选提示条 ---------- */
+.bk-theme-select-banner {
+  background: var(--bk-theme-select-banner-bg);
+  border-radius: var(--bk-theme-select-banner-radius);
+}
+
+/* ---------- cell-tip：带 tips 的单元格文字，hover 不变色 ---------- */
+.bk-theme-cell-tip {
+  text-decoration: none;
+  cursor: default;
+  border-bottom: var(--bk-theme-cell-tip-underline);
+}
+
+/* ---------- form：表单项间距变体，通过改写场景变量实现 ---------- */
+.bk-theme-form--compact {
+  --bk-theme-form-item-gap: var(--bk-theme-form-item-gap-compact);
+}
+
+/* 表格内、行内表单：表单项不留纵向间距 */
+.bk-theme-form--inline {
+  --bk-theme-form-item-gap: 0;
+}
+
+/* ---------- list-toolbar：列表工具栏 ---------- */
+.bk-theme-list-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--bk-theme-list-toolbar-gap);
+  gap: var(--bk-theme-list-toolbar-item-gap);
+}
+
+/* ---------- descriptions：气泡内紧凑 Descriptions（P10 待确认，占位） ---------- */
+.bk-theme-descriptions--dense {
+  row-gap: var(--bk-theme-descriptions-row-gap);
+}
+
+/* 表格内控件：§3.1 第 6 条「表格内表单圆角无需处理」= 不单独处理，跟随 control 场景，不在这里写例外。 */

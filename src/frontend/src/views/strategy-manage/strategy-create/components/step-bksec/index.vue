@@ -19,7 +19,7 @@
   <smart-action
     class="create-strategy-page"
     :offset-target="getSmartActionOffsetTarget">
-    <div class="bksec-card">
+    <div class="bksec-card bk-theme-card bk-theme-card--flush">
       <div class="bksec-title">
         <button
           class="bksec-collapse"
@@ -197,10 +197,10 @@
           {{ t('上一步') }}
         </bk-button>
         <bk-button
-          class="bksec-submit ml8"
+          class="bksec-submit"
           data-testid="bksec-ticket-submit"
           theme="primary"
-          @click="handleNext">
+          @click="handleNext" style="margin-left: var(--bk-theme-space-8)">
           <span class="bksec-submit-text">
             <span>{{ primaryActionText }}</span>
             <span
@@ -210,14 +210,14 @@
         </bk-button>
         <bk-button
           v-if="showSaveDraftButton"
-          class="ml8"
+         
           data-testid="bksec-ticket-draft"
-          @click="handleSaveDraft">
+          @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
           {{ t('保存草稿') }}
         </bk-button>
         <bk-button
-          class="ml8"
-          @click="handleCancel">
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
         <span
@@ -226,10 +226,10 @@
             disabled: canPreview,
           }">
           <bk-button
-            class="ml8"
+           
             data-testid="bksec-ticket-preview"
             :disabled="!canPreview"
-            @click="showPreview = true">
+            @click="showPreview = true" style="margin-left: var(--bk-theme-space-8)">
             <audit-icon
               style="margin-right: 4px;"
               type="view" />
@@ -760,20 +760,17 @@
 </script>
 <style lang="postcss" scoped>
 .bksec-card {
-  margin-bottom: var(--audit-space-16);
-  background: var(--audit-neutral-bg-04);
-  border-radius: var(--audit-radius-container);
-  box-shadow: var(--audit-shadow-card);
+  margin-bottom: var(--bk-theme-space-16);
 }
 
 .bksec-title {
   display: flex;
   height: auto;
-  padding: var(--audit-space-12) var(--audit-space-24) var(--audit-space-16);
-  font-size: var(--audit-font-size-base);
-  font-weight: var(--audit-font-weight-bold);
-  line-height: var(--audit-line-height-base);
-  color: var(--audit-neutral-text-02);
+  padding: var(--bk-theme-space-12) var(--bk-theme-space-24) var(--bk-theme-space-16);
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-bold);
+  line-height: var(--bk-theme-line-height-base);
+  color: var(--bk-theme-text-default);
   align-items: center;
 }
 
@@ -782,8 +779,8 @@
   width: 16px;
   height: 16px;
   padding: 0;
-  margin-right: var(--audit-space-8);
-  color: var(--audit-neutral-text-02);
+  margin-right: var(--bk-theme-space-8);
+  color: var(--bk-theme-text-default);
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -792,7 +789,7 @@
 }
 
 .bksec-collapse-icon {
-  font-size: var(--audit-font-size-lg);
+  font-size: var(--bk-theme-font-size-lg);
 }
 
 .bksec-collapse-icon.is-collapsed {
@@ -813,28 +810,28 @@
 }
 
 .bksec-body {
-  padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
-  border-top: 1px solid var(--audit-neutral-border-01);
+  padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .bksec-title-text {
-  margin-right: 13px;
+  margin-right: var(--bk-theme-space-12);
 }
 
 .bksec-title-desc {
   display: flex;
-  margin-left: 13px;
-  font-size: var(--audit-font-size-sm);
-  font-weight: var(--audit-font-weight-regular);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  margin-left: var(--bk-theme-space-12);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   align-items: center;
-  gap: var(--audit-space-4);
+  gap: var(--bk-theme-space-4);
 }
 
 .bksec-info-icon {
-  font-size: var(--audit-font-size-base);
-  color: var(--audit-brand-02);
+  font-size: var(--bk-theme-font-size-base);
+  color: var(--bk-theme-color-brand-2);
 }
 
 .bksec-field {
@@ -845,29 +842,29 @@
 .bksec-field-label {
   display: flex;
   min-width: 0;
-  font-size: var(--audit-font-size-sm);
-  font-weight: var(--audit-font-weight-regular);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-sm);
+  font-weight: var(--bk-theme-font-weight-regular);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   align-items: center;
-  gap: 2px;
+  gap: var(--bk-theme-space-2);
 }
 
 .bksec-label {
-  margin-bottom: 6px;
+  margin-bottom: var(--bk-theme-space-6);
 }
 
 .bksec-field-head {
   display: flex;
   height: 20px;
-  margin-bottom: 6px;
+  margin-bottom: var(--bk-theme-space-6);
   align-items: center;
   justify-content: space-between;
-  gap: var(--audit-space-8);
+  gap: var(--bk-theme-space-8);
 }
 
 .is-required {
-  color: var(--audit-danger-02);
+  color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-type-select {
@@ -879,54 +876,54 @@
 }
 
 .bksec-type-select :deep(.bk-select-trigger) {
-  border-color: var(--audit-neutral-text-04);
+  border-color: var(--bk-theme-border-strong);
 }
 
 .bksec-type-select :deep(.bk-input--text) {
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
 }
 
 .bksec-type-select :deep(.bk-input--text::placeholder) {
-  color: var(--audit-neutral-text-04);
+  color: var(--bk-theme-text-disabled);
 }
 
 .bksec-type-select.is-error :deep(.bk-select-trigger) {
-  border-color: var(--audit-danger-02);
+  border-color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-fields-divider {
-  margin: var(--audit-space-24) 0;
-  border-top: 1px solid var(--audit-neutral-border-01);
+  margin: var(--bk-theme-space-24) 0;
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .bksec-fields-title {
-  font-size: var(--audit-font-size-base);
-  font-weight: var(--audit-font-weight-bold);
-  line-height: var(--audit-line-height-base);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-base);
+  font-weight: var(--bk-theme-font-weight-bold);
+  line-height: var(--bk-theme-line-height-base);
+  color: var(--bk-theme-text-default);
 }
 
 .bksec-field-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  margin-top: var(--audit-space-12);
-  column-gap: var(--audit-space-24);
-  row-gap: var(--audit-space-24);
+  margin-top: var(--bk-theme-space-12);
+  column-gap: var(--bk-theme-space-24);
+  row-gap: var(--bk-theme-space-24);
 }
 
 .bksec-input {
   display: flex;
   height: 32px;
-  background: var(--audit-neutral-bg-04);
-  border: 1px solid var(--audit-neutral-text-04);
-  border-radius: var(--audit-radius-control);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-strong);
+  border-radius: var(--bk-theme-control-radius);
   align-items: center;
 }
 
 .bksec-input.is-error {
-  border-color: var(--audit-danger-02);
+  border-color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-field-display {
@@ -935,11 +932,11 @@
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: var(--audit-space-4) var(--audit-space-8);
+  padding: var(--bk-theme-space-4) var(--bk-theme-space-8);
   overflow: hidden;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   text-align: left;
   white-space: nowrap;
   cursor: text;
@@ -950,23 +947,23 @@
 }
 
 .bksec-field-display .is-variable {
-  padding: 0 var(--audit-space-4);
-  margin: 0 1px;
-  background: var(--audit-neutral-bg-01);
-  border-radius: var(--audit-radius-control);
+  padding: 0 var(--bk-theme-space-4);
+  margin: 0 var(--bk-theme-space-2);
+  background: var(--bk-theme-surface-muted);
+  border-radius: var(--bk-theme-control-radius);
 }
 
 .bksec-field-placeholder {
-  color: var(--audit-neutral-text-04);
+  color: var(--bk-theme-text-disabled);
 }
 
 .bksec-native-input {
   height: 100%;
   min-width: 0;
-  padding: 0 var(--audit-space-8);
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-02);
+  padding: 0 var(--bk-theme-space-8);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-default);
   background: transparent;
   border: 0;
   outline: none;
@@ -974,31 +971,31 @@
 }
 
 .bksec-native-input::placeholder {
-  color: var(--audit-neutral-text-04);
+  color: var(--bk-theme-text-disabled);
 }
 
 .bksec-var-trigger {
   display: inline-flex;
   padding: 0;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-brand-02);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: 0;
   align-items: center;
-  gap: var(--audit-space-4);
+  gap: var(--bk-theme-space-4);
   flex: none;
 }
 
 .bksec-var-icon {
-  font-size: var(--audit-font-size-lg);
+  font-size: var(--bk-theme-font-size-lg);
 }
 
 .bksec-error {
-  margin-top: var(--audit-space-8);
-  font-size: var(--audit-font-size-sm);
-  color: var(--audit-danger-02);
+  margin-top: var(--bk-theme-space-8);
+  font-size: var(--bk-theme-font-size-sm);
+  color: var(--bk-theme-color-danger-2);
 }
 
 .bksec-field > .bksec-error {
@@ -1007,9 +1004,9 @@
   right: 0;
   left: 0;
   z-index: 1;
-  margin-top: 2px;
+  margin-top: var(--bk-theme-space-2);
   overflow: hidden;
-  line-height: var(--audit-line-height-sm);
+  line-height: var(--bk-theme-line-height-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
@@ -1018,7 +1015,7 @@
 <style lang="postcss">
 .bksec-var-popover.bk-pop2-content,
 .bksec-var-popover .bk-pop2-content {
-  padding: var(--audit-space-4) 0;
+  padding: var(--bk-theme-space-4) 0;
 }
 
 .bksec-field-value-tip {
@@ -1048,7 +1045,7 @@
   z-index: 2;
   height: auto;
   min-height: 56px;
-  background: var(--audit-neutral-bg-04);
+  background: var(--bk-theme-surface-default);
   align-self: stretch;
 }
 </style>

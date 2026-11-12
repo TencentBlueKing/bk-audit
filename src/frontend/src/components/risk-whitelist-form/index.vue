@@ -177,7 +177,7 @@
         </bk-radio-group>
         <bk-alert
           v-if="whitelistType === 'risk_acceptance'"
-          class="type-alert"
+          class="type-alert risk-warning"
           theme="warning"
           :title="t('风险告警：冒险加白表示风险真实存在，可能带来安全风险，必须设置有效期。因冒险加白导致重大安全事故的，申请人需承担主要责任，请谨慎操作')" />
       </div>
@@ -188,7 +188,7 @@
         {{ t('有效期') }}
       </div>
       <div class="form-content">
-        <template v-if="validityView === 'picker' || validityView === 'permanent-switch'">
+        <template v-if="showDurationPicker">
           <div class="duration-line">
             <div
               class="duration-group"
@@ -221,7 +221,7 @@
               @update:model-value="changeCustomExpire" />
           </div>
           <bk-alert
-            v-if="validityView === 'permanent-switch' && validityMode !== 'permanent'"
+            v-if="showSwitchHint"
             class="type-alert"
             theme="info"
             :title="t('切换后将从现在起计算到期时间。预计到期时间为：{time}', { time: expectedExpire })" />
@@ -239,7 +239,7 @@
               class="renew-link"
               text
               theme="primary"
-              @click="emit('renew')">
+              @click="startRenew">
               {{ t('续期') }}
             </bk-button>
           </div>
@@ -251,7 +251,7 @@
           <bk-alert
             v-if="validityView === 'expired'"
             class="type-alert"
-            theme="error"
+            theme="danger"
             :title="t('当前期限已到期。如需延长使用，请续期。')" />
         </template>
         <div
@@ -337,7 +337,6 @@
     initialScope: null,
   });
 
-  const emit = defineEmits<{(e: 'renew'): void}>();
   const { t } = useI18n();
   const roleText = useWhitelistRoleText();
 
@@ -353,6 +352,7 @@
   const dirty = ref(false);
   const renewedExpire = ref('');
   const renewedActive = ref(false);
+  const renewEditing = ref(false);
   const strategyLoading = ref(false);
   const strategyOptions = ref<Array<{ id: string; name: string }>>([]);
 
@@ -376,12 +376,27 @@
     return 'active';
   });
 
+  const showDurationPicker = computed(() => (
+    !props.record
+    || validityView.value === 'picker'
+    || validityView.value === 'permanent-switch'
+    || renewEditing.value
+  ));
+
+  const showSwitchHint = computed(() => (
+    validityMode.value !== 'permanent'
+    && (renewEditing.value || validityView.value === 'permanent-switch')
+  ));
+
   const markDirty = () => {
     dirty.value = true;
   };
 
   const fillFromRecord = (record: RiskWhitelist | null) => {
     dirty.value = false;
+    renewedExpire.value = '';
+    renewedActive.value = false;
+    renewEditing.value = false;
     if (!record) {
       scope.value = props.initialScope?.groups?.length
         ? JSON.parse(JSON.stringify(props.initialScope))
@@ -626,6 +641,11 @@
     markDirty();
   };
 
+  const startRenew = () => {
+    renewEditing.value = true;
+    markDirty();
+  };
+
   const disablePastDate = (date: Date) => dayjs(date).endOf('day').isBefore(dayjs());
 
   const changeCustomExpire = (value: string | Date) => {
@@ -751,7 +771,9 @@
   };
 
   const isValidityEditable = () => (
-    validityView.value === 'picker' || validityView.value === 'permanent-switch'
+    renewEditing.value
+    || validityView.value === 'picker'
+    || validityView.value === 'permanent-switch'
   );
 
   const getPayload = (): WhitelistPayload => {
@@ -811,7 +833,7 @@
 </script>
 <style lang="postcss" scoped>
   .risk-whitelist-form {
-    padding: 24px 24px 0;
+    padding: var(--bk-theme-space-24) var(--bk-theme-space-24) 0;
     overflow: visible;
   }
 
@@ -826,7 +848,7 @@
   .risk-whitelist-form.is-embedded .form-label {
     width: auto;
     padding-top: 0;
-    margin-bottom: 8px;
+    margin-bottom: var(--bk-theme-space-8);
     text-align: left;
   }
 
@@ -837,7 +859,7 @@
   .form-item {
     display: flex;
     flex-direction: column;
-    margin-bottom: 24px;
+    margin-bottom: var(--bk-theme-space-24);
   }
 
   .form-item:last-child {
@@ -847,19 +869,19 @@
   .form-label {
     width: auto;
     flex-shrink: 0;
-    margin-bottom: 8px;
-    font-family: var(--audit-font-family);
-    font-size: var(--audit-font-size-sm);
+    margin-bottom: var(--bk-theme-space-8);
+    font-family: var(--bk-theme-font-family);
+    font-size: var(--bk-theme-font-size-sm);
     font-style: normal;
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-02);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
     text-align: left;
   }
 
   .is-required .form-label::after {
-    margin-left: 2px;
-    color: var(--audit-danger-02);
+    margin-left: var(--bk-theme-space-2);
+    color: var(--bk-theme-color-danger-2);
     content: '*';
   }
 
@@ -873,7 +895,7 @@
   }
 
   .is-reason .form-label {
-    margin-bottom: 6px;
+    margin-bottom: var(--bk-theme-space-6);
   }
 
   .form-content {
@@ -883,7 +905,7 @@
 
   .type-radios {
     display: inline-flex;
-    gap: 24px;
+    gap: var(--bk-theme-space-24);
     align-items: center;
     height: 20px;
     line-height: 20px;
@@ -892,6 +914,15 @@
   .type-radios :deep(.bk-radio) {
     height: 20px;
     line-height: 20px;
+  }
+
+  .type-radios :deep(.bk-radio-label) {
+    font-size: 12px;
+  }
+
+  .risk-warning :deep(.bk-alert-title) {
+    line-height: var(--bk-theme-line-height-sm);
+    white-space: nowrap;
   }
 
   .false-positive-wrap {
@@ -910,7 +941,7 @@
 
   .scope-editor.has-outer .group-list {
     width: calc(100% - 40px);
-    margin-left: 40px;
+    margin-left: var(--bk-theme-space-32);
   }
 
   .outer-logic,
@@ -920,14 +951,14 @@
     width: 28px;
     height: 28px;
     padding: 0;
-    font-size: var(--audit-font-size-sm);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 26px;
-    color: var(--audit-warn-02);
+    color: var(--bk-theme-color-warn-2);
     text-align: center;
     cursor: pointer;
-    background: var(--audit-neutral-bg-04);
-    border: 1px solid var(--audit-warn-02);
-    border-radius: 2px;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-color-warn-2);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .outer-logic {
@@ -938,13 +969,13 @@
 
   .scope-group {
     position: relative;
-    padding: 16px 25px 16px 16px;
-    margin-bottom: 12px;
-    background: var(--audit-neutral-bg-03);
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-16) var(--bk-theme-space-16);
+    margin-bottom: var(--bk-theme-space-12);
+    background: var(--bk-theme-surface-subtle);
   }
 
   .risk-whitelist-form.is-embedded .scope-group {
-    background: var(--audit-neutral-bg-04);
+    background: var(--bk-theme-surface-default);
   }
 
   .outer-row-line {
@@ -953,7 +984,7 @@
     left: -20px;
     width: 20px;
     height: 0;
-    border-top: 1px dashed var(--audit-neutral-border-01);
+    border-top: 1px dashed var(--bk-theme-border-default);
   }
 
   .outer-col {
@@ -961,7 +992,7 @@
     left: -20px;
     width: 0;
     height: calc(50% + 6px);
-    border-left: 1px dashed var(--audit-neutral-border-01);
+    border-left: 1px dashed var(--bk-theme-border-default);
   }
 
   .outer-col-top {
@@ -978,7 +1009,7 @@
     top: 5px;
     right: 5px;
     font-size: 14px;
-    color: var(--audit-neutral-text-03);
+    color: var(--bk-theme-text-weak);
     cursor: pointer;
   }
 
@@ -994,12 +1025,12 @@
     position: relative;
     display: grid;
     grid-template-columns: 260px 160px minmax(0, 1fr) minmax(40px, auto);
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
   }
 
   .scope-row + .scope-row {
-    margin-top: 8px;
+    margin-top: var(--bk-theme-space-8);
   }
 
   .inner-row-line {
@@ -1008,7 +1039,7 @@
     left: -25px;
     width: 25px;
     height: 0;
-    border-top: 1px dashed var(--audit-neutral-border-01);
+    border-top: 1px dashed var(--bk-theme-border-default);
   }
 
   .inner-col-line {
@@ -1017,7 +1048,7 @@
     left: -25px;
     width: 0;
     height: 40px;
-    border-left: 1px dashed var(--audit-neutral-border-01);
+    border-left: 1px dashed var(--bk-theme-border-default);
   }
 
   .field-select {
@@ -1034,12 +1065,12 @@
 
   .icon-group {
     display: flex;
-    gap: 10px;
+    gap: var(--bk-theme-space-12);
     align-items: center;
     height: 32px;
     font-size: 14px;
     line-height: 1;
-    color: var(--audit-neutral-text-04);
+    color: var(--bk-theme-text-disabled);
   }
 
   .expr-action-icon {
@@ -1051,29 +1082,29 @@
 
   .add-group {
     display: flex;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     align-items: center;
     justify-content: flex-start;
     width: 100%;
     height: 32px;
-    padding: 0 12px;
-    font-size: var(--audit-font-size-sm);
-    font-weight: var(--audit-font-weight-regular);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-brand-02);
+    padding: 0 var(--bk-theme-space-12);
+    font-size: var(--bk-theme-font-size-sm);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-color-brand-2);
     text-align: left;
     cursor: pointer;
-    background: var(--audit-neutral-bg-02);
-    border: 1px dashed var(--audit-neutral-border-01);
+    background: var(--bk-theme-surface-subtle);
+    border: 1px dashed var(--bk-theme-border-default);
   }
 
   .add-group-icon {
-    font-size: 16px;
+    font-size: 12px;
   }
 
   .duration-line {
     display: flex;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     align-items: center;
   }
 
@@ -1085,35 +1116,35 @@
   .duration-item {
     width: 80px;
     height: 32px;
-    margin-right: -1px;
-    font-size: var(--audit-font-size-sm);
+    margin-right: -var(--bk-theme-space-2);
+    font-size: var(--bk-theme-font-size-sm);
     line-height: 30px;
-    color: var(--audit-neutral-text-01);
+    color: var(--bk-theme-text-strong);
     cursor: pointer;
-    background: var(--audit-neutral-bg-04);
-    border: 1px solid var(--audit-neutral-text-04);
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-text-disabled);
   }
 
   .duration-item:first-child {
-    border-radius: 2px 0 0 2px;
+    border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
   }
 
   .duration-item:last-child {
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
   }
 
   .duration-item.is-active {
     position: relative;
     z-index: 1;
-    color: var(--audit-brand-02);
-    background: var(--audit-brand-06);
-    border-color: var(--audit-brand-02);
+    color: var(--bk-theme-color-brand-2);
+    background: var(--bk-theme-color-brand-6);
+    border-color: var(--bk-theme-color-brand-2);
   }
 
   .duration-item.is-disabled {
-    color: var(--audit-neutral-text-04);
+    color: var(--bk-theme-text-disabled);
     cursor: not-allowed;
-    background: var(--audit-neutral-bg-03);
+    background: var(--bk-theme-surface-subtle);
   }
 
   .form-content :deep(textarea) {
@@ -1126,7 +1157,7 @@
   }
 
   .type-alert {
-    margin-top: 8px;
+    margin-top: var(--bk-theme-space-8);
   }
 
   .custom-expire {
@@ -1137,51 +1168,51 @@
 
   .field-tip,
   .field-error {
-    margin-top: 4px;
-    font-size: var(--audit-font-size-sm);
+    margin-top: var(--bk-theme-space-4);
+    font-size: var(--bk-theme-font-size-sm);
   }
 
   .field-tip {
-    color: var(--audit-warn-01);
+    color: var(--bk-theme-color-warn-1);
   }
 
   .field-error {
-    color: var(--audit-danger-02);
+    color: var(--bk-theme-color-danger-2);
   }
 
   .expire-line {
     display: flex;
-    gap: 12px;
+    gap: var(--bk-theme-space-12);
     align-items: center;
   }
 
   .expire-box {
     display: flex;
+    gap: var(--bk-theme-space-8);
     align-items: center;
-    justify-content: space-between;
     width: 240px;
     height: 32px;
-    padding: 0 8px;
-    font-size: var(--audit-font-size-sm);
-    line-height: var(--audit-line-height-sm);
-    color: var(--audit-neutral-text-01);
-    background: var(--audit-neutral-bg-03);
-    border-radius: 2px;
+    padding: 0 var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-tag-radius);
   }
 
   .expired-text {
-    color: var(--audit-danger-02);
+    color: var(--bk-theme-color-danger-2);
   }
 
   .renew-link {
     height: 32px;
     padding: 0;
-    font-size: var(--audit-font-size-sm);
+    font-size: var(--bk-theme-font-size-sm);
   }
 
   .input-suffix {
-    padding-right: 8px;
-    color: var(--audit-neutral-text-03);
+    padding-right: var(--bk-theme-space-8);
+    color: var(--bk-theme-text-weak);
   }
 </style>
 <style lang="postcss">

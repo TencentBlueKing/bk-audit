@@ -73,8 +73,8 @@
                     :src="noLogDataSvg"
                     style="width: 68px; margin-left: 16px;">
                   <div
-                    class="ml8"
-                    style="line-height: 50px;">
+                   
+                    style="line-height: 50px; margin-left: var(--bk-theme-space-8)">
                     <span>{{ t('获取数据中') }}</span>
                     <bk-button
                       class="refresh-btn"
@@ -141,21 +141,21 @@
       <bk-button
         v-if="isPreview"
         v-bk-tooltips="t('请先调试并映射字段')"
-        class="ml8 w88 is-disabled"
-        theme="primary">
+        class="w88 is-disabled"
+        theme="primary" style="margin-left: var(--bk-theme-space-8)">
         {{ t('下一步') }}
       </bk-button>
       <bk-button
         v-else
-        class="ml8 w88"
+        class="w88"
         :loading="isSubmiting"
         theme="primary"
-        @click="handleSubmit">
+        @click="handleSubmit" style="margin-left: var(--bk-theme-space-8)">
         {{ t('下一步') }}
       </bk-button>
       <bk-button
-        class="ml8"
-        @click="handleCancle">
+       
+        @click="handleCancle" style="margin-left: var(--bk-theme-space-8)">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -344,8 +344,8 @@
     display: flex;
     min-height: 86px;
     overflow: hidden;
-    color: #63656e;
-    border-radius: 2px;
+    color: var(--bk-theme-text-default);
+    border-radius: var(--bk-theme-tag-radius);
 
     .original-data {
       display: flex;
@@ -353,30 +353,30 @@
 
       .original-data-text {
         flex: 1;
-        padding: 10px;
+        padding: var(--bk-theme-space-12);
         line-height: 18px;
         word-break: break-all;
-        background: #f5f7fa;
+        background: var(--bk-theme-surface-subtle);
       }
     }
 
     .no-data {
       display: flex;
       margin: auto;
-      color: #63656e;
-      background: #f5f7fa;
+      color: var(--bk-theme-text-default);
+      background: var(--bk-theme-surface-subtle);
     }
   }
 
   .bg-color {
-    background: #f5f7fa;
+    background: var(--bk-theme-surface-subtle);
   }
 
   .refresh-btn {
     height: 16px;
-    padding-left: 8px;
+    padding-left: var(--bk-theme-space-8);
     line-height: 16px;
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
     word-break: keep-all;
     white-space: nowrap;
     cursor: pointer;

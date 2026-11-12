@@ -15,18 +15,13 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="storageList">
-    <div class="scene-manage-page">
-      <!-- 头部操作区 -->
-      <div class="scene-manage-header">
+  <div class="scene-manage-page bk-theme-card">
+    <div class="scene-manage-header bk-theme-list-toolbar">
         <div class="header-left">
           <bk-button
-            class="mr8"
+           
             theme="primary"
-            @click="handleCreateScene">
+            @click="handleCreateScene" style="margin-right: var(--bk-theme-space-8)">
             <audit-icon
               class="mr4"
               type="add" />
@@ -36,7 +31,7 @@
         <div class="header-right">
           <bk-radio-group
             v-model="statusFilter"
-            class="status-filter mr16"
+            class="status-filter"
             type="capsule"
             @change="handleStatusFilterChange">
             <bk-radio-button label="all">
@@ -93,6 +88,7 @@
           :columns="tableColumns"
           :data-source="dataSource"
           need-empty-search-tip
+          use-skeleton
           :row-class-name="getSceneRowClassName"
           row-key="scene_id"
           @clear-search="handleClearSearch"
@@ -113,8 +109,7 @@
         @delete="handleDeleteScene"
         @edit="handleDetailEdit"
         @toggle-status="handleToggleStatus" />
-    </div>
-  </skeleton-loading>
+  </div>
 </template>
 
 <script setup lang='tsx'>
@@ -155,7 +150,6 @@
   const { messageSuccess } = useMessage();
   const { replaceSearchParams, getSearchParams } = useUrlSearch();
 
-  const isLoading = ref(false);
   // 状态筛选
   const statusFilter = ref('all');
   // bk-search-select 搜索值
@@ -559,8 +553,6 @@
 
   // 处理请求成功
   const handleRequestSuccess = () => {
-    isLoading.value = false;
-    // 每次列表请求成功后，单独获取全局状态统计
     fetchStatusCounts();
   };
 
@@ -910,17 +902,13 @@
 <style lang="postcss" scoped>
 .scene-manage-page {
   min-height: 85vh;
-  padding: 24px;
-  background-color: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+  padding: var(--bk-theme-space-24);
 }
 
 .scene-manage-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
 }
 
 .header-left {
@@ -934,39 +922,40 @@
 }
 
 .mr4 {
-  margin-right: 4px;
+  margin-right: var(--bk-theme-space-4);
 }
 
 .mr8 {
-  margin-right: 8px;
+  margin-right: var(--bk-theme-space-8);
 }
 
 .mr16 {
-  margin-right: 16px;
+  margin-right: var(--bk-theme-space-16);
 }
 
 .ml4 {
-  margin-left: 4px;
+  margin-left: var(--bk-theme-space-4);
 }
 
 .ml8 {
-  margin-left: 8px;
+  margin-left: var(--bk-theme-space-8);
 }
 
 .status-filter {
+  margin-right: var(--bk-theme-space-16);
   :deep(.bk-radio-button) {
     .bk-radio-button-label {
       display: flex;
       align-items: center;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
     }
   }
 
   :deep(.bk-radio-button:not(.is-checked)) {
     .status-count {
-      color: #979ba5;
-      background-color: #fff !important;
-      border-color: #fff !important;
+      color: var(--bk-theme-text-weak);
+      background-color: var(--bk-theme-surface-default) !important;
+      border-color: var(--bk-theme-surface-default) !important;
     }
   }
 }
@@ -974,8 +963,8 @@
 .status-count {
   height: 18px;
   min-width: 18px;
-  padding: 0 4px;
-  margin-left: 4px;
+  padding: 0 var(--bk-theme-space-4);
+  margin-left: var(--bk-theme-space-4);
   font-size: 12px;
   line-height: 18px;
   pointer-events: none;
@@ -1002,12 +991,12 @@
 }
 
 .scene-id-cell {
-  color: #63656e;
+  color: var(--bk-theme-text-default);
 }
 
 .column-title-required::before {
-  margin-right: 4px;
-  color: #ea3636;
+  margin-right: var(--bk-theme-space-4);
+  color: var(--bk-theme-color-danger-2);
   content: '*';
 }
 
@@ -1020,11 +1009,11 @@
 /* 更多操作图标 */
 .more-action-icon {
   font-size: 18px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
 
   &:hover {
-    color: #3a84ff;
+    color: var(--bk-theme-color-brand-2);
   }
 }
 
@@ -1043,7 +1032,7 @@
 .audit-tdesign-list .scene-name-cell {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   max-width: 100%;
   overflow: hidden;
   line-height: 20px;
@@ -1067,7 +1056,7 @@
   width: 16px;
   height: 16px;
   font-size: 14px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   visibility: hidden;
 }
@@ -1077,7 +1066,7 @@
 }
 
 .jump-link {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -1093,21 +1082,21 @@
 .more-action-menu {
   .more-action-item {
     font-size: 12px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
     cursor: pointer;
     transition: background-color .2s;
 
     &:hover {
-      color: #3a84ff;
-      background-color: #f5f7fa;
+      color: var(--bk-theme-color-brand-2);
+      background-color: var(--bk-theme-surface-subtle);
     }
 
     &.is-disabled {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
 
       &:hover {
-        color: #c4c6cc;
+        color: var(--bk-theme-border-strong);
         background-color: transparent;
       }
     }
@@ -1117,7 +1106,7 @@
 .tag-list {
   display: inline-flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--bk-theme-space-4);
   align-items: center;
   overflow: hidden;
 

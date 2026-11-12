@@ -74,8 +74,7 @@
   });
 </script>
 <style lang="postcss" scoped>
-  .auth-router-link-disabled {
-    color: #c4c6cc !important;
+  .auth-router-link-disabled {color: var(--bk-theme-text-disabled) !important;
     user-select: none !important;
   }
 </style>

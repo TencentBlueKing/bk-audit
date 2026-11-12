@@ -92,26 +92,25 @@
 </script>
 
 <style lang="postcss" scoped>
-.variable-field-list {
-  padding: 20px 40px 24px;
+.variable-field-list {padding: var(--bk-theme-space-16) var(--bk-theme-space-32) var(--bk-theme-space-24);
 }
 
 .variable-field-list__search {
   width: 100%;
-  margin-bottom: 12px;
+  margin-bottom: var(--bk-theme-space-12);
 }
 
 .variable-field-list__search-icon {
   display: flex;
   font-size: 16px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   align-items: center;
 }
 
 .variable-field-list__table {
-  background: #fff;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-tag-radius);
 }
 
 .variable-field-list__row {
@@ -119,17 +118,17 @@
   grid-template-columns: 220px minmax(0, 1fr) 80px;
   align-items: center;
   min-height: 42px;
-  padding: 0 16px;
+  padding: 0 var(--bk-theme-space-16);
   font-size: 12px;
   line-height: 20px;
-  color: #313238;
-  border-top: 1px solid #dcdee5;
+  color: var(--bk-theme-text-strong);
+  border-top: 1px solid var(--bk-theme-border-default);
 }
 
 .variable-field-list__row.is-header {
   font-weight: 600;
-  color: #313238;
-  background: #f0f1f5;
+  color: var(--bk-theme-text-strong);
+  background: var(--bk-theme-surface-muted);
   border-top: none;
 }
 
@@ -141,20 +140,20 @@
 }
 
 .variable-field-list__copy {
-  margin-left: 6px;
-  color: #4d4f56;
+  margin-left: var(--bk-theme-space-6);
+  color: var(--bk-theme-text-default);
   cursor: pointer;
 }
 
 .variable-field-list__copy:hover {
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
 }
 
 .variable-field-list__insert {
   padding: 0;
   font-size: 12px;
   line-height: 20px;
-  color: #3a84ff;
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
   background: transparent;
   border: none;
@@ -165,9 +164,9 @@
 }
 
 .variable-field-list__empty {
-  padding: 40px 0;
+  padding: var(--bk-theme-space-32) 0;
   font-size: 12px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
   text-align: center;
 }
 </style>

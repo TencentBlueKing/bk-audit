@@ -31,10 +31,10 @@
           :value="item.id" />
       </bk-select>
       <bk-select
-        class="ml8"
+       
         filterable
         :model-value="data.separator"
-        style="width: 312px;"
+        style="width: 312px; margin-left: var(--bk-theme-space-8)"
         @change="(value: string) => handleChange('separator', value)">
         <bk-option
           v-for="item in globalsData.data_delimiter"
@@ -218,17 +218,17 @@
   }
 
   .separator-filter-tips {
-    margin-top: 24px;
+    margin-top: var(--bk-theme-space-24);
     font-size: 12px;
     line-height: 16px;
-    color: #979ba5;
+    color: var(--bk-theme-text-weak);
   }
 
   .separator-filter-row {
     position: relative;
     display: flex;
-    padding-left: 48px;
-    margin-top: 12px;
+    padding-left: var(--bk-theme-space-32);
+    margin-top: var(--bk-theme-space-12);
 
     .logic-operation-value {
       position: absolute;
@@ -237,16 +237,16 @@
       width: 40px;
       height: 32px;
       font-size: 12px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       text-align: center;
       cursor: pointer;
-      background: #fff;
-      border: 1px solid #c4c6cc;
-      border-radius: 2px;
+      background: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-border-strong);
+      border-radius: var(--bk-theme-tag-radius);
 
       &:hover {
-        background: #f0f1f5;
-        border-color: #f0f1f5;
+        background: var(--bk-theme-surface-muted);
+        border-color: var(--bk-theme-surface-muted);
       }
     }
 
@@ -258,7 +258,7 @@
       display: flex;
       width: 26px;
       font-size: 14px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
       align-items: center;
       justify-content: center;
     }
@@ -270,15 +270,15 @@
     .column-btn {
       display: flex;
       height: 32px;
-      padding: 0 5px;
+      padding: 0 var(--bk-theme-space-4);
       font-size: 14px;
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: pointer;
       align-items: center;
       justify-content: center;
 
       &:hover {
-        color: #979ba5;
+        color: var(--bk-theme-text-weak);
       }
     }
   }

@@ -70,6 +70,6 @@
 </script>
 <style lang="postcss">
   .show-copy {
-    margin-right: 12px;
+    margin-right: var(--bk-theme-space-12);
   }
 </style>

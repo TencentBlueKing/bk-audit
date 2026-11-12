@@ -364,7 +364,7 @@
                         <div class="report-mode-tip-text">{{ item.modeTip }}</div>
                         <button
                           class="report-mode-tip-copy"
-                          title="复制"
+                          v-bk-tooltips="t('复制')"
                           type="button"
                           @click="copyReportModeTip(item)">
                           <audit-icon type="copy" />
@@ -409,7 +409,7 @@
         class="feedback-row">
         <button
           class="feedback-btn"
-          title="复制"
+          v-bk-tooltips="t('复制')"
           type="button"
           @click="handleCopy">
           <audit-icon type="copy" />
@@ -417,7 +417,7 @@
         <button
           class="feedback-btn"
           :class="{ 'is-active': feedback === 'up' }"
-          title="有用"
+          v-bk-tooltips="t('有用')"
           type="button"
           @click="feedback = feedback === 'up' ? '' : 'up'">
           <svg
@@ -437,7 +437,7 @@
         <button
           class="feedback-btn"
           :class="{ 'is-active': feedback === 'down' }"
-          title="无用"
+          v-bk-tooltips="t('无用')"
           type="button"
           @click="feedback = feedback === 'down' ? '' : 'down'">
           <svg
@@ -457,7 +457,7 @@
         <button
           v-if="showRegenerate"
           class="feedback-btn"
-          title="重新生成"
+          v-bk-tooltips="t('重新生成')"
           type="button"
           @click="$emit('regenerate')">
           <audit-icon type="refresh" />
@@ -1984,13 +1984,12 @@
   }
 
   .retrieval-result-card {
-    width: 100%;
-    padding: 20px 24px 24px;
+    width: 100%;padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
     font-size: 14px;
     line-height: 22px;
-    color: #63656e;
-    background: #fff;
-    border-radius: 16px;
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-default);
+    border-radius: var(--bk-theme-dialog-radius);
     box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
 
@@ -2004,15 +2003,15 @@
   }
 
   .condition-section {
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #eaebf0;
+    margin-bottom: var(--bk-theme-space-16);
+    padding-bottom: var(--bk-theme-space-16);
+    border-bottom: 1px solid var(--bk-theme-border-weak);
   }
 
   .result-systems-section {
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #eaebf0;
+    margin-bottom: var(--bk-theme-space-16);
+    padding-bottom: var(--bk-theme-space-16);
+    border-bottom: 1px solid var(--bk-theme-border-weak);
   }
 
   .result-body-loading {
@@ -2025,9 +2024,9 @@
 
   .condition-header {
     display: flex;
-    margin-bottom: 12px;
+    margin-bottom: var(--bk-theme-space-12);
     align-items: center;
-    gap: 16px;
+    gap: var(--bk-theme-space-16);
   }
 
   .condition-header-main {
@@ -2035,14 +2034,14 @@
     min-width: 0;
     font-size: 14px;
     line-height: 22px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
     align-items: center;
   }
 
   .condition-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
   }
 
   .condition-editor {
@@ -2051,7 +2050,7 @@
 
   .condition-actions {
     display: flex;
-    margin-top: 12px;
+    margin-top: var(--bk-theme-space-12);
     justify-content: flex-start;
 
     .resubmit-btn {
@@ -2063,36 +2062,35 @@
   .condition-tag {
     display: inline-flex;
     height: 32px;
-    padding: 0 12px;
+    padding: 0 var(--bk-theme-space-12);
     font-size: 12px;
     line-height: 30px;
-    color: #63656e;
-    background: #f0f1f5;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-muted);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
     box-sizing: border-box;
 
     .tag-value {
       font-weight: 700;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     &.is-fixed {
-      background: #f0f5ff;
-      border-color: #c5d8ff;
+      background: var(--bk-theme-select-banner-bg);border-color: var(--bk-theme-color-brand-5);
     }
   }
 
   .status-panel {
     display: flex;
-    margin-top: 12px;
-    margin-bottom: 8px;
+    margin-top: var(--bk-theme-space-12);
+    margin-bottom: var(--bk-theme-space-8);
     min-height: 200px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
     box-sizing: border-box;
   }
 
@@ -2114,26 +2112,26 @@
     }
 
     .status-title {
-      margin-top: 8px;
+      margin-top: var(--bk-theme-space-8);
       font-size: 14px;
       line-height: 22px;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
 
     .status-desc {
       font-size: 12px;
       line-height: 18px;
-      color: #4d4f56;
+      color: var(--bk-theme-text-default);
       text-align: center;
     }
   }
 
   .summary-section {
     display: flex;
-    margin-bottom: 16px;
+    margin-bottom: var(--bk-theme-space-16);
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--bk-theme-space-16);
   }
 
   .summary-main {
@@ -2142,22 +2140,22 @@
   }
 
   .summary-title {
-    margin: 0 0 19px;
+    margin: 0 0 var(--bk-theme-space-16);
     font-size: 20px;
     font-weight: 700;
     line-height: 24px;
-    color: #313238;
+    color: var(--bk-theme-text-strong);
   }
 
   .summary-desc {
     margin: 0;
     font-size: 12px;
     line-height: 22px;
-    color: #63656e;
+    color: var(--bk-theme-text-default);
 
     .summary-num {
       font-weight: 700;
-      color: #313238;
+      color: var(--bk-theme-text-strong);
     }
   }
 
@@ -2165,7 +2163,7 @@
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
   }
 
   .export-dropdown {
@@ -2174,24 +2172,24 @@
 
   .export-btn {
     height: 32px;
-    padding: 0 12px;
-    color: #63656e;
-    background: #fff;
-    border-color: #dcdee5;
+    padding: 0 var(--bk-theme-space-12);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-surface-default);
+    border-color: var(--bk-theme-border-default);
 
     &:hover {
-      color: #3a84ff;
-      border-color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
+      border-color: var(--bk-theme-color-brand-2);
     }
 
     .export-icon {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
       font-size: 14px;
     }
   }
 
   .table-section {
-    margin-bottom: 20px;
+    margin-bottom: var(--bk-theme-space-16);
     overflow: hidden;
   }
 
@@ -2199,7 +2197,7 @@
     width: 100%;
     overflow: auto;
     scrollbar-width: thin;
-    scrollbar-color: #dcdee5 transparent;
+    scrollbar-color: var(--bk-theme-border-default) transparent;
 
     &::-webkit-scrollbar {
       height: 4px;
@@ -2207,8 +2205,8 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: #dcdee5;
-      border-radius: 2px;
+      background: var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-tag-radius);
     }
   }
 
@@ -2223,12 +2221,12 @@
       min-width: 140px;
       max-width: 280px;
       height: 42px;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
       overflow: hidden;
       font-size: 12px;
       /* 勿用 line-height:42px 撑行高，会与 popover inline-block 基线空隙叠加 */
       line-height: 20px;
-      color: #63656e;
+      color: var(--bk-theme-text-default);
       text-align: left;
       vertical-align: middle;
       border: none;
@@ -2254,7 +2252,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       cursor: help;
-      border-bottom: 1px dashed #979ba5;
+      border-bottom: 1px dashed var(--bk-theme-text-weak);
       box-sizing: border-box;
     }
 
@@ -2263,31 +2261,31 @@
     }
 
     .empty-cell {
-      color: #979ba5;
+      color: var(--bk-theme-text-weak);
       text-align: center;
     }
 
     th {
       font-weight: 400;
-      color: #313238;
-      background: #fafbfd;
-      border-bottom: 1px solid #dcdee5;
+      color: var(--bk-theme-text-strong);
+      background: var(--bk-theme-table-header-bg);
+      border-bottom: 1px solid var(--bk-theme-border-default);
     }
 
     td {
-      background: #fff;
+      background: var(--bk-theme-surface-default);
     }
 
     tbody tr:nth-child(even) td {
-      background: #fafbfd;
+      background: var(--bk-theme-table-header-bg);
     }
   }
 
   .table-pagination {
     display: flex;
-    padding: 8px 12px;
-    background: #fff;
-    border-top: 1px solid #dcdee5;
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+    background: var(--bk-theme-surface-default);
+    border-top: 1px solid var(--bk-theme-border-default);
     align-items: center;
     justify-content: flex-end;
   }
@@ -2295,27 +2293,23 @@
   .action-section {
     display: flex;
     margin-bottom: 0;
-    gap: 12px;
+    gap: var(--bk-theme-space-12);
   }
 
   .action-btn-wrap {
     display: inline-flex;
   }
 
-  .analyze-btn {
-    color: #7b29ff;
-    border-color: #7b29ff;
+  .analyze-btn {color: var(--bk-theme-category-purple);border-color: var(--bk-theme-category-purple);
 
-    &:not(.is-disabled, [disabled]):hover {
-      color: #9b5cff;
-      border-color: #9b5cff;
+    &:not(.is-disabled, [disabled]):hover {color: var(--bk-theme-category-purple);border-color: var(--bk-theme-category-purple);
     }
 
     &.is-disabled,
     &[disabled] {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
-      border-color: #dcdee5;
+      border-color: var(--bk-theme-border-default);
       opacity: 1;
 
       .ai-agent-ai {
@@ -2324,29 +2318,29 @@
     }
 
     .ai-agent-ai {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
     }
   }
 
   .statistics-btn {
-    color: #63656e;
-    border-color: #dcdee5;
+    color: var(--bk-theme-text-default);
+    border-color: var(--bk-theme-border-default);
 
     .action-icon {
-      margin-right: 4px;
+      margin-right: var(--bk-theme-space-4);
       font-size: 16px;
     }
 
     &:not(.is-disabled, [disabled]):hover {
-      color: #3a84ff;
-      border-color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
+      border-color: var(--bk-theme-color-brand-2);
     }
 
     &.is-disabled,
     &[disabled] {
-      color: #c4c6cc;
+      color: var(--bk-theme-border-strong);
       cursor: not-allowed;
-      border-color: #dcdee5;
+      border-color: var(--bk-theme-border-default);
       opacity: 1;
     }
   }
@@ -2354,8 +2348,8 @@
   .report-status-section {
     display: flex;
     flex-direction: column;
-    margin-top: var(--audit-space-16);
-    gap: var(--audit-space-8);
+    margin-top: var(--bk-theme-space-16);
+    gap: var(--bk-theme-space-8);
   }
 
   .report-status-row {
@@ -2365,17 +2359,16 @@
     overflow: hidden;
     flex-wrap: nowrap;
     align-items: center;
-    gap: var(--audit-space-8);
+    gap: var(--bk-theme-space-8);
 
     &.is-loading {
       cursor: not-allowed;
     }
 
     &.is-done,
-    &.is-failed {
-      padding: 5px var(--audit-space-16) 5px var(--audit-space-12);
-      background: var(--audit-neutral-bg-03);
-      border-radius: var(--audit-radius-container);
+    &.is-failed {padding: var(--bk-theme-space-4) var(--bk-theme-space-16) var(--bk-theme-space-4) var(--bk-theme-space-12);
+      background: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-tag-radius);
     }
 
     .status-loading-wrap,
@@ -2386,24 +2379,24 @@
       cursor: default;
       flex: 1;
       align-items: center;
-      gap: var(--audit-space-8);
+      gap: var(--bk-theme-space-8);
     }
 
     .status-icon {
-      font-size: var(--audit-font-size-lg);
+      font-size: var(--bk-theme-font-size-lg);
       flex-shrink: 0;
 
       &.is-loading {
-        color: var(--audit-brand-02);
+        color: var(--bk-theme-color-brand-2);
         animation: log-report-spin 1s linear infinite;
       }
 
       &.is-success {
-        color: #2dcb56;
+        color: var(--bk-theme-color-success-2);
       }
 
       &.is-failed {
-        color: var(--audit-danger-02);
+        color: var(--bk-theme-color-danger-2);
       }
     }
 
@@ -2411,9 +2404,9 @@
       /* 按最长文案「智能分析已生成」占位，失败等短文案也把标签留在同一列 */
       min-width: 7em;
       overflow: hidden;
-      font-size: var(--audit-font-size-sm);
-      line-height: var(--audit-line-height-sm);
-      color: var(--audit-neutral-text-02);
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-default);
       text-overflow: ellipsis;
       white-space: nowrap;
       flex: 0 1 auto;
@@ -2421,7 +2414,7 @@
 
     &.is-done .status-text,
     &.is-failed .status-text {
-      color: var(--audit-neutral-text-01);
+      color: var(--bk-theme-text-strong);
     }
 
     .status-text.is-error-tip {
@@ -2438,33 +2431,33 @@
 
     :deep(.report-mode-tag.bk-tag) {
       height: 20px;
-      padding: 0 var(--audit-space-8);
-      font-size: var(--audit-font-size-sm);
+      padding: 0 var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 18px;
-      border-radius: var(--audit-radius-control);
+      border-radius: var(--bk-theme-control-radius);
       cursor: default;
 
       &.is-field {
-        color: var(--audit-warn-01);
-        background: var(--audit-warn-07);
-        border-color: var(--audit-warn-05);
+        color: var(--bk-theme-color-warn-1);
+        background: var(--bk-theme-color-warn-7);
+        border-color: var(--bk-theme-color-warn-5);
       }
     }
 
     .report-mode-tag-wrap :deep(.bk-tag.bk-tag-info) {
-      color: var(--audit-brand-01);
-      background-color: var(--audit-brand-06);
-      border-color: var(--audit-brand-05);
+      color: var(--bk-theme-color-brand-1);
+      background-color: var(--bk-theme-color-brand-6);
+      border-color: var(--bk-theme-color-brand-5);
     }
 
     .report-mode-tag-wrap :deep(.bk-tag.bk-tag-info:hover) {
-      background-color: var(--audit-brand-05);
+      background-color: var(--bk-theme-color-brand-5);
     }
 
     .status-time {
-      margin-left: var(--audit-space-8);
-      font-size: var(--audit-font-size-sm);
-      color: var(--audit-neutral-text-03);
+      margin-left: var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
+      color: var(--bk-theme-text-weak);
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -2473,16 +2466,16 @@
       display: inline-flex;
       margin-left: auto;
       padding: 0;
-      font-size: var(--audit-font-size-sm);
-      line-height: var(--audit-line-height-sm);
-      color: var(--audit-brand-02);
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-color-brand-2);
       cursor: pointer;
       background: none;
       border: none;
       white-space: nowrap;
       flex-shrink: 0;
       align-items: center;
-      gap: var(--audit-space-4);
+      gap: var(--bk-theme-space-4);
 
       .view-icon {
         font-size: 16px;
@@ -2493,11 +2486,11 @@
       }
 
       &:hover {
-        color: var(--audit-brand-03);
+        color: var(--bk-theme-color-brand-3);
       }
 
       &:disabled {
-        color: var(--audit-neutral-text-04);
+        color: var(--bk-theme-text-disabled);
         cursor: not-allowed;
       }
     }
@@ -2515,11 +2508,11 @@
 
   .feedback-row {
     display: flex;
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid #dcdee5;
+    margin-top: var(--bk-theme-space-16);
+    padding-top: var(--bk-theme-space-16);
+    border-top: 1px solid var(--bk-theme-border-default);
     align-items: center;
-    gap: 8px;
+    gap: var(--bk-theme-space-8);
   }
 
   .feedback-btn {
@@ -2527,11 +2520,11 @@
     width: 28px;
     height: 28px;
     font-size: 16px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
     cursor: pointer;
     background: transparent;
     border: none;
-    border-radius: 2px;
+    border-radius: var(--bk-theme-tag-radius);
     align-items: center;
     justify-content: center;
 
@@ -2541,8 +2534,8 @@
 
     &:hover,
     &.is-active {
-      color: #3a84ff;
-      background: #f0f5ff;
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-select-banner-bg);
     }
   }
 </style>
@@ -2571,15 +2564,15 @@
 
       .condition-clear-btn {
         order: 1000;
-        margin-left: 8px;
+        margin-left: var(--bk-theme-space-8);
       }
     }
 
     .condition-tag-item {
       height: 32px;
-      padding: 0 8px 0 12px;
-      background: #f0f1f5;
-      border: 1px solid #dcdee5;
+      padding: 0 var(--bk-theme-space-8) 0 var(--bk-theme-space-12);
+      background: var(--bk-theme-surface-muted);
+      border: 1px solid var(--bk-theme-border-default);
       box-sizing: border-box;
 
       &:hover {
@@ -2596,11 +2589,11 @@
 
     .nl-add-condition-trigger {
       height: 32px;
-      padding: 0 12px;
+      padding: 0 var(--bk-theme-space-12);
       box-sizing: border-box;
 
       &.is-accent {
-        background: #f0f5ff;
+        background: var(--bk-theme-select-banner-bg);
       }
     }
 
@@ -2624,7 +2617,7 @@
   .report-mode-tip-popover .report-mode-tip {
     display: flex;
     align-items: flex-start;
-    gap: 4px;
+    gap: var(--bk-theme-space-4);
     max-width: 320px;
     pointer-events: auto;
   }
@@ -2649,25 +2642,25 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    margin: 2px 0 0;
-    color: #fff;
+    margin: var(--bk-theme-space-2) 0 0;
+    color: var(--bk-theme-surface-default);
     cursor: pointer;
     background: transparent;
     border: 0;
   }
 
   .report-mode-tip-popover .report-mode-tip-copy:hover {
-    color: var(--audit-brand-04, #a3c5fd);
+    color: var(--bk-theme-color-brand-4, var(--bk-theme-color-brand-4));
   }
 
-  /* 默认用原悬停色 #E1ECFF；悬停再深一档，避免和默认色相同 */
+  /* 默认用原悬停色 var(--bk-theme-fill-selected)；悬停再深一档，避免和默认色相同 */
   .retrieval-result-card .report-mode-tag-wrap .bk-tag.bk-tag-info {
-    color: var(--audit-brand-01);
-    background-color: var(--audit-brand-06);
-    border-color: var(--audit-brand-05);
+    color: var(--bk-theme-color-brand-1);
+    background-color: var(--bk-theme-color-brand-6);
+    border-color: var(--bk-theme-color-brand-5);
   }
 
   .retrieval-result-card .report-mode-tag-wrap .bk-tag.bk-tag-info:hover {
-    background-color: var(--audit-brand-05);
+    background-color: var(--bk-theme-color-brand-5);
   }
 </style>

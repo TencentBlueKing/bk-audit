@@ -35,13 +35,12 @@
   // const { t } = useI18n();
 </script>
 <style scoped>
-.reopen-mis-report-wrap {
-  padding: 10px 16px;
+.reopen-mis-report-wrap {padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
   font-size: 12px;
-  color: #63656e;
-  background: #fff;
-  border: 1px solid #eaebf0;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px 0 #0000000a;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-weak);
+  border-radius: var(--bk-theme-control-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 }
 </style>

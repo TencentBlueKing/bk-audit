@@ -141,8 +141,8 @@
 
 <style scoped lang="postcss">
 .edit-icon {
-  margin-left: 8px;
-  color: #3a84ff;
+  margin-left: var(--bk-theme-space-8);
+  color: var(--bk-theme-color-brand-2);
   cursor: pointer;
 }
 
@@ -157,40 +157,39 @@
   }
 
   :deep(p + p) {
-    margin-top: 8px;
+    margin-top: var(--bk-theme-space-8);
   }
 
   :deep(.ql-report-table) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
   }
 
   :deep(table),
   :deep(.report-table) {
     width: 100%;
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
     font-size: 12px;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
     border-collapse: collapse;
     table-layout: auto;
   }
 
   :deep(th),
-  :deep(td) {
-    padding: 8px 10px;
-    color: #313238;
+  :deep(td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+    color: var(--bk-theme-text-strong);
     text-align: left;
     vertical-align: top;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(thead th) {
     font-weight: 600;
-    color: #313238;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
   }
 
   :deep(ul) {
-    padding-left: 15px;
+    padding-left: var(--bk-theme-space-16);
 
     li {
       list-style: disc !important;
@@ -198,7 +197,7 @@
   }
 
   :deep(ol) {
-    padding-left: 13px;
+    padding-left: var(--bk-theme-space-12);
 
     li {
       list-style: decimal;

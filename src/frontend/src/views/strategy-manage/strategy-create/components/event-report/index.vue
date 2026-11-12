@@ -27,7 +27,7 @@
         type="tishi" />
       <span class="info-fill-text">{{ t('当前策略尚未产生风险单，暂时无法预览报告的实际内容，您可以选择等待策略产生风险单后再启用该功能，或立即启用无需使用预览功能') }}</span>
     </div>
-    <div class="event-box">
+    <div class="event-box bk-theme-card bk-theme-card--flush">
       <div class="event-title">
         <span class="event-title-text">{{ t('事件调查报告') }}</span>
         <bk-switcher
@@ -104,11 +104,11 @@
               disabled: !(!hasEditorContent || selectedValue === ''),
               content: previewTooltips,
             }"
-            class="ml8"
+           
             :disabled="!hasEditorContent || selectedValue === ''"
             outline
             theme="primary"
-            @click="handlePreview">
+            @click="handlePreview" style="margin-left: var(--bk-theme-space-8)">
             {{ t('报告预览') }}
           </bk-button>
           <div class="risks-select-desc">
@@ -126,27 +126,27 @@
           {{ t('上一步') }}
         </bk-button>
         <bk-button
-          class="ml8"
+         
           theme="primary"
-          @click="handleNext">
+          @click="handleNext" style="margin-left: var(--bk-theme-space-8)">
           {{ primaryActionText }}
         </bk-button>
         <bk-button
           v-if="showSaveDraftButton"
-          class="ml8"
-          @click="handleSaveDraft">
+         
+          @click="handleSaveDraft" style="margin-left: var(--bk-theme-space-8)">
           {{ t('保存草稿') }}
         </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
-          class="ml8"
+         
           theme="primary"
-          @click="handleSaveCurrentStep">
+          @click="handleSaveCurrentStep" style="margin-left: var(--bk-theme-space-8)">
           {{ t('提交') }}
         </bk-button> -->
         <bk-button
-          class="ml8"
-          @click="handleCancel">
+         
+          @click="handleCancel" style="margin-left: var(--bk-theme-space-8)">
           {{ t('取消') }}
         </bk-button>
       </div>
@@ -546,43 +546,39 @@
     display: flex;
     align-items: center;
     height: 32px;
-    background: #f0f5ff;
-    border: 1px solid #a3c5fd;
-    border-radius: 2px;
+    background: var(--bk-theme-select-banner-bg);
+    border: 1px solid var(--bk-theme-color-brand-4);
+    border-radius: var(--bk-theme-tag-radius);
 
     .info-fill-icon {
-      margin-left: 9px;
+      margin-left: var(--bk-theme-space-8);
       font-size: 14px;
-      color: #3a84ff;
+      color: var(--bk-theme-color-brand-2);
     }
 
   }
 
   .event-box {
     height: auto;
-    margin-top: var(--audit-space-16);
-    background: var(--audit-neutral-bg-04);
-    border-radius: var(--audit-radius-container);
-    box-shadow: var(--audit-shadow-card);
+    margin-top: var(--bk-theme-space-16);
 
     .event-title {
       display: flex;
-      height: auto;
-      padding: 12px var(--audit-space-24) var(--audit-space-16);
-      font-size: var(--audit-font-size-base);
-      font-weight: var(--audit-font-weight-bold);
-      line-height: var(--audit-line-height-base);
+      height: auto;padding: var(--bk-theme-space-12) var(--bk-theme-space-24) var(--bk-theme-space-16);
+      font-size: var(--bk-theme-font-size-base);
+      font-weight: var(--bk-theme-font-weight-bold);
+      line-height: var(--bk-theme-line-height-base);
       letter-spacing: 0;
-      color: var(--audit-neutral-text-01);
-      border-bottom: 1px solid var(--audit-neutral-border-02);
+      color: var(--bk-theme-text-strong);
+      border-bottom: 1px solid var(--bk-theme-border-weak);
       align-items: center;
 
       .event-title-text {
-        margin-right: 13px;
+        margin-right: var(--bk-theme-space-12);
       }
 
       .event-switcher {
-        margin-right: 13px;
+        margin-right: var(--bk-theme-space-12);
       }
 
       .event-title-desc {
@@ -591,18 +587,18 @@
         flex: 1;
 
         .info-fill-dec {
-          margin-left: 5px;
+          margin-left: var(--bk-theme-space-4);
           font-size: 12px;
           font-weight: 500;
           line-height: 20px;
           letter-spacing: 0;
-          color: #4d4f56;
+          color: var(--bk-theme-text-default);
         }
       }
     }
 
     .is-auto-reports {
-      padding: var(--audit-space-16) var(--audit-space-24) 0;
+      padding: var(--bk-theme-space-16) var(--bk-theme-space-24) 0;
 
       .auto-reports-content {
         display: flex;
@@ -610,47 +606,46 @@
         font-size: 12px;
         line-height: 20px;
         letter-spacing: 0;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
 
         .auto-reports-desc {
           display: flex;
           align-items: center;
-          margin-left: 8px;
+          margin-left: var(--bk-theme-space-8);
           flex: 1;
         }
       }
     }
 
     .event-editor {
-      padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
+      padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
 
       .event-editor-title {
         font-size: 12px;
         font-weight: 500;
         line-height: 20px;
         letter-spacing: 0;
-        color: #4d4f56;
+        color: var(--bk-theme-text-default);
       }
     }
 
     .editor-box {
-      margin-top: 5px;
+      margin-top: var(--bk-theme-space-4);
     }
 
     .editor-box-error {
       :deep(.rich-text-editor-container) {
-        border-color: #ea3636;
+        border-color: var(--bk-theme-color-danger-2);
       }
     }
 
     .editor-error-text {
-      margin-top: 6px;
+      margin-top: var(--bk-theme-space-6);
       font-size: 12px;
-      color: #ea3636;
+      color: var(--bk-theme-color-danger-2);
     }
 
-    .risks-select {
-      padding: 0 16px 20px;
+    .risks-select {padding: 0 var(--bk-theme-space-16) var(--bk-theme-space-16);
 
       .risks-select-content {
         display: flex;
@@ -663,7 +658,7 @@
         .risks-select-desc {
           display: flex;
           align-items: center;
-          margin-left: 8px;
+          margin-left: var(--bk-theme-space-8);
           flex: 1;
         }
       }
@@ -672,30 +667,30 @@
 
   .info-fill {
     font-size: 14px;
-    color: #c4c6cc;
+    color: var(--bk-theme-border-strong);
   }
 
   .select-tip-text {
     font-size: 12px;
     letter-spacing: 0;
-    color: #4d4f56;
+    color: var(--bk-theme-text-default);
   }
 
   .action-button {
-    margin-top: 20px;
+    margin-top: var(--bk-theme-space-16);
   }
 }
 
 .title-fill-icon {
   margin-left: 0;
   font-size: 14px;
-  color: #979ba5;
+  color: var(--bk-theme-text-weak);
 }
 
 .info-fill-text {
-  margin-left: 5px;
+  margin-left: var(--bk-theme-space-4);
   font-size: 12px;
   letter-spacing: 0;
-  color: #4d4f56;
+  color: var(--bk-theme-text-default);
 }
 </style>

@@ -135,12 +135,11 @@
   };
 </script>
 <style scoped lang="postcss">
-.risk-content-item {
-  padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #eaebf0;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px 0 #0000000a;
+.risk-content-item {padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  background: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-weak);
+  border-radius: var(--bk-theme-control-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 
   .risk-content-title {
     display: flex;
@@ -150,50 +149,49 @@
 }
 
 .description-html {
-  padding: 8px;
-  margin-top: 8px;
+  padding: var(--bk-theme-space-8);
+  margin-top: var(--bk-theme-space-8);
   overflow-x: auto;
   line-height: 1.6;
   word-break: break-word;
   white-space: normal;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: var(--bk-theme-surface-subtle);
+  border-radius: var(--bk-theme-tag-radius);
 
   :deep(p) {
-    margin: 0 0 8px;
+    margin: 0 0 var(--bk-theme-space-8);
   }
 
   :deep(.ql-report-table) {
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
   }
 
   :deep(table),
   :deep(.report-table) {
     width: 100%;
-    margin: 0 0 12px;
+    margin: 0 0 var(--bk-theme-space-12);
     font-size: 12px;
-    background: #fff;
+    background: var(--bk-theme-surface-default);
     border-collapse: collapse;
     table-layout: auto;
   }
 
   :deep(th),
-  :deep(td) {
-    padding: 8px 10px;
-    color: #313238;
+  :deep(td) {padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+    color: var(--bk-theme-text-strong);
     text-align: left;
     vertical-align: top;
-    border: 1px solid #dcdee5;
+    border: 1px solid var(--bk-theme-border-default);
   }
 
   :deep(thead th) {
     font-weight: 600;
-    color: #313238;
-    background: #f5f7fa;
+    color: var(--bk-theme-text-strong);
+    background: var(--bk-theme-surface-subtle);
   }
 
   :deep(ul) {
-    padding-left: 15px;
+    padding-left: var(--bk-theme-space-16);
 
     li {
       list-style: disc !important;
@@ -201,7 +199,7 @@
   }
 
   :deep(ol) {
-    padding-left: 13px;
+    padding-left: var(--bk-theme-space-12);
 
     li {
       list-style: decimal;

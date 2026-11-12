@@ -258,20 +258,20 @@
 <style scoped lang="postcss">
 .risk-display {
   .detail-info-card {
-    background: var(--audit-neutral-bg-04);
+    background: var(--bk-theme-surface-default);
   }
 
   .detail-section-title {
-    margin-bottom: var(--audit-space-12);
-    font-size: var(--audit-font-size-base);
-    font-weight: var(--audit-font-weight-bold);
-    line-height: var(--audit-line-height-base);
-    color: var(--audit-neutral-text-01);
+    margin-bottom: var(--bk-theme-space-12);
+    font-size: var(--bk-theme-font-size-base);
+    font-weight: var(--bk-theme-font-weight-bold);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-strong);
   }
 
   .detail-section-divider {
-    margin: var(--audit-space-24) 0;
-    border-top: 1px solid var(--audit-neutral-bg-01);
+    margin: var(--bk-theme-space-24) 0;
+    border-top: 1px solid var(--bk-theme-surface-muted);
   }
 
   .table-scroll-x {
@@ -285,16 +285,16 @@
 
   .field-table {
     width: 100%;
-    color: var(--audit-neutral-text-02);
-    border-radius: var(--audit-radius-control);
+    color: var(--bk-theme-text-default);
+    border-radius: var(--bk-theme-control-radius);
 
     @mixin cell-base {
       display: flex;
       min-height: 36px;
-      padding: 0 var(--audit-space-12);
-      font-size: var(--audit-font-size-sm);
-      font-weight: var(--audit-font-weight-regular);
-      line-height: var(--audit-line-height-sm);
+      padding: 0 var(--bk-theme-space-12);
+      font-size: var(--bk-theme-font-size-sm);
+      font-weight: var(--bk-theme-font-weight-regular);
+      line-height: var(--bk-theme-line-height-sm);
       align-items: center;
       box-sizing: border-box;
     }
@@ -302,7 +302,7 @@
     .table-head {
       display: flex;
       width: 100%;
-      background-color: #f5f7fa;
+      background-color: var(--bk-theme-surface-subtle);
 
       &.risk-table-head {
         .header-cell:last-child {
@@ -328,9 +328,9 @@
         @include cell-base;
 
         height: 36px;
-        color: var(--audit-neutral-text-01);
-        background-color: var(--audit-neutral-bg-03);
-        border-bottom: 1px solid var(--audit-neutral-border-01);
+        color: var(--bk-theme-text-strong);
+        background-color: var(--bk-theme-surface-page);
+        border-bottom: 1px solid var(--bk-theme-border-default);
       }
     }
 
@@ -338,22 +338,22 @@
       @include cell-base;
 
       flex-shrink: 0;
-      color: var(--audit-neutral-text-01);
-      background-color: var(--audit-neutral-bg-03);
-      border-right: 1px solid var(--audit-neutral-border-01);
+      color: var(--bk-theme-text-strong);
+      background-color: var(--bk-theme-surface-page);
+      border-right: 1px solid var(--bk-theme-border-default);
       justify-content: center;
     }
 
     .head-group-cell {
       height: 36px;
-      background-color: var(--audit-neutral-bg-03);
-      border-right: 1px solid var(--audit-neutral-border-01);
-      border-bottom: 1px solid var(--audit-neutral-border-01);
+      background-color: var(--bk-theme-surface-page);
+      border-right: 1px solid var(--bk-theme-border-default);
+      border-bottom: 1px solid var(--bk-theme-border-default);
     }
 
     .body-group-cell {
-      background-color: var(--audit-neutral-bg-03);
-      border-right: 1px solid var(--audit-neutral-border-01);
+      background-color: var(--bk-theme-surface-page);
+      border-right: 1px solid var(--bk-theme-border-default);
     }
 
     .table-body-group {
@@ -420,9 +420,9 @@
 
     .table-empty {
       height: 36px;
-      font-size: var(--audit-font-size-sm);
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 36px;
-      color: var(--audit-neutral-text-03);
+      color: var(--bk-theme-text-weak);
       text-align: center;
     }
   }
@@ -431,16 +431,16 @@
     display: flex;
     width: 100%;
     min-height: 36px;
-    background: var(--audit-neutral-bg-04);
+    background: var(--bk-theme-surface-default);
 
     .cell {
       display: flex;
       min-height: 36px;
-      padding: 0 var(--audit-space-12);
-      font-size: var(--audit-font-size-sm);
-      font-weight: var(--audit-font-weight-regular);
-      line-height: var(--audit-line-height-sm);
-      color: var(--audit-neutral-text-02);
+      padding: 0 var(--bk-theme-space-12);
+      font-size: var(--bk-theme-font-size-sm);
+      font-weight: var(--bk-theme-font-weight-regular);
+      line-height: var(--bk-theme-line-height-sm);
+      color: var(--bk-theme-text-default);
       align-items: center;
       box-sizing: border-box;
     }
@@ -448,7 +448,7 @@
 
   .field-table > :deep(.table-row:nth-child(odd)),
   .data-body-rows :deep(.table-row:nth-child(even)) {
-    background: var(--audit-neutral-bg-02);
+    background: var(--bk-theme-table-header-bg);
   }
 }
 </style>
