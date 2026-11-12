@@ -668,6 +668,7 @@ class TestBkSecRules:
         with mock.patch("services.web.common.monitor.BkSecConfigSyncFailedEvent") as event:
             assert sync_bksec_rule(strategy) is None
         event.assert_called_once()
+        assert event.call_args.kwargs["target"] == "bksec_config_sync"
         assert event.call_args.kwargs["context"]["fail_reason"] == "config_invalid"
         assert event.return_value.report.called
         latest = RiskRule.objects.filter(auto_strategy_id=strategy.strategy_id).order_by("-version").first()

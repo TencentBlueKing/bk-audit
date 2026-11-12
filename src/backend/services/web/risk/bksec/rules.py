@@ -68,6 +68,7 @@ def _report_invalid_bksec_config(strategy: Strategy, err: Exception) -> None:
         from services.web.common.monitor import BkSecConfigSyncFailedEvent
 
         BkSecConfigSyncFailedEvent(
+            target="bksec_config_sync",
             context={
                 "strategy_id": str(strategy.strategy_id),
                 "stage": BkSecConfigSyncStage.RULE_SYNC.value,
@@ -349,6 +350,7 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
     def _report_fail(reason: BkSecConfigSyncFailReason, error: str) -> None:
         """失败上报：维度只放低基数的 stage/fail_reason，错误明细走事件正文"""
         BkSecConfigSyncFailedEvent(
+            target="bksec_config_sync",
             context={
                 "strategy_id": str(strategy.strategy_id),
                 "stage": stage.value,
