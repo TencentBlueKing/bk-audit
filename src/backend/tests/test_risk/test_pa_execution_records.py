@@ -68,16 +68,17 @@ def _create_node(
         process_result.update({"task_name": task_name, "trigger": trigger})
     if start_time or finish_time:
         process_result["status"].update({"start_time": start_time, "finish_time": finish_time})
+    created_at = time.time()
     return TicketNode.objects.create(
         risk_id=risk_id,
         operator="admin",
         current_operator=[],
         action=action,
-        timestamp=time.time(),
+        timestamp=created_at,
         time="2026-09-20 12:00:00",
         process_result=process_result,
         extra={},
-        sops_start_time=sops_start_time,
+        sops_start_time=sops_start_time if sops_start_time is not None else created_at,
     )
 
 
@@ -251,6 +252,7 @@ class TestListPAExecutionRecords:
             timestamp=time.time(),
             time="2026-09-20 12:00:00",
             process_result={"task": {"task_id": 3}},
+            sops_start_time=time.time(),
             extra={},
         )
         # 非 AutoProcess 节点不进执行记录
@@ -294,6 +296,7 @@ class TestListPAExecutionRecords:
             timestamp=time.time(),
             time="2026-09-20 12:00:00",
             process_result={"task": {"task_id": 5}},
+            sops_start_time=time.time(),
             extra={},
         )
         # 单值（兼容旧调用方）
@@ -518,10 +521,14 @@ class TestListPAExecutionRecords:
         assert resp["count"] == 0
 
     @staticmethod
-    def _stamp(node, when):
+    def _stamp(node, when, sync_sops_start_time=True):
         node.timestamp = when.timestamp()
         node.time = timezone.localtime(when).strftime("%Y-%m-%d %H:%M:%S")
-        node.save(update_fields=["timestamp", "time"])
+        update_fields = ["timestamp", "time"]
+        if sync_sops_start_time:
+            node.sops_start_time = when.timestamp()
+            update_fields.append("sops_start_time")
+        node.save(update_fields=update_fields)
 
     def test_default_range_is_last_30_days(self):
         """套餐列表不传 from/to 时只保留近 30 天的开始时间"""
@@ -576,8 +583,8 @@ class TestListPAExecutionRecords:
             sops_start_time=actual_before.timestamp(),
         )
         # 创建时间与真实开始时间相反：创建过早的在范围内，创建在范围内的实际过早
-        self._stamp(in_range, actual_in_range - datetime.timedelta(hours=1))
-        self._stamp(out_of_range, actual_in_range + datetime.timedelta(minutes=30))
+        self._stamp(in_range, actual_in_range - datetime.timedelta(hours=1), sync_sops_start_time=False)
+        self._stamp(out_of_range, actual_in_range + datetime.timedelta(minutes=30), sync_sops_start_time=False)
         window_from = actual_in_range - datetime.timedelta(minutes=30)
         window_to = actual_in_range + datetime.timedelta(minutes=30)
         resp = resource.risk.list_pa_execution_records.perform_request({"from": window_from, "to": window_to})
@@ -605,8 +612,8 @@ class TestListPAExecutionRecords:
             sops_start_time=actual_late.timestamp(),
         )
         # 创建时间与真实开始时间相反
-        self._stamp(created_late, actual_late)
-        self._stamp(created_early, actual_early)
+        self._stamp(created_late, actual_late, sync_sops_start_time=False)
+        self._stamp(created_early, actual_early, sync_sops_start_time=False)
         resp = resource.risk.list_pa_execution_records.perform_request({"order_by": "start_time"})
         assert [item["sops_task_id"] for item in resp["results"]] == ["1", "2"]
         resp = resource.risk.list_pa_execution_records.perform_request({"order_by": "-start_time"})
