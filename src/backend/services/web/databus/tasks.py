@@ -465,8 +465,6 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
 
     if collector_plugin_id:
         plugins = CollectorPlugin.objects.filter(collector_plugin_id=collector_plugin_id)
-        for plugin in plugins:
-            bkbase_clean.reset_plugin_operation(plugin)
     else:
         # 仅为日志/事件采集插件创建入库
         plugins = bkbase_clean.pending_plugins(
@@ -484,7 +482,15 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
         if not handler:
             logger.error("[PluginEtlHandlerNotFound] PluginScene => %s", plugin.plugin_scene)
             continue
-        handler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
+        try:
+            if collector_plugin_id:
+                bkbase_clean.reset_plugin_operation(plugin)
+            handler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
+        except bkbase_clean.PLUGIN_OPERATION_EXCEPTIONS as error:
+            if bkbase_clean.get_bkbase_version() != bkbase_clean.BKBaseVersion.V4:
+                raise
+            logger.exception("BKBase V4 plugin task failed: %s", plugin.pk)
+            bkbase_clean.record_plugin_failure(plugin, error)
 
 
 @periodic_task(run_every=crontab(minute="0", hour="5"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
