@@ -38,6 +38,7 @@ from tests.test_databus.storage.constants import (
     STORAGE_LIST_DATA,
     STORAGE_LIST_PARAMS,
     STORAGE_OPERATE_LOG_DATA,
+    USERNAME,
 )
 
 
@@ -88,6 +89,7 @@ class StorageTest(TestCase):
         self.assertEqual(result, REPLICA_WRITE_CLUSTER_ID)
 
     @mock.patch("bk_resource.api.bk_base.create_resource_set", mock.Mock(return_value={}))
+    @mock.patch("services.web.databus.storage.handler.redis.get_request_username", mock.Mock(return_value=USERNAME))
     def test_create_or_update_redis(self):
         """CreateOrUpdateRedisResource"""
         result = self.resource.databus.storage.create_or_update_redis(**CREATE_OR_UPDATE_REDIS_PARAMS)

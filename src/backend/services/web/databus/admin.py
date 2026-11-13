@@ -16,9 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from django import forms
 from django.contrib import admin
 from django.utils.translation import gettext_lazy
 
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.models import (
     CollectorConfig,
     CollectorPlugin,
@@ -107,8 +110,23 @@ class SnapshotStorageInline(admin.TabularInline):
 
 
 # 定义 Snapshot 的管理界面
+class SnapshotAdminForm(forms.ModelForm):
+    """快照管理表单；V4 Source 不消费敏感级别。"""
+
+    class Meta:
+        model = Snapshot
+        fields = "__all__"
+
+    def clean_pull_config(self):
+        value = self.cleaned_data.get("pull_config")
+        if get_bkbase_version() == BKBaseVersion.V4 and value is not None and not isinstance(value, dict):
+            raise forms.ValidationError("pull_config must be a JSON object or null")
+        return value
+
+
 @admin.register(Snapshot)
 class SnapshotAdmin(admin.ModelAdmin):
+    form = SnapshotAdminForm
     readonly_fields = ["bkbase_v4_resources"]
     list_display = [
         "id",

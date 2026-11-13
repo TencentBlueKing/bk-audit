@@ -42,6 +42,9 @@ from apps.meta.utils.fields import (
 from services.web.bkbase import clean as bkbase_clean
 from services.web.bkbase import source as bkbase_source
 from services.web.bkbase import storage as bkbase_storage
+from services.web.bkbase.common import get_bkbase_context, get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.constants import (
     DEFAULT_DATA_ENCODING,
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
@@ -164,10 +167,13 @@ class PluginEtlHandler:
             )
         )
         clusters = resource.databus.storage.storage_list(namespace=self.plugin.namespace)
-        for item in clusters:
-            if item["cluster_config"]["cluster_id"] == main_default_cluster_id:
-                cluster_info = item
-        bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {})["bkbase_cluster_id"]
+        matches = [item for item in clusters if item["cluster_config"]["cluster_id"] == main_default_cluster_id]
+        if len(matches) != 1:
+            raise BKBaseResourceMappingError(message="Default BKLog storage cluster must match exactly one cluster")
+        cluster_info = matches[0]
+        bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {}).get("bkbase_cluster_id")
+        if not isinstance(bkbase_cluster_id, str) or not bkbase_cluster_id.strip():
+            raise BKBaseResourceMappingError(message="BKLog storage cluster has no BKBase cluster mapping")
         # 更新入库字段
         es_fields = self.get_es_fields()
         # 获取主存储入库参数（目前为ES）
@@ -209,6 +215,31 @@ class PluginEtlHandler:
                 "fields": replica_fields,
                 "config": {"dimension_table": False, "data_model": "duplicate_table", "is_profiling": False},
             }
+        if get_bkbase_version() == BKBaseVersion.V4:
+            binding = self.plugin.bkbase_v4_resources or {}
+            physical = binding.get("physical_targets", {}).get("main")
+            if physical is None and not binding.get("storages", {}).get("main") and not self.plugin.has_storage:
+                table_id = f"{settings.DEFAULT_BK_BIZ_ID}_{self.get_table_id()}"
+                physical = f"write_%Y%m%d_{table_id}"
+            if physical is not None:
+                main_storage_params["physical_table_name"] = physical
+            # 旧 Plugin.retention 可能是迁移回填值，以本次已读取的 BKLog metadata 为准。
+            retention = (
+                cluster_info["cluster_config"]
+                .get("custom_option", {})
+                .get("setup_config", {})
+                .get("retention_days_default")
+            )
+            main_storage_params.pop("expires")
+            if retention is not None:
+                if (
+                    not isinstance(retention, int)
+                    or isinstance(retention, bool)
+                    or (retention <= 0 and retention != -1)
+                ):
+                    raise BKBaseResourceMappingError(message="Invalid BKLog metadata storage retention")
+                main_storage_params["expires"] = retention
+            replica_storage_params.pop("expires", None)
         return main_storage_params, replica_storage_params
 
     @classmethod
@@ -341,12 +372,22 @@ class PluginEtlHandler:
         return fields
 
     def get_bk_data_id(self) -> int:
-        resp = bkbase_source.get_rawdata_list(
-            bk_biz_id=settings.DEFAULT_BK_BIZ_ID, raw_data_name__icontains=self.plugin.collector_plugin_name_en
-        )
+        if get_bkbase_version() == BKBaseVersion.V4:
+            binding = self.plugin.bkbase_v4_resources or {}
+            if any(key in binding for key in ("data_source", "data_id", "source_raw_data_id")):
+                return bkbase_source.bound_source_raw_id(get_bkbase_context(), binding)
+        params = {
+            "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+            "raw_data_name__icontains": self.plugin.collector_plugin_name_en,
+        }
+        if get_bkbase_version() == BKBaseVersion.V4:
+            params["include_binding"] = True
+        resp = bkbase_source.get_rawdata_list(**params)
         # 非一条数据则表示没有匹配上，需要报错提示
         if len(resp) != 1:
             raise MultiOrNoneRawDataError()
+        if get_bkbase_version() == BKBaseVersion.V4:
+            bkbase_source.bind_source(self.plugin, resp[0]["_bkbase_v4_binding"])
         return resp[0]["id"]
 
     def get_label(self) -> str:
@@ -543,7 +584,7 @@ class EventCollectorEtlHandler(PluginEtlHandler):
 
         cluster_id = self.get_doris_storage_cluster()
         fields = self.get_doris_fields()
-        return {
+        params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "raw_data_id": self.get_bk_data_id(),
             "data_type": "clean",
@@ -556,3 +597,33 @@ class EventCollectorEtlHandler(PluginEtlHandler):
             "config": {"dimension_table": False, "data_model": "duplicate_table", "is_profiling": False},
             "physical_table_name": self.get_physical_table_name(),
         }
+        if get_bkbase_version() == BKBaseVersion.V4:
+            binding = self.plugin.bkbase_v4_resources or {}
+            saved = GlobalMetaConfig.get(
+                DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=self.plugin.namespace,
+            )
+            if not saved:
+                saved_config = (
+                    GlobalMetaConfig.get(
+                        DORIS_EVENT_STORAGE_CONFIG_KEY,
+                        config_level=ConfigLevelChoices.NAMESPACE.value,
+                        instance_key=self.plugin.namespace,
+                        default={},
+                    )
+                    or {}
+                )
+                saved = saved_config.get("physical_table_name")
+            pinned = binding.get("physical_targets", {}).get("main")
+            if pinned and saved and pinned != saved:
+                raise BKBaseResourceMappingError(
+                    message="V4 event storage configuration conflicts with its saved target"
+                )
+            physical = pinned or saved
+            if physical:
+                params["physical_table_name"] = physical
+            elif binding.get("storages", {}).get("main") or self.plugin.has_storage:
+                # 存量目标只从已保存配置或正式 DataStorage 读取，不按新规则重算。
+                params.pop("physical_table_name")
+        return params

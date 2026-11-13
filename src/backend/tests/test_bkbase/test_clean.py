@@ -1,4 +1,5 @@
 """共享Clean删除顺序、规则转换与发布版本验证。"""
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
 
@@ -9,6 +10,10 @@ from services.web.bkbase.constants import BKBASE_V4_MAX_POLLS, TaskState
 from services.web.bkbase.exceptions import (
     BKBaseResourceMappingError,
     BKBaseSharedResourceProtected,
+)
+from services.web.databus.collector.etl.etl_config_handler.base import BkBaseConfig
+from services.web.databus.collector.etl.etl_config_handler.bk_base_json import (
+    BkBaseJsonConfig,
 )
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
@@ -23,6 +28,133 @@ class CleanTests(SimpleTestCase):
     def setUp(self):
         self.context = {"version": "v4", "tenant": "tenant_a", "namespace": "audit"}
         self.ref = {"kind": "Clean", "tenant": "tenant_a", "namespace": "audit", "name": "clean_a"}
+
+    def test_real_collector_scalar_builder_assigns_the_entire_previous_value(self):
+        producer = SimpleNamespace(
+            system_id="system_a", collector_config_id="15", data_id=11, uniq_label_id=lambda: "label"
+        )
+        rules = clean.convert_rules({"extract": BkBaseConfig.build_custom_field_config(producer)})
+        assigns = {rule["output_id"]: rule for rule in rules if rule["operator"]["type"] == "assign"}
+        for target, source, output_type in (
+            ("system_id", "__system_id", "string"),
+            ("collector_config_id", "__collector_config_id", "int"),
+            ("bk_data_id", "__bk_data_id", "int"),
+        ):
+            with self.subTest(target=target):
+                self.assertEqual(assigns[target]["input_id"], source)
+                self.assertEqual(
+                    assigns[target]["operator"], {"type": "assign", "key_index": None, "output_type": output_type}
+                )
+
+    def test_direct_scalar_conversion_does_not_generalize_explicit_paths_or_other_subtypes(self):
+        for subtype, path, expected in (
+            ("assign_value", {}, None),
+            ("assign_value", {"key": ""}, ""),
+            ("assign_value", {"key": "field"}, "field"),
+            ("assign_value", {"index": 0}, "0"),
+            ("assign_obj", {}, ""),
+            ("assign_json", {"key": "__all_keys__"}, None),
+            ("assign_json", {"key": ""}, ""),
+            ("assign_json", {"key": "payload"}, "payload"),
+            ("assign_json", {"index": 0, "key": "__all_keys__"}, "0"),
+            ("assign_obj", {"key": "__all_keys__"}, "__all_keys__"),
+        ):
+            with self.subTest(subtype=subtype, path=path):
+                [rule] = clean.convert_rules(
+                    {
+                        "extract": {
+                            "type": "assign",
+                            "subtype": subtype,
+                            "assign": {"assign_to": "result", "type": "string", **path},
+                        }
+                    }
+                )
+                self.assertEqual(rule["operator"]["key_index"], expected)
+
+    @staticmethod
+    def normal_dataid_config():
+        """保留真实 BK_BASE_JSON 模板，仅提供不需要 ORM 的构造上下文。"""
+        producer = SimpleNamespace(
+            uniq_label_id=lambda: "label",
+            build_custom_field_config=lambda: [],
+            assign_other_fields=[],
+            time_conf={},
+        )
+        return BkBaseJsonConfig.build_config(producer, {"next": {"next": []}})
+
+    def test_normal_dataid_builder_assigns_the_entire_decoded_object_to_log(self):
+        config = self.normal_dataid_config()
+        [decode, log] = clean.convert_rules(config)
+        self.assertEqual(decode, {"input_id": "__raw_data", "output_id": "json_data", "operator": {"type": "json_de"}})
+        self.assertEqual(
+            log,
+            {
+                "input_id": "json_data",
+                "output_id": "log",
+                "operator": {"type": "assign", "key_index": None, "output_type": "text"},
+            },
+        )
+
+    def test_whole_object_log_reuses_formal_readback_but_does_not_hide_explicit_path_changes(self):
+        data_ref = {**self.ref, "kind": "DataId", "name": "input_a"}
+        rt_ref = {**self.ref, "kind": "ResultTable", "name": "output_a"}
+        rules = clean.build_clean_spec(
+            {"json_config": self.normal_dataid_config(), "raw_data_id": 11},
+            data_ref=data_ref,
+            logical_id="1_output",
+            rt_owner=False,
+        )
+        formal = deepcopy(rules)
+        formal["rules"][0]["operator"]["error_strategy"] = "drop"
+        formal["rules"][1]["operator"].update(key_index=None, fixed_value=None, input_type=None, time_format=None)
+        self.assertTrue(clean._same_clean_rules(rules["rules"], formal["rules"]))
+        formal.update(config_revision=10, deploy_revision=10, desired_status="Running", current_status="Running")
+        remote = {
+            "kind": "Clean",
+            "metadata": {key: self.ref[key] for key in ("tenant", "namespace", "name")},
+            "spec": formal,
+            "status": {"phase": "Ok"},
+        }
+        owner = SimpleNamespace(
+            bkbase_v4_resources={
+                "clean": self.ref,
+                "clean_role": "existing",
+                "result_table_id": "1_output",
+                "result_table": rt_ref,
+            }
+        )
+
+        def save_binding(instance, patch, *, remove=()):
+            instance.bkbase_v4_resources.update(deepcopy(patch))
+            for key in remove:
+                instance.bkbase_v4_resources.pop(key, None)
+
+        with mock.patch.object(clean, "resource_lock"), mock.patch.object(
+            clean, "get_resource_or_none", return_value=remote
+        ), mock.patch.object(clean, "update_owner_binding", side_effect=save_binding), mock.patch.object(
+            clean.api.bk_base_v4, "clean_create"
+        ) as create, mock.patch.object(
+            clean.api.bk_base_v4,
+            "clean_update",
+            side_effect=lambda **payload: {
+                "metadata": payload["metadata"],
+                "spec": payload["spec"],
+                "status": {"phase": "Pending"},
+            },
+        ) as update, mock.patch(
+            "requests.sessions.Session.request", side_effect=AssertionError("Unexpected HTTP")
+        ):
+            for _ in range(2):
+                result = clean.ensure_clean(self.context, owner, rules=deepcopy(rules), rt_ref=rt_ref)
+                self.assertEqual(result["task_state"], TaskState.RUNNING)
+            create.assert_not_called()
+            update.assert_not_called()
+            changed = deepcopy(rules)
+            changed["rules"][1]["operator"]["key_index"] = ""
+            self.assertFalse(clean._same_clean_rules(changed["rules"], formal["rules"]))
+            clean.ensure_clean(self.context, owner, rules=changed, rt_ref=rt_ref)
+            self.assertEqual(update.call_count, 1)
+            self.assertEqual(update.call_args.kwargs["spec"]["rules"][1]["operator"]["key_index"], "")
 
     def test_owner_and_unknown_guard_before_stop_or_delete(self):
         for role in ("owner", None):
@@ -149,6 +281,48 @@ class CleanTests(SimpleTestCase):
             ],
         )
 
+    def test_branch_fanout_keeps_inputs_for_valid_and_renamed_intermediate_nodes(self):
+        for input_name in ("parsed_json", "parsed json"):
+            with self.subTest(input_name=input_name):
+                config = {
+                    "extract": {
+                        "type": "fun",
+                        "method": "from_json",
+                        "result": input_name,
+                        "next": {
+                            "type": "branch",
+                            "next": [
+                                {
+                                    "type": "access",
+                                    "subtype": "access_obj",
+                                    "key": "nested",
+                                    "result": "nested value",
+                                    "next": {
+                                        "type": "assign",
+                                        "assign": [{"key": "id", "assign_to": "nested_id", "type": "string"}],
+                                    },
+                                },
+                                {
+                                    "type": "assign",
+                                    "assign": [{"key": "name", "assign_to": "name", "type": "string"}],
+                                },
+                            ],
+                        },
+                    }
+                }
+                parse, access, nested_assign, parent_assign = clean.convert_rules(config)
+                self.assertEqual(parse["input_id"], "__raw_data")
+                self.assertEqual(access["input_id"], parse["output_id"])
+                self.assertEqual(nested_assign["input_id"], access["output_id"])
+                self.assertEqual(parent_assign["input_id"], parse["output_id"])
+                self.assertEqual(nested_assign["output_id"], "nested_id")
+                self.assertEqual(parent_assign["output_id"], "name")
+                if input_name == "parsed_json":
+                    self.assertEqual(parse["output_id"], input_name)
+                else:
+                    self.assertRegex(parse["output_id"], r"^[A-Za-z_][A-Za-z0-9_]*$")
+                self.assertRegex(access["output_id"], r"^[A-Za-z_][A-Za-z0-9_]*$")
+
     def test_configure_keeps_dimension_joins_from_business_rules(self):
         rt = {**self.ref, "kind": "ResultTable", "name": "rt_a"}
         data_id = {**self.ref, "kind": "DataId", "name": "data_a"}
@@ -162,8 +336,10 @@ class CleanTests(SimpleTestCase):
         ]
         with mock.patch("services.web.bkbase.clean.get_bkbase_context", return_value=self.context), mock.patch(
             "services.web.bkbase.clean.CollectorPlugin.objects.get",
-            return_value=SimpleNamespace(bkbase_v4_resources={"result_table": rt}),
-        ), mock.patch("services.web.bkbase.clean.ensure_clean") as ensure:
+            return_value=SimpleNamespace(),
+        ), mock.patch.object(clean, "_shared_plugin_table", return_value=("1_logical", rt)), mock.patch(
+            "services.web.bkbase.clean.ensure_clean"
+        ) as ensure:
             clean.configure_clean(
                 owner,
                 {"raw_data_id": 11, "result_table_name_alias": "test", "json_config": {"extract": None, "join": joins}},
@@ -179,7 +355,7 @@ class PluginStorageOrchestrationTests(SimpleTestCase):
             namespace="audit",
             plugin_scene=PluginSceneChoices.COLLECTOR,
             collector_plugin_name_en="plugin_a",
-            bkbase_v4_resources={},
+            bkbase_v4_resources={"result_table_id": "1_logical"},
             has_storage=False,
             has_replica_storage=False,
             save=mock.Mock(),
@@ -189,13 +365,21 @@ class PluginStorageOrchestrationTests(SimpleTestCase):
             mock.patch("requests.sessions.Session.request", side_effect=AssertionError("Unexpected HTTP"))
         )
         self.enterContext(mock.patch.object(self.handler, "get_bk_data_id", return_value=11))
+
+        def save_binding(owner, patch, *, remove=()):
+            owner.bkbase_v4_resources.update(deepcopy(patch))
+            for key in remove:
+                owner.bkbase_v4_resources.pop(key, None)
+            return owner.bkbase_v4_resources
+
         self.enterContext(
             mock.patch(
                 "services.web.bkbase.clean.update_owner_binding",
-                side_effect=lambda owner, patch: owner.bkbase_v4_resources.update(patch),
+                side_effect=save_binding,
             )
         )
         self.clean = self.enterContext(mock.patch("services.web.bkbase.clean.configure_clean"))
+        self.enterContext(mock.patch.object(clean, "_verified_result_table_ref"))
         self.storage = self.enterContext(mock.patch("services.web.bkbase.clean.storage_service.configure_storage"))
         self.config = {
             DEFAULT_STORAGE_CONFIG_KEY: 1,

@@ -21,6 +21,10 @@ import json
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.meta.models import ResourceType, System
+from services.web.bkbase import asset_etl_maintenance
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
 )
@@ -34,6 +38,7 @@ class Command(BaseCommand):
         parser.add_argument("--system-id", required=True, help="系统ID")
         parser.add_argument("--resource-type-id", required=True, help="资源类型ID")
         parser.add_argument("--custom-config", help="写入 Snapshot.custom_config 的 JSON 对象")
+        parser.add_argument("--retry-unknown", action="store_true", help="显式重试已核对且结果未知的维护步骤")
 
     def parse_custom_config(self, raw_config: str | None) -> dict | None:
         if raw_config is None:
@@ -54,6 +59,21 @@ class Command(BaseCommand):
         snapshot = Snapshot.objects.get(system_id=system_id, resource_type_id=resource_type_id)
         system = System.objects.get(system_id=system_id)
         resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+
+        if get_bkbase_version() == BKBaseVersion.V4:
+            if not snapshot.storages.exists():
+                raise CommandError("未配置可执行的入库存储；本次未更新资产清洗或本地配置")
+            target_config = custom_config if custom_config is not None else snapshot.custom_config
+            try:
+                asset_etl_maintenance.run_maintenance(
+                    snapshot, system, resource_type, target_config, retry_unknown=kwargs["retry_unknown"]
+                )
+            except BKBaseResourceMappingError as error:
+                raise CommandError(f"BKBase V4 资产维护未完成：{error.message}") from error
+            except Exception as error:
+                raise CommandError("BKBase V4 资产维护未完成；请检查持久操作状态并核对配置后重试") from error
+            self.stdout.write(self.style.SUCCESS("[update_asset_etl] 全部更新完成"))
+            return
 
         if custom_config is not None:
             snapshot.custom_config = custom_config

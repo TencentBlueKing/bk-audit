@@ -1,4 +1,4 @@
-"""验证日志插件 Doris 入库模型使用实际网关接受的协议值。"""
+"""验证日志插件按 APIGW 文档转换 Doris 入库模型。"""
 from types import SimpleNamespace
 from unittest import mock
 
@@ -14,7 +14,7 @@ from services.web.databus.constants import (
 
 
 class DorisStorageModelTests(SimpleTestCase):
-    def test_plugin_replica_uses_supported_model_in_v4_request(self):
+    def test_plugin_replica_uses_documented_model_in_v4_request(self):
         handler = PluginEtlHandler(plugin=SimpleNamespace(namespace="audit", collector_plugin_name_en="plugin_a"))
         config = {
             DEFAULT_STORAGE_CONFIG_KEY: 1,
