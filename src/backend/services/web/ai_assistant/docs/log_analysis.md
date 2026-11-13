@@ -16,7 +16,7 @@ flowchart LR
     Task --> Result[平台归档过程并保存 Markdown]
 ```
 
-任务复用公共Agent Client，以实际用户执行；查询工具每次独立鉴权。分析Agent工具集为audit-log-analysis，统计Agent另用仅含字段探索和聚合的audit-log-statistics；工具路径、配置及能力说明见[查询工具接入](../../query/ai_assistant/README.md)。
+任务复用公共Agent Client，以实际用户执行；查询工具每次独立鉴权。分析Agent与统计Agent均使用audit-log-analysis，统计Agent在Agent平台只勾选字段探索和聚合；工具路径、配置及能力说明见[查询工具接入](../../query/ai_assistant/README.md)。
 
 ## 2. 指令与快照
 

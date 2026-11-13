@@ -61,8 +61,10 @@ AUDIT_META_MCP_RESOURCES = {
     "mcp_get_audit_system_detail": "/mcp/meta/system_detail/",
     "mcp_list_system_actions": "/mcp/meta/actions/",
     "mcp_list_system_resource_types": "/mcp/meta/resource_types/",
-    "mcp_get_log_field_metadata": "/mcp/logs/field_metadata/",
 }
+
+# 本期仅这两个工具集全部由用户态资源组成，允许个人 token 直接以本人身份调用。
+PERSONAL_TOKEN_MCP_SERVERS = {"audit-log-analysis", "audit-meta"}
 
 
 class TestMCPUserAPIGWConfig(SimpleTestCase):
@@ -191,7 +193,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
             self.assertEqual(set(server["resource_names"]), set(AUDIT_META_MCP_RESOURCES))
 
     def test_audit_meta_resources_use_user_gateway_backend(self):
-        """audit-meta 五个工具均为 POST、用户态校验并指向默认命名空间后端。"""
+        """audit-meta 四个工具均为 POST、用户态校验并指向默认命名空间后端。"""
         for operation_id, path in AUDIT_META_MCP_RESOURCES.items():
             with self.subTest(operation_id=operation_id):
                 operation = self.resources["paths"][path]["post"]
@@ -204,9 +206,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
                 self.assertTrue(config["authConfig"]["resourcePermissionRequired"])
                 self.assertEqual(
                     config["backend"]["path"],
-                    "/api/v1/query/namespaces/default/mcp_user/logs/field_metadata/"
-                    if operation_id == "mcp_get_log_field_metadata"
-                    else f"/api/v1/meta/namespaces/default/mcp_user/meta/{path.rsplit('/', 2)[-2]}/",
+                    f"/api/v1/meta/namespaces/default/mcp_user/meta/{path.rsplit('/', 2)[-2]}/",
                 )
                 self.assertEqual(operation["parameters"][0]["in"], "body")
 
@@ -234,6 +234,30 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
         for stage in definition["stages"]:
             for server in stage["mcp_servers"]:
                 self.assertTrue(server["is_public"])
+
+    def test_statistics_server_is_removed(self):
+        """统计 Agent 改用 audit-log-analysis 并在 Agent 侧限定工具，不再单独维护工具集。"""
+        definition = self._load_definition()
+
+        for stage in definition["stages"]:
+            self.assertNotIn("audit-log-statistics", {server["name"] for server in stage["mcp_servers"]})
+
+    def test_personal_token_only_on_user_verified_servers(self):
+        """个人 token 只开在全部工具为用户态的 MCP 上，且不开 OAuth2 公开客户端。"""
+        definition = self._load_definition()
+        operations = self._get_operations()
+
+        for stage in definition["stages"]:
+            for server in stage["mcp_servers"]:
+                with self.subTest(stage=stage["name"], server=server["name"]):
+                    self.assertFalse(server.get("oauth2_public_client_enabled", False))
+                    enabled = server.get("oauth2_personal_client_enabled", False)
+                    self.assertEqual(enabled, server["name"] in PERSONAL_TOKEN_MCP_SERVERS)
+                    if not enabled:
+                        continue
+                    for resource_name in server["resource_names"]:
+                        auth_config = operations[resource_name]["x-bk-apigateway-resource"]["authConfig"]
+                        self.assertTrue(auth_config["userVerifiedRequired"], resource_name)
 
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()

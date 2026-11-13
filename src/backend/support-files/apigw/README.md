@@ -12,6 +12,8 @@
 
 用户态 MCP 工具要求应用认证、用户认证及资源授权，并在后端按当前用户执行数据权限检查。调用方不得通过请求体指定其他用户身份。MCP Server 仅暴露 `resource_names` 声明的工具，工具描述以网关实际发布的 schema 为准。
 
+`audit-log-analysis` 与 `audit-meta` 开启个人 token（`oauth2_personal_client_enabled`）：用户在 bkauth 签发个人 token 后，以 `Authorization: Bearer <token>` 直接用本人身份调用，无需应用 code/secret。网关以 `bk_app_code=personal` 通过应用认证，因此后端不能依赖 app_code 做白名单或限流，权限只按 JWT 用户校验。只有全部工具均为用户态资源的 MCP Server 才能开启；资源级 `oauth2PersonalClientEnabled` 未开启，个人 token 不能绕过 MCP 直接调用 API。
+
 ## 日志分析工具
 
 | operationId | 方法与路径 | 用途 |

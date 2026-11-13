@@ -72,7 +72,7 @@ nl2riskfilter 的 prompt 包含字段表格和枚举值，这些信息直接来�
 ### 日志分析与日志统计的独立配置
 
 `log_analysis` 对应日志分析 Agent，使用 `audit-log-analysis`（字段探索、聚合、明细）；
-`log_statistics` 对应 `bp-ai-log-stats`，使用 `audit-log-statistics`（仅字段探索和聚合）。
+`log_statistics` 对应 `bp-ai-log-stats`，同样绑定 `audit-log-analysis`，在 Agent 平台只勾选字段探索和聚合，不使用明细。
 两者系统提示词都说明角色、能力与做事原则；用户指令提供本次具体目标、关注维度与输出要求。
 分析使用字段探索、聚合和明细取证，围绕给定范围形成证据支持的结论；统计使用字段探索和聚合，可按需求调整初始范围，并按统计 Skill 输出结果。
 字段采样、OTHER/MISSING 等返回值语义与错误处理由 MCP 描述说明，参数限制由 schema 定义；系统提示词保留跨工具的工作原则，不重复协议细节。
@@ -90,8 +90,8 @@ DEFAULT 分析指令来自 `GlobalMetaConfig` 的 `ai_assistant_log_analysis_def
 系统提示词说明决策原则和 MessagePlan 协议；用户提示词只提供本轮原话、可信会话阶段、
 当前系统、授权系统 ID 和时间锚点。系统详情、字段、操作与资源类型不预加载到提示词。
 
-意图 Agent 绑定唯一的 `audit-meta` MCP，包含系统列表、系统详情、操作列表、资源类型列表，
-以及二期 `mcp_get_log_field_metadata`。模型只补充决策缺少的元数据；可信当前系统无需重查目录，无系统线索或闲聊不查目录。
+意图 Agent 绑定 `audit-meta`（系统列表、系统详情、操作列表、资源类型列表）和 `audit-log-analysis`，
+后者在 Agent 平台只勾选 `mcp_get_log_field_metadata`。模型只补充决策缺少的元数据；可信当前系统无需重查目录，无系统线索或闲聊不查目录。
 工具返回内容不能扩大当前会话的授权范围，后端仍独立校验系统和检索条件。
 网关工具集部署后还需在 Agent 平台绑定，本地提示词更新不代表平台绑定已经完成。
 
