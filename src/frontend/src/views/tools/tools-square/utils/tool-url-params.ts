@@ -158,6 +158,20 @@ export const applyUrlParamsToSearchList = <T extends {
   return { list, hasApplied };
 };
 
+/** URL 回填后查询值是否真的变了。相同值不再自动执行，避免路由回写把 BKVision 加载第二次。 */
+export const hasSearchListValueChange = (
+  current: Array<{ raw_name?: string; value: unknown }>,
+  next: Array<{ raw_name?: string; value: unknown }>,
+): boolean => {
+  if (current.length !== next.length) return true;
+  return current.some((item, index) => {
+    const nextItem = item.raw_name
+      ? next.find(candidate => candidate.raw_name === item.raw_name)
+      : next[index];
+    return JSON.stringify(item.value) !== JSON.stringify(nextItem?.value);
+  });
+};
+
 const serializeSearchItemValue = (item: {
   value: unknown;
   field_category?: string;

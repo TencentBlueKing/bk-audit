@@ -207,6 +207,7 @@
     buildGameDetailUid,
     getFlatToolParamsFromRoute,
     getRouteQueryValue,
+    hasSearchListValueChange,
     mergeGameDetailRouteQuery,
     mergeToolRouteQuery,
     parseGameDetailFromRoute,
@@ -852,6 +853,12 @@
 
     const urlApplied = applyUrlParamsToSearchList(searchListMap.value[uid], urlParams);
     if (!urlApplied.hasApplied) {
+      markRouteQueryApplied(uid);
+      return;
+    }
+
+    // 场景补参、tool_id 回写等只改了 query、没改查询值时，不再自动执行
+    if (!hasSearchListValueChange(searchListMap.value[uid], urlApplied.list)) {
       markRouteQueryApplied(uid);
       return;
     }
