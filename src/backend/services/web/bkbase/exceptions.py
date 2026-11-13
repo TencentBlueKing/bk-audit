@@ -39,3 +39,18 @@ class BKBaseCapabilityDeprecated(BKBaseException):
     ERROR_CODE = "004"
     STATUS_CODE = 410
     MESSAGE = gettext_lazy("BKBase V4不再支持场景方案和模型审计")
+
+
+class BKBaseFlowOperationPending(BKBaseException):
+    """同一正式 Flow 尚有未决写入，不能叠加相反目标、改图或重启。"""
+
+    ERROR_CODE = "005"
+    STATUS_CODE = 409
+    MESSAGE = gettext_lazy("Flow存在未决操作，请先核实当前操作结果")
+
+
+class BKBaseFlowWriteFailed(BKBaseException):
+    """同步发送已结束但未成功取得回执，由用户显式重试。"""
+
+    ERROR_CODE = "006"
+    MESSAGE = gettext_lazy("Flow发送失败或受理结果未知，请重试")
