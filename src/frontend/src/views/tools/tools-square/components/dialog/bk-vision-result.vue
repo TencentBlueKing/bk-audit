@@ -87,9 +87,12 @@
   }>();
 
   let app: any;
+  /** 最近一次成功挂载的执行签名。相同参数不再请求、不再 init。 */
   let loadedExecuteKey = '';
-  let currentExecuteKey = '';
-  let initializing = false;
+  /** 本次执行开始时的代数。关闭或销毁后自增，丢弃过期响应。 */
+  let executeEpoch = 0;
+  let pendingEpoch = 0;
+  let pendingExecuteKey = '';
 
   const panelRef = ref<HTMLElement | null>(null);
   const panelId = ref('');
@@ -97,55 +100,67 @@
   const { messageError } = useMessage();
   const emitBus = useEventBus().emit;
 
+  const buildToolVariables = () => props.searchList.map((item) => {
+    if (item.field_category !== 'person_select') {
+      return {
+        raw_name: item.raw_name,
+        value: item.value,
+      };
+    }
+    return {
+      raw_name: item.raw_name,
+      value: item.value.length === 0 ? '' : item.value.join(','),
+    };
+  });
+
+  const buildExecuteKey = () => JSON.stringify({
+    uid: props.toolDetails?.uid || props.uid,
+    variables: buildToolVariables(),
+    risk: props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {},
+    drillOpen: props.isDrillDownOpen,
+    drillConfig: props.isDrillDownOpen ? props.drillDownItemConfig : [],
+    drillRow: props.isDrillDownOpen ? props.drillDownItemRowData : {},
+  });
+
+  const clearLoadedChart = () => {
+    executeEpoch += 1;
+    loadedExecuteKey = '';
+    if (app) {
+      app.unmount();
+      app = null;
+    }
+  };
+
   // 获取工具执行结果
   const {
     run: fetchToolsExecute,
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      if (!data?.data?.panel_id) {
-        isExecuting.value = false;
-        emit('executed');
-        return;
+      if (pendingEpoch !== executeEpoch) return;
+      if (data?.data?.panel_id) {
+        panelId.value = data.data.panel_id;
+        loadedExecuteKey = pendingExecuteKey;
+        initBK(panelId.value);
       }
-      initializing = true;
-      panelId.value = data.data.panel_id;
-      initBK(panelId.value).then(() => {
-        loadedExecuteKey = currentExecuteKey;
-      })
-        .finally(() => {
-          initializing = false;
-          isExecuting.value = false;
-          emit('executed');
-        });
+      emit('executed');
     },
     onFinally: () => {
-      if (!initializing) isExecuting.value = false;
+      isExecuting.value = false;
     },
-  });
-
-  const buildExecuteKey = () => JSON.stringify({
-    uid: props.toolDetails?.uid || props.uid,
-    variables: props.searchList.map(item => ({
-      raw_name: item.raw_name,
-      value: item.value,
-    })),
-    drill: props.isDrillDownOpen ? props.drillDownItemConfig : [],
   });
 
   // 执行工具（使用 toolDetails.uid 作为真实工具uid来调用后端API）
   const executeTool = () => {
     const executeKey = buildExecuteKey();
     if (isExecuting.value || executeKey === loadedExecuteKey) return;
-    currentExecuteKey = executeKey;
+    pendingEpoch = executeEpoch;
+    pendingExecuteKey = executeKey;
     isExecuting.value = true;
     fetchToolsExecute({
       uid: props.toolDetails?.uid || props.uid,
       params: {
-        tool_variables: props.searchList.map(item => ({
-          raw_name: item.raw_name,
-          // eslint-disable-next-line no-nested-ternary
-          value: (item.field_category === 'person_select') ? (item.value.length === 0 ?  '' :  item.value.join(','))  :  item.value        })),
+        tool_variables: buildToolVariables(),
       },
       ...(props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {}),
     });
@@ -153,11 +168,7 @@
 
   // 关闭弹窗时清理实例
   const closeBK = () => {
-    if (app) {
-      app.unmount();
-      app = null;
-    }
-    loadedExecuteKey = '';
+    clearLoadedChart();
   };
 
   // 加载脚本
@@ -300,10 +311,7 @@
 
   // 组件销毁时清理实例（作为后备机制）
   onUnmounted(() => {
-    if (app) {
-      app.unmount();
-      app = null;
-    }
+    clearLoadedChart();
   });
 </script>
 

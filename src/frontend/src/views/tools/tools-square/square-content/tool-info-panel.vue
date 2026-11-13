@@ -215,6 +215,7 @@
     buildGameDetailUid,
     getFlatToolParamsFromRoute,
     getRouteQueryValue,
+    hasSearchListValueChange,
     mergeGameDetailRouteQuery,
     mergeToolRouteQuery,
     parseGameDetailFromRoute,
@@ -863,15 +864,17 @@
       markRouteQueryApplied(uid);
       return;
     }
-    const valuesChanged = urlApplied.list.some((item, index) => (
-      JSON.stringify(item.value) !== JSON.stringify(previousList[index]?.value)
-    ));
+
+    // 场景补参、tool_id 回写等只改了 query、没改查询值时，不再自动执行
+    if (!hasSearchListValueChange(previousList, urlApplied.list)) {
+      markRouteQueryApplied(uid);
+      return;
+    }
 
     searchListMap.value[uid] = urlApplied.list;
     syncSearchListToStorage();
     markUrlParamsOwner(uid);
     markRouteQueryApplied(uid);
-    if (!valuesChanged) return;
 
     nextTick(() => {
       const ref = toolContentRefs.value[uid];
