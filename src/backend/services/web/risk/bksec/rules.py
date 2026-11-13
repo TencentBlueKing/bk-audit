@@ -252,7 +252,9 @@ def _sync_rule_scene_binding(strategy: Strategy, rule: RiskRule) -> None:
 
 
 @transaction.atomic
-def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -> Optional[RiskRule]:
+def sync_bksec_rule(
+    strategy: Strategy, strategy_alive: Optional[bool] = None, as_platform: bool = False
+) -> Optional[RiskRule]:
     """
     策略保存后自动同步处理规则：
         1. 无处理规则时新建
@@ -285,7 +287,7 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         _sync_rule_scene_binding(strategy, latest)
         # Config 同步：即使规则内容未变，插件侧凭证/配方也可能更新（如用户改了 target_type）
         # 同步失败抛 BkSecPluginSyncError，本事务回滚规则变更，调用方回退 bksec_config
-        _ensure_plugin_config_synced(strategy, config)
+        _ensure_plugin_config_synced(strategy, config, as_platform=as_platform)
         return latest
     # 内容变化/首次 → 创建启用的新版本
     instance = _create_rule_version(strategy, fields, rule_id=latest.rule_id if latest else None)
@@ -296,7 +298,7 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         instance.version,
     )
     # 启用路径同步插件 Config；失败时本事务回滚刚写入的规则
-    _ensure_plugin_config_synced(strategy, config)
+    _ensure_plugin_config_synced(strategy, config, as_platform=as_platform)
     return instance
 
 
@@ -330,12 +332,16 @@ def sync_bksec_rule_or_keep_strategy(strategy: Strategy, strategy_alive: Optiona
         raise serializers.ValidationError(gettext("BKSEC 工单配置同步失败：%s") % err)
 
 
-def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = False) -> tuple:
+def sync_plugin_config(
+    strategy: Strategy, config: BkSecConfig, is_test: bool = False, as_platform: bool = False
+) -> tuple:
     """
     同步插件 Config：传业务参数给插件
 
     审计中心传 strategy_id + risk_type_id + source_type + token
     is_test=True 时用 {strategy_id}_test 作为 key，不影响正式配置（测试发送用）。
+    as_platform=False：请求路径优先用用户身份，一次查询同时完成权限校验与 token 获取；
+    as_platform=True：后台任务使用平台身份，只获取稳定 token，不做用户权限校验。
     返回 (success: bool, message: str)：
         - success=True  → 插件已成功建立/更新 Config
         - success=False → 失败原因（含插件返回的 message 或网络异常信息）
@@ -365,52 +371,61 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
         _report_fail(BkSecConfigSyncFailReason.API_URL_MISSING, message)
         return (False, message)
 
-    # 可见性校验（用户身份）：下拉用用户身份（网关按数据域过滤），取 token 用平台身份（不受数据域影响），
-    # 不校验则可绕过前端直传越权 risk_type_id，借平台身份拿到 token 并写入插件 Config
-    try:
-        from services.web.risk.bksec.service import is_risk_type_visible
-
-        if not is_risk_type_visible(config.risk_type_id, project_id=config.project_id):
-            message = "当前用户无权使用 risk_type_id=%s 的风险类型" % config.risk_type_id
-            logger.warning(
-                "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
-                message,
-                strategy.strategy_id,
-                config.risk_type_id,
-            )
-            _report_fail(BkSecConfigSyncFailReason.RISK_TYPE_FORBIDDEN, message)
-            return (False, message)
-    except Exception as err:  # NOCC:broad-except(校验异常须阻断，避免 fail-open 放行越权配置)
-        message = "风险类型可见性校验失败：%s" % err
-        logger.warning(
-            "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s", message, strategy.strategy_id, config.risk_type_id
-        )
-        _report_fail(BkSecConfigSyncFailReason.RISK_TYPE_CHECK_FAILED, message)
-        return (False, message)
-
-    # 获取 token（risk_access 列表翻页查找：单页取会截断漏匹配；is_formal=true 优先、false 兜底）
+    # 请求路径用用户身份一次拿到可见性与 token；后台任务由调用方显式传 as_platform=True。
+    # 这样既能阻止用户越权使用风险类型，也避免同一份 risk_access 结果重复请求两次。
     try:
         from services.web.risk.bksec.service import find_risk_access_item
 
         # 凭证查找不走缓存（use_cache=False），避免 token 轮换后向插件写入旧值
-        item = find_risk_access_item(config.risk_type_id, project_id=config.project_id)
-        token = (item or {}).get("token", "")
-        if not token:
-            message = "risk_access 列表接口未返回 risk_type_id=%s 的 token" % config.risk_type_id
+        item = find_risk_access_item(
+            config.risk_type_id,
+            project_id=config.project_id,
+            as_platform=as_platform,
+            use_cache=False,
+        )
+    except Exception as err:
+        if as_platform:
+            message = "获取 token 失败：%s" % err
             logger.warning(
                 "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
                 message,
                 strategy.strategy_id,
                 config.risk_type_id,
             )
+            _report_fail(BkSecConfigSyncFailReason.TOKEN_FETCH_FAILED, message)
+        else:
+            message = "风险类型可见性校验失败：%s" % err
+            logger.warning(
+                "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
+                message,
+                strategy.strategy_id,
+                config.risk_type_id,
+            )
+            _report_fail(BkSecConfigSyncFailReason.RISK_TYPE_CHECK_FAILED, message)
+        return (False, message)
+
+    if not item:
+        if as_platform:
+            message = "risk_access 列表接口未返回 risk_type_id=%s 的记录" % config.risk_type_id
             _report_fail(BkSecConfigSyncFailReason.TOKEN_MISSING, message)
-            return (False, message)
-    except Exception as err:
-        message = "获取 token 失败：%s" % err
+        else:
+            message = "当前用户无权使用 risk_type_id=%s 的风险类型" % config.risk_type_id
+            _report_fail(BkSecConfigSyncFailReason.RISK_TYPE_FORBIDDEN, message)
+        logger.warning(
+            "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
+            message,
+            strategy.strategy_id,
+            config.risk_type_id,
+        )
+        return (False, message)
+
+    token = item.get("token", "")
+    if not token:
+        message = "risk_access 列表接口未返回 risk_type_id=%s 的 token" % config.risk_type_id
         logger.warning(
             "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s", message, strategy.strategy_id, config.risk_type_id
         )
-        _report_fail(BkSecConfigSyncFailReason.TOKEN_FETCH_FAILED, message)
+        _report_fail(BkSecConfigSyncFailReason.TOKEN_MISSING, message)
         return (False, message)
 
     # 测试发送用独立 key，不影响正式配置
@@ -445,19 +460,20 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
         return (False, message)
 
 
-def _ensure_plugin_config_synced(strategy: Strategy, config: BkSecConfig) -> None:
+def _ensure_plugin_config_synced(strategy: Strategy, config: BkSecConfig, as_platform: bool = False) -> None:
     """
     启用路径的插件 Config 同步：失败抛出 BkSecPluginSyncError，带重试。
 
     重试解决短暂抖动（插件服务不可用/网络异常等）。
     失败后本函数所在的规则事务回滚，调用方把 bksec_config 写回保存前的值。
+    as_platform 由调用场景决定：请求路径用用户身份，后台任务用平台身份。
     """
     import time
 
     max_retries = 3
     message = ""
     for attempt in range(max_retries):
-        success, message = sync_plugin_config(strategy, config)
+        success, message = sync_plugin_config(strategy, config, as_platform=as_platform)
         if success:
             return
         if attempt < max_retries - 1:

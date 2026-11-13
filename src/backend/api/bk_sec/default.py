@@ -138,21 +138,27 @@ class PreviewTicketFields(BKSec):
     platform_authorization = False
 
     def _mock_request(self, validated_request_data):
-        """用样例数据模拟 BKSEC 返回，请求中的标准字段和 extra 会覆盖样例值。"""
+        """用样例数据模拟 BKSEC 返回，非空请求值覆盖样例值。"""
         mock_data = _load_preview_mock_data()
         mock_fields = mock_data.get("fields") or []
 
-        dynamic_values = {}
+        # extra 里可能有 field_mappings 渲染出的同名字段，空值不能覆盖标准入参或样例值。
+        dynamic_values = {
+            key: value for key, value in (validated_request_data.get("extra") or {}).items() if value not in (None, "")
+        }
         for key in ("target", "target_type", "operator", "source_type", "timestamp"):
-            if key in validated_request_data:
-                dynamic_values[key] = validated_request_data.get(key)
-        dynamic_values.update(validated_request_data.get("extra") or {})
+            value = validated_request_data.get(key)
+            if value not in (None, ""):
+                dynamic_values[key] = value
 
         result = []
         for item in mock_fields:
             if not isinstance(item, dict) or not item.get("key"):
                 continue
             key = item["key"]
-            result.append({**item, "value": dynamic_values.get(key, item.get("value"))})
+            value = dynamic_values.get(key)
+            if value in (None, ""):
+                value = item.get("value")
+            result.append({**item, "value": value})
 
         return {"fields": result}

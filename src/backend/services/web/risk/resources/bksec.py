@@ -237,6 +237,7 @@ class SendTestTicket(TicketResourceMeta):
                 "duration": None,  # 测试单创建时无耗时，状态更新时同步
             },
             duration=None,  # 测试单创建时无耗时，状态更新时同步
+            pa_id=pa.id,
             extra={},
             status=TicketNodeStatus.RUNNING,
             is_test=True,

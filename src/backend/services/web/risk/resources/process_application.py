@@ -21,7 +21,6 @@ import datetime
 
 from django.db import transaction
 from django.db.models import Case, Count, F, IntegerField, Q, Value, When
-from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
@@ -146,7 +145,10 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             nodes = TicketNode.objects.filter(action="AutoProcess").filter(
                 risk_id__in=Risk.load_authed_risks(action=ActionEnum.LIST_RISK).values("risk_id")
             )
-            pa_ids = {pa.id for pa in process_applications if nodes.filter(_pa_filter_q([pa.id])).exists()}
+            if nodes.filter(pa_id__isnull=True).exists():
+                pa_ids = {pa.id for pa in process_applications if nodes.filter(_pa_filter_q([pa.id])).exists()}
+            else:
+                pa_ids = set(nodes.values_list("pa_id", flat=True).distinct())
             process_applications = (
                 process_applications.filter(id__in=pa_ids)
                 if has_execution_records
@@ -227,10 +229,13 @@ def _pa_filter_q(pa_ids: list) -> Q:
     return snapshot_q | legacy_q
 
 
-def _filter_execution_nodes_by_scope(nodes, pa_id, scene_id):
+def _filter_execution_nodes_by_scope(nodes, pa_id, scene_id, risk_id=""):
     """按风险所属场景和候选套餐收窄执行记录。指定了条件但没有候选套餐时返回空查询。"""
     if scene_id:
-        nodes = nodes.filter(risk_id__in=Risk.objects.filter(scene_id=scene_id).values("risk_id"))
+        scene_risks = Risk.objects.filter(scene_id=scene_id)
+        if risk_id:
+            scene_risks = scene_risks.filter(risk_id=risk_id)
+        nodes = nodes.filter(risk_id__in=scene_risks.values("risk_id"))
     if not (pa_id or scene_id):
         return nodes
     pa_queryset = ProcessApplication.objects.all()
@@ -246,7 +251,10 @@ def _filter_execution_nodes_by_scope(nodes, pa_id, scene_id):
     pa_ids = list(pa_queryset.values_list("id", flat=True))
     if not pa_ids:
         return nodes.none()
-    return nodes.filter(_pa_filter_q(pa_ids))
+    # 历史无快照记录尚未回填 pa_id 时保留旧规则链路兜底；完成回填后只走 pa_id 索引。
+    if nodes.filter(pa_id__isnull=True).exists():
+        return nodes.filter(_pa_filter_q(pa_ids))
+    return nodes.filter(pa_id__in=pa_ids)
 
 
 class UpdateProcessApplication(ProcessApplicationMeta):
@@ -490,20 +498,17 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         nodes = self._filter_by_record_id(nodes, record_id)
 
         # 场景先按风险所属场景收窄，再按该场景可见套餐过滤。没有候选套餐时返回空结果。
-        nodes = _filter_execution_nodes_by_scope(nodes, pa_id, scene_id)
-        # 实际开始时间：新记录读物化字段，历史记录回退创建时间。
-        # 筛选、排序、返回展示统一使用 actual_start，避免“展示实际开始时间、筛选/排序却用创建时间”。
-        nodes = nodes.annotate(actual_start=Coalesce("sops_start_time", "timestamp"))
-        # 开始时间闭区间：from <= actual_start <= to。套餐列表缺省近 30 天；风险入口不套默认。
+        nodes = _filter_execution_nodes_by_scope(nodes, pa_id, scene_id, risk_id=risk_id)
+        # 开始时间闭区间：from <= sops_start_time <= to。套餐列表缺省近 30 天；风险入口不套默认。
         time_from = validated_request_data.get("from")
         time_to = validated_request_data.get("to")
         if not risk_id and time_from is None and time_to is None:
             time_to = timezone.now()
             time_from = time_to - self.DEFAULT_START_TIME_LOOKBACK
         if time_from is not None:
-            nodes = nodes.filter(actual_start__gte=time_from.timestamp())
+            nodes = nodes.filter(sops_start_time__gte=time_from.timestamp())
         if time_to is not None:
-            nodes = nodes.filter(actual_start__lte=time_to.timestamp())
+            nodes = nodes.filter(sops_start_time__lte=time_to.timestamp())
 
         # 执行人筛选
         if operator:
@@ -513,10 +518,15 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         if task_name:
             nodes = nodes.filter(process_result__task_name__icontains=task_name)
 
-        # 套餐名称筛选（精确匹配，支持多选，任一命中；快照字段，ORM 下沉；
-        # 历史无快照记录由展示逻辑 rule→pa 兜底，筛选不覆盖）
+        # 套餐名称筛选：先按当前套餐名映射到 pa_id，再走执行记录快照列。
         if pa_name_values:
-            nodes = nodes.filter(process_result__pa_name__in=pa_name_values)
+            pa_name_ids = list(ProcessApplication.objects.filter(name__in=pa_name_values).values_list("id", flat=True))
+            if nodes.filter(pa_id__isnull=True).exists():
+                nodes = nodes.filter(
+                    Q(pa_id__in=pa_name_ids) | Q(pa_id__isnull=True, process_result__pa_name__in=pa_name_values)
+                )
+            else:
+                nodes = nodes.filter(pa_id__in=pa_name_ids) if pa_name_ids else nodes.none()
 
         # 触发方式筛选（支持多选，任一命中）
         if trigger_values:
@@ -548,11 +558,10 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         # 排序
         order_field_map = {
             # start_time 为对外字段名；time 保留为兼容旧调用方的别名。
-            # 统一按 actual_start（实际开始时间，历史记录回退记录创建时间）排序。
-            "start_time": "actual_start",
-            "-start_time": "-actual_start",
-            "time": "actual_start",
-            "-time": "-actual_start",
+            "start_time": "sops_start_time",
+            "-start_time": "-sops_start_time",
+            "time": "sops_start_time",
+            "-time": "-sops_start_time",
             "operator": "operator",
             "-operator": "-operator",
         }
