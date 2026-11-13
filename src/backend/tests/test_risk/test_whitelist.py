@@ -16,13 +16,16 @@ from services.web.risk.whitelist.constants import (
 from services.web.risk.whitelist.models import RiskWhitelist
 from services.web.risk.whitelist.service import (
     _node_payload,
+    _submit_itsm_ticket,
     create_itsm_ticket,
     expire_at_from,
     flow_of,
     intercept_whitelist,
     progress_map,
+    renew_whitelist,
     resolve_duration,
     resolve_expire_at,
+    review_whitelist,
     submit_whitelist,
     validity_text,
 )
@@ -156,6 +159,41 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         with self.assertRaises(ValidationError):
             create_itsm_ticket(1)
         abort.assert_called_once_with(rule)
+
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    @patch("apps.meta.models.GlobalMetaConfig.get", return_value=["platform-admin"])
+    @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
+    def test_ticket_create_passes_platform_and_scene_admins(self, ticket_create, platform_admins, scene_filter):
+        from services.web.scene.models import Scene
+
+        scene_filter.return_value.first.return_value = Scene(scene_id=3, managers=["scene-admin"])
+        rule = SimpleNamespace(
+            id=1,
+            scene_id=3,
+            whitelist_type=WhitelistType.FALSE_POSITIVE,
+            reason="误报",
+            match_scope=_scope(),
+            risk_id="risk-1",
+            created_by="alice",
+        )
+        _submit_itsm_ticket(rule, operator="alice", callback_token="token")
+        form_data = ticket_create.call_args.kwargs["form_data"]
+        self.assertEqual(form_data["approver"], ["platform-admin", "scene-admin"])
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    @patch("services.web.risk.whitelist.service.operate_itsm")
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
+    def test_admin_pass_follows_itsm_ticket(self, is_admin, operate, ticket_detail, apply_result):
+        from services.web.risk.whitelist.service import _pass_if_admin
+
+        ticket = {"id": "ticket-1", "status": "running", "approve_result": None}
+        ticket_detail.return_value = ticket
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1")
+        _pass_if_admin(rule, "alice")
+        operate.assert_called_once_with(rule, "approve", "alice")
+        apply_result.assert_called_once_with(rule, ticket)
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [
@@ -493,6 +531,46 @@ class WhitelistFlowTests(SimpleTestCase):
             self.assertFalse(intercept_whitelist({**event, "operator": "bob"}, {}, 3))
 
 
+class WhitelistRenewTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch(
+        "services.web.risk.whitelist.service._submit_itsm_ticket",
+        return_value={"id": "ticket-2", "sn": "SN2", "frontend_url": "http://itsm/ticket-2"},
+    )
+    @patch("services.web.risk.whitelist.service.validate_match_scope", return_value="")
+    def test_false_positive_duration_clears_permanent(self, validate_scope, submit, refresh_nodes, admin_pass):
+        saved = {}
+        rule = _Rule(
+            status=WhitelistStatus.ACTIVE,
+            whitelist_type=WhitelistType.FALSE_POSITIVE,
+            is_permanent=True,
+            expire_at=None,
+            match_scope=_scope(),
+            reason="永久误报",
+            scene_id=1,
+            callback_token="old-token",
+        )
+
+        def save(update_fields=None):
+            saved["fields"] = list(update_fields or [])
+
+        rule.save = save
+        renew_whitelist(
+            rule,
+            match_scope=_scope(),
+            reason="改成三十天",
+            duration_days=30,
+            expire_at=None,
+            username="alice",
+        )
+        self.assertFalse(rule.is_permanent)
+        self.assertIsNotNone(rule.expire_at)
+        self.assertEqual(rule.status, WhitelistStatus.PENDING)
+        self.assertIn("is_permanent", saved["fields"])
+        self.assertIn("expire_at", saved["fields"])
+
+
 class WhitelistListQueryTests(SimpleTestCase):
     def test_status_type_and_sort_accept_multiple_values(self):
         from services.web.risk.whitelist.serializers import (
@@ -523,3 +601,31 @@ class WhitelistListQueryTests(SimpleTestCase):
         serializer = ListRiskWhitelistReqSerializer(data={})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["order_fields"], ["-id"])
+
+
+class WhitelistReviewTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result", side_effect=lambda rule, ticket: ticket)
+    @patch(
+        "services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_handle",
+        return_value={"success": True, "message": "操作成功"},
+    )
+    def test_success_true_updates_status(self, ticket_handle, apply_result):
+        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1")
+        review_whitelist(rule, "approve", "alice")
+        self.assertTrue(apply_result.call_args.args[1]["approve_result"])
+        review_whitelist(rule, "refuse", "alice", reject_reason="不准")
+        self.assertFalse(apply_result.call_args.args[1]["approve_result"])
+        self.assertEqual(apply_result.call_args.args[1]["comment"], "不准")
+        self.assertEqual(ticket_handle.call_count, 2)
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch(
+        "services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_handle",
+        return_value={"success": False, "message": "操作失败"},
+    )
+    def test_success_false_keeps_status(self, ticket_handle, apply_result):
+        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1")
+        returned = review_whitelist(rule, "approve", "alice")
+        self.assertIs(returned, rule)
+        apply_result.assert_not_called()
+        ticket_handle.assert_called_once()

@@ -52,9 +52,9 @@ from services.web.risk.whitelist.service import (
     ensure_same_strategy_scene,
     get_rule_for_admin,
     managed_scene_ids,
-    operate_itsm,
     progress_map,
     renew_whitelist,
+    review_whitelist,
     serialize_rule,
     submit_whitelist,
 )
@@ -244,7 +244,7 @@ class ApproveRiskWhitelist(RiskWhitelistMeta):
         rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status != WhitelistStatus.PENDING:
             return serialize_rule(rule)
-        operate_itsm(rule, "approve", get_request_username())
+        rule = review_whitelist(rule, "approve", get_request_username())
         return serialize_rule(rule)
 
 
@@ -256,9 +256,12 @@ class RejectRiskWhitelist(RiskWhitelistMeta):
         rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status != WhitelistStatus.PENDING:
             return serialize_rule(rule)
-        rule.reject_reason = validated_request_data["reason"]
-        rule.save(update_fields=["reject_reason", "updated_at", "updated_by"])
-        operate_itsm(rule, "refuse", get_request_username())
+        rule = review_whitelist(
+            rule,
+            "refuse",
+            get_request_username(),
+            reject_reason=validated_request_data["reason"],
+        )
         return serialize_rule(rule)
 
 

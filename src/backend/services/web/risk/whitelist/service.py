@@ -415,16 +415,34 @@ def _create_whitelist(
     return rule
 
 
-def operate_itsm(rule: RiskWhitelist, method: str, operator: str) -> None:
+def operate_itsm(rule: RiskWhitelist, method: str, operator: str):
     if not rule.itsm_ticket_id:
         raise ValidationError(gettext("ITSM 工单尚未创建"))
-    api.bk_itsm_v4.ticket_handle(
+    return api.bk_itsm_v4.ticket_handle(
         ticket_id=rule.itsm_ticket_id,
         action={"method": method, "params": {}},
         operator=operator,
         portal_id="DEFAULT",
         form_data={},
         options={},
+    )
+
+
+def review_whitelist(rule: RiskWhitelist, method: str, operator: str, reject_reason: str = "") -> RiskWhitelist:
+    """点击通过或驳回。ITSM 返回 success 为 true 才改状态，为 false 不改。"""
+
+    payload = operate_itsm(rule, method, operator)
+    if not (isinstance(payload, dict) and payload.get("success") is True):
+        return rule
+    approved = method == "approve"
+    return apply_whitelist_result(
+        rule,
+        {
+            "id": rule.itsm_ticket_id,
+            "status": ITSMV4TicketStatus.FINISHED,
+            "approve_result": approved,
+            "comment": "" if approved else reject_reason,
+        },
     )
 
 
@@ -490,6 +508,50 @@ def _abort_whitelist(rule: RiskWhitelist) -> None:
     rule.delete()
 
 
+def _usernames(values) -> list:
+    if not isinstance(values, (list, tuple)):
+        return []
+    names = []
+    for item in values:
+        username = str(item or "").strip()
+        if username and username not in names:
+            names.append(username)
+    return names
+
+
+def _scene_admin_usernames(scene_id) -> list:
+    """审批人里的场景管理员直接取该场景的 managers。"""
+
+    try:
+        scene = Scene.objects.filter(pk=scene_id, is_deleted=False).first()
+    except Exception:
+        logger.exception("[RiskWhitelist] load scene admins failed, scene_id=%s", scene_id)
+        return []
+    if scene is None:
+        return []
+    return _usernames(getattr(scene, "managers", None))
+
+
+def _platform_admin_usernames() -> list:
+    """平台管理员 platform_admin_users。"""
+
+    from apps.meta.models import GlobalMetaConfig
+    from services.web.entry.constants import PLATFORM_ADMIN_USERS_KEY
+
+    try:
+        configured = GlobalMetaConfig.get(PLATFORM_ADMIN_USERS_KEY, default=[]) or []
+    except Exception:
+        logger.exception("[RiskWhitelist] load platform admins failed")
+        configured = []
+    return _usernames(configured)
+
+
+def _whitelist_approvers(scene_id) -> list:
+    """平台管理员和该场景的场景管理员，写入 ITSM form_data.approver。"""
+
+    return _usernames([*_platform_admin_usernames(), *_scene_admin_usernames(scene_id)])
+
+
 def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: str, reason=None, match_scope=None):
     """提交 ITSM 工单。"""
 
@@ -506,6 +568,7 @@ def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: s
         "match_scope": json.dumps(scope, ensure_ascii=False),
         "risk_id": rule.risk_id,
         "applicant": operator or rule.created_by or "",
+        "approver": _whitelist_approvers(rule.scene_id),
     }
     try:
         ticket = api.bk_itsm_v4.ticket_create(
@@ -531,27 +594,19 @@ def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
     rule.itsm_ticket_url = ticket.get("frontend_url") or ""
 
 
-def _pass_if_admin(rule: RiskWhitelist, ticket: dict, username: str) -> None:
+def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
+    """管理员创建时调用 ITSM 审批。白名单状态只跟随后续读到的工单，不在本地写成已通过。"""
+
     if not username or not is_scene_admin(username, rule.scene_id):
         return
     try:
         operate_itsm(rule, "approve", username)
+        detail = api.bk_itsm_v4.ticket_detail(id=rule.itsm_ticket_id)
     except Exception:
         logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
         return
-    apply_whitelist_result(
-        rule,
-        {
-            "id": rule.itsm_ticket_id,
-            "sn": rule.itsm_sn,
-            "frontend_url": rule.itsm_ticket_url,
-            "status": ITSMV4TicketStatus.FINISHED,
-            "approve_result": True,
-            "comment": "",
-            "current_processors": ticket.get("current_processors") or [],
-            "current_steps": ticket.get("current_steps") or [],
-        },
-    )
+    if isinstance(detail, dict):
+        apply_whitelist_result(rule, detail)
 
 
 def renew_whitelist(
@@ -586,6 +641,7 @@ def renew_whitelist(
         update_fields=[
             "match_scope",
             "reason",
+            "is_permanent",
             "expire_at",
             "status",
             "reject_reason",
@@ -598,7 +654,7 @@ def renew_whitelist(
         ]
     )
     refresh_whitelist_nodes(rule, ticket)
-    _pass_if_admin(rule, ticket, username)
+    _pass_if_admin(rule, username)
     rule.refresh_from_db()
     return rule
 
@@ -615,7 +671,7 @@ def create_itsm_ticket(rule_id: int) -> None:
     _bind_ticket(rule, ticket)
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     refresh_whitelist_nodes(rule, ticket)
-    _pass_if_admin(rule, ticket, rule.created_by or "")
+    _pass_if_admin(rule, rule.created_by or "")
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:
