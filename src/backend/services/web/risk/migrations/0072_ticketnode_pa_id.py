@@ -81,7 +81,7 @@ def backfill_ticket_node_pa_id(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("risk", "0070_ticketnode_sops_start_time"),
+        ("risk", "0071_riskwhitelist"),
     ]
 
     operations = [
