@@ -86,11 +86,12 @@ const extensionRows = (
 export const buildLocalPreview = (input: LocalPreviewInput): BksecTicketPreviewRow[] => {
   const values = input.fieldValues || {};
   const rows: BksecTicketPreviewRow[] = [
-    { key: 'ticket_id', label: '工单ID', value: '--' },
+    // 新建预览同样不展示工单 ID、提单时间、工单状态。
+    // { key: 'ticket_id', label: '工单ID', value: '--' },
     { key: 'title', label: '工单标题', value: '--' },
     { key: 'deadline', label: '处理截止时间', value: '--' },
-    { key: 'submitted_at', label: '提单时间', value: '--' },
-    { key: 'status', label: '工单状态', value: '--', kind: 'status' },
+    // { key: 'submitted_at', label: '提单时间', value: '--' },
+    // { key: 'status', label: '工单状态', value: '--', kind: 'status' },
     { key: 'level', label: '风险等级', value: '--', kind: 'level' },
     { key: 'risk_type', label: '风险类型', value: typeLabel(input.riskTypeName, input.riskTypeId) },
     { key: 'notice_users', label: '关注人', value: '--' },
@@ -208,11 +209,12 @@ const mapFieldListPreview = (
   const fields = new Map(rawFields.map(field => [field.key, field]));
   const used = new Set<string>();
   const slots: PreviewSlot[] = [
-    emptySlot('ticket_id', '工单ID'),
+    // 新预览响应没有工单 ID、提单时间、工单状态，先不展示。
+    // emptySlot('ticket_id', '工单ID'),
     fieldSlot(fields, used, 'title', 'title', '工单标题'),
     fieldSlot(fields, used, 'deadline_time', 'deadline', '统一处理期限'),
-    emptySlot('submitted_at', '提单时间'),
-    emptySlot('status', '工单状态', 'status'),
+    // emptySlot('submitted_at', '提单时间'),
+    // emptySlot('status', '工单状态', 'status'),
     fieldSlot(fields, used, 'risk_level', 'level', '风险等级', 'level', value => levelLabel(parseJsonArray(value))),
     {
       rowKey: 'risk_type',
