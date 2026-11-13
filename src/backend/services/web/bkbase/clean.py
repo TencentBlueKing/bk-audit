@@ -424,6 +424,8 @@ def _verified_result_table_ref(context, binding, logical_id):
 def _bound_raw_data_id(context, owner, binding, data_ref):
     """旧绑定缺少数字键时，从同一正式来源确认数字标签和 DataId。"""
     raw_id = binding.get("source_raw_data_id")
+    if "migration_import" in binding and "data_source" not in binding:
+        raw_id = source.bound_plugin_raw_id(context, binding)
     if raw_id is None:
         ref = source._replay_ref(context, binding.get("data_source"), "DataSource")
         resource = api.bk_base_v4.data_source_get(**resource_params(context, ref, kind="DataSource"))
@@ -677,6 +679,10 @@ def configure_clean(owner, params, *, rt_owner=False, publish=True, _locked_clea
         raise BKBaseResourceMappingError(message="Clean raw_data_id does not match its source binding")
     if not (owner.bkbase_v4_resources or {}).get("data_id"):
         source.resolve_synced_source(context, owner, raw_data_id=params["raw_data_id"])
+    binding = owner.bkbase_v4_resources or {}
+    if "migration_import" in binding and "data_source" not in binding:
+        if source.bound_plugin_raw_id(context, binding) != raw_id:
+            raise BKBaseResourceMappingError(message="Imported Native DataId does not match Clean input")
     if rt_owner:
         binding = owner.bkbase_v4_resources or {}
         if binding.get("clean"):

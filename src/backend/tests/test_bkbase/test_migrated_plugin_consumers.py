@@ -83,6 +83,96 @@ class MigratedPluginConsumerTests(SimpleTestCase):
         self.enterContext(mock.patch.object(storage, "update_owner_binding", side_effect=bind))
         self.enterContext(mock.patch.object(storage, "resolve_storage_cluster", return_value=self.cluster_ref))
 
+    def native_data(self):
+        self.plugin.bkbase_v4_resources.pop("data_source")
+        self.sdk.data_id_get.return_value = {
+            "kind": "DataId",
+            "metadata": {key: self.data_ref[key] for key in ("tenant", "namespace", "name")},
+            "spec": {"predefined": {"dataId": 73}},
+            "status": {"phase": "Ok"},
+        }
+
+    def test_native_bound_plugin_reads_explicit_cross_project_data_id_without_discovery(self):
+        self.native_data()
+        self.assertEqual(self.handler.get_bk_data_id(), 73)
+        self.sdk.data_id_get.assert_called_once_with(namespace="legacy_sources", name="actual-data")
+        self.sdk.data_source_get.assert_not_called()
+        self.sdk.data_source_list.assert_not_called()
+        self.sdk.data_id_list.assert_not_called()
+        self.sdk.data_id_get.side_effect = APIRequestError("bk_base_v4", "data_id_get", "403")
+        with self.assertRaises(APIRequestError):
+            self.handler.get_bk_data_id()
+
+    def test_native_bound_plugin_rejects_wrong_numeric_and_resource_identity(self):
+        self.native_data()
+        data = self.sdk.data_id_get.return_value
+        for value in (None, True, "73", 73.0, 74):
+            data["spec"] = {"predefined": {"dataId": value}}
+            with self.assertRaises(BKBaseResourceMappingError):
+                self.handler.get_bk_data_id()
+        data["spec"] = {"predefined": {"dataId": 73}}
+        for key in ("tenant", "namespace", "name"):
+            original = data["metadata"][key]
+            data["metadata"][key] = "different"
+            with self.assertRaises(BKBaseResourceMappingError):
+                self.handler.get_bk_data_id()
+            data["metadata"][key] = original
+
+    def test_present_but_invalid_source_cannot_downgrade_to_native_data_id(self):
+        self.native_data()
+        for value in (None, {}, "invalid"):
+            self.plugin.bkbase_v4_resources["data_source"] = value
+            with self.assertRaises(BKBaseResourceMappingError):
+                self.handler.get_bk_data_id()
+        self.sdk.data_id_get.assert_not_called()
+
+    def test_native_import_explicit_maintenance_revalidates_actual_data_id_before_clean_update(self):
+        self.native_data()
+        self.plugin.bkbase_v4_resources["migration_import"] = {"owner": "plugin", "owner_pk": 1}
+        params = self.handler.build_clean_config()
+        spec = clean.build_clean_spec(params, data_ref=self.data_ref, logical_id=self.logical_id, rt_owner=True)
+        spec.update(config_revision=1, deploy_revision=1, desired_status="Stopped", current_status="Stopped")
+        self.sdk.clean_get.return_value = {
+            "kind": "Clean",
+            "metadata": {key: self.clean_ref[key] for key in ("tenant", "namespace", "name")},
+            "spec": spec,
+            "status": {"phase": "Ok"},
+        }
+        clean.reset_plugin_operation(self.plugin)
+        self.sdk.data_id_get.return_value["spec"]["predefined"]["dataId"] = 74
+        with self.assertRaises(BKBaseResourceMappingError):
+            clean.configure_clean(self.plugin, params, rt_owner=True)
+        self.sdk.clean_update.assert_not_called()
+        self.sdk.clean_create.assert_not_called()
+        self.sdk.data_id_get.return_value["spec"]["predefined"]["dataId"] = 73
+        self.sdk.clean_update.side_effect = lambda **kw: {
+            "kind": "Clean",
+            "metadata": kw["metadata"],
+            "spec": kw["spec"],
+            "status": {"phase": "Pending"},
+        }
+        clean.configure_clean(self.plugin, params, rt_owner=True)
+        self.sdk.clean_update.assert_called_once()
+        self.assertEqual(self.sdk.clean_update.call_args.kwargs["name"], self.clean_ref["name"])
+        self.assertTrue(self.plugin.bkbase_v4_resources["migration_maintenance"])
+        self.sdk.data_source_get.assert_not_called()
+        self.sdk.data_source_list.assert_not_called()
+
+    def test_native_import_shared_parent_read_revalidates_actual_data_id(self):
+        self.native_data()
+        self.plugin.bkbase_v4_resources["migration_import"] = {"owner": "plugin", "owner_pk": 1}
+        self.sdk.data_id_get.return_value["spec"]["predefined"]["dataId"] = 74
+        with self.assertRaises(BKBaseResourceMappingError):
+            clean._bound_raw_data_id(
+                source.get_bkbase_context(), self.plugin, self.plugin.bkbase_v4_resources, self.data_ref
+            )
+
+    def test_native_plugin_binding_does_not_relax_source_only_contract(self):
+        self.native_data()
+        with self.assertRaises(BKBaseResourceMappingError):
+            source.bound_source_raw_id(source.get_bkbase_context(), self.plugin.bkbase_v4_resources)
+        self.sdk.data_id_get.assert_not_called()
+
     def test_explicit_cross_project_source_is_used_without_name_discovery(self):
         self.assertEqual(self.handler.get_bk_data_id(), 73)
         self.sdk.data_source_get.assert_called_once_with(

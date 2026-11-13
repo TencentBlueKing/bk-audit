@@ -160,6 +160,31 @@ def bound_source_raw_id(context, binding):
     return raw_id
 
 
+def verify_native_data_id(context, resource, *, data_ref, raw_data_id):
+    """核实显式Native DataId的真实身份及数字ID，不从名称、标签或别名推导。"""
+    ref = _replay_ref(context, data_ref, "DataId")
+    raw_id = _replay_raw_id(raw_data_id)
+    if _binding_resource_ref(context, resource, "DataId") != ref:
+        raise BKBaseResourceMappingError(message="Native DataId identity changed")
+    predefined = resource["spec"].get("predefined")
+    actual = predefined.get("dataId") if isinstance(predefined, dict) else None
+    if type(actual) is not int or actual <= 0 or actual != raw_id:
+        raise BKBaseResourceMappingError(message="Native DataId requires matching spec.predefined.dataId")
+    return raw_id
+
+
+def bound_plugin_raw_id(context, binding):
+    """插件显式绑定可直接引用Native DataId，已有Source键始终沿用完整Source核验。"""
+    if "data_source" in binding:
+        return bound_source_raw_id(context, binding)
+    ref = _replay_ref(context, binding.get("data_id"), "DataId")
+    raw_id = _replay_raw_id(binding.get("source_raw_data_id"))
+    params = resource_params(context, ref, kind="DataId")
+    params.pop("tenant")
+    resource = api.bk_base_v4.data_id_get(**params)
+    return verify_native_data_id(context, resource, data_ref=ref, raw_data_id=raw_id)
+
+
 def get_my_rawdata_list(**params):
     """维持原列表分页外观；V4原生列表由审计分页。"""
     if get_bkbase_version() == BKBaseVersion.V3:
