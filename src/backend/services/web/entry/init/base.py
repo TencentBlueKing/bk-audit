@@ -39,6 +39,8 @@ from core.kms import (
 )
 from core.sql.constants import Operator
 from core.utils.distutils import strtobool
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.collector.snapshot.system.base import (
     create_iam_data_link,
     init_itsm_v4,
@@ -157,7 +159,8 @@ class SystemInitHandler:
         self.init_es()
         self.init_doris()
         self.init_redis()
-        self.init_snapshot()
+        if self.init_snapshot() is False:
+            return False
         self.init_event()
         self.create_or_update_plugin_etl()
         self.init_system()
@@ -265,6 +268,17 @@ class SystemInitHandler:
         self.post_init(INIT_REDIS_FISHED_KEY)
 
     def init_snapshot(self):
+        if get_bkbase_version() == BKBaseVersion.V4:
+            kinds = ["action", "resource_type"]
+            if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
+                kinds.append("user")
+            ready = True
+            for kind in kinds:
+                waiting_for = create_iam_data_link(kind)
+                if waiting_for is not None:
+                    print(f"[InitSnapshot] V4 {kind} pending: {waiting_for}")
+                    ready = False
+            return ready
         if self.pre_check(INIT_SNAPSHOT_FINISHED_KEY):
             return
         print("[InitSnapshot] Type => Action")

@@ -23,11 +23,15 @@ import uuid
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
+from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE, ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from apps.permission.handlers.permission import FetchInstancePermission
 from services.web.bkbase import source as bkbase_source
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.constants import (
     ACTION_DATA_NAME_FORMAT,
     RESOURCE_TYPE_DATA_NAME_FORMAT,
@@ -36,7 +40,7 @@ from services.web.databus.constants import (
 
 
 class HttpPullHandler:
-    def __init__(self, resource_type: str):
+    def __init__(self, resource_type: str, *, raw_data_name=None):
         now = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.resource_type = resource_type
         # 获取结果表名
@@ -48,6 +52,8 @@ class HttpPullHandler:
             self.raw_data_name = USER_INFO_DATA_NAME_FORMAT.format(now)
         else:
             raise Exception(f"ResourceType Does Not Support => {resource_type}")
+        if raw_data_name is not None:
+            self.raw_data_name = raw_data_name
         # 获取认证与URL
         if resource_type == "user":
             self.token = FetchInstancePermission.build_auth(
@@ -55,8 +61,19 @@ class HttpPullHandler:
             )
             self.url = settings.SNAPSHOT_USERINFO_RESOURCE_URL
         else:
-            password = GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY, default=uuid.uuid4().hex)
-            GlobalMetaConfig.set(FETCH_INSTANCE_TOKEN_KEY, password)
+            if get_bkbase_version() == BKBaseVersion.V4:
+                config, _ = GlobalMetaConfig.objects.get_or_create(
+                    config_key=FETCH_INSTANCE_TOKEN_KEY,
+                    config_level=ConfigLevelChoices.GLOBAL.value,
+                    instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+                    defaults={"config_value": uuid.uuid4().hex},
+                )
+                password = config.config_value
+                if not isinstance(password, str) or not password:
+                    raise BKBaseResourceMappingError(message="IAM snapshot callback token is invalid")
+            else:
+                password = GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY, default=uuid.uuid4().hex)
+                GlobalMetaConfig.set(FETCH_INSTANCE_TOKEN_KEY, password)
             self.token = FetchInstancePermission.build_auth(settings.FETCH_INSTANCE_USERNAME, password)
             self.url = get_saas_url(settings.APP_CODE, module_name="puller") + "/api/v1/resources/"
 

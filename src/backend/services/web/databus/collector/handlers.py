@@ -27,6 +27,7 @@ from django.utils.timezone import get_default_timezone
 from rest_framework.settings import api_settings
 
 from services.web.bkbase import source as bkbase_source
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.constants import SourcePlatformChoices
 from services.web.databus.models import CollectorConfig
 
@@ -62,19 +63,20 @@ class TailLogHandler:
     def sync(self):
         try:
             self.load_tail_log()
-        except APIRequestError as err:
+        except (APIRequestError, BKBaseResourceMappingError) as err:
             logger.warning(
-                "[GetCollectorTailLogError] CollectorConfigID => %s; Err => %s", self.collector.collector_config_id, err
+                "[GetCollectorTailLogError] CollectorConfigID => %s; ErrorType => %s",
+                self.collector.collector_config_id,
+                type(err).__name__,
             )
         if self.tail_logs:
             try:
                 self.parse_log_time()
             except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 logger.warning(
-                    "[ParseLogFailed] Collector => %s; Log => %s; Err => %s",
+                    "[ParseLogFailed] Collector => %s; ErrorType => %s",
                     self.collector.collector_config_id,
-                    self.tail_logs,
-                    err,
+                    type(err).__name__,
                 )
         self.collector.tail_log_time = self.tail_log_time
         self.collector.save(update_fields=["tail_log_time"])
@@ -100,7 +102,7 @@ class BkBaseTailLogHandler(TailLogHandler):
     """
 
     def load_tail_log(self):
-        self.tail_logs = bkbase_source.get_rawdata_tail(bk_data_id=self.collector.bk_data_id)
+        self.tail_logs = bkbase_source.get_rawdata_tail(owner=self.collector, bk_data_id=self.collector.bk_data_id)
 
     def parse_log_time(self):
         start_time = int(json.loads(self.tail_logs[0].get("value", "{}")).get("start_time"))

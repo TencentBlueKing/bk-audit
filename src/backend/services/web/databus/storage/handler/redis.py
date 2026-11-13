@@ -18,8 +18,16 @@ to the current version of the project delivered to anyone in the future.
 
 from django.conf import settings
 
+from apps.meta.models import System
 from core.models import get_request_username
 from services.web.bkbase import storage as bkbase_storage
+from services.web.bkbase.common import get_bkbase_context, get_bkbase_version
+from services.web.bkbase.constants import (
+    BKBASE_V4_REDIS_BINDING,
+    BKBaseVersion,
+    RedisRegistrationState,
+)
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.constants import DEFAULT_REDIS_TAGS
 from services.web.databus.models import RedisConfig
 
@@ -30,8 +38,8 @@ class RedisHandler:
         if redis_id:
             self.redis_config = RedisConfig.objects.get(redis_id=redis_id)
 
-    def update_or_create(self, data: dict) -> None:
-        """创建或更新"""
+    def update_or_create(self, data: dict) -> RedisConfig:
+        """返回创建或更新后的记录；V4一期跳过已有实例更新并返回原记录。"""
 
         username = get_request_username()
         params = {
@@ -49,6 +57,13 @@ class RedisHandler:
             "connection_info": data["connection_info"],
             "version": data["version"],
         }
+
+        if get_bkbase_version() == BKBaseVersion.V4:
+            if self.redis_config:
+                # 一期跳过更新，返回原记录，不能将新连接信息伪记为已注册。
+                bkbase_storage.update_resource_set(**params)
+                return self.redis_config
+            return bkbase_storage.register_redis_config(data, params)
 
         # 更新
         if self.redis_config:
@@ -76,6 +91,31 @@ class RedisHandler:
         """随机获取Redis实例"""
 
         redis_configs = RedisConfig.objects.all()
+        if get_bkbase_version() == BKBaseVersion.V4:
+            namespace = System.objects.get(system_id=system_id).namespace
+            context = get_bkbase_context()
+            available = []
+            for config in redis_configs.filter(namespace=namespace, is_deleted=False):
+                binding = (config.extra or {}).get(BKBASE_V4_REDIS_BINDING)
+                if binding is not None and binding.get("registration_state") != RedisRegistrationState.BOUND:
+                    continue
+                try:
+                    bkbase_storage.resolve_storage_cluster(
+                        context, audit_namespace=namespace, storage_type="redis", legacy_cluster_id=config.redis_name_en
+                    )
+                except BKBaseResourceMappingError:
+                    continue
+                available.append(config)
+            if not available:
+                raise BKBaseResourceMappingError(message="No Redis with a verified V4 binding is available")
+            for config in available:
+                if system_id in config.extra.get("systems", []):
+                    return config
+            redis_config = min(available, key=lambda config: config.extra.get("count", 0))
+            redis_config.extra["count"] = redis_config.extra.get("count", 0) + 1
+            redis_config.extra.setdefault("systems", []).append(system_id)
+            redis_config.save(update_fields=["extra"])
+            return redis_config
 
         for config in redis_configs:
             if system_id in config.extra.get("systems", []):
