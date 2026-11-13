@@ -18,14 +18,13 @@ to the current version of the project delivered to anyone in the future.
 
 # 执行记录列表性能优化迁移：
 # 1. 新增 TicketNode.pa_id（执行时套餐快照），用于替代 process_result.pa_name 的 JSON 过滤；
-# 2. 回填历史 AutoProcess 节点的 pa_id：优先取 process_result.pa_id，
-#    缺失时按 Risk.rule_id/rule_version -> RiskRule.pa_id 兜底；
-# 3. 回填 sops_start_time：优先从 process_result.status 解析实际开始时间，缺失时回退 timestamp；
-# 4. 增加执行记录列表常用复合索引：
+# 2. 增加执行记录列表常用复合索引：
 #    action+sops_start_time、action+pa_id+sops_start_time、action+risk_id+sops_start_time。
+#
+# 历史数据回填不放在迁移中，避免大表长事务和死锁。
+# 请执行 docs/scripts/backfill_ticketnode_pa_id.py 完成 pa_id / sops_start_time 回填。
 
 from django.db import migrations, models
-from django.db.models import Q
 
 
 def column_exists(schema_editor, table: str, column: str) -> bool:
@@ -94,108 +93,7 @@ class SafeAddIndex(migrations.AddIndex):
         super().database_forwards(app_label, schema_editor, from_state, to_state)
 
 
-def backfill_ticket_node_pa_id(apps, schema_editor):
-    """回填 TicketNode.pa_id 和 sops_start_time。"""
-
-    import time
-
-    from django.db import OperationalError, transaction
-
-    from services.web.risk.utils import calc_task_start_timestamp
-
-    TicketNode = apps.get_model("risk", "TicketNode")
-    Risk = apps.get_model("risk", "Risk")
-    RiskRule = apps.get_model("risk", "RiskRule")
-
-    batch_size = 500
-    last_id = ""
-    total_updated = 0
-    failed_batches = []
-
-    while True:
-        rows = list(
-            TicketNode.objects.filter(action="AutoProcess")
-            .filter(Q(pa_id__isnull=True) | Q(sops_start_time__isnull=True))
-            .filter(id__gt=last_id)
-            .order_by("id")
-            .values("id", "risk_id", "process_result", "pa_id", "sops_start_time", "timestamp")[:batch_size]
-        )
-        if not rows:
-            break
-
-        batch = []
-        for row in rows:
-            process_result = row["process_result"] or {}
-            pa_id = row["pa_id"]
-            if not pa_id:
-                pa_id = process_result.get("pa_id")
-            if not pa_id:
-                risk = Risk.objects.filter(risk_id=row["risk_id"]).only("rule_id", "rule_version").first()
-                if risk and risk.rule_id:
-                    rule_queryset = RiskRule.objects.filter(rule_id=risk.rule_id)
-                    if risk.rule_version is not None:
-                        rule_queryset = rule_queryset.filter(version=risk.rule_version)
-                    else:
-                        rule_queryset = rule_queryset.order_by("-version")
-                    pa_id = rule_queryset.values_list("pa_id", flat=True).first()
-
-            sops_start_time = row["sops_start_time"]
-            if sops_start_time is None:
-                sops_start_time = calc_task_start_timestamp(process_result.get("status") or {})
-                if sops_start_time is None:
-                    sops_start_time = row["timestamp"]
-
-            batch.append(
-                TicketNode(
-                    id=row["id"],
-                    pa_id=pa_id or row["pa_id"],
-                    sops_start_time=sops_start_time,
-                )
-            )
-
-        for attempt in range(3):
-            try:
-                with transaction.atomic(using=schema_editor.connection.alias):
-                    TicketNode.objects.bulk_update(batch, ["pa_id", "sops_start_time"], batch_size=batch_size)
-                break
-            except OperationalError as err:
-                # 1205 lock wait timeout / 1213 deadlock：小批次重试，避免整个迁移失败
-                if err.args and err.args[0] in (1205, 1213) and attempt < 2:
-                    print(
-                        f"[backfill_ticket_node_pa_id] retry {attempt + 1}, error={err}, "
-                        f"id range=({rows[0]['id']}, {rows[-1]['id']})",
-                        flush=True,
-                    )
-                    time.sleep(1)
-                    continue
-                failed_batches.append({"start_id": rows[0]["id"], "end_id": rows[-1]["id"], "error": str(err)})
-                print(
-                    f"[backfill_ticket_node_pa_id][ERROR] batch failed, "
-                    f"id range=({rows[0]['id']}, {rows[-1]['id']}), error={err}",
-                    flush=True,
-                )
-                break
-
-        last_id = rows[-1]["id"]
-        total_updated += len(batch)
-        print(
-            f"[backfill_ticket_node_pa_id] batch done: updated={len(batch)}, total={total_updated}, "
-            f"last_id={last_id}",
-            flush=True,
-        )
-
-    print(
-        f"[backfill_ticket_node_pa_id] finished: updated={total_updated}, failed_batches={len(failed_batches)}",
-        flush=True,
-    )
-    if failed_batches:
-        raise Exception(f"TicketNode pa_id backfill failed batches: {failed_batches}")
-
-
 class Migration(migrations.Migration):
-
-    # 禁用整体事务：按小批次提交，降低大表回填时的锁持有时间和死锁概率
-    atomic = False
 
     dependencies = [
         ("risk", "0071_riskwhitelist"),
@@ -208,12 +106,11 @@ class Migration(migrations.Migration):
             field=models.BigIntegerField(
                 blank=True,
                 db_index=True,
-                help_text="执行时套餐快照，用于执行记录按套餐筛选；历史记录由迁移回填",
+                help_text="执行时套餐快照，用于执行记录按套餐筛选；历史记录由脚本回填",
                 null=True,
                 verbose_name="Process Application ID",
             ),
         ),
-        migrations.RunPython(backfill_ticket_node_pa_id, migrations.RunPython.noop),
         SafeAddIndex(
             model_name="ticketnode",
             index=models.Index(fields=["action", "sops_start_time"], name="risk_tn_act_start_idx"),

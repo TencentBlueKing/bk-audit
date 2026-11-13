@@ -715,7 +715,7 @@ class TicketNode(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        help_text=gettext_lazy("执行时套餐快照，用于执行记录按套餐筛选；历史记录由迁移回填"),
+        help_text=gettext_lazy("执行时套餐快照，用于执行记录按套餐筛选；历史记录由脚本回填"),
     )
 
     class Meta:
