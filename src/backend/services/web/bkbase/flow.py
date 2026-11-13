@@ -1070,12 +1070,24 @@ def persist_operation_status(strategy, operation_id, status, message=None):
         current = Strategy.objects.select_for_update().get(pk=strategy.pk)
         if not is_current_operation(current, operation_id) or flow_operation.is_pure(current):
             return False
+        graph_became_running = (
+            current.status in (StrategyStatusChoices.STARTING, StrategyStatusChoices.UPDATING)
+            and status == StrategyStatusChoices.RUNNING
+        )
         current.status = status
         fields = ["status"]
         if message is not None:
             current.status_msg = message
             fields.append("status_msg")
         current.save(update_record=False, update_fields=fields)
+        if graph_became_running:
+            flow_operation.enqueue_monitor_after_commit(
+                strategy,
+                operation_id,
+                is_active=True,
+                expected_configuration=flow_operation._configuration(strategy),
+                expected_status=StrategyStatusChoices.RUNNING,
+            )
     strategy.status = current.status
     strategy.status_msg = current.status_msg
     return True

@@ -626,10 +626,12 @@ def _receipt(strategy, operation_id, *, attempted, accepted=False, reason="", wr
     return attempted and accepted and config_matches and not already_accepted
 
 
-def enqueue_monitor_after_commit(strategy, operation_id, *, is_active, expected_configuration=None):
+def enqueue_monitor_after_commit(
+    strategy, operation_id, *, is_active, expected_configuration=None, expected_status=None
+):
     """在事务与资源锁外发布通知任务，提交后重新核对现有操作身份和Ref。
 
-    重启可传请求前的不可变配置摘要，受理后与提交回调前均核对。
+    可传配置摘要及预期终态，受理后与提交回调前均核对。
     排队失败不改变已受理Flow结果，也不新增消息幂等状态。
     """
     expected_ref = deepcopy(binding(strategy).get("flow") or {})
@@ -654,6 +656,8 @@ def enqueue_monitor_after_commit(strategy, operation_id, *, is_active, expected_
             ):
                 return
             if expected_configuration is not None and _configuration(current) != expected_configuration:
+                return
+            if expected_status is not None and current.status != expected_status:
                 return
             if is_pure(current, operation_id):
                 pure = binding(current)["pure_operation"]
