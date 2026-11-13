@@ -7,8 +7,8 @@
 ## 输入与判尺
 
 用户提示词只提供本轮原话、可信会话阶段、当前系统、授权系统 ID 和时间锚点。
-系统详情、字段、操作和资源类型由 Agent 按需求调用它绑定的 `audit-meta` 获取，不提前塞入 Prompt。
-`audit-meta` 由四个系统元数据工具与二期 `mcp_get_log_field_metadata` 组成，不向意图 Agent 提供明细或聚合能力。
+系统详情、字段、操作和资源类型由 Agent 按需求调用绑定的 MCP 获取，不提前塞入 Prompt。
+`audit-meta` 提供四个系统元数据工具；字段探索来自 `audit-log-analysis`，Agent 平台只勾选 `mcp_get_log_field_metadata`，不向意图 Agent 提供明细或聚合能力。
 
 评测只观察最终选择效果：
 
