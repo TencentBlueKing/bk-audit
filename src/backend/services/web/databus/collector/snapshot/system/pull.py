@@ -18,7 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 import json
-import os
 import uuid
 
 from bk_resource import api
@@ -52,7 +51,7 @@ class HttpPullHandler:
         # 获取认证与URL
         if resource_type == "user":
             self.token = FetchInstancePermission.build_auth(
-                settings.FETCH_INSTANCE_USERNAME, os.getenv("BKAPP_FETCH_USER_INFO_TOKEN", "")
+                settings.FETCH_INSTANCE_USERNAME, settings.SNAPSHOT_USERINFO_RESOURCE_TOKEN
             )
             self.url = settings.SNAPSHOT_USERINFO_RESOURCE_URL
         else:
