@@ -30,6 +30,7 @@ from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     StrategySource,
+    StrategyStatusChoices,
     StrategyType,
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
@@ -258,6 +259,44 @@ class StrategyResourcesTest(TestCase):
         self.assertEqual(tag_entry["tag_name"], tag.tag_name)
         self.assertEqual(tag_entry["strategy_count"], 1)
         self.assertEqual(tags[0]["tag_name"], str(HAS_UPDATE_TAG_NAME))
+
+    @mock.patch("strategy_v2.resources.resource.strategy_v2.list_has_update_strategy")
+    def test_list_strategy_tags_counts_global_draft(self, mock_list_updates):
+        """全局草稿没有平台绑定，平台视角标签计数也应包含它"""
+        mock_list_updates.return_value = []
+        draft = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="draft-strategy",
+            status=StrategyStatusChoices.DRAFT,
+        )
+        tag = Tag.objects.create(tag_name="DraftTag")
+        StrategyTag.objects.create(strategy=draft, tag=tag)
+
+        tags = self.resource.strategy_v2.list_strategy_tags()
+
+        tag_entry = next(item for item in tags if str(item.get("tag_id")) == str(tag.tag_id))
+        self.assertEqual(tag_entry["strategy_count"], 1)
+
+    @mock.patch("strategy_v2.resources.resource.strategy_v2.list_has_update_strategy")
+    def test_list_strategy_tags_orders_by_binding_id(self, mock_list_updates):
+        """标签列表按最近一次绑定记录 id 排序，而不是 tag_id"""
+        mock_list_updates.return_value = []
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(self.strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        # tag_id 顺序：OldTag < NewTag；绑定顺序：NewTag 先，OldTag 后
+        old_tag = Tag.objects.create(tag_name="OldTag")
+        new_tag = Tag.objects.create(tag_name="NewTag")
+        StrategyTag.objects.create(strategy=self.strategy, tag=new_tag)
+        StrategyTag.objects.create(strategy=self.strategy, tag=old_tag)
+
+        tags = self.resource.strategy_v2.list_strategy_tags(scene_id=self.scene.scene_id)
+
+        names = [item["tag_name"] for item in tags if item["tag_id"] != HAS_UPDATE_TAG_ID]
+        self.assertEqual(names, ["NewTag", "OldTag"])
 
     @mock.patch("strategy_v2.resources.enhance_rt_fields")
     @mock.patch("strategy_v2.resources.api.bk_base.get_sensitivity_info_via_dataset")

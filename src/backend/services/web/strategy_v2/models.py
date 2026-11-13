@@ -233,7 +233,7 @@ class StrategyTag(OperateRecordModel):
     class Meta:
         verbose_name = gettext_lazy("Strategy Tag")
         verbose_name_plural = verbose_name
-        ordering = ["-id"]
+        ordering = ["id"]
         unique_together = [("strategy", "tag")]  # 防止重复关联
 
 
@@ -331,7 +331,7 @@ class LinkTableTag(OperateRecordModel):
     class Meta:
         verbose_name = gettext_lazy("Link Table Tag")
         verbose_name_plural = verbose_name
-        ordering = ["-id"]
+        ordering = ["id"]
 
 
 class LinkTableAuditInstance(AuditInstance):

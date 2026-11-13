@@ -757,6 +757,25 @@ class TestSceneResource(TestCase):
         self.assertIn(strategy.strategy_id, target["strategy_ids"])
         self.assertEqual(target["risk_count"], 1)
 
+    def test_scene_list_strategy_count_includes_draft(self):
+        """场景列表策略数按绑定数统计，包含草稿策略"""
+        strategy = self._create_bound_strategy(self.scene, "场景运行策略")
+        draft = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="场景草稿策略",
+            status=StrategyStatusChoices.DRAFT,
+        )
+        self._bind_strategy_to_scene(draft, self.scene)
+
+        result = self.resource.scene.list_scene({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+
+        self.assertSetEqual(
+            set(target["strategy_ids"]),
+            {strategy.strategy_id, draft.strategy_id},
+        )
+        self.assertEqual(target["strategy_count"], 2)
+
     def test_scene_list_default_sort_defers_strategy_and_risk_stats_to_batch_queries(self):
         """默认排序主查询不内联策略/风险统计子查询"""
         strategy = self._create_bound_strategy(self.scene, "默认排序批量统计策略")
@@ -1225,8 +1244,8 @@ class TestSceneResource(TestCase):
         self.assertEqual(default_result["risk_count"], 1)
         self.assertEqual(request_window_result["risk_count"], 2)
 
-    def test_scene_retrieve_strategy_count_counts_running_strategies(self):
-        """测试场景详情策略数量仅统计运行中策略"""
+    def test_scene_retrieve_strategy_count_counts_bound_strategies(self):
+        """测试场景详情策略数量按绑定数统计，包含非运行中策略"""
         visible_strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="详情可见策略",
@@ -1263,12 +1282,16 @@ class TestSceneResource(TestCase):
 
         self.assertSetEqual(
             set(detail["strategy_ids"]),
-            {visible_strategy.strategy_id, another_visible_strategy.strategy_id},
+            {
+                visible_strategy.strategy_id,
+                another_visible_strategy.strategy_id,
+                disabled_strategy.strategy_id,
+            },
         )
-        self.assertEqual(detail["strategy_count"], 2)
+        self.assertEqual(detail["strategy_count"], 3)
 
-    def test_get_scene_info_strategy_count_counts_running_strategies(self):
-        """测试场景管理员详情策略数量仅统计运行中策略"""
+    def test_get_scene_info_strategy_count_counts_bound_strategies(self):
+        """测试场景管理员详情策略数量按绑定数统计，包含非运行中策略"""
         running_strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="管理员详情运行策略",
@@ -1284,8 +1307,11 @@ class TestSceneResource(TestCase):
 
         result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
 
-        self.assertEqual(result["strategy_ids"], [running_strategy.strategy_id])
-        self.assertEqual(result["strategy_count"], 1)
+        self.assertSetEqual(
+            set(result["strategy_ids"]),
+            {running_strategy.strategy_id, disabled_strategy.strategy_id},
+        )
+        self.assertEqual(result["strategy_count"], 2)
 
     def test_create_scene_all_systems_without_system_id(self):
         """创建场景选择全系统时允许不传 system_id"""
