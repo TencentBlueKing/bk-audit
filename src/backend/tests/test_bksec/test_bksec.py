@@ -1393,23 +1393,34 @@ class TestBkSecResources:
 
     def test_preview_ticket(self):
         config = BkSecConfig.model_validate(BKSEC_CONFIG_DATA)
-        with RiskContext() as risk:
+        fields = [
+            {"key": "title", "name": "工单标题", "value": "预览标题", "type": "string"},
+            {"key": "operator", "name": "初始责任人", "value": "admin", "type": "STRING"},
+        ]
+        with RiskContext() as risk, mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.preview_ticket_fields",
+            return_value={"fields": fields},
+        ) as preview_api:
             result = resource.risk.preview_ticket.perform_request(
                 {"bksec_config": config.model_dump(), "risk_id": risk.risk_id}
             )
+
         assert result["has_sample_risk"] is True
         assert "risk" not in result
         assert "risk_context_keys" not in result
-        assert result["ticket_header"] == {
-            "ticket_id": "",
-            "title": "",
-            "submit_time": "",
-            "deadline": "",
-            "status": "",
-            "current_operator_org": "",
-        }
-        assert result["ticket"]["fields"]["operator"] == "admin"
-        assert risk.risk_id in result["ticket"]["fields"]["target"]
+        assert "ticket_header" not in result
+        assert "risk_attribute" not in result["ticket"]
+        assert result["ticket"]["fields"] == [
+            {"key": "title", "name": "工单标题", "value": "预览标题"},
+            {"key": "operator", "name": "初始责任人", "value": "admin"},
+        ]
+
+        params = preview_api.call_args.args[0]
+        assert params["project_id"] == config.project_id
+        assert params["risk_type_id"] == config.risk_type_id
+        assert params["operator"] == "admin"
+        assert params["source_type"] == "bk-audit"
+        assert risk.risk_id in params["target"]
 
     def test_list_projects_keyword_matches_project_name(self):
         """项目名命中与风险类型名命中取并集；类型命中时保留所属项目名，只留命中的类型"""
