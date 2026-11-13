@@ -375,7 +375,7 @@ class PluginEtlHandler:
         if get_bkbase_version() == BKBaseVersion.V4:
             binding = self.plugin.bkbase_v4_resources or {}
             if any(key in binding for key in ("data_source", "data_id", "source_raw_data_id")):
-                return bkbase_source.bound_source_raw_id(get_bkbase_context(), binding)
+                return bkbase_source.bound_plugin_raw_id(get_bkbase_context(), binding)
         params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "raw_data_name__icontains": self.plugin.collector_plugin_name_en,
