@@ -28,8 +28,78 @@ from django.db import migrations, models
 from django.db.models import Q
 
 
+def column_exists(schema_editor, table: str, column: str) -> bool:
+    """检查列是否存在，兼容迁移被中断后的重跑。"""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+            [table, column],
+        )
+        return cursor.fetchone()[0] > 0
+
+
+def index_exists(schema_editor, table: str, index_name: str) -> bool:
+    """检查索引是否存在，兼容迁移被中断后的重跑。"""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s",
+            [table, index_name],
+        )
+        return cursor.fetchone()[0] > 0
+
+
+def _expected_field_index_name(schema_editor, table: str, field) -> str:
+    """复用 Django 自动命名规则，推导 db_index=True 字段的索引名。"""
+    return schema_editor._create_index_name(table, [field.column])
+
+
+class SafeAddField(migrations.AddField):
+    """列已存在时跳过，并补齐缺失的 db_index 索引。"""
+
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        model = to_state.apps.get_model(app_label, self.model_name)
+        table = model._meta.db_table
+        field = model._meta.get_field(self.name)
+
+        if not column_exists(schema_editor, table, field.column):
+            super().database_forwards(app_label, schema_editor, from_state, to_state)
+            return
+        print(f"[SafeAddField] column exists, skip => {table}.{self.name}", flush=True)
+        if not getattr(field, "db_index", False):
+            return
+        index_name = _expected_field_index_name(schema_editor, table, field)
+        if index_exists(schema_editor, table, index_name):
+            print(f"[SafeAddField] index exists, skip => {table}.{field.column} ({index_name})", flush=True)
+            return
+        schema_editor.execute(
+            schema_editor._create_index_sql(
+                field.model,
+                fields=[field],
+                name=index_name,
+            )
+        )
+
+
+class SafeAddIndex(migrations.AddIndex):
+    """索引已存在时跳过，兼容迁移被中断后的重跑。"""
+
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        model = to_state.apps.get_model(app_label, self.model_name)
+        table = model._meta.db_table
+        if index_exists(schema_editor, table, self.index.name):
+            print(f"[SafeAddIndex] index exists, skip => {table}.{self.index.name}", flush=True)
+            return
+        super().database_forwards(app_label, schema_editor, from_state, to_state)
+
+
 def backfill_ticket_node_pa_id(apps, schema_editor):
     """回填 TicketNode.pa_id 和 sops_start_time。"""
+
+    import time
+
+    from django.db import OperationalError, transaction
 
     from services.web.risk.utils import calc_task_start_timestamp
 
@@ -37,55 +107,102 @@ def backfill_ticket_node_pa_id(apps, schema_editor):
     Risk = apps.get_model("risk", "Risk")
     RiskRule = apps.get_model("risk", "RiskRule")
 
-    batch = []
-    queryset = (
-        TicketNode.objects.filter(action="AutoProcess")
-        .filter(Q(pa_id__isnull=True) | Q(sops_start_time__isnull=True))
-        .only("id", "risk_id", "process_result", "pa_id", "sops_start_time", "timestamp")
-    )
-    for node in queryset.iterator(chunk_size=1000):
-        process_result = node.process_result or {}
-        pa_id = node.pa_id
-        if not pa_id:
-            pa_id = process_result.get("pa_id")
-        if not pa_id:
-            risk = Risk.objects.filter(risk_id=node.risk_id).only("rule_id", "rule_version").first()
-            if risk and risk.rule_id:
-                rule_queryset = RiskRule.objects.filter(rule_id=risk.rule_id)
-                if risk.rule_version is not None:
-                    rule_queryset = rule_queryset.filter(version=risk.rule_version)
-                else:
-                    rule_queryset = rule_queryset.order_by("-version")
-                pa_id = rule_queryset.values_list("pa_id", flat=True).first()
+    batch_size = 500
+    last_id = ""
+    total_updated = 0
+    failed_batches = []
 
-        sops_start_time = node.sops_start_time
-        if sops_start_time is None:
-            sops_start_time = calc_task_start_timestamp(process_result.get("status") or {})
-            if sops_start_time is None:
-                sops_start_time = node.timestamp
-
-        batch.append(
-            TicketNode(
-                id=node.id,
-                pa_id=pa_id or node.pa_id,
-                sops_start_time=sops_start_time,
-            )
+    while True:
+        rows = list(
+            TicketNode.objects.filter(action="AutoProcess")
+            .filter(Q(pa_id__isnull=True) | Q(sops_start_time__isnull=True))
+            .filter(id__gt=last_id)
+            .order_by("id")
+            .values("id", "risk_id", "process_result", "pa_id", "sops_start_time", "timestamp")[:batch_size]
         )
-        if len(batch) >= 1000:
-            TicketNode.objects.bulk_update(batch, ["pa_id", "sops_start_time"])
-            batch = []
-    if batch:
-        TicketNode.objects.bulk_update(batch, ["pa_id", "sops_start_time"])
+        if not rows:
+            break
+
+        batch = []
+        for row in rows:
+            process_result = row["process_result"] or {}
+            pa_id = row["pa_id"]
+            if not pa_id:
+                pa_id = process_result.get("pa_id")
+            if not pa_id:
+                risk = Risk.objects.filter(risk_id=row["risk_id"]).only("rule_id", "rule_version").first()
+                if risk and risk.rule_id:
+                    rule_queryset = RiskRule.objects.filter(rule_id=risk.rule_id)
+                    if risk.rule_version is not None:
+                        rule_queryset = rule_queryset.filter(version=risk.rule_version)
+                    else:
+                        rule_queryset = rule_queryset.order_by("-version")
+                    pa_id = rule_queryset.values_list("pa_id", flat=True).first()
+
+            sops_start_time = row["sops_start_time"]
+            if sops_start_time is None:
+                sops_start_time = calc_task_start_timestamp(process_result.get("status") or {})
+                if sops_start_time is None:
+                    sops_start_time = row["timestamp"]
+
+            batch.append(
+                TicketNode(
+                    id=row["id"],
+                    pa_id=pa_id or row["pa_id"],
+                    sops_start_time=sops_start_time,
+                )
+            )
+
+        for attempt in range(3):
+            try:
+                with transaction.atomic(using=schema_editor.connection.alias):
+                    TicketNode.objects.bulk_update(batch, ["pa_id", "sops_start_time"], batch_size=batch_size)
+                break
+            except OperationalError as err:
+                # 1205 lock wait timeout / 1213 deadlock：小批次重试，避免整个迁移失败
+                if err.args and err.args[0] in (1205, 1213) and attempt < 2:
+                    print(
+                        f"[backfill_ticket_node_pa_id] retry {attempt + 1}, error={err}, "
+                        f"id range=({rows[0]['id']}, {rows[-1]['id']})",
+                        flush=True,
+                    )
+                    time.sleep(1)
+                    continue
+                failed_batches.append({"start_id": rows[0]["id"], "end_id": rows[-1]["id"], "error": str(err)})
+                print(
+                    f"[backfill_ticket_node_pa_id][ERROR] batch failed, "
+                    f"id range=({rows[0]['id']}, {rows[-1]['id']}), error={err}",
+                    flush=True,
+                )
+                break
+
+        last_id = rows[-1]["id"]
+        total_updated += len(batch)
+        print(
+            f"[backfill_ticket_node_pa_id] batch done: updated={len(batch)}, total={total_updated}, "
+            f"last_id={last_id}",
+            flush=True,
+        )
+
+    print(
+        f"[backfill_ticket_node_pa_id] finished: updated={total_updated}, failed_batches={len(failed_batches)}",
+        flush=True,
+    )
+    if failed_batches:
+        raise Exception(f"TicketNode pa_id backfill failed batches: {failed_batches}")
 
 
 class Migration(migrations.Migration):
+
+    # 禁用整体事务：按小批次提交，降低大表回填时的锁持有时间和死锁概率
+    atomic = False
 
     dependencies = [
         ("risk", "0071_riskwhitelist"),
     ]
 
     operations = [
-        migrations.AddField(
+        SafeAddField(
             model_name="ticketnode",
             name="pa_id",
             field=models.BigIntegerField(
@@ -97,15 +214,15 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunPython(backfill_ticket_node_pa_id, migrations.RunPython.noop),
-        migrations.AddIndex(
+        SafeAddIndex(
             model_name="ticketnode",
             index=models.Index(fields=["action", "sops_start_time"], name="risk_tn_act_start_idx"),
         ),
-        migrations.AddIndex(
+        SafeAddIndex(
             model_name="ticketnode",
             index=models.Index(fields=["action", "pa_id", "sops_start_time"], name="risk_tn_act_pa_start_idx"),
         ),
-        migrations.AddIndex(
+        SafeAddIndex(
             model_name="ticketnode",
             index=models.Index(fields=["action", "risk_id", "sops_start_time"], name="risk_tn_act_risk_start_idx"),
         ),
