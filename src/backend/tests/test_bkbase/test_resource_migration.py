@@ -167,6 +167,155 @@ class ResourceMigrationManifestTests(SimpleTestCase):
     },
 )
 class ResourceMigrationTests(SimpleTestCase):
+    def native_row(self, row=None):
+        """模拟真实Native DataId和无旧标识标签Clean，不制造Source。"""
+        row = self.row if row is None else row
+        source_ref = row.pop("data_source")
+        self.resources.pop(source_ref["name"])
+        data = self.resources[row["data_id"]["name"]]
+        data["spec"] = {"predefined": {"dataId": row["legacy"]["raw_data_id"]}, "bizId": 2}
+        data["metadata"]["labels"] = {"bk_biz_id": "47"}
+        self.resources[row["clean"]["name"]]["metadata"]["labels"] = {"validation_run": "synthetic"}
+        table = self.resources[row["result_table"]["name"]]
+        table["metadata"]["labels"] = {"raw_data_id": "11"}
+        table["spec"] = {"predefiendResultTableId": row["legacy"]["result_table_id"]}
+        return row
+
+    def test_native_preview_apply_stopped_observation_is_readonly_and_reports_limited_proof(self):
+        self.native_row()
+        rows = resource_migration.validate_manifest(self.payload, context=self.context)
+        self.assertEqual(rows, [self.row])
+        plan = resource_migration.preview_mapping(self.context, self.row)
+        observed = plan["observed"]["clean"]
+        self.assertIsNone(observed["source_observation"])
+        self.assertEqual(observed["legacy_processing_evidence"], "local_manifest_only")
+        self.assertEqual(len(self.calls), 4)
+        resource_migration.apply_mapping(self.context, self.row, plan, before_save=lambda: None)
+        self.assertNotIn("data_source", self.plugin.bkbase_v4_resources)
+        again = resource_migration.preview_mapping(self.context, self.row)
+        self.assertEqual(again["action"], "unchanged")
+        self.resources[self.row["clean"]["name"]]["status"] = {"phase": "Ok"}
+        self.plugin.bkbase_v4_resources["poll_count"] = 100
+        self.assertEqual(self.observe_imported()["task_state"], "stopped")
+        self.assertEqual(self.plugin.bkbase_v4_resources["poll_count"], 0)
+        self.assertFalse(self.plugin.bkbase_v4_resources["ready"])
+        self.assertFalse(self.plugin.bkbase_v4_resources["blocked"])
+
+    def test_native_data_ok_does_not_fabricate_source_running_or_clean_readiness(self):
+        self.native_row()
+        self.import_plugin()
+        for value in self.resources.values():
+            value["status"] = {"phase": "Ok"}
+        self.assertEqual(self.observe_imported()["task_state"], "stopped")
+        self.assertFalse(self.plugin.bkbase_v4_resources["ready"])
+        spec = self.resources[self.row["clean"]["name"]]["spec"]
+        spec.update(current_status="Running", desired_status="Running", deploy_revision=spec["config_revision"])
+        self.assertEqual(self.observe_imported()["task_state"], "running")
+        self.assertTrue(self.plugin.bkbase_v4_resources["ready"])
+        self.resources[self.row["data_id"]["name"]]["status"] = {"phase": "Pending"}
+        self.assertIsNone(self.observe_imported()["task_state"])
+        self.assertFalse(self.plugin.bkbase_v4_resources["ready"])
+
+    def test_native_numeric_id_is_required_and_strict_without_alias_fallback(self):
+        self.native_row()
+        data = self.resources[self.row["data_id"]["name"]]
+        for value in (
+            None,
+            {},
+            {"predefined": {}},
+            {"predefined": {"dataId": "11"}},
+            {"predefined": {"dataId": True}},
+            {"predefined": {"dataId": 11.0}},
+            {"predefined": {"dataId": 12}},
+            {"dataId": 11},
+            {"predefined": {"data_id": 11}},
+        ):
+            with self.subTest(spec=value):
+                data["spec"] = value
+                with self.assertRaises((ValueError, BKBaseResourceMappingError)):
+                    resource_migration.preview_mapping(self.context, self.row)
+                self.plugin.save.assert_not_called()
+
+    def test_native_formal_identity_and_clean_labels_cannot_conflict(self):
+        self.native_row()
+        clean_resource = self.resources[self.row["clean"]["name"]]
+        for key, wrong in (("processing_id", "other"), ("raw_data_id", "12"), ("result_table_id", "7_other")):
+            with self.subTest(label=key):
+                clean_resource["metadata"]["labels"] = {key: wrong}
+                with self.assertRaises(ValueError):
+                    resource_migration.preview_mapping(self.context, self.row)
+        clean_resource["metadata"]["labels"] = {}
+        data = self.resources[self.row["data_id"]["name"]]
+        for key in ("tenant", "namespace", "name"):
+            original = data["metadata"][key]
+            data["metadata"][key] = "other"
+            with self.assertRaises((ValueError, BKBaseResourceMappingError)):
+                resource_migration.preview_mapping(self.context, self.row)
+            data["metadata"][key] = original
+        data["kind"] = "DataSource"
+        with self.assertRaises((ValueError, BKBaseResourceMappingError)):
+            resource_migration.preview_mapping(self.context, self.row)
+
+    def test_native_omission_cannot_bypass_any_saved_source_key(self):
+        previous_source = self.row["data_source"]
+        self.native_row()
+        for saved in (previous_source, None, {}, "invalid"):
+            self.plugin.bkbase_v4_resources = {"data_source": saved}
+            self.calls.clear()
+            with self.assertRaises(ValueError):
+                resource_migration.preview_mapping(self.context, self.row)
+            self.assertEqual(self.calls, [])
+            self.assertEqual(self.plugin.bkbase_v4_resources, {"data_source": saved})
+        self.row["data_source"] = None
+        with self.assertRaises(ValueError):
+            resource_migration.validate_manifest(self.payload, context=self.context)
+
+    def test_native_parent_and_child_use_independent_data_ids_and_shared_creator_table(self):
+        self.native_row()
+        self.import_plugin()
+        row = self.collector_row()
+        self.native_row(row)
+        self.assertNotEqual(row["data_id"], self.row["data_id"])
+        plan = resource_migration.preview_mapping(self.context, row)
+        self.assertEqual(plan["observed"]["plugin_clean"]["legacy_processing_evidence"], "local_manifest_only")
+        resource_migration.apply_mapping(self.context, row, plan, before_save=lambda: None)
+        self.assertEqual(self.collector.bkbase_v4_resources["clean_role"], "existing")
+        self.assertNotIn("storages", self.collector.bkbase_v4_resources)
+        self.assertNotIn("data_source", self.collector.bkbase_v4_resources)
+        self.assertEqual(self.collector.bkbase_v4_resources["source_raw_data_id"], 12)
+        self.assertEqual(self.resources[row["result_table"]["name"]]["metadata"]["labels"]["raw_data_id"], "11")
+        self.resources[row["clean"]["name"]]["spec"]["data_id"] = self.row["data_id"]
+        with self.assertRaises(BKBaseResourceMappingError):
+            resource_migration.preview_mapping(self.context, row)
+
+    def test_native_child_requires_unchanged_explicit_parent_migration_receipt(self):
+        self.native_row()
+        self.import_plugin()
+        row = self.collector_row()
+        self.native_row(row)
+        self.plugin.bkbase_processing_id = "changed_processing"
+        with self.assertRaises(ValueError):
+            resource_migration.preview_mapping(self.context, row)
+        self.plugin.bkbase_processing_id = "legacy_plugin"
+        self.plugin.bkbase_v4_resources.pop(resource_migration.MIGRATION_BINDING_KEY)
+        with self.assertRaises(ValueError):
+            resource_migration.preview_mapping(self.context, row)
+
+    def test_native_event_requires_main_doris_and_preserves_physical_destination(self):
+        self.row["owner"] = "event_plugin"
+        self.plugin.plugin_scene = PluginSceneChoices.EVENT
+        self.row["storages"]["main"].update(
+            cluster=ref("Doris", "event_doris", "infra"), physical_table_name="events.original"
+        )
+        self.resources.clear()
+        self.add_resources(self.row, "new")
+        self.native_row()
+        with mock.patch.object(resource_migration.clean.GlobalMetaConfig, "get", return_value=None):
+            resource_migration.validate_manifest(self.payload, context=self.context)
+            self.import_plugin()
+        self.assertEqual(self.plugin.bkbase_v4_resources["physical_targets"], {"main": "events.original"})
+        self.assertNotIn("data_source", self.plugin.bkbase_v4_resources)
+
     def observe_imported(self):
         """真实后台Service入口只允许GET，绑定写入在内存模拟。"""
         handler = SimpleNamespace(plugin=self.plugin, build_clean_config=mock.Mock(return_value={}))

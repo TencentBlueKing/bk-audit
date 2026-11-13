@@ -82,11 +82,11 @@ def validate_manifest(payload, *, context, limit=MAX_BATCH_SIZE):
     if not isinstance(rows, list) or not 1 <= len(rows) <= limit:
         raise ValueError(f"每批必须包含1–{limit}条，不自动截断")
     owners, cleans = set(), set()
-    required = {"owner", "owner_pk", "audit_namespace", "legacy", "storages", *RESOURCE_KINDS}
+    required = {"owner", "owner_pk", "audit_namespace", "legacy", "storages", "data_id", "clean", "result_table"}
     for row in rows:
         if (
             not isinstance(row, dict)
-            or set(row) != required
+            or set(row) not in (required, required | {"data_source"})
             or not isinstance(row.get("owner"), str)
             or row["owner"] not in OWNER_MODELS
             or not _positive_int(row.get("owner_pk"))
@@ -102,7 +102,8 @@ def validate_manifest(payload, *, context, limit=MAX_BATCH_SIZE):
         ):
             raise ValueError("旧身份必须包含正整数raw_data_id、processing_id和逻辑result_table_id")
         for key, kind in RESOURCE_KINDS.items():
-            _ref(context, row[key], kind)
+            if key in row:
+                _ref(context, row[key], kind)
         storages = row["storages"]
         storage_kinds = _storage_kinds(row)
         if not isinstance(storages, dict) or set(storages) - storage_kinds.keys():
@@ -208,6 +209,8 @@ def _validate_local(owner, row, plugin):
     ):
         raise ValueError("本地审计namespace、旧processing或逻辑表与清单不一致")
     _assert_settled(owner.bkbase_v4_resources)
+    if "data_source" not in row and "data_source" in owner.bkbase_v4_resources:
+        raise ValueError("已有DataSource绑定不能通过省略清单字段绕过")
     if row["owner"] != "collector":
         event = row["owner"] == "event_plugin"
         scene = PluginSceneChoices.EVENT if event else PluginSceneChoices.COLLECTOR
@@ -265,14 +268,14 @@ def _validate_local(owner, row, plugin):
             or binding.get("clean_role") != CleanRole.OWNER
             or binding.get("result_table_id") != legacy["result_table_id"]
             or binding.get("result_table") != row["result_table"]
-            or any(not binding.get(key) for key in ("data_source", "data_id", "source_raw_data_id", "clean"))
+            or any(not binding.get(key) for key in ("data_id", "source_raw_data_id", "clean"))
         ):
             raise ValueError("所属插件未导入完整owner身份，或共享ResultTable与采集项不一致；请先导入插件")
 
 
 def _identity_patch(row):
     """身份补丁不包含运行态，Collector不认领插件的Storage。"""
-    patch = {key: deepcopy(row[key]) for key in RESOURCE_KINDS}
+    patch = {key: deepcopy(row[key]) for key in RESOURCE_KINDS if key in row}
     patch.update(
         source_raw_data_id=row["legacy"]["raw_data_id"],
         result_table_id=row["legacy"]["result_table_id"],
@@ -297,6 +300,8 @@ def _identity_patch(row):
 def _merged_binding(owner, row):
     """保留未知键，冲突拒绝；新补身份使旧就绪标记重新接受正常确认。"""
     before = owner.bkbase_v4_resources
+    if "data_source" not in row and "data_source" in before:
+        raise ValueError("已有DataSource绑定不能通过省略清单字段绕过")
     after = deepcopy(before)
     for key, value in _identity_patch(row).items():
         if key in ("storages", "physical_targets"):
@@ -364,17 +369,23 @@ def _get(context, ref, kind, getter):
 def _verify_identity(context, row, role):
     """交叉核实旧processing、数字DataID、实际输入和逻辑结果表。"""
     legacy = row["legacy"]
-    current_source = _get(context, row["data_source"], "DataSource", api.bk_base_v4.data_source_get)
-    if (
-        source._positive_raw_data_id(current_source["metadata"].get("labels", {}).get("raw_data_id"))
-        != legacy["raw_data_id"]
-        or current_source["spec"].get("data_id") != row["data_id"]
-    ):
-        raise ValueError("DataSource缺少匹配的raw_data_id标签或DataId关联")
+    current_source = None
+    if "data_source" in row:
+        current_source = _get(context, row["data_source"], "DataSource", api.bk_base_v4.data_source_get)
+        if (
+            source._positive_raw_data_id(current_source["metadata"].get("labels", {}).get("raw_data_id"))
+            != legacy["raw_data_id"]
+            or current_source["spec"].get("data_id") != row["data_id"]
+        ):
+            raise ValueError("DataSource缺少匹配的raw_data_id标签或DataId关联")
     current_data = _get(context, row["data_id"], "DataId", api.bk_base_v4.data_id_get)
+    if current_source is None:
+        source.verify_native_data_id(context, current_data, data_ref=row["data_id"], raw_data_id=legacy["raw_data_id"])
     current_clean = _get(context, row["clean"], "Clean", api.bk_base_v4.clean_get)
     labels = current_clean["metadata"].get("labels", {})
-    if labels.get("processing_id") != legacy["processing_id"]:
+    if (current_source is not None or "processing_id" in labels) and labels.get("processing_id") != legacy[
+        "processing_id"
+    ]:
         raise ValueError("Clean缺少与本地旧processing严格匹配的processing_id标签")
     source_role = "new" if role == CleanRole.OWNER else "existing"
     if current_clean["spec"].get("result_table_source") != source_role:
@@ -396,9 +407,12 @@ def _verify_identity(context, row, role):
     if metadata.result_table_identity(context, current_table) != (row["result_table"], legacy["result_table_id"]):
         raise ValueError("ResultTable正式身份或逻辑ID与旧表不一致")
     observed = operation_result(current_clean, row["clean"], "observe")
-    observed["source_observation"] = operation_result(current_source, row["data_source"], "observe")
+    observed["legacy_processing_evidence"] = "remote_label" if "processing_id" in labels else "local_manifest_only"
+    observed["source_observation"] = (
+        operation_result(current_source, row["data_source"], "observe") if current_source is not None else None
+    )
     observed["dependencies_ready"] = (
-        observed["source_observation"]["task_state"] == TaskState.RUNNING
+        (current_source is None or observed["source_observation"]["task_state"] == TaskState.RUNNING)
         and current_data.get("status", {}).get("phase") == "Ok"
         and current_table.get("status", {}).get("phase") == "Ok"
         and current_clean["spec"].get("config_revision") == current_clean["spec"].get("deploy_revision")
@@ -412,12 +426,23 @@ def _verify_remote(context, row, plugin):
     observed = {"clean": _verify_identity(context, row, role), "storages": {}}
     if plugin is not None:
         binding = plugin.bkbase_v4_resources
-        parent = {key: binding[key] for key in RESOURCE_KINDS}
-        parent["legacy"] = {
-            "raw_data_id": binding["source_raw_data_id"],
-            "processing_id": plugin.bkbase_processing_id,
-            "result_table_id": plugin.bkbase_table_id,
-        }
+        if "data_source" not in binding:
+            # Native资源可能没有旧processing标签；父插件也必须沿原显式清单核对本地旧身份。
+            parent = validate_manifest(
+                {"schema_version": SCHEMA_VERSION, "mappings": [binding.get(MIGRATION_BINDING_KEY)]}, context=context
+            )[0]
+            if parent["owner"] != "plugin" or parent["owner_pk"] != plugin.pk:
+                raise ValueError("Native共享插件缺少与owner对应的显式迁移凭据")
+            _validate_local(plugin, parent, None)
+            if _merged_binding(plugin, parent) != binding:
+                raise ValueError("Native共享插件绑定与原迁移凭据不一致")
+        else:
+            parent = {key: binding[key] for key in RESOURCE_KINDS}
+            parent["legacy"] = {
+                "raw_data_id": binding["source_raw_data_id"],
+                "processing_id": plugin.bkbase_processing_id,
+                "result_table_id": plugin.bkbase_table_id,
+            }
         observed["plugin_clean"] = _verify_identity(context, parent, CleanRole.OWNER)
     for purpose, entry in row["storages"].items():
         ref = entry["resource"]
@@ -456,7 +481,9 @@ def observe_imported_resource(context, owner):
         observed = _verify_remote(context, row, plugin)
     except ValueError as error:
         raise BKBaseResourceMappingError(message=str(error)) from error
-    results = [observed["clean"]["source_observation"], observed["clean"], *observed["storages"].values()]
+    results = [observed["clean"], *observed["storages"].values()]
+    if observed["clean"]["source_observation"] is not None:
+        results.insert(0, observed["clean"]["source_observation"])
     running = observed["clean"]["dependencies_ready"] and all(r["task_state"] == TaskState.RUNNING for r in results)
     patch = {
         "clean_ready": observed["clean"]["task_state"] == TaskState.RUNNING and observed["clean"]["dependencies_ready"]
