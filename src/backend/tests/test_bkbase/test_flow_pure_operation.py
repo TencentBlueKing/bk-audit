@@ -727,12 +727,15 @@ class FlowMonitorProducerTests(FlowFixture, TransactionTestCase):
         self.remote["status"]["phase"] = "Ok"
         with mock.patch.object(transaction, "on_commit", side_effect=callbacks.append):
             self.observe()
-        self.assertEqual(len(callbacks), 1)
+        # 通知与规则可各自注册提交回调；配置变更后两者都不能执行旧副作用。
+        self.assertTrue(callbacks)
         current = Strategy.objects.get(pk=self.strategy.pk)
         operation_id = current.backend_data["bkbase_v4"]["operation_id"]
         Strategy.objects.filter(pk=current.pk).update(configs=[{"newer_configuration": True}])
-        for callback in callbacks:
-            callback()
+        with mock.patch.object(tasks, "_sync_bksec_rule_after_status_change") as rule_sync:
+            for callback in callbacks:
+                callback()
+        rule_sync.assert_not_called()
         self.monitor.assert_not_called()
         current.refresh_from_db()
         self.assertEqual(current.status, StrategyStatusChoices.RUNNING)

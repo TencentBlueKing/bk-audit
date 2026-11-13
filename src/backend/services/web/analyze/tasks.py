@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import time
+from copy import deepcopy
 from functools import reduce
 from operator import or_
 from typing import List
@@ -28,6 +29,7 @@ from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils.translation import gettext
 
@@ -48,6 +50,7 @@ from services.web.analyze.controls.auth import (
 )
 from services.web.analyze.models import ControlVersion
 from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase import flow_operation
 from services.web.bkbase import permissions as bkbase_permissions
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
@@ -155,6 +158,50 @@ def _sync_bksec_rule_after_status_change(strategy: Strategy) -> None:
         _report_bksec_rule_activation_failed(strategy, last_error)
 
 
+def _sync_pure_flow_rule_after_commit(strategy_id, operation_id, *, configuration, bksec_config):
+    """纯操作落定后复核当前代次与配置，在Flow事务和资源锁外同步规则。"""
+
+    def sync_current():
+        if get_bkbase_version() != BKBaseVersion.V4:
+            return
+        current = Strategy.objects.filter(pk=strategy_id, is_deleted=False).first()
+        if (
+            current is None
+            or not bkbase_flow.is_current_operation(current, operation_id)
+            or not flow_operation.is_pure(current, operation_id)
+        ):
+            return
+        pure = flow_operation.binding(current)["pure_operation"]
+        # 重启的停止步以本次receipt证明受理，accepted只在启动步置True。
+        accepted = pure.get("accepted") is True or (
+            pure.get("restart")
+            and pure.get("target") == "stop"
+            and pure.get("attempted") is True
+            and bool(pure.get("receipt"))
+        )
+        if (
+            not configuration
+            or pure.get("configuration") != configuration
+            or flow_operation._configuration(current) != configuration
+            or current.bksec_config != bksec_config
+            or not accepted
+            or any(pure.get(key) for key in ("observing", "writer", "write_fence", "outcome_unknown"))
+            or not (pure.get("target") == "start" or pure.get("restart"))
+        ):
+            return
+        if current.status == StrategyStatusChoices.RUNNING:
+            if not pure.get("goal_observed") or pure.get("target") != "start":
+                return
+        elif current.status in (StrategyStatusChoices.START_FAILED, StrategyStatusChoices.UPDATE_FAILED):
+            if not (pure.get("restart") or pure.get("observed_failure")):
+                return
+        else:
+            return
+        _sync_bksec_rule_after_status_change(current)
+
+    transaction.on_commit(sync_current)
+
+
 @periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:reconcile_bksec_auto_rule")
 def reconcile_bksec_auto_rule():
@@ -190,7 +237,13 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
         return
     if not bkbase_flow.is_current_operation(strategy, operation_id):
         return
+    pure = flow_operation.binding(strategy).get("pure_operation") or {}
+    configuration = pure.get("configuration")
+    bksec_config = deepcopy(getattr(strategy, "bksec_config", None))
     if bkbase_flow.check_pure_operation(strategy, operation_id):
+        _sync_pure_flow_rule_after_commit(
+            strategy_id, operation_id, configuration=configuration, bksec_config=bksec_config
+        )
         return
 
     # check flow status
