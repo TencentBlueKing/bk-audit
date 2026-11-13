@@ -112,7 +112,8 @@ jobs:
       - name: Install MySQL client
         run: |
           sudo apt-get update
-          sudo apt-get install -y ca-certificates mysql-client
+          # 数据库由 services.mysql 提供，这里只需 mysql CLI；--no-upgrade 避免连带升级 runner 预装的 mysql-server 导致 postinst 失败
+          sudo apt-get install -y --no-upgrade ca-certificates mysql-client
       - name: Install dependencies
         run: |
           cd src/backend
