@@ -27,10 +27,11 @@ from services.web.databus.utils import start_bkbase_clean
 
 
 class PullCleanHandler:
-    def __init__(self, bkbase_data_id, clean_config_name, resource_type=None):
+    def __init__(self, bkbase_data_id, clean_config_name, resource_type=None, *, pull_report_config=None):
         self.clean_config_name = clean_config_name
         self.bkbase_data_id = bkbase_data_id
         self.resource_type = resource_type
+        self.pull_report_config = pull_report_config
 
     @classmethod
     def get_fields(cls, resource_type=None):
@@ -268,7 +269,9 @@ class PullCleanHandler:
             "clean_config_name": self.clean_config_name,
             "description": self.clean_config_name,
             "fields": self.get_fields(self.resource_type),
-            "json_config": json.dumps(_json_config),
+            "json_config": json.dumps(
+                bkbase_clean.adapt_pull_clean_config(_json_config, report_config=self.pull_report_config)
+            ),
             "raw_data_id": self.bkbase_data_id,
             "result_table_name": self.clean_config_name,
             "result_table_name_alias": self.clean_config_name,

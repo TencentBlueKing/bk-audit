@@ -1,6 +1,6 @@
 """用合成网关响应验证正则预览消费者及发布规则的一致性。
 
-真实平台取证已覆盖匹配、无匹配与失败；其他预览配置继续门禁。
+真实平台取证已覆盖匹配、无匹配与失败；非业务使用的配置在本地拒绝。
 仅替换HTTP传输，不触达真实平台或读取本地联调数据。
 """
 import json
@@ -10,11 +10,11 @@ from unittest import mock
 import requests
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase, override_settings
+from rest_framework.exceptions import ValidationError
 
 from api.bk_base_v4 import default as v4_api
 from apps.exceptions import RegexpExpressionError
 from services.web.bkbase import clean
-from services.web.bkbase.exceptions import BKBaseCapabilityNotReady
 from services.web.databus.collector.etl.bk_log_regexp import BkLogRegexpEtlClean
 from services.web.entry.handler.healthz import MockData
 
@@ -135,11 +135,18 @@ class CleanPreviewTests(SimpleTestCase):
             with self.assertRaises(APIRequestError):
                 clean.clean_preview(msg="line", conf=json.dumps(self.conf), debug_by_step=True)
 
-    def test_unknown_preview_shape_remains_blocked_before_network(self):
-        for conf in ({"type": "fun", "method": "from_json"}, {**self.conf, "next": {"type": "assign"}}):
-            with self.subTest(conf=conf), self.assertRaises(BKBaseCapabilityNotReady) as caught:
-                clean.clean_preview(msg="line", conf=json.dumps(conf), debug_by_step=True)
-            self.assertEqual(caught.exception.blocker_id, "B06")
+    def test_unsupported_preview_config_is_local_validation_error_before_network(self):
+        for conf in (
+            {"type": "fun", "method": "from_json"},
+            {**self.conf, "next": {"type": "assign"}},
+            {**self.conf, "args": []},
+            None,
+        ):
+            with self.subTest(conf=conf):
+                with self.assertRaises(ValidationError) as caught:
+                    clean.clean_preview(msg="line", conf=json.dumps(conf), debug_by_step=True)
+                self.assertEqual(caught.exception.status_code, 400)
+                self.assertIn("conf", caught.exception.detail)
 
     def test_publication_regex_reads_actual_producer_argument_and_keeps_lookbehind(self):
         config = {

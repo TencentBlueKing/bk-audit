@@ -34,7 +34,8 @@ class CollectorCleanRetryTests(SimpleTestCase):
         )
         params = {"raw_data_id": 11, "clean_config_name": "source", "json_config": {"extract": None}}
         old = {
-            "metadata": {"name": "clean_a"},
+            "kind": "Clean",
+            "metadata": {"tenant": "tenant_a", "namespace": "audit", "name": "clean_a"},
             "spec": {
                 "alias": "source",
                 "description": "",
@@ -60,7 +61,9 @@ class CollectorCleanRetryTests(SimpleTestCase):
             "services.web.bkbase.clean.get_bkbase_context", return_value=context
         ), mock.patch(
             "services.web.bkbase.clean.CollectorPlugin.objects.get",
-            return_value=SimpleNamespace(bkbase_v4_resources={"result_table": rt_ref}),
+            return_value=SimpleNamespace(),
+        ), mock.patch.object(
+            clean, "_shared_plugin_table", return_value=("rt_a", rt_ref)
         ), mock.patch(
             "services.web.bkbase.clean.update_owner_binding", side_effect=save_binding
         ), mock.patch(

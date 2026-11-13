@@ -23,6 +23,8 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.meta.models import ResourceType, System
 from services.web.bkbase import source as bkbase_source
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
@@ -30,6 +32,7 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     SensitivityChoice,
+    SnapshotRunningStatus,
 )
 from services.web.databus.exceptions import SecurityForbiddenError
 from services.web.databus.models import Snapshot
@@ -49,17 +52,40 @@ class HttpPullHandler:
     def update_or_create(self):
         params = self.config
 
+        if get_bkbase_version() == BKBaseVersion.V4 and (
+            not self.snapshot.bkbase_data_id
+            or (
+                self.snapshot.status != SnapshotRunningStatus.RUNNING
+                and (self.snapshot.bkbase_v4_resources or {}).get("source_provision")
+            )
+        ):
+            if (self.snapshot.bkbase_v4_resources or {}).get("source_provision", {}).get("stage") == "ready":
+                return None
+            return bkbase_source.create_deploy_plan(params, snapshot=self.snapshot)
+
         # 更新
         if self.snapshot.bkbase_data_id:
             logger.info(f"{self.__class__.__name__} Update DataID => {self.snapshot.bkbase_data_id}")
             params.update({"bkbase_data_id": self.snapshot.bkbase_data_id})
-            bkbase_source.update_deploy_plan(params)
+            bkbase_source.update_deploy_plan(params, snapshot=self.snapshot)
             return self.snapshot.bkbase_data_id
 
         # 创建
         logger.info(f"{self.__class__.__name__} Create DataID => {self.snapshot.bkbase_data_id}")
         result = bkbase_source.create_deploy_plan(params)
         return result["raw_data_id"]
+
+    def advance_provision(self):
+        """在后台事务之外推进新 PULL。"""
+        return bkbase_source.advance_source_provision(self.snapshot, self.config)
+
+    def prepare_replay(self):
+        """由周期刷新排队已有Asset/Basic纯重放，不走新建数字ID入口。"""
+        return bkbase_source.prepare_snapshot_replay(self.snapshot, self.config)
+
+    def advance_replay(self):
+        """推进已排队的源维护，终止于源观察，不调用清洗和入库。"""
+        return bkbase_source.advance_snapshot_replay(self.snapshot, self.config)
 
     def validate_url_security(self, url: str) -> None:
         """

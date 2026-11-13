@@ -28,6 +28,8 @@ from api.bk_log.serializers import (
 )
 from core.exceptions import ValidationError
 from core.utils.time import format_date_string
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.constants import DEFAULT_ALLOCATION_MIN_DAYS, ClusterMode
 from services.web.databus.models import RedisConfig
 
@@ -75,11 +77,24 @@ class StorageListRequestSerializer(serializers.Serializer):
     keyword = serializers.CharField(label=gettext_lazy("搜索关键字"), allow_null=True, allow_blank=True, required=False)
 
 
+class StorageSetupResponseSerializer(SetupSerializer):
+    """读取时保留周期缺失，不把请求默认天数当成平台 metadata。"""
+
+    retention_days_default = serializers.IntegerField(required=False)
+
+    def validate(self, attrs):
+        """沿用原有上限投影，仅跳过缺失的保留期。"""
+        for key in ("retention_days", "number_of_replicas"):
+            if f"{key}_default" in attrs:
+                attrs[f"{key}_max"] = attrs[f"{key}_default"]
+        return attrs
+
+
 class StorageCustomOptionSerializer(serializers.Serializer):
     bk_biz_id = serializers.IntegerField()
     hot_warm_config = StorageHotWarmSerializer()
     source_type = serializers.CharField()
-    setup_config = SetupSerializer()
+    setup_config = StorageSetupResponseSerializer()
     admin = serializers.ListField(child=serializers.CharField(allow_blank=True))
     description = serializers.CharField()
     option = serializers.JSONField(required=False)
@@ -88,6 +103,13 @@ class StorageCustomOptionSerializer(serializers.Serializer):
     bkbase_cluster_id = serializers.RegexField(required=False, regex=CLUSTER_NAME_EN_REGEX)
     visible_config = serializers.JSONField()
     allocation_min_days = serializers.IntegerField(required=False, default=DEFAULT_ALLOCATION_MIN_DAYS)
+
+    def get_fields(self):
+        """V3 列表沿用原 Setup 默认周期，V4 保留平台字段缺失。"""
+        fields = super().get_fields()
+        if get_bkbase_version() == BKBaseVersion.V3:
+            fields["setup_config"] = SetupSerializer()
+        return fields
 
 
 class StorageClusterConfigSerializer(serializers.Serializer):
@@ -119,6 +141,18 @@ class RedisConnectionInfoSerializer(serializers.Serializer):
     host = serializers.CharField(label=gettext_lazy("HOST"))
     port = serializers.IntegerField(label=gettext_lazy("端口"))
     password = serializers.CharField(label=gettext_lazy("密码"))
+
+    def get_fields(self):
+        fields = super().get_fields()
+        if get_bkbase_version() == BKBaseVersion.V4:
+            fields["password"].trim_whitespace = False
+        return fields
+
+    def to_internal_value(self, data):
+        if get_bkbase_version() == BKBaseVersion.V4 and isinstance(data, dict):
+            if set(data) - set(self.fields):
+                raise serializers.ValidationError("Unsupported Redis connection option")
+        return super().to_internal_value(data)
 
 
 class CreateRedisRequestSerializer(serializers.Serializer):
