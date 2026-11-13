@@ -29,6 +29,8 @@ from services.web.analyze.constants import (
     DEFAULT_QUEUE_STORAGE_CLUSTER_KEY,
 )
 from services.web.analyze.exceptions import ClusterNotExists
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.constants import (
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_RETENTION,
@@ -183,6 +185,13 @@ class DorisStorageNode(BaseStorageNode):
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
         )
+        json_fields = [EventMappingFields.EVENT_EVIDENCE.field_name, EventMappingFields.EVENT_DATA.field_name]
+        original_json_fields = []
+        if get_bkbase_version() == BKBaseVersion.V4:
+            # V4动态结构只声明original_json_fields；V3保留原接口配置。
+            dynamic_fields = {field.field_name for field in EventMappingFields.dynamic_json_fields()}
+            original_json_fields = [name for name in json_fields if name in dynamic_fields]
+            json_fields = [name for name in json_fields if name not in dynamic_fields]
 
         return {
             **super().build_node_config(bk_biz_id, raw_table_name, from_result_table_ids),
@@ -192,9 +201,9 @@ class DorisStorageNode(BaseStorageNode):
             "storage_keys": [],
             "analyzed_fields": [],
             "doc_values_fields": [],
-            "json_fields": [EventMappingFields.EVENT_EVIDENCE.field_name, EventMappingFields.EVENT_DATA.field_name],
+            "json_fields": json_fields,
             "physical_table_name": physical_table_name,
-            "original_json_fields": [],
+            "original_json_fields": original_json_fields,
             "udc_name": "doris",
             "storage_field_config": {},
             "custom_param_config": {

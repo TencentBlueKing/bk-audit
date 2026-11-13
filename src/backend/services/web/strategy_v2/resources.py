@@ -82,6 +82,8 @@ from services.web.bkbase import flow as bkbase_flow
 from services.web.bkbase import metadata as bkbase_metadata
 from services.web.bkbase import permissions as bkbase_permissions
 from services.web.bkbase import query as bkbase_query
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.exceptions import BKBaseFlowOperationPending
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
@@ -806,7 +808,10 @@ class CreateStrategy(StrategyV2Base):
         if not is_draft:
             try:
                 call_controller(
-                    BaseControl.create.__name__, strategy.strategy_id, self.get_base_control_type(strategy_type)
+                    BaseControl.create.__name__,
+                    strategy.strategy_id,
+                    self.get_base_control_type(strategy_type),
+                    bkbase_version=get_bkbase_version(),
                 )
             except Exception as err:
                 strategy.status = StrategyStatusChoices.START_FAILED
@@ -894,6 +899,7 @@ class UpdateStrategy(StrategyV2Base):
                         BaseControl.create.__name__,
                         strategy.strategy_id,
                         self.get_base_control_type(strategy.strategy_type),
+                        bkbase_version=get_bkbase_version(),
                     )
                 except Exception as err:
                     strategy.status = StrategyStatusChoices.START_FAILED
@@ -964,6 +970,7 @@ class UpdateStrategy(StrategyV2Base):
 
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict, draft_save: bool = False) -> bool:
+        bkbase_flow.lock_strategy_configuration(strategy)
         # 用于控制是否更新真实的监控策略或计算平台Flow
         need_update_remote = False
         has_manual_sql = self.has_sql_override(validated_request_data)
@@ -1058,16 +1065,23 @@ class UpdateStrategy(StrategyV2Base):
                         field_config.get('field_name'),
                         field_category,
                     )
+        bkbase_flow.reserve_configuration_update(strategy, need_update_remote, draft_save)
         # return
         return need_update_remote
 
     def update_remote(self, strategy: Strategy) -> None:
-        strategy.status = StrategyStatusChoices.UPDATING
-        strategy.save(update_fields=["status"])
+        if not bkbase_flow.prepare_controller_update(strategy, StrategyStatusChoices.UPDATING):
+            strategy.status = StrategyStatusChoices.UPDATING
+            strategy.save(update_fields=["status"])
         try:
             call_controller(
-                BaseControl.update.__name__, strategy.strategy_id, self.get_base_control_type(strategy.strategy_type)
+                BaseControl.update.__name__,
+                strategy.strategy_id,
+                self.get_base_control_type(strategy.strategy_type),
+                bkbase_version=get_bkbase_version(),
             )
+        except BKBaseFlowOperationPending:
+            raise
         except Exception as err:
             strategy.status = StrategyStatusChoices.UPDATE_FAILED
             strategy.status_msg = str(err)
@@ -1079,8 +1093,46 @@ class DeleteStrategy(StrategyV2Base):
     name = gettext_lazy("Delete Strategy")
     audit_action = ActionEnum.DELETE_STRATEGY
 
-    @transaction.atomic()
     def perform_request(self, validated_request_data):
+        if not bkbase_flow.uses_v4_delete():
+            return self._perform_request_legacy(validated_request_data)
+        strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        if not bkbase_flow.uses_v4_delete(strategy):
+            return self._perform_request_legacy(validated_request_data)
+        self.ensure_active_scene_binding_or_404(
+            strategy.strategy_id, allow_draft=(strategy.status == StrategyStatusChoices.DRAFT)
+        )
+        operation_id = bkbase_flow.reserve_strategy_delete(strategy)
+        operation = strategy.backend_data["bkbase_v4"]["delete_operation"]
+        if not operation.get("local_only"):
+            call_controller(
+                BaseControl.delete.__name__,
+                strategy.strategy_id,
+                self.get_base_control_type(strategy.strategy_type),
+                bkbase_version=get_bkbase_version(),
+            )
+        with bkbase_flow.finish_strategy_delete(strategy, operation_id) as current:
+            self.ensure_active_scene_binding_or_404(
+                current.strategy_id, allow_draft=(current.status == StrategyStatusChoices.DRAFT)
+            )
+            self._delete_local(current)
+
+    def _delete_local(self, strategy):
+        """已确认停止声明的V4策略沿原顺序级联本地数据。"""
+        StrategyTag.objects.filter(strategy_id=strategy.strategy_id).delete()
+        StrategyTool.objects.filter(strategy=strategy).delete()
+        self._soft_delete_rules(list(strategy.rules.filter(is_deleted=False)))
+        self._soft_delete_rules(list(strategy.dispatch_rules.filter(is_deleted=False)))
+        self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
+        strategy.delete()
+        BindingMetadataHelper.delete_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+        )
+        self.delete_enum_mappings(strategy_id=strategy.strategy_id)
+
+    @transaction.atomic()
+    def _perform_request_legacy(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         # 草稿策略可能无平台绑定（草稿期不创建），放行 404
         self.ensure_active_scene_binding_or_404(
@@ -1100,6 +1152,7 @@ class DeleteStrategy(StrategyV2Base):
                     BaseControl.delete.__name__,
                     validated_request_data["strategy_id"],
                     self.get_base_control_type(strategy.strategy_type),
+                    bkbase_version=get_bkbase_version(),
                 )
             except Exception as err:
                 strategy.status = StrategyStatusChoices.DELETE_FAILED
@@ -1461,7 +1514,12 @@ class ToggleStrategy(StrategyV2Base):
                 )
                 raise serializers.ValidationError(gettext("策略未启用，BKSEC 工单配置同步失败：%s") % err)
             try:
-                call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
+                call_controller(
+                    BaseControl.enable.__name__,
+                    strategy.strategy_id,
+                    controller_cls,
+                    bkbase_version=get_bkbase_version(),
+                )
             except Exception:
                 # 控制器启用失败（如 get_flow_deploy_data 超时）：规则尚未激活，仍补偿关闭，
                 # 兜住策略原本已有启用规则的场景。补偿失败只记日志，不遮蔽原异常。
@@ -1473,7 +1531,9 @@ class ToggleStrategy(StrategyV2Base):
                     )
                 raise
         else:
-            call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
+            call_controller(
+                BaseControl.disabled.__name__, strategy.strategy_id, controller_cls, bkbase_version=get_bkbase_version()
+            )
             sync_bksec_rule(strategy, strategy_alive=False)
 
 
@@ -1491,15 +1551,24 @@ class RetryStrategy(StrategyV2Base):
         # 草稿未部署无远端资源，无重试语义
         if strategy.status == StrategyStatusChoices.DRAFT:
             raise serializers.ValidationError(gettext("草稿策略未部署，无需重试；请在编辑页提交部署"))
+        if bkbase_flow.retry_failed_pure(strategy):
+            strategy.updated_by = get_request_username()
+            strategy.save(update_fields=["updated_by"])
+            return
         # try update
         controller_cls = self.get_base_control_type(strategy.strategy_type)
         need_update = strategy.backend_data and (strategy.backend_data.get("id") or bkbase_flow.has_flow(strategy))
+        bkbase_flow.prepare_controller_update(
+            strategy, StrategyStatusChoices.UPDATING if need_update else StrategyStatusChoices.STARTING
+        )
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
         func_name = BaseControl.update.__name__ if need_update else BaseControl.create.__name__
         try:
-            call_controller(func_name, strategy.strategy_id, controller_cls)
+            call_controller(func_name, strategy.strategy_id, controller_cls, bkbase_version=get_bkbase_version())
+        except BKBaseFlowOperationPending:
+            raise
         except Exception as err:
             strategy.status = StrategyStatusChoices.FAILED
             strategy.status_msg = str(err)

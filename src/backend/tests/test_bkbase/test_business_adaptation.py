@@ -7,12 +7,13 @@ from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from core.exceptions import LockError
 from services.web.analyze.controls.base import BkbaseFlowController
+from services.web.analyze.controls.rule_audit import RuleAuditController
 from services.web.analyze.tasks import check_flow_status
-from services.web.bkbase import clean, flow, storage
+from services.web.bkbase import clean, flow, flow_operation, storage
 from services.web.bkbase.exceptions import BKBaseOperationSuperseded
 from services.web.databus.collector_plugin.handlers import (
     EventCollectorEtlHandler,
@@ -21,6 +22,7 @@ from services.web.databus.collector_plugin.handlers import (
 from services.web.databus.models import CollectorConfig, CollectorPlugin
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
+from tests.test_bkbase.test_flow_pure_operation import FlowFixture
 
 
 @override_settings(BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit")
@@ -210,38 +212,6 @@ class BusinessAdaptationTests(TestCase):
             )
             self.assertEqual(retry.call_args.kwargs["kwargs"]["operation_id"], "current_update")
 
-    def test_superseded_start_does_not_overwrite_or_enqueue_after_completed_stop(self):
-        controller = self.make_controller(StrategyStatusChoices.DISABLED, pending_spec=False)
-        started = []
-
-        def new_stop_arrives(context, strategy, **kwargs):
-            started.append(strategy.backend_data["bkbase_v4"]["operation_id"])
-            flow._save_binding(strategy, {"operation_id": "superseding_stop", "requested_action": "stop"})
-            Strategy.objects.filter(pk=strategy.pk).update(status=StrategyStatusChoices.DISABLED)
-            return {"task_state": None}
-
-        with mock.patch("services.web.bkbase.flow.operate_rule_flow", side_effect=new_stop_arrives):
-            flow.toggle_controller(controller, "start")
-        controller.check_flow_status.assert_not_called()
-        controller.strategy.refresh_from_db()
-        self.assertEqual(controller.strategy.status, StrategyStatusChoices.DISABLED)
-
-    def test_enqueue_does_not_rebind_old_callback_to_newer_operation(self):
-        controller = self.make_controller(StrategyStatusChoices.DISABLED, pending_spec=False)
-        started = []
-
-        def enqueue_after_new_stop(**kwargs):
-            started.append(controller.strategy.backend_data["bkbase_v4"]["operation_id"])
-            flow._save_binding(controller.strategy, {"operation_id": "new_stop", "requested_action": "stop"})
-            BkbaseFlowController.check_flow_status(controller, **kwargs)
-
-        controller.check_flow_status = enqueue_after_new_stop
-        with mock.patch("services.web.bkbase.flow.operate_rule_flow", return_value={"task_state": None}), mock.patch(
-            "services.web.analyze.controls.base.check_flow_status.delay"
-        ) as queue:
-            flow.toggle_controller(controller, "start")
-            self.assertEqual(queue.call_args.kwargs["operation_id"], started[0])
-
     def test_superseded_poll_cannot_consume_new_stop_retry_budget(self):
         controller = self.make_controller(StrategyStatusChoices.UPDATING, pending_spec=False)
         flow._save_binding(controller.strategy, {"operation_id": "old_update", "poll_count": 59})
@@ -305,3 +275,63 @@ class BusinessAdaptationTests(TestCase):
             )
         controller.strategy.refresh_from_db()
         self.assertEqual(controller.strategy.backend_data, before)
+
+
+@override_settings(
+    BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit", BKBASE_V4_MCP_PROJECT_ID=11
+)
+class BusinessFlowGenerationTests(FlowFixture, TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        Strategy.objects.filter(pk=self.strategy.pk).update(status=StrategyStatusChoices.DISABLED)
+        self.strategy.refresh_from_db()
+        self.remote["metadata"]["annotations"]["task_stopped"] = "true"
+        # A stable stopped configuration permits an ordinary start without engine lookup.
+        self.remote["status"] = {"phase": "Ok"}
+
+    def mark_start_failed(self):
+        # Model the precondition for an accepted, finished start being replaceable by stop.
+        Strategy.objects.filter(pk=self.strategy.pk).update(status=StrategyStatusChoices.START_FAILED)
+
+    def test_superseded_start_does_not_overwrite_or_enqueue_after_completed_stop(self):
+        RuleAuditController(self.strategy.pk).enable()
+        old_id = self.binding()["operation_id"]
+        self.mark_start_failed()
+        self.stop()
+        new_id = self.binding()["operation_id"]
+        self.assertNotEqual(old_id, new_id)
+        # Completion is a fixture precondition: this test checks stale callback isolation, not C16.
+        backend = deepcopy(self.strategy.backend_data)
+        backend["bkbase_v4"]["pure_operation"].update(observing=False, write_fence=False, goal_observed=True)
+        Strategy.objects.filter(pk=self.strategy.pk).update(backend_data=backend, status=StrategyStatusChoices.DISABLED)
+        self.queue.reset_mock()
+        self.requeue.reset_mock()
+        self.observe(old_id)
+        self.strategy.refresh_from_db()
+        self.assertEqual(self.strategy.status, StrategyStatusChoices.DISABLED)
+        self.assertEqual(self.strategy.backend_data["bkbase_v4"]["operation_id"], new_id)
+        self.queue.assert_not_called()
+        self.requeue.assert_not_called()
+        self.assertFalse(any("/mcp/" in url for _, url, _ in self.calls))
+
+    def test_enqueue_does_not_rebind_old_callback_to_newer_operation(self):
+        original_enqueue = flow_operation.enqueue
+        ids = {}
+
+        def delayed_enqueue(strategy, countdown=None):
+            if flow_operation.binding(strategy)["pure_operation"]["target"] == "start":
+                ids["old"] = flow_operation.binding(strategy)["operation_id"]
+                self.mark_start_failed()
+                self.stop()
+                ids["new"] = self.binding()["operation_id"]
+                self.queue.reset_mock()
+            return original_enqueue(strategy, countdown=countdown)
+
+        with mock.patch.object(flow_operation, "enqueue", side_effect=delayed_enqueue):
+            RuleAuditController(self.strategy.pk).enable()
+        self.assertNotEqual(ids["old"], ids["new"])
+        self.queue.assert_called_once()
+        self.assertEqual(self.queue.call_args.kwargs["operation_id"], ids["old"])
+        self.strategy.refresh_from_db()
+        self.assertEqual(self.strategy.backend_data["bkbase_v4"]["operation_id"], ids["new"])
+        self.assertFalse(any("/mcp/" in url for _, url, _ in self.calls))
