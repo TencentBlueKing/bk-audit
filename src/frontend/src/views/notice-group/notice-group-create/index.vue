@@ -95,6 +95,19 @@
                   </td>
                 </tr>
               </table>
+              <template v-if="hasUnavailableWeixin">
+                <bk-alert
+                  class="mt8"
+                  theme="warning"
+                  :title="t('微信当前不可选，原有配置已保留，可手动移除。')" />
+                <bk-button
+                  class="mt8"
+                  text
+                  theme="primary"
+                  @click="handleRemoveWeixin">
+                  {{ t('移除微信') }}
+                </bk-button>
+              </template>
             </div>
           </bk-form-item>
           <bk-form-item
@@ -129,7 +142,9 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -275,12 +290,30 @@
   };
 
   // 获取通知方式
+  const hasLoadedMsgType = ref(false);
   const {
     data: msgType,
+    loading: isMsgTypeLoading,
   } = useRequest(NoticeManageService.fetchMsgType, {
-    defaultValue: {},
+    defaultValue: [],
     manual: true,
+    onSuccess: () => {
+      hasLoadedMsgType.value = true;
+    },
   });
+  watch(isMsgTypeLoading, (loading) => {
+    if (loading) {
+      hasLoadedMsgType.value = false;
+    }
+  }, { flush: 'sync' });
+  const hasUnavailableWeixin = computed(() => hasLoadedMsgType.value && !isMsgTypeLoading.value
+    && !!formData.value.notice_config.weixin
+    && !msgType.value.some(item => item.id === 'weixin'));
+
+  const handleRemoveWeixin = () => {
+    formData.value.notice_config.weixin = false;
+    window.changeConfirm = true;
+  };
 
   // 提交
   const handleSubmit = () => {

@@ -59,6 +59,11 @@
               </td>
             </tr>
           </table>
+          <bk-alert
+            v-if="hasUnavailableWeixin"
+            class="mt8"
+            theme="warning"
+            :title="t('微信（已停用）')" />
         </bk-loading>
       </render-info-item>
     </render-info-block>
@@ -72,6 +77,8 @@
 <script setup lang="ts">
   import {
     computed,
+    ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -93,13 +100,25 @@
 
 
   // 获取通知方式
+  const hasLoadedMsgType = ref(false);
   const {
     loading: isLoading,
     data: msgType,
   } = useRequest(NoticeManageService.fetchMsgType, {
-    defaultValue: {},
+    defaultValue: [],
     manual: true,
+    onSuccess: () => {
+      hasLoadedMsgType.value = true;
+    },
   });
+  watch(isLoading, (loading) => {
+    if (loading) {
+      hasLoadedMsgType.value = false;
+    }
+  }, { flush: 'sync' });
+  const hasUnavailableWeixin = computed(() => hasLoadedMsgType.value && !isLoading.value
+    && noticeWay.value?.includes('weixin') === true
+    && !msgType.value.some(item => item.id === 'weixin'));
 </script>
 <style lang="postcss">
 .notice-group-detail {
