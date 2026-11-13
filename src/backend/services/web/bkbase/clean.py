@@ -55,7 +55,10 @@ from services.web.databus.constants import (
     PluginSceneChoices,
     SourcePlatformChoices,
 )
+from services.web.databus.exceptions import DatabusException
 from services.web.databus.models import CollectorConfig, CollectorPlugin
+
+PLUGIN_OPERATION_EXCEPTIONS = (APIRequestError, BKBaseException, LockError, DatabusException)
 
 
 def _convert_named_regex_groups(pattern):
@@ -957,6 +960,19 @@ def reset_plugin_operation(plugin):
         update_owner_binding(plugin, patch)
 
 
+def record_plugin_failure(plugin, error, *, poll_count=None):
+    """记录预期业务失败，保留未决写证据并使旧就绪状态失效。"""
+    count = poll_count if poll_count is not None else (plugin.bkbase_v4_resources or {}).get("poll_count", 0) + 1
+    blocked = count >= BKBASE_V4_MAX_POLLS
+    message = str(error)
+    if blocked:
+        message = "Clean/storage initialization timed out: " + message
+    update_owner_binding(
+        plugin,
+        {"ready": False, "clean_ready": False, "poll_count": count, "blocked": blocked, "message": message},
+    )
+
+
 def configure_plugin(handler):
     """插件初始化逐次推进，有界重试并隔离单插件错误。"""
     if get_bkbase_version() == BKBaseVersion.V3:
@@ -973,9 +989,10 @@ def configure_plugin(handler):
         result = _configure_plugin(handler)
         failed = result and result["task_state"] == TaskState.FAILED
         message = result.get("message", "") if result else ""
-    except (APIRequestError, BKBaseException, LockError) as error:
-        result, message = None, str(error)
+    except PLUGIN_OPERATION_EXCEPTIONS as error:
         logger.exception("BKBase V4 plugin operation failed: %s", plugin.pk)
+        record_plugin_failure(plugin, error, poll_count=count)
+        return None
     ready = (plugin.bkbase_v4_resources or {}).get("ready", False)
     binding = plugin.bkbase_v4_resources or {}
     imported_stopped = (
