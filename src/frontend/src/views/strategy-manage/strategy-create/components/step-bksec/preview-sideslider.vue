@@ -150,6 +150,16 @@
         v-else
         class="bksec-preview-scroll bksec-preview-body">
         <div
+          v-if="remoteWarnings.length"
+          class="bksec-preview-warnings"
+          data-testid="bksec-preview-warnings">
+          <p
+            v-for="(warning, index) in remoteWarnings"
+            :key="index">
+            {{ warning }}
+          </p>
+        </div>
+        <div
           v-for="group in previewGroups"
           :key="group.key"
           class="bksec-desc-group"
@@ -216,7 +226,7 @@
   import useRequest from '@hooks/use-request';
 
   import { canSendTestTicket, shouldRequestRemotePreview } from './form-rules';
-  import { buildLocalPreview, mapRemotePreview } from './local-preview';
+  import { buildLocalPreview, mapRemotePreview, previewWarnings } from './local-preview';
 
   import { isStrategyEditRoute } from '../../../utils/strategy-routes';
 
@@ -264,6 +274,7 @@
   ];
   const previewError = ref(false);
   const previewRows = ref<BksecTicketPreviewRow[]>([]);
+  const remoteWarnings = ref<string[]>([]);
   const sending = ref(false);
   const testForm = ref({ handler: '' });
   const handlerSelectorKey = ref(0);
@@ -353,6 +364,7 @@
 
   const renderLocal = () => {
     previewError.value = false;
+    remoteWarnings.value = [];
     previewRows.value = buildLocalPreview({
       fieldValues: props.fieldValues || {},
       fields: previewFields(),
@@ -399,6 +411,7 @@
         }),
       });
       if (seq !== previewSeq) return;
+      remoteWarnings.value = previewWarnings(response);
       previewRows.value = mapRemotePreview({
         riskTypeId: props.riskTypeId,
         riskTypeName: props.riskTypeName,
@@ -408,6 +421,7 @@
     } catch {
       if (seq !== previewSeq) return;
       previewError.value = true;
+      remoteWarnings.value = [];
       previewRows.value = [];
     } finally {
       if (seq === previewSeq) previewLoading.value = false;
@@ -725,6 +739,24 @@
   min-width: 0;
   font-size: var(--bk-theme-font-size-sm);
   line-height: 20px;
+}
+
+.bksec-preview-warnings {
+  margin-bottom: var(--audit-space-16);
+  padding: var(--audit-space-8) var(--audit-space-12);
+  font-size: var(--audit-font-size-sm);
+  line-height: var(--audit-line-height-sm);
+  color: var(--audit-danger-01);
+  background: var(--audit-danger-06);
+  border-radius: var(--audit-radius-control);
+}
+
+.bksec-preview-warnings p {
+  margin: 0;
+}
+
+.bksec-preview-warnings p + p {
+  margin-top: var(--audit-space-4);
 }
 
 .bksec-desc-group.is-extension {
