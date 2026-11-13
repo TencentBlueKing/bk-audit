@@ -125,7 +125,7 @@ def _sync_bksec_rule_after_status_change(strategy: Strategy) -> None:
     last_error = None
     for attempt in range(BKSEC_RULE_SYNC_MAX_RETRIES):
         try:
-            sync_bksec_rule(strategy, strategy_alive=strategy_alive)
+            sync_bksec_rule(strategy, strategy_alive=strategy_alive, as_platform=True)
             return
         except (BkSecPluginSyncError, BkSecPresetNotReady) as err:
             # 插件同步内部已有重试；套餐缺失需人工配置，重试无意义，直接告警
@@ -165,7 +165,7 @@ def reconcile_bksec_auto_rule():
             logger_celery.warning(
                 "[ReconcileBkSecRule] Auto rule missing or disabled, strategy_id=%s", strategy.strategy_id
             )
-            sync_bksec_rule(strategy, strategy_alive=True)
+            sync_bksec_rule(strategy, strategy_alive=True, as_platform=True)
         except Exception:  # NOCC:broad-except(单个策略补偿失败不影响其他策略)
             logger_celery.exception("[ReconcileBkSecRuleFailed] strategy_id=%s", strategy.strategy_id)
 
