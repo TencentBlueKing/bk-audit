@@ -5,12 +5,12 @@ SQL 内完成全范围计算，应用只接收有界结果，不截断、不拼�
 """
 import time
 
-from bk_resource import api
 from django.conf import settings
 from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
 from api.bk_base.constants import StorageType
+from services.web.bkbase import query as bkbase_query
 from services.web.query.ai_assistant.exceptions import (
     StatisticsResponseTooLarge,
     UnsupportedAggregation,
@@ -159,7 +159,7 @@ class LogAggregationService:
             }
         ]
         started = time.perf_counter()
-        responses = api.bk_base.safe_query_sync.bulk_request(requests)
+        responses = bkbase_query.query_sync_bulk(requests, safe=True)
         took_ms = int((time.perf_counter() - started) * 1000)
         if not isinstance(responses, (tuple, list)) or len(responses) != 1 or not isinstance(responses[0], dict):
             raise ValueError("invalid statistics query response")
