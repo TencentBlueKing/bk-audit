@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import json
 import logging
 import uuid
 from typing import List, Optional
@@ -33,14 +34,17 @@ from core.models import get_request_username
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
     BKSEC_CACHE_TIMEOUT,
-    BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_PARAM_OPERATOR,
+    BKSEC_PARAM_RISK_TYPE_EXTRA,
+    BKSEC_PARAM_TARGET,
+    BKSEC_PARAM_TARGET_TYPE,
     BKSEC_PRESET_PA_NAME,
     BKSEC_RISK_ACCESS_MAX_PAGES,
     BKSEC_RISK_ACCESS_ORDERING,
     BKSEC_RISK_ACCESS_PAGE_SIZE,
     BKSEC_RISK_TYPES_CACHE_KEY,
 )
-from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
+from services.web.risk.bksec.contract import build_plugin_constants
 from services.web.risk.constants import BkSecPushStatus
 from services.web.risk.models import ProcessApplication, Risk
 from services.web.strategy_v2.models import Strategy
@@ -278,31 +282,70 @@ def parse_bksec_config(config_dict: dict) -> BkSecConfig:
 
 def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
     """
-    组装工单预览（按配置 + 样例风险单渲染报文，不实际发送，支持保存前预览）
+    组装工单预览：审计侧渲染最终参数后调用 BKSEC，返回 BKSEC 实际工单字段
     """
     ensure_bksec_enabled()
+    if risk is None:
+        return {
+            "risk_type_id": config.risk_type_id,
+            "risk_type_name": config.risk_type_name,
+            "has_sample_risk": False,
+            "ticket": {
+                "risk_type": config.risk_type_id,
+                "source": "bk-audit",
+                "risk_id": "",
+                "fields": [],
+            },
+            "warnings": [],
+        }
+
     try:
-        payload = build_event_payload(config, risk=risk)
+        constants = build_plugin_constants(config, risk=risk)
+        operator = constants.get(BKSEC_PARAM_OPERATOR) or "[]"
+        operator = ",".join(str(item) for item in json.loads(operator))
+        extra = json.loads(constants.get(BKSEC_PARAM_RISK_TYPE_EXTRA) or "{}")
+        preview_params = {
+            "project_id": config.project_id,
+            "risk_type_id": config.risk_type_id,
+            "operator": operator,
+            "data_source": risk.event_source or "bk-audit",
+            "target": constants.get(BKSEC_PARAM_TARGET, ""),
+            "target_type": constants.get(BKSEC_PARAM_TARGET_TYPE, ""),
+            "source_type": config.source_type or "bk-audit",
+            "timestamp": int(risk.event_time.timestamp() * 1000),
+            "extra": extra,
+        }
     except Exception as err:  # NOCC:broad-except(预览即时报错，区别于正式发送的失败重试链路)
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
+
+    try:
+        result = api.bk_sec.preview_ticket_fields(preview_params) or {}
+    except Exception as err:  # NOCC:broad-except(预览接口异常需转为用户可读错误)
+        logger.exception("[BkSecPreview] preview_ticket_fields failed, risk_id=%s", risk.risk_id)
+        raise serializers.ValidationError(gettext_lazy("BKSEC 工单字段预览失败：%s") % err)
+
+    fields = [
+        {
+            "key": str(item["key"]),
+            "name": item.get("name") or str(item["key"]),
+            "value": item.get("value"),
+        }
+        for item in (result.get("fields") or [])
+        if isinstance(item, dict) and item.get("key")
+    ]
     warnings = []
-    if risk is not None and not (payload.get("fields", {}).get(BKSEC_FIELD_INITIAL_OWNER) or "").strip():
+    if not operator.strip():
         warnings.append(gettext_lazy("初始责任人为空（该风险单无责任人且未配置安全接口人兜底），工单可能被 BKSEC 拒收，请到系统配置设置安全接口人或调整映射"))
-    # 工单头由 BKSEC 在发单后生成，预览阶段没有真实值。字段留空，空值展示由前端处理。
-    ticket_header = {
-        "ticket_id": "",
-        "title": "",
-        "submit_time": "",
-        "deadline": "",
-        "status": "",
-        "current_operator_org": "",
-    }
     return {
         "risk_type_id": config.risk_type_id,
         "risk_type_name": config.risk_type_name,
-        "has_sample_risk": risk is not None,
-        "ticket": payload,
-        "ticket_header": ticket_header,
+        "has_sample_risk": True,
+        "ticket": {
+            "risk_type": config.risk_type_id,
+            "source": "bk-audit",
+            "risk_id": risk.risk_id,
+            "fields": fields,
+        },
         "warnings": warnings,
     }
 

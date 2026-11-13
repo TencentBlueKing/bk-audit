@@ -28,11 +28,18 @@ from api.domains import BKSEC_API_URL
 
 # Mock 数据文件路径（WeSec API 完整响应，仅 BKAPP_BKSEC_MOCK_ENABLED=True 时使用）
 _MOCK_DATA_FILE = os.path.join(os.path.dirname(__file__), "risk_type_list.json")
+_PREVIEW_MOCK_DATA_FILE = os.path.join(os.path.dirname(__file__), "preview_ticket_fields.json")
 
 
 def _load_mock_data():
     """加载 Mock 数据（WeSec risk_access_list API 完整响应）"""
     with open(_MOCK_DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _load_preview_mock_data():
+    """加载 BKSEC 工单字段预览 Mock 数据"""
+    with open(_PREVIEW_MOCK_DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -120,3 +127,38 @@ class RiskAccessListAsPlatform(RiskAccessList):
 
     name = "查询风险类型列表（平台身份）"
     platform_authorization = True
+
+
+class PreviewTicketFields(BKSec):
+    """预览 BKSEC 工单实际字段（用户身份）"""
+
+    name = "预览工单字段"
+    method = "POST"
+    action = "/api/v1/risk/preview_ticket_fields/"
+    platform_authorization = False
+
+    def _mock_request(self, validated_request_data):
+        """用样例数据模拟 BKSEC 返回，非空请求值覆盖样例值。"""
+        mock_data = _load_preview_mock_data()
+        mock_fields = mock_data.get("fields") or []
+
+        # extra 里可能有 field_mappings 渲染出的同名字段，空值不能覆盖标准入参或样例值。
+        dynamic_values = {
+            key: value for key, value in (validated_request_data.get("extra") or {}).items() if value not in (None, "")
+        }
+        for key in ("target", "target_type", "operator", "source_type", "timestamp"):
+            value = validated_request_data.get(key)
+            if value not in (None, ""):
+                dynamic_values[key] = value
+
+        result = []
+        for item in mock_fields:
+            if not isinstance(item, dict) or not item.get("key"):
+                continue
+            key = item["key"]
+            value = dynamic_values.get(key)
+            if value in (None, ""):
+                value = item.get("value")
+            result.append({**item, "value": value})
+
+        return {"fields": result}
