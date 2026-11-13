@@ -4,7 +4,6 @@ import re
 import time
 from typing import Any, Dict, Iterable, List, Sequence
 
-from bk_resource import api
 from bk_resource.base import Empty
 from django.conf import settings
 from django.utils import timezone
@@ -12,6 +11,7 @@ from django.utils import timezone
 from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import START_TIME
 from core.utils.data import extract_nested_value
+from services.web.bkbase import query as bkbase_query
 from services.web.query.ai_assistant.constants import MCP_LOG_DEFAULT_FIELDS
 from services.web.query.ai_assistant.exceptions import LogQueryResponseTooLarge
 from services.web.query.ai_assistant.log_tools.context import (
@@ -146,11 +146,12 @@ class LogDetailSearchService:
             page_size=request.page_size,
         )
         started_at = time.perf_counter()
-        responses = api.bk_base.safe_query_sync.bulk_request(
+        responses = bkbase_query.query_sync_bulk(
             [
                 {"sql": builder.build_data_sql(fields), "prefer_storage": StorageType.DORIS.value},
                 {"sql": builder.build_count_sql(), "prefer_storage": StorageType.DORIS.value},
-            ]
+            ],
+            safe=True,
         )
         took_ms = int((time.perf_counter() - started_at) * 1000)
         data_response, count_response = responses

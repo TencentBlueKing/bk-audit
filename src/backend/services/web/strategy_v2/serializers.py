@@ -47,6 +47,8 @@ from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
 from services.web.bkbase import metadata as bkbase_metadata
 from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.common.constants import ScopeType
 from services.web.risk.bksec.config import BkSecConfig
@@ -752,7 +754,7 @@ class StrategySerializer(serializers.Serializer):
         确保项目对结果表有权限，如果没有则进行授权
         注意：需要从结果表元数据获取 bk_biz_id，按业务分组调用 project_data_batch_add
         """
-        if not result_table_ids:
+        if not result_table_ids or get_bkbase_version() == BKBaseVersion.V4:
             return
 
         # 1. 批量检查项目是否对这些结果表有权限
@@ -2452,7 +2454,7 @@ class LinkTableDataPermissionMixin:
         """
         确保项目对结果表有权限，如果没有则进行授权
         """
-        if not result_table_ids:
+        if not result_table_ids or get_bkbase_version() == BKBaseVersion.V4:
             return
 
         # 1. 批量检查项目是否对这些结果表有权限

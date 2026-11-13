@@ -22,6 +22,11 @@ from django.conf import settings
 from rest_framework.settings import api_settings
 
 from services.web.analyze.constants import OffsetUnit, ResultTableType
+from services.web.bkbase import metadata as bkbase_metadata
+from services.web.bkbase import table_capabilities
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 
 __all__ = [
     "get_service_name",
@@ -56,6 +61,12 @@ def is_asset(result_table: dict):
     判断是否为维表
     """
 
+    if get_bkbase_version() == BKBaseVersion.V4:
+        capability = bkbase_metadata.get_source_capabilities(result_table.get("result_table_id"))
+        asset = table_capabilities.asset_status(capability)
+        if asset is None:
+            raise BKBaseResourceMappingError(message="ResultTable Bindings do not establish an asset classification")
+        return asset
     processing_type = result_table.get("processing_type")
     result_table_type = result_table.get("result_table_type")
     return (processing_type == ResultTableType.CDC) or (result_table_type == ResultTableType.STATIC)
