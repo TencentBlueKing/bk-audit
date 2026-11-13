@@ -33,13 +33,12 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import models, transaction
-from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery
+from django.db.models import Count, IntegerField, Max, OuterRef, Q, QuerySet, Subquery
 from django.db.models.aggregates import Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
-from pypinyin import lazy_pinyin
 from rest_framework import serializers
 from rest_framework.settings import api_settings
 
@@ -228,11 +227,17 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
     audit_resource_type = ResourceEnum.STRATEGY
 
     def _save_tags(self, strategy_id: int, tag_names: list) -> None:
-        StrategyTag.objects.filter(strategy_id=strategy_id).delete()
-        if not tag_names:
-            return
-        tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
-        StrategyTag.objects.bulk_create([StrategyTag(strategy_id=strategy_id, tag_id=t["tag_id"]) for t in tags])
+        tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names]) if tag_names else []
+        desired_tag_ids = {t["tag_id"] for t in tags}
+        relation_qs = StrategyTag.objects.filter(strategy_id=strategy_id)
+        existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
+        relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
+        StrategyTag.objects.bulk_create(
+            [
+                StrategyTag(strategy_id=strategy_id, tag_id=tag_id)
+                for tag_id in sorted(desired_tag_ids - existing_tag_ids)
+            ]
+        )
 
     def _save_strategy_tools(self, strategy: Strategy, validated_request_data: dict) -> None:
         StrategyTool.objects.filter(strategy=strategy).delete()
@@ -1531,27 +1536,52 @@ class ListStrategyTags(StrategyV2Base):
         if not (scene_id or system_id or binding_type):
             # 无任何过滤参数：默认平台视角（仅全局策略的标签聚合）
             binding_type = BindingType.PLATFORM_BINDING
-        strategies = CompositeScopeFilter.filter_queryset(
-            queryset=Strategy.objects.filter(is_deleted=False).exclude(source=StrategySource.SYSTEM),
-            binding_type=binding_type,
-            scene_id=scene_id,
-            system_id=system_id,
-            resource_type=ResourceVisibilityType.STRATEGY,
-            pk_field="strategy_id",
+        namespace = settings.DEFAULT_NAMESPACE
+        strategies = Strategy.objects.filter(is_deleted=False, namespace=namespace).exclude(
+            source=StrategySource.SYSTEM
         )
+        if binding_type == BindingType.PLATFORM_BINDING and not (scene_id or system_id):
+            # 与 ListStrategy 平台视角保持一致：全局草稿草稿期未创建平台绑定，需显式并入
+            platform_resource_ids = set(
+                ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.STRATEGY,
+                    binding_type=BindingType.PLATFORM_BINDING,
+                ).values_list("resource_id", flat=True)
+            )
+            scene_bound_resource_ids = set(
+                ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.STRATEGY,
+                    binding__binding_type=BindingType.SCENE_BINDING,
+                ).values_list("binding__resource_id", flat=True)
+            )
+            draft_resource_ids = {
+                str(strategy.strategy_id)
+                for strategy in Strategy.objects.filter(namespace=namespace, status=StrategyStatusChoices.DRAFT)
+                if str(strategy.strategy_id) not in scene_bound_resource_ids
+            }
+            strategies = strategies.filter(strategy_id__in=platform_resource_ids | draft_resource_ids)
+        else:
+            strategies = CompositeScopeFilter.filter_queryset(
+                queryset=strategies,
+                binding_type=binding_type,
+                scene_id=scene_id,
+                system_id=system_id,
+                resource_type=ResourceVisibilityType.STRATEGY,
+                pk_field="strategy_id",
+            )
         strategy_ids = list(strategies.values_list("strategy_id", flat=True))
         # load all tags
+        # 以绑定记录 id（最近一次绑定）排序，最后添加的标签排最后
         tag_count = list(
             StrategyTag.objects.filter(strategy_id__in=strategy_ids)
             .values("tag_id")
-            .annotate(strategy_count=Count("tag_id"))
-            .order_by()
+            .annotate(strategy_count=Count("tag_id"), last_binding_id=Max("id"))
+            .order_by("last_binding_id")
         )
         tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
         for t in tag_count:
+            t.pop("last_binding_id", None)
             t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
-        # sort
-        tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
         # add has update
         tag_count = [
             {
@@ -2145,12 +2175,16 @@ class LinkTableBase(AuditMixinResource, abc.ABC):
         super().add_audit_instance_to_context(instance=LinkTableAuditInstance(link_table))
 
     def _save_tags(self, link_table_uid: str, tag_names: list) -> None:
-        LinkTableTag.objects.filter(link_table_uid=link_table_uid).delete()
-        if not tag_names:
-            return
-        tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
+        tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names]) if tag_names else []
+        desired_tag_ids = {t["tag_id"] for t in tags}
+        relation_qs = LinkTableTag.objects.filter(link_table_uid=link_table_uid)
+        existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
+        relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
         LinkTableTag.objects.bulk_create(
-            [LinkTableTag(link_table_uid=link_table_uid, tag_id=t["tag_id"]) for t in tags]
+            [
+                LinkTableTag(link_table_uid=link_table_uid, tag_id=tag_id)
+                for tag_id in sorted(desired_tag_ids - existing_tag_ids)
+            ]
         )
 
 
@@ -2411,17 +2445,17 @@ class ListLinkTableTags(LinkTableBase):
         )
         link_table_uids = list(link_tables.values_list("uid", flat=True))
         # load all tags
+        # 以绑定记录 id（最近一次绑定）排序，最后添加的标签排最后
         tag_count = list(
             LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)
             .values("tag_id")
-            .annotate(link_table_count=Count("tag_id"))
-            .order_by()
+            .annotate(link_table_count=Count("tag_id"), last_binding_id=Max("id"))
+            .order_by("last_binding_id")
         )
         tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
         for t in tag_count:
+            t.pop("last_binding_id", None)
             t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
-        # sort
-        tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
         # add no tags
         tagged_link_table_uids = set(
             LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)

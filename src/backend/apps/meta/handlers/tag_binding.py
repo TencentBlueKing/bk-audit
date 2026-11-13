@@ -20,7 +20,7 @@ from typing import List, Optional, Tuple, Type
 
 from bk_resource import resource
 from django.db import models, transaction
-from django.db.models import QuerySet
+from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import Http404
 
 from apps.meta.constants import TagBindingResourceType
@@ -45,21 +45,27 @@ def sync_resource_tags(
     返回:
         当前绑定的标签列表
     """
-    # 删除旧关联
     filter_kwargs = {relation_resource_field: resource_uid}
-    relation_model.objects.filter(**filter_kwargs).delete()
+    tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names]) if tag_names else []
+    desired_tag_ids = {t["tag_id"] for t in tags}
 
-    if not tag_names:
+    # 只增删差量，保留已有绑定记录 id，展示顺序即可直接按绑定 id 排序
+    relation_qs = relation_model.objects.filter(**filter_kwargs)
+    existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
+    relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
+    relation_model.objects.bulk_create(
+        [
+            relation_model(**{relation_resource_field: resource_uid, "tag_id": tag_id})
+            for tag_id in sorted(desired_tag_ids - existing_tag_ids)
+        ]
+    )
+
+    if not desired_tag_ids:
         return Tag.objects.none()
-
-    # 批量保存标签
-    tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
-    tag_ids = [t["tag_id"] for t in tags]
-    # 批量创建关联
-    objs = [relation_model(**{relation_resource_field: resource_uid, "tag_id": tag_id}) for tag_id in tag_ids]
-    relation_model.objects.bulk_create(objs)
-
-    return Tag.objects.filter(tag_id__in=tag_ids)
+    binding_id = relation_model.objects.filter(**filter_kwargs, tag_id=OuterRef("tag_id")).values("pk")[:1]
+    return (
+        Tag.objects.filter(tag_id__in=desired_tag_ids).annotate(binding_id=Subquery(binding_id)).order_by("binding_id")
+    )
 
 
 class TagBindingHandler:
