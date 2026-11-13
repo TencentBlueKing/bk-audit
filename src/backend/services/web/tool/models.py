@@ -168,6 +168,7 @@ class ToolTag(OperateRecordModel):
     class Meta:
         verbose_name = gettext_lazy("Tool Tag")
         verbose_name_plural = verbose_name
+        ordering = ["id"]
         unique_together = [("tool_uid", "tag_id")]
 
 
