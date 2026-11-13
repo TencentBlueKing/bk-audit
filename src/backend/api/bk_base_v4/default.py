@@ -7,28 +7,39 @@ import abc
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
+from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from urllib3.util import Timeout
 
 from api.bk_base_v4.serializers import (
+    BatchStatusListRequestSerializer,
     CleanDebugRequestSerializer,
     DataIdTailRequestSerializer,
     DatasetDetailRequestSerializer,
     DatasetListRequestSerializer,
+    DirectAuthByResourcesRequestSerializer,
+    DirectAuthByResourcesResponseSerializer,
     FlowIdRequestSerializer,
     FlowListRequestSerializer,
     FlowRestartRequestSerializer,
     NamedResourceRequestSerializer,
     NamedResourceWriteRequestSerializer,
+    NotifyGetRequestSerializer,
+    NotifyUpdateRequestSerializer,
     ObjectResponseSerializer,
     PayloadResponseSerializer,
     QuerySyncRequestSerializer,
     QuerySyncResponseSerializer,
+    RedisAssetCreateRequestSerializer,
     ResourceRefRequestSerializer,
     ResourceWriteRequestSerializer,
+    ResultTableInfoRequestSerializer,
     ResultTableRequestSerializer,
+    StorageAssetGetRequestSerializer,
+    StorageAssetListRequestSerializer,
+    TenantRequestSerializer,
     UserCheckRequestSerializer,
     UserScopesRequestSerializer,
     UserTablesRequestSerializer,
@@ -71,6 +82,66 @@ class BkBaseV4Resource(BkApiResource, abc.ABC):
         return super().before_request(kwargs)
 
 
+class DirectAuthByResources(BkBaseV4Resource):
+    """以应用身份核对指定用户的 RT 权限，不携带用户凭据或平台账号。"""
+
+    action = "/v4/auth/users/direct_auth_by_resources/"
+    method = "POST"
+    platform_authorization = False
+    RequestSerializer = DirectAuthByResourcesRequestSerializer
+    ResponseSerializer = DirectAuthByResourcesResponseSerializer
+
+    def add_esb_info_before_request(self, params):
+        """该接口不做用户认证，前后台均只使用审计应用凭据。"""
+        return {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
+
+    def build_header(self, validated_request_data):
+        """保留语言头，移除与应用认证无关的请求 Cookie。"""
+        headers = super().build_header(validated_request_data)
+        headers.pop("cookie", None)
+        return headers
+
+    def before_request(self, kwargs):
+        """禁止将应用凭据转发至重定向目标。"""
+        kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """权限结果仅接受文档规定的明确成功包裹。"""
+        if 300 <= response.status_code < 400:
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Permission check redirected")
+        data = super().parse_response(response)
+        envelope = response.json()
+        if (
+            not isinstance(envelope, dict)
+            or envelope.get("result") is not True
+            or envelope.get("code") != "00"
+            or envelope.get("message") is not None
+            or envelope.get("errors") is not None
+            or "messages" in envelope
+        ):
+            raise APIRequestError(module_name=self.module_name, url=self.action, result=envelope)
+        return data
+
+
+class BatchStatusList(BkBaseV4Resource):
+    """读取正式离线作业历史页，保留原始行和错误。"""
+
+    action = "/v4/dataflow/batch/jobs/{job_id}/status_list/"
+    method = "GET"
+    url_keys = ["job_id"]
+    RequestSerializer = BatchStatusListRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+    def before_request(self, kwargs):
+        """正式 Batch 查询要求 URL 布尔参数为小写。"""
+        kwargs = super().before_request(kwargs)
+        value = kwargs.get("params", {}).get("is_data_time")
+        if isinstance(value, bool):
+            kwargs["params"]["is_data_time"] = "true" if value else "false"
+        return kwargs
+
+
 class QuerySyncResource(BkBaseV4Resource):
     """以平台用户权限执行同步SQL，保留现有五分钟超时。"""
 
@@ -96,6 +167,17 @@ class QuerySyncResource(BkBaseV4Resource):
         return super().before_request(kwargs)
 
 
+class SafeQuerySyncResource(QuerySyncResource):
+    """日志工具的 V4 查询，沿用原 SafeQuery 的 SQL 诊断日志契约。"""
+
+    def before_request(self, kwargs):
+        """仅记录最终 SQL，交项目日志处理链控制输出，不记录鉴权头。"""
+        request_data = kwargs.get("json") or kwargs.get("data") or {}
+        if isinstance(request_data, dict):
+            logger.info("[SafeQuerySyncResource] SQL => %s", request_data.get("sql", ""))
+        return super().before_request(kwargs)
+
+
 class DebugQuerySyncResource(QuerySyncResource):
     """调试使用独立地址，其余协议与普通查询相同。"""
 
@@ -112,7 +194,36 @@ class ResultTable(BkBaseV4Resource):
     ResponseSerializer = ObjectResponseSerializer
 
 
-class DatasetDetail(BkBaseV4Resource):
+class DatasetResource(BkBaseV4Resource, abc.ABC):
+    """Dataset的企业空间来自Service上下文，不能透传前端任意请求头。"""
+
+    def build_header(self, validated_request_data):
+        """把校验后的tenant移入请求头，避免落入业务查询参数。"""
+        tenant = validated_request_data.pop("tenant")
+        headers = super().build_header(validated_request_data)
+        headers["X-Bk-Tenant-Id"] = tenant
+        return headers
+
+
+class ResultTableInfo(DatasetResource):
+    """按逻辑 ID 查询正式结果表，错误不代表允许创建或接管资源。"""
+
+    action = "/v4/result_tables/{result_table_id}/"
+    method = "GET"
+    url_keys = ["result_table_id"]
+    RequestSerializer = ResultTableInfoRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+    def parse_response(self, response):
+        """1558025 同时可能表示绑定目标缺失，必须保留失败语义。"""
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            error.resource_not_found = False
+            raise
+
+
+class DatasetDetail(DatasetResource):
     """读取指定项目数据集详情。"""
 
     action = "/v4/databus/dataset/{namespace}/detail/{dataset_name}/"
@@ -122,13 +233,52 @@ class DatasetDetail(BkBaseV4Resource):
     ResponseSerializer = ObjectResponseSerializer
 
 
-class DatasetList(BkBaseV4Resource):
+class DatasetList(DatasetResource):
     """读取项目数据集的一页，分页在Service推进。"""
 
     action = "/v4/databus/dataset/{namespace}/dataset_list/"
     method = "GET"
     url_keys = ["namespace"]
     RequestSerializer = DatasetListRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+
+class StorageAssetCreate(DatasetResource):
+    """登记Redis存储资产；受理返回asset_name，不冒充正式Ref或连通成功。"""
+
+    action = "/v4/res_manage/assets/storage/"
+    method = "POST"
+    RequestSerializer = RedisAssetCreateRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+    def before_request(self, kwargs):
+        """禁止重定向重发注册请求。"""
+        kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """重定向不能证明资产注册成功。"""
+        if 300 <= response.status_code < 400:
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Redis registration redirected")
+        return super().parse_response(response)
+
+
+class StorageAssetGet(DatasetResource):
+    """读取权威resource_ns；连接口令可能为遮罩，仅供元数据查看。"""
+
+    action = "/v4/res_manage/assets/{project_name}/{sub_type}/{asset_name}/"
+    method = "GET"
+    url_keys = ["project_name", "sub_type", "asset_name"]
+    RequestSerializer = StorageAssetGetRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+
+class StorageAssetList(DatasetResource):
+    """按可信项目视角分页读取存储资产，保留本地与共享归属的上游区分。"""
+
+    action = "/v4/res_manage/assets/"
+    method = "GET"
+    RequestSerializer = StorageAssetListRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
 
 
@@ -147,6 +297,26 @@ class UserBkBaseV4Resource(BkBaseV4Resource, abc.ABC):
         params.update(bk_app_code=settings.APP_CODE, bk_app_secret=settings.SECRET_KEY, bk_username=username)
         params.update(self.build_auth_args(request))
         return params
+
+
+class UserNamespacesList(UserBkBaseV4Resource):
+    """以当前请求身份读取该租户的有权项目，不使用旧 MCP scopes。"""
+
+    action = "/v4/tenants/{tenant}/namespaces"
+    method = "GET"
+    url_keys = ["tenant"]
+    RequestSerializer = TenantRequestSerializer
+    ResponseSerializer = PayloadResponseSerializer
+
+    def build_header(self, validated_request_data):
+        """路径和租户头采用同一已校验上下文，保留路径参数供 URL 格式化。"""
+        headers = super().build_header(validated_request_data)
+        headers["X-Bk-Tenant-Id"] = validated_request_data["tenant"]
+        return headers
+
+
+class UserDatasetList(UserBkBaseV4Resource, DatasetList):
+    """复用正式 Dataset 列表协议与租户头，认证固定为当前请求用户。"""
 
 
 class UserResultTables(UserBkBaseV4Resource):
@@ -179,10 +349,34 @@ class DataSourceList(BkBaseV4Resource):
 
 
 class DataSourceGet(DataSourceList):
-    action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}"
+    action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/"
     url_keys = ["tenant", "namespace", "name"]
     RequestSerializer = NamedResourceRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+
+
+class DataSourceCreate(DataSourceList):
+    """创建 DataSource；受理不代表 DataId 已就绪。"""
+
+    method = "POST"
+    RequestSerializer = ResourceWriteRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+    def before_request(self, kwargs):
+        """禁止重定向导致重复创建。"""
+        kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        if 300 <= response.status_code < 400:
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="DataSource POST redirected")
+        return super().parse_response(response)
+
+
+class DataConnCreate(DataSourceCreate):
+    """创建独立 DataConn；连接可用状态须另行观察。"""
+
+    action = "/v4/tenants/{tenant}/namespaces/{namespace}/dataconns/"
 
 
 class UserDataSourceList(UserBkBaseV4Resource, DataSourceList):
@@ -199,12 +393,57 @@ class DataSourceUpdate(DataSourceGet):
     RequestSerializer = NamedResourceWriteRequestSerializer
 
 
+class DataConnGet(DataSourceGet):
+    """读取Source显式关联的已有PULL连接。"""
+
+    action = "/v4/tenants/{tenant}/namespaces/{namespace}/dataconns/{name}/"
+
+
+class DataConnUpdate(DataConnGet):
+    """全量更新已有连接；密码原文或原密文的保存规则由平台处理。"""
+
+    method = "PUT"
+    RequestSerializer = NamedResourceWriteRequestSerializer
+
+
+class DataSourceNotifies(DatasetResource):
+    """读取Source/Flow通知配置；首次GET可能生成对象的默认配置。"""
+
+    action = "/v4/databus/data_source/notifies/"
+    method = "GET"
+    RequestSerializer = NotifyGetRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+
+class DataSourceNotifiesUpdate(DataSourceNotifies):
+    """更新完整通知配置，tenant仅进入可信租户请求头。"""
+
+    method = "PUT"
+    RequestSerializer = NotifyUpdateRequestSerializer
+
+
 class DataIdTail(BkBaseV4Resource):
     action = "/v4/namespaces/{namespace}/dataids/{name}/tail_kafka/"
     method = "GET"
     url_keys = ["namespace", "name"]
     RequestSerializer = DataIdTailRequestSerializer
     ResponseSerializer = PayloadResponseSerializer
+
+
+class DataIdGet(BkBaseV4Resource):
+    """读取通用资源详情；无tenant路径的使用范围由Service限定。"""
+
+    action = "/v4/namespaces/{namespace}/dataids/{name}/"
+    method = "GET"
+    url_keys = ["namespace", "name"]
+    RequestSerializer = DataIdTailRequestSerializer
+    ResponseSerializer = ObjectResponseSerializer
+
+
+class ResultTableResourceGet(DataIdGet):
+    """读取正式ResultTable资源，区别于逻辑ID的MCP元数据。"""
+
+    action = "/v4/namespaces/{namespace}/resulttables/{name}/"
 
 
 class CleanDebug(BkBaseV4Resource):
@@ -222,6 +461,13 @@ class CleanGet(BkBaseV4Resource):
     url_keys = ["tenant", "namespace", "name"]
     RequestSerializer = NamedResourceRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+
+
+class CleanList(CleanGet):
+    action = "/v4/tenants/{tenant}/namespaces/{namespace}/cleans/"
+    url_keys = ["tenant", "namespace"]
+    RequestSerializer = ResourceRefRequestSerializer
+    ResponseSerializer = PayloadResponseSerializer
 
 
 class CleanCreate(CleanGet):
@@ -247,6 +493,13 @@ class DataStorageGet(BkBaseV4Resource):
     url_keys = ["tenant", "namespace", "name"]
     RequestSerializer = NamedResourceRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+
+
+class DataStorageList(DataStorageGet):
+    action = "/v4/tenants/{tenant}/namespaces/{namespace}/datastorages/"
+    url_keys = ["tenant", "namespace"]
+    RequestSerializer = ResourceRefRequestSerializer
+    ResponseSerializer = PayloadResponseSerializer
 
 
 class DataStorageCreate(DataStorageGet):
@@ -279,6 +532,22 @@ class FlowCreate(FlowGet):
 class FlowUpdate(FlowGet):
     method = "PUT"
     RequestSerializer = NamedResourceWriteRequestSerializer
+
+    def before_request(self, kwargs):
+        """完整写入不跟随重定向，避免307/308在客户端重复发送PUT。"""
+        kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """仅文档化成功凭证证明保存；重定向、裸对象或矛盾包裹均未决。"""
+        if 300 <= response.status_code < 400:
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Flow PUT redirected")
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("result") is not True or payload.get("code") != "00":
+            raise APIRequestError(
+                module_name=self.module_name, url=self.action, result="Flow PUT receipt is not confirmed"
+            )
+        return super().parse_response(response)
 
 
 class Flows(BkBaseV4Resource):

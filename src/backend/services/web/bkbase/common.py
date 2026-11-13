@@ -75,13 +75,14 @@ def resource_params(context, ref=None, *, kind=None):
 
 
 def operation_result(resource, ref, action):
-    """只报告观测到的实际状态，不从期望态或调和成功推导任务成功。"""
+    """按资源协议转换观察状态；DataStorage 的 Ok 表示当前配置已生效。"""
     status = resource.get("status") or {}
     state = resource.get("spec", {}).get("current_status")
     if isinstance(state, str):
         state = state.lower()
-    if ref.get("kind") == "DataStorage" and status.get("message") in TaskState.values:
-        state = status["message"]
+    if ref.get("kind") == "DataStorage":
+        annotations = (resource.get("metadata") or {}).get("annotations") or {}
+        state = TaskState.STOPPED if annotations.get("task_stopped") == "true" else TaskState.RUNNING
     if status.get("phase") == "Failed":
         state = TaskState.FAILED
     elif status.get("phase") != "Ok" or state not in TaskState.values:
@@ -137,6 +138,21 @@ def resource_lock(context, ref):
         lock.release()
 
 
+@contextmanager
+def snapshot_lock(system_id, resource_type_id):
+    """互斥同一快照的启停、重放和资产维护；应先于资源锁获取。"""
+    if not all(isinstance(value, str) and value for value in (system_id, resource_type_id)):
+        raise BKBaseResourceMappingError(message="Missing snapshot identity")
+    digest = hashlib.sha256(json.dumps([system_id, resource_type_id], ensure_ascii=False).encode()).hexdigest()
+    lock = RedisLock("bkbase_v4:snapshot:" + digest, ttl=300)
+    if not lock.acquire(0.1):
+        raise LockError(message="Snapshot operation is already in progress")
+    try:
+        yield
+    finally:
+        lock.release()
+
+
 def get_resource_or_none(resource, **params):
     """只有明确HTTP404或已文档化的资源不存在错误才视为不存在，鉴权/超时等错误不能触发重建。"""
     try:
@@ -153,7 +169,11 @@ def update_owner_binding(owner, patch, *, remove=()):
         current = type(owner).objects.select_for_update().get(pk=owner.pk)
         binding = deepcopy(current.bkbase_v4_resources or {})
         for key, value in patch.items():
-            if key == "storages":
+            if key in ("storages", "physical_targets"):
+                if key == "physical_targets" and any(
+                    binding.get(key, {}).get(purpose) not in (None, target) for purpose, target in value.items()
+                ):
+                    raise BKBaseResourceMappingError(message="V4 storage destination conflicts with its saved target")
                 binding.setdefault(key, {}).update(deepcopy(value))
             else:
                 binding[key] = deepcopy(value)
