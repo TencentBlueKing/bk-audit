@@ -191,6 +191,8 @@ def check_strategy_status_anomalies():
 
     for strategy in strategies:
         try:
+            if bkbase_flow.recover_pure_operation(strategy):
+                continue
             # 获取策略对应的flow_id
             flow_id = (strategy.backend_data or {}).get("flow_id")
 
