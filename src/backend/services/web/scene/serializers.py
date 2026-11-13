@@ -28,7 +28,7 @@ from services.web.scene.models import (
     ScenePermissionApplication,
     SceneSystem,
 )
-from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
+from services.web.strategy_v2.constants import StrategySource
 from services.web.strategy_v2.models import Strategy
 
 SCENE_LIST_SORT_FIELDS = ("scene_id", "strategy_count", "risk_count", "updated_at")
@@ -257,7 +257,6 @@ class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer)
 
     risk_count_default_months = SCENE_RISK_COUNT_DEFAULT_MONTHS
     risk_count_display_statuses = SCENE_RISK_COUNT_ACTIVE_DISPLAY_STATUSES
-    strategy_count_statuses = (StrategyStatusChoices.RUNNING,)
 
     systems = SceneSystemSerializer(source="scene_systems", many=True, read_only=True)
     tables = SceneDataTableSerializer(source="scene_tables", many=True, read_only=True)

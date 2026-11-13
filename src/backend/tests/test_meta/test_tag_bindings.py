@@ -92,6 +92,24 @@ class TagBindingsTest(TestCase):
             {"tag-b", "tag-c"},
         )
 
+    def test_bound_tags_keep_binding_order(self):
+        """顺序按绑定先后，而不是 tag_id：先绑新标签 A，再绑老标签 B，结果应为 A、B"""
+        old_tag = Tag.objects.create(tag_name="old-tag")
+        new_tag = Tag.objects.create(tag_name="new-tag")
+
+        self.save_tags("strategy", self.strategy.strategy_id, [new_tag.tag_name])
+        result = self.save_tags("strategy", self.strategy.strategy_id, [new_tag.tag_name, old_tag.tag_name])
+
+        self.assertEqual([item["tag_name"] for item in result], ["new-tag", "old-tag"])
+        self.assertEqual(
+            list(
+                StrategyTag.objects.filter(strategy_id=self.strategy.strategy_id)
+                .order_by("id")
+                .values_list("tag__tag_name", flat=True)
+            ),
+            ["new-tag", "old-tag"],
+        )
+
     def test_clear_strategy_tags(self):
         self.save_tags("strategy", self.strategy.strategy_id, ["tag-a"])
         result = self.save_tags("strategy", self.strategy.strategy_id, [])
