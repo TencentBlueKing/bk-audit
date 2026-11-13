@@ -81,8 +81,9 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
-        # 个人 token：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
         oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
       - name: "audit-meta"
         description: "审计系统接入元数据 MCP，按需查询系统、操作和资源类型"
         labels:
@@ -98,8 +99,9 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
-        # 个人 token：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
         oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
   - name: "prod"
     description: "生产环境"
     # 环境的英文名，蓝鲸官方网关需提供，以支持国际化
@@ -155,8 +157,9 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
-        # 个人 token：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
         oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
       - name: "audit-meta"
         description: "审计系统接入元数据 MCP，按需查询系统、操作和资源类型"
         labels:
@@ -172,8 +175,9 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
-        # 个人 token：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
         oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
 
 # 为网关添加关联应用，关联应用可以通过网关 bk-apigateway 的接口操作网关数据；每个网关最多可有 10 个关联应用；
 # 用于命令 `add_related_apps`

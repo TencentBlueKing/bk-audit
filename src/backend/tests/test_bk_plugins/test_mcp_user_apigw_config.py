@@ -63,8 +63,8 @@ AUDIT_META_MCP_RESOURCES = {
     "mcp_list_system_resource_types": "/mcp/meta/resource_types/",
 }
 
-# 本期仅这两个工具集全部由用户态资源组成，允许个人 token 直接以本人身份调用。
-PERSONAL_TOKEN_MCP_SERVERS = {"audit-log-analysis", "audit-meta"}
+# 本期仅这两个工具集全部由用户态资源组成，允许个人 token 或 OAuth2 登录直接以本人身份调用。
+USER_IDENTITY_MCP_SERVERS = {"audit-log-analysis", "audit-meta"}
 
 
 class TestMCPUserAPIGWConfig(SimpleTestCase):
@@ -242,18 +242,21 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
         for stage in definition["stages"]:
             self.assertNotIn("audit-log-statistics", {server["name"] for server in stage["mcp_servers"]})
 
-    def test_personal_token_only_on_user_verified_servers(self):
-        """个人 token 只开在全部工具为用户态的 MCP 上，且不开 OAuth2 公开客户端。"""
+    def test_user_identity_clients_only_on_user_verified_servers(self):
+        """个人 token 与 OAuth2 公开客户端只开在全部工具为用户态的 MCP 上。
+
+        两种模式分别以 personal/public 身份通过应用认证，纯应用态工具开启会导致任意用户越权。
+        """
         definition = self._load_definition()
         operations = self._get_operations()
 
         for stage in definition["stages"]:
             for server in stage["mcp_servers"]:
                 with self.subTest(stage=stage["name"], server=server["name"]):
-                    self.assertFalse(server.get("oauth2_public_client_enabled", False))
-                    enabled = server.get("oauth2_personal_client_enabled", False)
-                    self.assertEqual(enabled, server["name"] in PERSONAL_TOKEN_MCP_SERVERS)
-                    if not enabled:
+                    expected = server["name"] in USER_IDENTITY_MCP_SERVERS
+                    self.assertEqual(server.get("oauth2_personal_client_enabled", False), expected)
+                    self.assertEqual(server.get("oauth2_public_client_enabled", False), expected)
+                    if not expected:
                         continue
                     for resource_name in server["resource_names"]:
                         auth_config = operations[resource_name]["x-bk-apigateway-resource"]["authConfig"]
