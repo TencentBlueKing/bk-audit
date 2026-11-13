@@ -55,6 +55,9 @@ from services.web.analyze.storage_node import (
 from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
 from services.web.bkbase import flow as bkbase_flow
 from services.web.bkbase import metadata as bkbase_metadata
+from services.web.bkbase import table_capabilities
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.models import CollectorPlugin
 from services.web.strategy_v2.constants import BkBaseStorageType, RuleAuditConfigType
 from services.web.strategy_v2.models import LinkTable
@@ -107,6 +110,19 @@ class RuleAuditController(BkbaseFlowController):
         config_type = self.strategy.configs["config_type"]
         data_source = self.strategy.configs["data_source"]
         source_type = data_source["source_type"]
+        if get_bkbase_version() == BKBaseVersion.V4:
+            capability = bkbase_metadata.get_source_capabilities(result_table_id)
+            asset = (
+                True
+                if config_type == RuleAuditConfigType.LINK_TABLE and self.event_log_rt_id != result_table_id
+                else None
+            )
+            if self.event_log_rt_id == result_table_id:
+                asset = False
+            node_type = table_capabilities.source_node_type(capability, source_type, asset=asset)
+            if node_type is None:
+                raise NotSupportDataSource(source_type, result_table_id)
+            return node_type
         result_table = bkbase_metadata.get_result_table(result_table_id=result_table_id, related=["storages"])
         # 1. 实时计算&(日志|其他单表)：实时流水表
         if source_type == FlowDataSourceNodeType.REALTIME and (

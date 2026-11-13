@@ -3,7 +3,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from services.web.bkbase import clean, flow, source, storage
 from services.web.bkbase.common import update_owner_binding
@@ -11,6 +11,41 @@ from services.web.bkbase.exceptions import BKBaseSharedResourceProtected
 from services.web.databus.collector.resources import DeleteCollectorResource
 from services.web.databus.constants import SourcePlatformChoices
 from services.web.databus.models import CollectorConfig, Snapshot
+from services.web.strategy_v2.models import Strategy
+
+
+@override_settings(BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit")
+class FlowConsumptionPositionTests(TransactionTestCase):
+    def test_restart_changed_position_updates_cr_instead_of_mcp(self):
+        """改变消费位置仍走待发布图；只验证停止声明和本地配置登记。"""
+        context = {"version": "v4", "tenant": "tenant_a", "namespace": "audit"}
+        ref = {"kind": "Flow", "tenant": "tenant_a", "namespace": "audit", "name": "flow_a"}
+        strategy = Strategy.objects.create(
+            namespace="audit", strategy_name="rule", backend_data={"bkbase_v4": {"flow": ref, "managed_nodes": ["sql"]}}
+        )
+        remote = {
+            "metadata": {"name": ref["name"]},
+            "spec": {"nodes": [{"name": "sql"}], "operation_config": {"start_position": "continue"}},
+        }
+        with mock.patch("services.web.bkbase.flow.resource_lock"), mock.patch(
+            "services.web.bkbase.flow.api.bk_base_v4.flow_get", return_value=remote
+        ), mock.patch(
+            "services.web.bkbase.flow.api.bk_base_v4.flow_update",
+            side_effect=lambda **kw: {"metadata": kw["metadata"], "spec": kw["spec"]},
+        ) as update, mock.patch(
+            "services.web.bkbase.flow.api.bk_base_v4.flow_restart"
+        ) as restart:
+            flow.operate_rule_flow(context, strategy, action="restart", start_position="from_head")
+            restart.assert_not_called()
+            update.assert_called_once()
+            sent = update.call_args.kwargs
+            self.assertEqual(sent["metadata"]["annotations"]["task_stopped"], "true")
+            self.assertEqual(sent["spec"], remote["spec"])
+            self.assertIsNone(sent["status"])
+        strategy.refresh_from_db()
+        binding = strategy.backend_data["bkbase_v4"]
+        self.assertEqual(binding["operation"], "wait_stopped")
+        self.assertEqual(binding["pending_spec"]["operation_config"]["start_position"], "from_head")
 
 
 @override_settings(BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit")
@@ -35,10 +70,14 @@ class LifecycleTests(TestCase):
 
     def test_snapshot_stop_waits_for_actual_source_stop(self):
         owner = Snapshot.objects.create(
-            system_id="system_a", resource_type_id="resource_a", bkbase_data_id=10, status="running"
+            system_id="system_a",
+            resource_type_id="resource_a",
+            bkbase_data_id=10,
+            status="running",
+            bkbase_v4_resources={"data_source": {**self.ref, "kind": "DataSource"}},
         )
         with mock.patch(
-            "services.web.bkbase.source.stop_collector",
+            "services.web.bkbase.source.stop_source",
             return_value={"ref": {**self.ref, "kind": "DataSource"}, "task_state": "running"},
         ):
             self.assertFalse(source.stop_snapshot(owner, {}, multiple_storage=False))
@@ -102,30 +141,6 @@ class LifecycleTests(TestCase):
             owner.bkbase_v4_resources,
             {"data_id": {"name": "data"}, "storages": {"main": {"name": "main"}, "replica": {"name": "replica"}}},
         )
-
-    def test_restart_changed_position_updates_cr_instead_of_mcp(self):
-        ref = {**self.ref, "kind": "Flow"}
-        strategy = SimpleNamespace(backend_data={"bkbase_v4": {"flow": ref}})
-        remote = {
-            "metadata": {"name": ref["name"]},
-            "spec": {"nodes": [{"name": "sql"}], "operation_config": {"start_position": "continue"}},
-        }
-        with mock.patch("services.web.bkbase.flow.resource_lock"), mock.patch(
-            "services.web.bkbase.flow._save_binding"
-        ) as save, mock.patch(
-            "services.web.bkbase.flow.get_rule_flow_status", return_value={"task_state": "running", "engine_flow_id": 1}
-        ), mock.patch(
-            "services.web.bkbase.flow.api.bk_base_v4.flow_get", return_value=remote
-        ), mock.patch(
-            "services.web.bkbase.flow.api.bk_base_v4.flow_update",
-            side_effect=lambda **kw: {"metadata": kw["metadata"], "spec": kw["spec"]},
-        ) as update, mock.patch(
-            "services.web.bkbase.flow.api.bk_base_v4.flow_restart"
-        ) as restart:
-            flow.operate_rule_flow(self.context, strategy, action="restart", start_position="from_head")
-            restart.assert_not_called()
-            self.assertEqual(update.call_args.kwargs["metadata"]["annotations"]["task_stopped"], "true")
-            self.assertEqual(save.call_args.args[1]["pending_spec"]["operation_config"]["start_position"], "from_head")
 
     def test_flow_pending_observation_has_a_bound(self):
         strategy = SimpleNamespace(backend_data={"bkbase_v4": {"poll_count": 60}})

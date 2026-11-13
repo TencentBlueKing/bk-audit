@@ -40,6 +40,8 @@ from services.web.analyze.tasks import (
     toggle_monitor,
 )
 from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.exceptions import StrategyStatusUnexpected
 from services.web.strategy_v2.models import Strategy
@@ -227,6 +229,8 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         delete bkbase flow: 实际上是停止
         """
 
+        if bkbase_flow.prepare_controller_delete(self.strategy):
+            return
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             self._toggle_strategy(FlowStatusToggleChoices.STOP)
@@ -236,6 +240,8 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         enable bkbase flow
         """
 
+        if bkbase_flow.route_pure_toggle(self, "start"):
+            return
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.NO_START]:
             self._toggle_strategy(FlowStatusToggleChoices.START, force=force)
@@ -243,6 +249,8 @@ class BkbaseFlowController(BaseControl, abc.ABC):
             self._toggle_strategy(FlowStatusToggleChoices.RESTART, force=force)
 
     def disabled(self, force: bool = False) -> None:
+        if bkbase_flow.route_pure_toggle(self, "stop"):
+            return
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             self._toggle_strategy(FlowStatusToggleChoices.STOP, force=force)
@@ -262,13 +270,17 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         self.update_or_create(StrategyStatusChoices.UPDATING)
 
     def update_or_create(self, status: str):
-        self.strategy.status = status
-        self.strategy.save(update_record=False, update_fields=["status"])
+        if not bkbase_flow.prepare_controller_update(self.strategy, status):
+            self.strategy.status = status
+            self.strategy.save(update_record=False, update_fields=["status"])
+        version = get_bkbase_version()
+        version_args = {"bkbase_version": version} if version == BKBaseVersion.V4 else {}
         call_controller.delay(
             func_name=self._update_or_create.__name__,
             strategy_id=self.strategy.strategy_id,
             base_control_type=self.base_control_type,
             status=status,
+            **version_args,
         )
 
     @abc.abstractmethod

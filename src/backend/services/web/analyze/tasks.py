@@ -41,7 +41,6 @@ from services.web.analyze.constants import (
     CHECK_FLOW_STATUS_SLEEP_SECONDS,
     BaseControlTypeChoices,
     FlowStatusChoices,
-    ObjectType,
 )
 from services.web.analyze.controls.auth import (
     AssetAuthHandler,
@@ -50,6 +49,8 @@ from services.web.analyze.controls.auth import (
 from services.web.analyze.models import ControlVersion
 from services.web.bkbase import flow as bkbase_flow
 from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.common.monitor import LostSceneDetectedEvent
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import StrategyStatusChoices
@@ -58,11 +59,17 @@ from services.web.strategy_v2.models import Strategy
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def call_controller(
-    func_name: str, strategy_id: int, base_control_type: BaseControlTypeChoices = None, *args, **kwargs
+    func_name: str,
+    strategy_id: int,
+    base_control_type: BaseControlTypeChoices = None,
+    *args,
+    bkbase_version=BKBaseVersion.V3,
+    **kwargs,
 ):
-    """
-    call controller async
-    """
+    """按生产任务时的 BKBase 版本执行，旧队列未标记消息保持 V3 归属。"""
+    if bkbase_version != get_bkbase_version():
+        logger_celery.warning("[CallControllerSkipped] Strategy %s queued for BKBase %s", strategy_id, bkbase_version)
+        return
     if base_control_type == BaseControlTypeChoices.RULE_AUDIT:
         from services.web.analyze.controls.rule_audit import RuleAuditController
 
@@ -182,6 +189,8 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
         return
     if not bkbase_flow.is_current_operation(strategy, operation_id):
         return
+    if bkbase_flow.check_pure_operation(strategy, operation_id):
+        return
 
     # check flow status
     message = None
@@ -266,14 +275,20 @@ def auth_rt():
 
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def toggle_monitor(strategy_id: int, is_active: bool):
+def toggle_monitor(strategy_id: int, is_active: bool, operation_id=None):
     """
-    切换BKBASE数据监控开关状态
+    切换BKBASE数据监控开关状态；V4生产者携带operation_id，过期消息在平台读写前退出。
     """
 
     # 获取策略并判定关键参数存在
     strategy: Strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
-    if not strategy or not strategy.backend_data or not strategy.backend_data.get("flow_id"):
+    if strategy and (
+        (get_bkbase_version() == BKBaseVersion.V4 and not bkbase_flow.is_current_operation(strategy, operation_id))
+        or (get_bkbase_version() != BKBaseVersion.V4 and operation_id is not None)
+    ):
+        logger_celery.info("[ToggleMonitorSuperseded] %s %s", strategy_id, operation_id)
+        return
+    if not strategy or not bkbase_flow.has_flow(strategy):
         logger_celery.error("[ToggleMonitorFailed] Strategy Status Invalid => %s", strategy_id)
         return
 
@@ -291,19 +306,16 @@ def toggle_monitor(strategy_id: int, is_active: bool):
             if config.get("msg_type") != MsgType.VOICE
         }
     )
-    if not receivers or not notify_config:
+    if (not receivers or not notify_config) and not (get_bkbase_version() == BKBaseVersion.V4 and not is_active):
         logger_celery.error("[ToggleMonitorFailed] %s Notice Group Invalid => %s", strategy_id, strategy.notice_groups)
         return
 
-    # 获取告警配置
-    alert_config = bkbase_flow.get_alert_configs(
-        object_type=ObjectType.DATAFLOW, object_id=strategy.backend_data["flow_id"]
+    result = bkbase_flow.configure_monitor(
+        strategy, active=is_active, receivers=receivers, notify_config=notify_config, operation_id=operation_id
     )
-    alert_config["active"] = is_active
-    alert_config["alert_config_id"] = alert_config["id"]
-    alert_config["receivers"] = receivers
-    alert_config["notify_config"] = notify_config
-    bkbase_flow.edit_alert_configs(**alert_config)
+    if get_bkbase_version() == BKBaseVersion.V4 and result is None:
+        logger_celery.info("[ToggleMonitorSuperseded] %s %s", strategy_id, operation_id)
+        return
     logger_celery.info("[ToggleMonitorSuccess] %s %s", strategy_id, is_active)
 
 

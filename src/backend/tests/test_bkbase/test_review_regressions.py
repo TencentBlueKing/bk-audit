@@ -58,7 +58,8 @@ class ReviewRegressionTests(TestCase):
         )
         original = BkBaseJsonConfig.build_config(builder, {"next": {"next": []}})
         rules = clean.convert_rules(original)
-        self.assertEqual(next(r for r in rules if r["output_id"] == "log")["operator"]["key_index"], "")
+        self.assertEqual(original["extract"]["next"]["next"][0]["assign"][0]["key"], "__all_keys__")
+        self.assertIsNone(next(r for r in rules if r["output_id"] == "log")["operator"]["key_index"])
 
     def make_collector(self):
         return CollectorConfig.objects.create(
@@ -70,7 +71,8 @@ class ReviewRegressionTests(TestCase):
             source_platform=SourcePlatformChoices.BKBASE,
             bkbase_v4_resources={
                 "clean_ready": True,
-                "result_table": {**self.ref, "kind": "ResultTable", "name": "1_logs"},
+                "result_table": {**self.ref, "kind": "ResultTable", "name": "actual_rt_resource"},
+                "result_table_id": "1_logs",
             },
         )
 
@@ -78,7 +80,9 @@ class ReviewRegressionTests(TestCase):
         owner = self.make_collector()
         response = GetSystemDataIdList().request({"system_id": owner.system_id})
         self.assertEqual(response[0]["bkbase_table_id"], "1_logs")
-        self.assertEqual(GetCollectorsResponseSerializer(owner).data["bkbase_table_id"], "1_logs")
+        serialized = GetCollectorsResponseSerializer(owner).data
+        self.assertEqual(serialized["bkbase_table_id"], "1_logs")
+        self.assertNotIn("bkbase_v4_resources", serialized)
         owner.refresh_from_db()
         self.assertIsNone(owner.bkbase_table_id)
         self.assertNotIn("bkbase_v4_resources", response[0])
