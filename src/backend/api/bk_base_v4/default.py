@@ -282,6 +282,22 @@ class StorageAssetList(DatasetResource):
     ResponseSerializer = ObjectResponseSerializer
 
 
+class NamespacesList(BkBaseV4Resource):
+    """按平台身份枚举当前租户可访问的正式项目。"""
+
+    action = "/v4/tenants/{tenant}/namespaces"
+    method = "GET"
+    url_keys = ["tenant"]
+    RequestSerializer = TenantRequestSerializer
+    ResponseSerializer = PayloadResponseSerializer
+
+    def build_header(self, validated_request_data):
+        """项目列表路径及租户头采用同一校验上下文。"""
+        headers = super().build_header(validated_request_data)
+        headers["X-Bk-Tenant-Id"] = validated_request_data["tenant"]
+        return headers
+
+
 class UserBkBaseV4Resource(BkBaseV4Resource, abc.ABC):
     """个人接口显式携带真实请求身份，后台线程也不得借用平台账号。"""
 
@@ -299,20 +315,8 @@ class UserBkBaseV4Resource(BkBaseV4Resource, abc.ABC):
         return params
 
 
-class UserNamespacesList(UserBkBaseV4Resource):
+class UserNamespacesList(UserBkBaseV4Resource, NamespacesList):
     """以当前请求身份读取该租户的有权项目，不使用旧 MCP scopes。"""
-
-    action = "/v4/tenants/{tenant}/namespaces"
-    method = "GET"
-    url_keys = ["tenant"]
-    RequestSerializer = TenantRequestSerializer
-    ResponseSerializer = PayloadResponseSerializer
-
-    def build_header(self, validated_request_data):
-        """路径和租户头采用同一已校验上下文，保留路径参数供 URL 格式化。"""
-        headers = super().build_header(validated_request_data)
-        headers["X-Bk-Tenant-Id"] = validated_request_data["tenant"]
-        return headers
 
 
 class UserDatasetList(UserBkBaseV4Resource, DatasetList):
