@@ -19,8 +19,7 @@ audit-meta 工具集的元数据组装服务。
 
 权限与可见性和检索链路同源：系统列表复用 SearchLogPermission.
 get_auth_systems_by_username（候选系统口径），单系统工具先鉴权再校验
-命名空间归属；字段探索直接复用日志工具的 LogFieldMetadataService，
-鉴权、脱敏与响应预算全部内置，不重复实现。
+命名空间归属。字段探索不属于本工具集，由 audit-log-analysis 的日志字段工具提供。
 """
 
 import logging
