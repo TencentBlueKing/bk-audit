@@ -16,7 +16,6 @@ from services.web.databus.collector import resources as collector_resources
 from services.web.databus.collector.handlers import BkBaseTailLogHandler
 from services.web.databus.collector.views import DataIdsViewSet
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
-from services.web.databus.exceptions import MultiOrNoneRawDataError
 from services.web.databus.models import CollectorConfig, CollectorPlugin
 
 
@@ -41,12 +40,46 @@ class TrustedSourceBindingTests(TestCase):
                 "labels": {"raw_data_id": "11"},
             },
             "spec": {
-                "basic_info": {"data_source_name": "synthetic_source", "bk_biz_id": settings.DEFAULT_BK_BIZ_ID},
-                "data_id": {"namespace": "foreign_project", "name": "actual_data"},
+                "basic_info": {
+                    "data_source_name": "synthetic_source",
+                    "data_source_alias": "1_bklog_synthetic",
+                    "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+                },
+                "data_id": {
+                    "kind": "DataId",
+                    "tenant": "tenant_a",
+                    "namespace": "foreign_project",
+                    "name": "actual_data",
+                },
             },
+            "status": {"phase": "Ok"},
         }
         self.src_ref = {"kind": "DataSource", "tenant": "tenant_a", "namespace": "audit", "name": "actual_source"}
         self.data_ref = {"kind": "DataId", "tenant": "tenant_a", "namespace": "foreign_project", "name": "actual_data"}
+        namespaces = [
+            {
+                "kind": "Namespace",
+                "metadata": {"tenant": "tenant_a", "namespace": "bkbase", "name": "audit"},
+                "spec": {"name": "audit"},
+                "status": {"phase": "Ok"},
+            }
+        ]
+        data = {
+            "kind": "DataId",
+            "metadata": {
+                "tenant": "tenant_a",
+                "namespace": "foreign_project",
+                "name": "actual_data",
+                "labels": {"bk_biz_id": "1"},
+            },
+            "spec": {"predefined": {"dataId": 11}},
+            "status": {"phase": "Ok"},
+        }
+        self.enterContext(mock.patch.object(source.api.bk_base_v4, "namespaces_list", return_value=namespaces))
+        self.enterContext(
+            mock.patch.object(source.api.bk_base_v4, "data_source_get", side_effect=lambda **kw: deepcopy(self.native))
+        )
+        self.enterContext(mock.patch.object(source.api.bk_base_v4, "data_id_get", return_value=data))
 
     def test_plugin_selection_binds_refs_before_actual_clean(self):
         handler = PluginEtlHandler(plugin=self.plugin)
@@ -73,7 +106,7 @@ class TrustedSourceBindingTests(TestCase):
             with self.subTest(rows=rows), mock.patch.object(
                 source.api.bk_base_v4, "data_source_list", return_value=rows
             ):
-                with self.assertRaises(MultiOrNoneRawDataError):
+                with self.assertRaises(BKBaseResourceMappingError):
                     PluginEtlHandler(plugin=self.plugin).get_bk_data_id()
                 self.plugin.refresh_from_db()
                 self.assertEqual(self.plugin.bkbase_v4_resources, {})

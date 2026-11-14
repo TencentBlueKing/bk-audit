@@ -375,13 +375,15 @@ class PluginEtlHandler:
         if get_bkbase_version() == BKBaseVersion.V4:
             binding = self.plugin.bkbase_v4_resources or {}
             if any(key in binding for key in ("data_source", "data_id", "source_raw_data_id")):
-                return bkbase_source.bound_plugin_raw_id(get_bkbase_context(), binding)
+                identity = {"bk_biz_id": self.plugin.bkdata_biz_id} if "source_bk_biz_id" in binding else {}
+                return bkbase_source.bound_plugin_raw_id(get_bkbase_context(), binding, **identity)
         params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "raw_data_name__icontains": self.plugin.collector_plugin_name_en,
         }
         if get_bkbase_version() == BKBaseVersion.V4:
             params["include_binding"] = True
+            params["bk_biz_id"] = self.plugin.bkdata_biz_id
         resp = bkbase_source.get_rawdata_list(**params)
         # 非一条数据则表示没有匹配上，需要报错提示
         if len(resp) != 1:

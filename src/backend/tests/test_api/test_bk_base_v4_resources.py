@@ -6,6 +6,7 @@ from unittest import mock
 from django.core.exceptions import PermissionDenied
 from django.test import SimpleTestCase, override_settings
 
+from api.bk_base_v4 import default as v4_resources
 from api.bk_base_v4.default import (
     CleanGet,
     CleanUpdate,
@@ -21,6 +22,32 @@ class V4ResourceContractTests(SimpleTestCase):
         response.json.return_value = {"result": True, "code": "00", "data": data}
         response.raise_for_status.return_value = None
         return response
+
+    @override_settings(
+        BK_RESOURCE={
+            "PLATFORM_AUTH_ENABLED": True,
+            "PLATFORM_AUTH_ACCESS_USERNAME": "platform_user",
+            "PLATFORM_AUTH_ACCESS_TOKEN": "fixture_token",
+        }
+    )
+    def test_platform_namespace_scope_uses_platform_identity_and_tenant_header(self):
+        cls = getattr(v4_resources, "NamespacesList", None)
+        self.assertIsNotNone(cls, "Platform project enumeration must use the existing namespaces protocol")
+        resource = cls()
+        resource.session.get = mock.Mock(return_value=self.response([]))
+        self.assertEqual(resource.request({"tenant": "tenant_a"}), [])
+        kwargs = resource.session.get.call_args.kwargs
+        self.assertTrue(resource.session.get.call_args.args[0].endswith("/v4/tenants/tenant_a/namespaces"))
+        self.assertEqual(kwargs["params"], {})
+        self.assertEqual(kwargs["headers"]["X-Bk-Tenant-Id"], "tenant_a")
+        auth = json.loads(kwargs["headers"]["x-bkapi-authorization"])
+        self.assertEqual(auth["bk_username"], "platform_user")
+
+    def test_personal_namespace_scope_still_requires_authenticated_user(self):
+        resource = v4_resources.UserNamespacesList()
+        with mock.patch("api.bk_base_v4.default.get_local_request", return_value=None):
+            with self.assertRaises(PermissionDenied):
+                resource.request({"tenant": "tenant_a"})
 
     def test_clean_put_preserves_complete_body_and_strips_path(self):
         resource = CleanUpdate()
