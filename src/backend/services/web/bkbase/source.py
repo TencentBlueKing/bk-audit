@@ -7,6 +7,7 @@ DataSource与DataId分别保存真实引用，避免把同名视为同一资源�
 
 import hashlib
 import json
+import re
 import time
 import uuid
 from copy import deepcopy
@@ -133,10 +134,16 @@ def bind_source(owner, binding):
     """保存服务端确认的来源，拒绝覆盖已有的不同 DataId 绑定。"""
     with transaction.atomic():
         current = type(owner).objects.select_for_update().get(pk=owner.pk)
+        if isinstance(owner, CollectorPlugin) and any(
+            getattr(current, key) != getattr(owner, key) for key in ("collector_plugin_name_en", "bkdata_biz_id")
+        ):
+            raise BKBaseResourceMappingError(message="Plugin identity changed during source discovery")
         saved = deepcopy(current.bkbase_v4_resources or {})
+        keys = ("data_source", "data_id", "source_raw_data_id")
+        if "source_bk_biz_id" in binding:
+            keys += ("source_bk_biz_id",)
         if not isinstance(saved, dict) or any(
-            saved.get(key) is not None and saved[key] != binding[key]
-            for key in ("data_source", "data_id", "source_raw_data_id")
+            saved.get(key) is not None and saved[key] != binding[key] for key in keys
         ):
             raise BKBaseResourceMappingError(message="Existing source binding conflicts with selected source")
         saved.update(deepcopy(binding))
@@ -146,8 +153,8 @@ def bind_source(owner, binding):
     return saved
 
 
-def bound_source_raw_id(context, binding):
-    """核实已明确绑定的同租户来源，支持迁移后的跨项目引用。"""
+def bound_source_raw_id(context, binding, *, require_ready=False):
+    """核实已绑定的同租户来源；新发现绑定按需在同次GET核实就绪。"""
     ref = _replay_ref(context, binding.get("data_source"), "DataSource")
     data_ref = _replay_ref(context, binding.get("data_id"), "DataId")
     raw_id = _replay_raw_id(binding.get("source_raw_data_id"))
@@ -157,6 +164,8 @@ def bound_source_raw_id(context, binding):
     actual = _source_binding({**context, "namespace": ref["namespace"]}, resource, raw_id)
     if actual["data_source"] != ref or actual["data_id"] != data_ref:
         raise BKBaseResourceMappingError(message="Bound source DataId changed")
+    if require_ready and (not isinstance(resource.get("status"), dict) or resource["status"].get("phase") != "Ok"):
+        raise BKBaseResourceMappingError(message="Bound plugin DataSource is not ready")
     return raw_id
 
 
@@ -173,10 +182,16 @@ def verify_native_data_id(context, resource, *, data_ref, raw_data_id):
     return raw_id
 
 
-def bound_plugin_raw_id(context, binding):
+def bound_plugin_raw_id(context, binding, *, bk_biz_id=None):
     """插件显式绑定可直接引用Native DataId，已有Source键始终沿用完整Source核验。"""
     if "data_source" in binding:
-        return bound_source_raw_id(context, binding)
+        raw_id = bound_source_raw_id(context, binding, require_ready="source_bk_biz_id" in binding)
+        if "source_bk_biz_id" in binding:
+            saved_biz = _positive_raw_data_id(str(binding["source_bk_biz_id"]))
+            if saved_biz is None or _positive_raw_data_id(str(bk_biz_id)) != saved_biz:
+                raise BKBaseResourceMappingError(message="Plugin business conflicts with its verified source binding")
+            _verify_plugin_data_id(context, binding["data_id"], raw_id=raw_id, bk_biz_id=saved_biz)
+        return raw_id
     ref = _replay_ref(context, binding.get("data_id"), "DataId")
     raw_id = _replay_raw_id(binding.get("source_raw_data_id"))
     params = resource_params(context, ref, kind="DataId")
@@ -2179,21 +2194,120 @@ def stop_collector(**params):
     return stop_source(context, reference(_find_source(context, params["bkbase_data_id"]), context, "DataSource"))
 
 
+def _plugin_source_projects(context):
+    """完整采用当前租户正式项目范围，失败不能跳过后冒充唯一命中。"""
+    rows = api.bk_base_v4.namespaces_list(tenant=context["tenant"])
+    if not isinstance(rows, list):
+        raise BKBaseResourceMappingError(message="Expected platform Namespace resource array")
+    projects = set()
+    for row in rows:
+        meta = row.get("metadata") if isinstance(row, dict) else None
+        spec = row.get("spec") if isinstance(row, dict) else None
+        status = row.get("status", {}) if isinstance(row, dict) else None
+        if (
+            not isinstance(meta, dict)
+            or row.get("kind") != "Namespace"
+            or meta.get("tenant") != context["tenant"]
+            or meta.get("namespace") != "bkbase"
+            or not isinstance(meta.get("name"), str)
+            or not meta["name"]
+            or not isinstance(spec, dict)
+            or spec.get("name") not in (None, meta["name"])
+            or not isinstance(status, dict)
+        ):
+            raise BKBaseResourceMappingError(message="Invalid platform Namespace identity")
+        if status.get("phase") != "Terminating":
+            projects.add(meta["name"])
+    return sorted(projects)
+
+
+def _plugin_source_matches(resource, *, name, bk_biz_id):
+    """名称仅生成候选；复用既有BKLog标识，不按任意子串或固定业务前缀推导身份。"""
+    info = resource["spec"].get("basic_info", {})
+    if not isinstance(info, dict):
+        raise BKBaseResourceMappingError(message="Invalid DataSource basic_info")
+    identifiers = (name, CollectorPlugin.build_result_table_id(bk_biz_id, name))
+    pattern = r"(?<![A-Za-z0-9_-])(?:" + "|".join(re.escape(value) for value in identifiers) + r")(?![A-Za-z0-9_-])"
+    return any(
+        isinstance(value, str) and re.search(pattern, value, flags=re.IGNORECASE)
+        for value in (resource["metadata"]["name"], info.get("data_source_name"), info.get("data_source_alias"))
+    )
+
+
+def _verify_plugin_data_id(context, ref, *, raw_id, bk_biz_id):
+    """Source项目业务不能替代来源归属，按实际DataId的数字ID及业务标记核对。"""
+    params = resource_params(context, ref, kind="DataId")
+    params.pop("tenant")
+    actual = api.bk_base_v4.data_id_get(**params)
+    verify_native_data_id(context, actual, data_ref=ref, raw_data_id=raw_id)
+    labels = actual["metadata"].get("labels", {})
+    if _positive_raw_data_id(str(labels.get("bk_biz_id"))) != bk_biz_id:
+        raise BKBaseResourceMappingError(message="DataId origin business does not match the audit plugin")
+    if not isinstance(actual.get("status"), dict) or actual["status"].get("phase") != "Ok":
+        raise BKBaseResourceMappingError(message="Plugin DataId is not ready")
+
+
+def _plugin_rawdata_list(context, *, name, bk_biz_id):
+    """先完整范围消歧，再正式核验唯一Source及DataId，尚未核实的候选不能被过滤掉。"""
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        raise BKBaseResourceMappingError(message="Plugin source discovery requires its full English name")
+    biz_id = _positive_raw_data_id(str(bk_biz_id))
+    if biz_id is None:
+        raise BKBaseResourceMappingError(message="Plugin business must be a positive numeric ID")
+    candidates = []
+    for namespace in _plugin_source_projects(context):
+        rows = _source_list(api.bk_base_v4.data_source_list(tenant=context["tenant"], namespace=namespace))
+        for row in rows:
+            ref = _binding_resource_ref(context, row, "DataSource")
+            if ref["namespace"] != namespace:
+                raise BKBaseResourceMappingError(message="DataSource list escaped its enumerated project")
+            if _plugin_source_matches(row, name=name, bk_biz_id=biz_id):
+                candidates.append(row)
+    if len(candidates) != 1:
+        raise BKBaseResourceMappingError(message=f"Expected one plugin DataSource; matched {len(candidates)}")
+    selected = candidates[0]
+    ref = _binding_resource_ref(context, selected, "DataSource")
+    raw_id = _positive_raw_data_id(selected["metadata"].get("labels", {}).get("raw_data_id"))
+    if raw_id is None:
+        raise BKBaseResourceMappingError(message="Plugin DataSource numeric raw_data_id is not ready")
+    actual = api.bk_base_v4.data_source_get(**resource_params(context, ref, kind="DataSource"))
+    if _binding_resource_ref(context, actual, "DataSource") != ref:
+        raise BKBaseResourceMappingError(message="Plugin DataSource GET identity changed")
+    for resource in (selected, actual):
+        data_ref = resource["spec"].get("data_id")
+        if (
+            not isinstance(data_ref, dict)
+            or set(data_ref) != {"kind", "tenant", "namespace", "name"}
+            or data_ref.get("kind") != "DataId"
+        ):
+            raise BKBaseResourceMappingError(message="Plugin DataSource requires a complete DataId reference")
+    project_context = {**context, "namespace": ref["namespace"]}
+    binding = _source_binding(project_context, selected, raw_id)
+    if _source_binding(project_context, actual, raw_id) != binding or not _plugin_source_matches(
+        actual, name=name, bk_biz_id=biz_id
+    ):
+        raise BKBaseResourceMappingError(message="Plugin DataSource identity changed after listing")
+    if not isinstance(actual.get("status"), dict) or actual["status"].get("phase") != "Ok":
+        raise BKBaseResourceMappingError(message="Plugin DataSource is not ready")
+    _verify_plugin_data_id(context, binding["data_id"], raw_id=raw_id, bk_biz_id=biz_id)
+    # 保存已核实的来源业务身份，重入时重新核验；不改Source或审计输出的项目业务。
+    binding["source_bk_biz_id"] = biz_id
+    return [{**_legacy_source(actual), "bk_biz_id": biz_id, "_bkbase_v4_binding": binding}]
+
+
 def get_rawdata_list(*, include_binding=False, **params):
+    """插件发现返回已核实绑定；普通列表保留配置项目内的旧投影。"""
     if get_bkbase_version() == BKBaseVersion.V3:
         return api.bk_base.get_rawdata_list(**params)
     context = get_bkbase_context()
+    if include_binding:
+        return _plugin_rawdata_list(
+            context, name=params.get("raw_data_name__icontains"), bk_biz_id=params.get("bk_biz_id")
+        )
     rows = _source_list(api.bk_base_v4.data_source_list(**resource_params(context)))
     name = str(params.get("raw_data_name__icontains", "")).lower()
     return [
-        {
-            **_legacy_source(r),
-            **(
-                {"_bkbase_v4_binding": _source_binding(context, r, r["metadata"]["labels"]["raw_data_id"])}
-                if include_binding
-                else {}
-            ),
-        }
+        _legacy_source(r)
         for r in rows
         if _positive_raw_data_id(r.get("metadata", {}).get("labels", {}).get("raw_data_id")) is not None
         and name in r.get("spec", {}).get("basic_info", {}).get("data_source_name", "").lower()
