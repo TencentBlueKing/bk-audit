@@ -22,7 +22,7 @@ def _context(context):
 
 
 def result_table_identity(context, result):
-    """统一正式结果表与既有资源读回的引用、逻辑身份，拒绝相互冲突的证明。"""
+    """优先使用显式逻辑ID解析结果表身份，校验租户、标签和完整引用。"""
     if (
         not isinstance(result, dict)
         or result.get("kind", "ResultTable") != "ResultTable"
@@ -51,8 +51,6 @@ def result_table_identity(context, result):
         raise BKBaseResourceMappingError(message="Missing or invalid ResultTable logical identity")
     if label_id not in (None, "", logical_id):
         raise BKBaseResourceMappingError(message="Conflicting ResultTable logical identities")
-    if biz_id is not None and int(biz_id) != int(logical_id.split("_", 1)[0]):
-        raise BKBaseResourceMappingError(message="ResultTable business identity mismatch")
     return {"kind": "ResultTable", **{key: metadata[key] for key in ("tenant", "namespace", "name")}}, logical_id
 
 

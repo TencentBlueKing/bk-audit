@@ -43,7 +43,23 @@ class ResultTableIdentityReuseTests(SimpleTestCase):
         )
         self.by_ref.assert_not_called()
 
+    def test_clean_reuses_actual_ref_when_explicit_id_and_business_prefix_differ(self):
+        self.remote["spec"]["bizId"] = 2
+        first = clean._verified_result_table_ref(self.context, {}, "11_logical")
+        self.assertEqual(first, self.ref)
+        self.assertEqual(
+            clean._verified_result_table_ref(self.context, {"result_table": first}, "11_logical"), self.ref
+        )
+
     def test_flow_actual_apply_validates_formal_identity_before_create(self):
+        self._assert_flow_apply_keeps_actual_ref()
+
+    def test_flow_actual_apply_accepts_explicit_id_with_different_business_prefix(self):
+        self.remote["spec"]["bizId"] = 2
+        self._assert_flow_apply_keeps_actual_ref()
+
+    def _assert_flow_apply_keeps_actual_ref(self):
+        """在真实Flow发布入口校验输入身份，外部写入与持久化在边界替换。"""
         strategy = SimpleNamespace(strategy_id=13, namespace="audit", backend_data={})
         spec = {"nodes": [{"name": stable_name("src", "11_logical"), "kind": "StreamSourceNode", "data": self.ref}]}
 
@@ -84,7 +100,7 @@ class ResultTableIdentityReuseTests(SimpleTestCase):
         cases = [
             ({"predefiendResultTableId": "11_other"}, {}),
             ({"predefiendResultTableId": "11_logical"}, {"result_table_id": "11_other"}),
-            ({"predefiendResultTableId": "11_logical", "bizId": 12}, {}),
+            ({"predefiendResultTableId": "11_bad/path", "bizId": 12}, {}),
             ({}, {}),
         ]
         for spec, labels in cases:
@@ -112,6 +128,25 @@ class ResultTableIdentityReuseTests(SimpleTestCase):
             else:
                 with self.subTest(flow=True, spec=spec), self.assertRaises(BKBaseResourceMappingError):
                     flow._verified_input_ref(self.context, self.ref)
+
+    def test_different_business_prefix_does_not_bypass_tenant_kind_or_ref_checks(self):
+        self.remote["spec"]["bizId"] = 2
+        baseline = deepcopy(self.remote)
+        for key, value in (("tenant", "tenant_b"), ("namespace", ""), ("name", ""), ("name", "other-name")):
+            self.remote.clear()
+            self.remote.update(deepcopy(baseline))
+            self.remote["metadata"][key] = value
+            with self.subTest(clean=True, key=key, value=value), self.assertRaises(BKBaseResourceMappingError):
+                clean._verified_result_table_ref(self.context, {"result_table": self.ref}, "11_logical")
+            with self.subTest(flow=True, key=key, value=value), self.assertRaises(BKBaseResourceMappingError):
+                flow._verified_input_ref(self.context, self.ref)
+        self.remote.clear()
+        self.remote.update(baseline)
+        self.remote["kind"] = "DataStorage"
+        with self.assertRaises(BKBaseResourceMappingError):
+            clean._verified_result_table_ref(self.context, {"result_table": self.ref}, "11_logical")
+        with self.assertRaises(BKBaseResourceMappingError):
+            flow._verified_input_ref(self.context, self.ref)
 
     def test_legacy_explicit_label_remains_valid_when_formal_fields_are_absent(self):
         self.remote["spec"] = {}
