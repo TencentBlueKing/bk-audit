@@ -4,7 +4,13 @@ from unittest import mock
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase
 
-from api.bk_base_v4.default import CleanGet, DataSourceGet, DataStorageGet, FlowGet
+from api.bk_base_v4.default import (
+    CleanGet,
+    DataSourceGet,
+    DataSourceList,
+    DataStorageGet,
+    FlowGet,
+)
 from services.web.bkbase.common import get_resource_or_none
 
 
@@ -16,6 +22,56 @@ class ResourceErrorTests(SimpleTestCase):
         response.json.return_value = payload
         response.request.url = "https://gateway.test/resource"
         return response
+
+    def request_list(self, payload):
+        """经过真实request校验链，仅替换HTTP响应和鉴权头构造。"""
+        resource = DataSourceList()
+        with mock.patch.object(resource, "build_header", return_value={}), mock.patch.object(
+            resource.session, "get", return_value=self.response(payload)
+        ):
+            return resource.request(tenant="tenant_a", namespace="audit")
+
+    def test_successful_empty_list_and_native_payloads_remain_usable(self):
+        self.assertEqual(self.request_list({"result": True, "code": "00", "data": []}), [])
+        for native in ([], [{"metadata": {"name": "source_a"}}], {"metadata": {}, "spec": {}}):
+            with self.subTest(native=native):
+                self.assertEqual(self.request_list(native), native)
+
+    def test_malformed_or_contradictory_envelopes_cannot_become_empty_lists(self):
+        for payload in (
+            {"result": 0, "code": "1500111", "data": []},
+            {"result": 1, "code": "00", "data": []},
+            {"result": "true", "code": "00", "data": []},
+            {"code": "1500111", "data": []},
+            {"result": True, "code": "1500111", "data": []},
+            {"result": True, "data": []},
+            {"result": True, "code": "00"},
+            {"result": False, "code": "00", "data": []},
+            {"code": "1500111"},
+        ):
+            with self.subTest(payload=payload), self.assertRaises(APIRequestError):
+                self.request_list(payload)
+
+    def test_malformed_not_found_never_allows_resource_creation(self):
+        for result in (0, None, "false", True, "absent"):
+            for code, data in (("1558025", {}), ("1500102", {"err": "resource not exists"})):
+                payload = {"code": code, "data": data}
+                if result != "absent":
+                    payload["result"] = result
+                resource = FlowGet()
+                with mock.patch.object(resource, "build_header", return_value={}), mock.patch.object(
+                    resource.session, "get", return_value=self.response(payload)
+                ), self.subTest(result=result, code=code), self.assertRaises(APIRequestError) as caught:
+                    get_resource_or_none(resource.request, tenant="tenant_a", namespace="audit", name="missing")
+                self.assertFalse(getattr(caught.exception, "resource_not_found", False))
+
+    def test_incomplete_explicit_failure_is_not_authoritative_not_found(self):
+        resource = FlowGet()
+        with mock.patch.object(resource, "build_header", return_value={}), mock.patch.object(
+            resource.session, "get", return_value=self.response({"result": False, "code": "1558025"})
+        ), self.assertRaises(APIRequestError) as caught:
+            get_resource_or_none(resource.request, tenant="tenant_a", namespace="audit", name="missing")
+        self.assertFalse(getattr(caught.exception, "resource_not_found", False))
 
     def test_gateway_not_found_allows_first_create(self):
         for cls in (CleanGet, DataSourceGet, DataStorageGet, FlowGet):

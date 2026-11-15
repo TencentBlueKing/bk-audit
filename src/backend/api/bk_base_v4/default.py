@@ -62,13 +62,20 @@ class BkBaseV4Resource(BkApiResource, abc.ABC):
         except APIRequestError as error:
             error.http_status = response.status_code
             raise
-        if isinstance(payload, dict) and "data" in payload and ("result" in payload or "code" in payload):
-            if payload.get("result") is False:
+        if isinstance(payload, dict) and ("result" in payload or "code" in payload):
+            if payload.get("result") is not True or payload.get("code") != "00" or "data" not in payload:
                 error = APIRequestError(module_name=self.module_name, url=self.action, result=payload)
-                error.resource_not_found = str(payload.get("code")) == "1558025" or (
-                    str(payload.get("code")) == "1500102"
-                    and isinstance(payload.get("data"), dict)
-                    and payload["data"].get("err") == "resource not exists"
+                error.resource_not_found = (
+                    payload.get("result") is False
+                    and "data" in payload
+                    and (
+                        str(payload.get("code")) == "1558025"
+                        or (
+                            str(payload.get("code")) == "1500102"
+                            and isinstance(payload.get("data"), dict)
+                            and payload["data"].get("err") == "resource not exists"
+                        )
+                    )
                 )
                 raise error
             return payload["data"]

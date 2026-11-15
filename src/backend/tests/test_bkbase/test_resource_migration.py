@@ -547,7 +547,7 @@ class ResourceMigrationTests(SimpleTestCase):
         self.assertIn(name, self.resources)
         response = requests.Response()
         response.status_code = 200
-        response._content = json.dumps({"result": True, "code": "0", "data": deepcopy(self.resources[name])}).encode()
+        response._content = json.dumps({"result": True, "code": "00", "data": deepcopy(self.resources[name])}).encode()
         response.headers["Content-Type"] = "application/json"
         response.url = url
         return response
