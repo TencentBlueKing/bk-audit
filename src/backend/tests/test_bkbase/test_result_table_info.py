@@ -66,6 +66,11 @@ class ResultTableInfoTests(SimpleTestCase):
         self.assertEqual(self.resolve(), self.ref)
         self.assertNotIn("status", self.resolve())
 
+    def test_explicit_logical_id_resolves_actual_ref_when_business_prefix_differs(self):
+        self.resource["spec"]["bizId"] = 2
+        self.assertEqual(self.resolve(), self.ref)
+        self.assertEqual(metadata.result_table_identity(self.context, self.resource), (self.ref, "11_logical"))
+
     def test_documented_fallback_uses_business_and_hyphen_replacement_without_prefix_guessing(self):
         payload = deepcopy(self.resource)
         payload["metadata"]["name"] = "c_actual-name"
@@ -84,7 +89,9 @@ class ResultTableInfoTests(SimpleTestCase):
         for spec in (
             {},
             {"predefiendResultTableId": "11_other"},
-            {"predefiendResultTableId": "11_logical", "bizId": 12},
+            {"predefiendResultTableId": "11_bad/path", "bizId": 12},
+            {"predefiendResultTableId": "11_logical", "bizId": True},
+            {"predefiendResultTableId": "11_logical", "bizId": "invalid"},
         ):
             payload = deepcopy(self.resource)
             payload["spec"] = spec
@@ -92,6 +99,14 @@ class ResultTableInfoTests(SimpleTestCase):
                 self.resolve(payload)
         with self.assertRaises(BKBaseResourceMappingError):
             self.resolve({**self.resource, "kind": "DataStorage"})
+
+    def test_explicit_id_must_still_match_requested_id_and_label(self):
+        self.resource["spec"]["bizId"] = 2
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.resolve(logical="2_logical")
+        self.resource["metadata"]["labels"] = {"result_table_id": "2_logical"}
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.resolve()
 
     def test_invalid_logical_id_or_missing_tenant_does_not_make_a_request(self):
         with mock.patch.object(metadata.api.bk_base_v4, "result_table_info") as get:
