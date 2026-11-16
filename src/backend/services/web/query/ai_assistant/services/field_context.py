@@ -31,7 +31,7 @@ import json
 from datetime import timedelta
 from typing import Dict, List, Optional, Tuple
 
-from bk_resource import api, resource
+from bk_resource import resource
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils import timezone
@@ -39,6 +39,7 @@ from django.utils import timezone
 from api.bk_base.constants import StorageType
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.permissions import SearchLogPermission
+from services.web.bkbase import query as bkbase_query
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
     AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES,
@@ -276,7 +277,7 @@ class FieldContextService:
                 page=1,
                 page_size=getattr(settings, "AI_ASSISTANT_FIELD_SAMPLE_ROWS", AI_ASSISTANT_FIELD_SAMPLE_ROWS),
             )
-            records = api.bk_base.query_sync(
+            records = bkbase_query.query_sync(
                 sql=sql_builder.build_data_sql(),
                 prefer_storage=StorageType.DORIS.value,
             )

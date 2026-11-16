@@ -16,14 +16,15 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api
 from bk_resource.settings import bk_resource_settings
+
+from services.web.bkbase import clean as bkbase_clean
 
 
 def stop_bkbase_clean(bkbase_result_table_id: str, processing_id: str, username: str = None) -> None:
     """停止清洗任务"""
 
-    api.bk_base.databus_tasks_delete(
+    bkbase_clean.databus_tasks_delete(
         result_table_id=bkbase_result_table_id,
         storages=["clean"],
         processing_id=processing_id,
@@ -36,7 +37,7 @@ def start_bkbase_clean(bkbase_result_table_id: str, processing_id: str, username
     启动清洗任务
     """
 
-    api.bk_base.databus_tasks_post(
+    bkbase_clean.databus_tasks_post(
         result_table_id=bkbase_result_table_id,
         processing_id=processing_id,
         storages=["kafka"],

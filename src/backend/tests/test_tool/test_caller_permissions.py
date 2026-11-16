@@ -61,7 +61,7 @@ class TestToolViewPermissions(TestCase):
                 "services.web.tool.permissions.api.bk_vision.check_share_auth", return_value={"check_result": True}
             ),
             mock.patch(
-                "services.web.tool.executor.tool.api.bk_base.user_auth_batch_check",
+                "bk_resource.api.bk_base.user_auth_batch_check",
                 return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
             ),
         ):
@@ -223,11 +223,11 @@ class TestToolViewPermissions(TestCase):
                 return_value={"page": 1, "num_pages": 1, "total": 1, "results": [mocked_event]},
             ),
             mock.patch(
-                "services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request",
+                "bk_resource.api.bk_base.query_sync.bulk_request",
                 return_value=({"list": [{"a": 1}]}, {"list": [{"count": 1}]}),
             ),
             mock.patch(
-                "services.web.tool.executor.tool.api.bk_base.user_auth_batch_check",
+                "bk_resource.api.bk_base.user_auth_batch_check",
                 return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
             ),
             mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True),
@@ -366,7 +366,7 @@ class TestToolViewPermissions(TestCase):
                 return_value=True,
             ),
             mock.patch(
-                "services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request",
+                "bk_resource.api.bk_base.query_sync.bulk_request",
                 return_value=({"list": [{"a": 1}]}, {"list": [{"count": 1}]}),
             ),
             mock.patch(
@@ -374,7 +374,7 @@ class TestToolViewPermissions(TestCase):
                 return_value={"page": 1, "num_pages": 1, "total": 1, "results": []},
             ),
             mock.patch(
-                "services.web.tool.executor.tool.api.bk_base.user_auth_batch_check",
+                "bk_resource.api.bk_base.user_auth_batch_check",
                 return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
             ),
         ):

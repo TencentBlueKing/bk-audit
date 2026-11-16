@@ -18,13 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 from collections import defaultdict
 
-from blueapps.utils.base import ignored
 from blueapps.utils.unique import uniqid
 from django.conf import settings
 from django.utils.translation import gettext
 
-from apps.exceptions import MetaConfigNotExistException, TimeFieldMissing
-from apps.meta.models import GlobalMetaConfig
+from apps.exceptions import TimeFieldMissing
 from apps.meta.utils.fields import (
     BK_DATA_ID,
     BKAUDIT_BUILD_IN_FIELDS,
@@ -41,14 +39,12 @@ from apps.meta.utils.fields import (
 from core.constants import DEFAULT_JSON_EXPAND_SEPARATOR
 from core.models import get_request_username
 from services.web.databus.collector.snapshot.join.base import JoinConfig
+from services.web.databus.collector.snapshot.system.v4 import system_snapshot_table
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
-    ACTION_DATA_RT_KEY,
     DEFAULT_TIME_FORMAT,
     DEFAULT_TIME_LEN,
     DEFAULT_TIME_ZONE,
-    RESOURCE_TYPE_DATA_RT_KEY,
-    USER_INFO_DATA_RT_KEY,
     SourcePlatformChoices,
 )
 from services.web.databus.models import CollectorConfig
@@ -213,48 +209,26 @@ class BkBaseConfig:
                 for index, field in enumerate(self.fields, 20)
             ]
         )
-        with ignored(MetaConfigNotExistException):
-            if GlobalMetaConfig.get(RESOURCE_TYPE_DATA_RT_KEY):
-                fields.append(
-                    {
-                        "field_name": SNAPSHOT_RESOURCE_TYPE_INFO.field_name,
-                        "field_type": BKDATA_ES_TYPE_MAP.get(
-                            SNAPSHOT_RESOURCE_TYPE_INFO.field_type, SNAPSHOT_RESOURCE_TYPE_INFO.field_type
-                        ),
-                        "field_alias": SNAPSHOT_RESOURCE_TYPE_INFO.alias_name,
-                        "is_dimension": SNAPSHOT_RESOURCE_TYPE_INFO.is_dimension,
-                        "field_index": 12,
-                        "is_json": True,
-                    }
-                )
-        with ignored(MetaConfigNotExistException):
-            if GlobalMetaConfig.get(ACTION_DATA_RT_KEY):
-                fields.append(
-                    {
-                        "field_name": SNAPSHOT_ACTION_INFO.field_name,
-                        "field_type": BKDATA_ES_TYPE_MAP.get(
-                            SNAPSHOT_ACTION_INFO.field_type, SNAPSHOT_ACTION_INFO.field_type
-                        ),
-                        "field_alias": SNAPSHOT_ACTION_INFO.alias_name,
-                        "is_dimension": SNAPSHOT_ACTION_INFO.is_dimension,
-                        "field_index": 13,
-                        "is_json": True,
-                    }
-                )
-        with ignored(MetaConfigNotExistException):
-            if GlobalMetaConfig.get(USER_INFO_DATA_RT_KEY):
-                fields.append(
-                    {
-                        "field_name": SNAPSHOT_USER_INFO.field_name,
-                        "field_type": BKDATA_ES_TYPE_MAP.get(
-                            SNAPSHOT_USER_INFO.field_type, SNAPSHOT_ACTION_INFO.field_type
-                        ),
-                        "field_alias": SNAPSHOT_USER_INFO.alias_name,
-                        "is_dimension": SNAPSHOT_USER_INFO.is_dimension,
-                        "field_index": 14,
-                        "is_json": True,
-                    }
-                )
+        for index, (kind, snapshot_field) in enumerate(
+            (
+                ("resource_type", SNAPSHOT_RESOURCE_TYPE_INFO),
+                ("action", SNAPSHOT_ACTION_INFO),
+                ("user", SNAPSHOT_USER_INFO),
+            ),
+            start=12,
+        ):
+            if system_snapshot_table(kind) is None:
+                continue
+            fields.append(
+                {
+                    "field_name": snapshot_field.field_name,
+                    "field_type": BKDATA_ES_TYPE_MAP.get(snapshot_field.field_type, snapshot_field.field_type),
+                    "field_alias": snapshot_field.alias_name,
+                    "is_dimension": snapshot_field.is_dimension,
+                    "field_index": index,
+                    "is_json": True,
+                }
+            )
         if self.join_data_rt:
             fields.extend(JoinConfig.fields())
         return fields
@@ -465,51 +439,31 @@ class BkBaseConfig:
             "join": [],
         }
 
+    def _append_system_snapshot_join(self, config, kind, id_field, output_field):
+        """Use V4 Redis's actual composite key order and the legacy order for V3."""
+        table = system_snapshot_table(kind)
+        if table is None:
+            return None
+        result_table_id, key_fields = table
+        if key_fields is None:
+            key_fields = ["id"] if kind == "user" else ["system_id", "id"]
+        input_fields = {"system_id": "system_id", "id": id_field}
+        config["join"].append(
+            {
+                "result_table_id": result_table_id,
+                "join_on": [{"this_field": input_fields[key], "target_field": key} for key in key_fields],
+                "select": [{"field_name": "data", "type": FIELD_TYPE_TEXT, "as": output_field}],
+            }
+        )
+        return result_table_id
+
     def trans_config(self, next_config: dict) -> dict:
         config = self.build_config(next_config)
-        # 增加资源类型关联
-        resource_type_rt = None
-        with ignored(MetaConfigNotExistException):
-            resource_type_rt = GlobalMetaConfig.get(RESOURCE_TYPE_DATA_RT_KEY)
-            config["join"].append(
-                {
-                    "result_table_id": resource_type_rt,
-                    "join_on": [
-                        {"this_field": "system_id", "target_field": "system_id"},
-                        {"this_field": "resource_type_id", "target_field": "id"},
-                    ],
-                    "select": [
-                        {"field_name": "data", "type": FIELD_TYPE_TEXT, "as": SNAPSHOT_RESOURCE_TYPE_INFO.field_name}
-                    ],
-                }
-            )
-        # 增加操作关联
-        action_rt = None
-        with ignored(MetaConfigNotExistException):
-            action_rt = GlobalMetaConfig.get(ACTION_DATA_RT_KEY)
-            config["join"].append(
-                {
-                    "result_table_id": action_rt,
-                    "join_on": [
-                        {"this_field": "system_id", "target_field": "system_id"},
-                        {"this_field": "action_id", "target_field": "id"},
-                    ],
-                    "select": [{"field_name": "data", "type": FIELD_TYPE_TEXT, "as": SNAPSHOT_ACTION_INFO.field_name}],
-                }
-            )
-        # 增加用户数据关联
-        user_info_rt = None
-        with ignored(MetaConfigNotExistException):
-            user_info_rt = GlobalMetaConfig.get(USER_INFO_DATA_RT_KEY)
-            config["join"].append(
-                {
-                    "result_table_id": user_info_rt,
-                    "join_on": [
-                        {"this_field": "username", "target_field": "id"},
-                    ],
-                    "select": [{"field_name": "data", "type": FIELD_TYPE_TEXT, "as": SNAPSHOT_USER_INFO.field_name}],
-                }
-            )
+        resource_type_rt = self._append_system_snapshot_join(
+            config, "resource_type", "resource_type_id", SNAPSHOT_RESOURCE_TYPE_INFO.field_name
+        )
+        action_rt = self._append_system_snapshot_join(config, "action", "action_id", SNAPSHOT_ACTION_INFO.field_name)
+        self._append_system_snapshot_join(config, "user", "username", SNAPSHOT_USER_INFO.field_name)
         # 数据关联
         if self.join_data_rt:
             config["join"].append(JoinConfig(self.join_data_rt).config)

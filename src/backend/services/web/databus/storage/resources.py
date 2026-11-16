@@ -31,6 +31,9 @@ from apps.exceptions import MetaConfigNotExistException, StorageChanging
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
+from services.web.bkbase import plugin_storage_switch
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
@@ -95,9 +98,13 @@ class UpdateStorageResource(StorageMeta):
         )
         # 更新采集插件
         namespace = validated_request_data["namespace"]
-        CollectorPlugin.objects.filter(
+        plugins = CollectorPlugin.objects.filter(
             namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value]
-        ).update(storage_changed=True)
+        )
+        if get_bkbase_version() == BKBaseVersion.V4:
+            plugin_storage_switch.mark_config_update(plugins)
+        else:
+            plugins.update(storage_changed=True)
         return data
 
 
@@ -112,26 +119,22 @@ class StorageActivateResource(StorageMeta):
             raise StorageChanging()
         # 设置默认集群
         namespace = validated_request_data["namespace"]
-        if validated_request_data["cluster_mode"] == ClusterMode.MAIN:
-            _ = GlobalMetaConfig.set(
-                DEFAULT_STORAGE_CONFIG_KEY,
-                validated_request_data["cluster_id"],
-                config_level=ConfigLevelChoices.NAMESPACE.value,
-                instance_key=namespace,
-            )
+        purpose = validated_request_data["cluster_mode"]
+        if purpose == ClusterMode.MAIN:
+            key, target = DEFAULT_STORAGE_CONFIG_KEY, validated_request_data["cluster_id"]
         else:
-            _ = GlobalMetaConfig.set(
-                DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
-                {"cluster_id": validated_request_data["cluster_id"]}
-                if not validated_request_data.get('config')
-                else validated_request_data['config'],
-                config_level=ConfigLevelChoices.NAMESPACE.value,
-                instance_key=namespace,
-            )
+            key = DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY
+            target = validated_request_data.get("config") or {"cluster_id": validated_request_data["cluster_id"]}
         # 设置采集插件
-        CollectorPlugin.objects.filter(
+        plugins = CollectorPlugin.objects.filter(
             namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value]
-        ).update(storage_changed=True)
+        )
+        is_v4 = get_bkbase_version() == BKBaseVersion.V4
+        if is_v4:
+            plugin_storage_switch.reserve(plugins, namespace=namespace, purpose=purpose, target=target)
+        GlobalMetaConfig.set(key, target, config_level=ConfigLevelChoices.NAMESPACE.value, instance_key=namespace)
+        if not is_v4:
+            plugins.update(storage_changed=True)
         return validated_request_data["cluster_id"]
 
 

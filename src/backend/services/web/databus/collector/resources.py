@@ -21,6 +21,7 @@ import datetime
 import json
 import math
 from collections import defaultdict
+from functools import partial
 from typing import List
 
 import arrow
@@ -30,7 +31,9 @@ from bk_resource.contrib.model import ModelResource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import uniqid
 from blueapps.utils.logger import logger
+from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -49,10 +52,18 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from apps.meta.permissions import SystemPermissionHandler
 from apps.meta.utils.saas import get_saas_url
+from apps.permission.handlers.actions import ActionEnum
 from core.cache import CacheType
 from core.utils.data import replenish_params
 from core.utils.time import format_date_string
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import snapshot_clean_provision, snapshot_restore
+from services.web.bkbase import source as bkbase_source
+from services.web.bkbase.common import get_bkbase_version, snapshot_lock
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.bcs.yaml import YamlTemplate
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.serializers import (
@@ -124,7 +135,6 @@ from services.web.databus.models import (
     SnapshotStorage,
 )
 from services.web.databus.tasks import create_api_push_etl
-from services.web.databus.utils import stop_bkbase_clean
 
 
 class CollectorMeta(AuditMixinResource, abc.ABC):
@@ -372,11 +382,12 @@ class DeleteCollectorResource(CollectorMeta, ModelResource):
             collector_config_id=validated_request_data["collector_config_id"],
             source_platform=SourcePlatformChoices.BKLOG.value,
         )
+        bkbase_clean.validate_collector_delete(collector)
         # 停止采集
         api.bk_log.stop_subscription(collector_config_id=collector.collector_config_id)
         # 停止清洗入库
-        if collector.processing_id:
-            stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
+        if not bkbase_clean.stop_log_collector_clean(collector):
+            return None
         # 数据库软删除
         super().perform_request(validated_request_data)
 
@@ -512,6 +523,27 @@ class ToggleJoinDataResource(CollectorMeta):
     RequestSerializer = ToggleJoinDataRequestSerializer
     ResponseSerializer = ToggleJoinDataResponseSerializer
 
+    def build_extra_params(self, request_data, validated_request_data):
+        """保留字段的提交范围，已有快照省略配置时沿用现值。"""
+        validated_request_data = super().build_extra_params(request_data, validated_request_data)
+        if get_bkbase_version() == BKBaseVersion.V4:
+            validated_request_data["_provided_fields"] = set(request_data)
+        return validated_request_data
+
+    @staticmethod
+    def _existing_request(snapshot, request_data):
+        request_data = dict(request_data)
+        provided = request_data.pop("_provided_fields", set(request_data))
+        existing = {
+            "pull_type": snapshot.pull_type,
+            "join_data_type": snapshot.join_data_type,
+            "storage_type": list(snapshot.storages.values_list("storage_type", flat=True)),
+        }
+        for name, value in existing.items():
+            if name not in provided:
+                request_data[name] = value
+        return request_data
+
     def pre_check(self, system_id, resource_type_id, join_data_type):
         body = {
             "type": resource_type_id,
@@ -548,9 +580,126 @@ class ToggleJoinDataResource(CollectorMeta):
         )
         raise JoinDataPreCheckFailed()
 
-    @atomic
     def perform_request(self, validated_request_data):
+        if get_bkbase_version() == BKBaseVersion.V4 and not validated_request_data["is_enabled"]:
+            snapshot = Snapshot.objects.get_or_create(
+                system_id=validated_request_data["system_id"],
+                resource_type_id=validated_request_data["resource_type_id"],
+            )[0]
+            if snapshot.status == SnapshotRunningStatus.PREPARING:
+                raise SnapshotPreparingException()
+            bkbase_source.stop_snapshot(snapshot, {"bkbase_data_id": snapshot.bkbase_data_id})
+            snapshot.refresh_from_db()
+            return snapshot
+        if get_bkbase_version() == BKBaseVersion.V4:
+            system_id = validated_request_data["system_id"]
+            resource_type_id = validated_request_data["resource_type_id"]
+            with snapshot_lock(system_id, resource_type_id):
+                existing = Snapshot.objects.filter(system_id=system_id, resource_type_id=resource_type_id).first()
+                if existing is not None and existing.status == SnapshotRunningStatus.PREPARING:
+                    raise SnapshotPreparingException()
+                if (
+                    existing is not None
+                    and existing.status in (SnapshotRunningStatus.CLOSED, SnapshotRunningStatus.FAILED)
+                    and (
+                        existing.bkbase_data_id is not None or existing.bkbase_table_id or existing.bkbase_processing_id
+                    )
+                ):
+                    validated_request_data = self._existing_request(existing, validated_request_data)
+                    handler = HttpPullHandler(
+                        System.objects.get(system_id=system_id),
+                        ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id),
+                        existing,
+                        existing.join_data_type,
+                    )
+                    handler.pull_type = validated_request_data["pull_type"]
+                    provision = (existing.bkbase_v4_resources or {}).get("source_provision") or {}
+                    if not isinstance(provision, dict):
+                        raise BKBaseResourceMappingError(message="Invalid Snapshot source provision operation")
+                    if provision.get("clean_step") and not provision.get("completed"):
+                        return snapshot_clean_provision.retry(
+                            existing,
+                            validated_request_data,
+                            handler,
+                            partial(self.pre_check, system_id, resource_type_id, existing.join_data_type),
+                        )
+                    snapshot_restore.check_available(existing)
+                    if bkbase_source.can_retry_failed_pull_connection(existing):
+                        if (
+                            validated_request_data["join_data_type"] != existing.join_data_type
+                            or validated_request_data["pull_type"] != existing.pull_type
+                            or set(validated_request_data["storage_type"])
+                            != set(existing.storages.values_list("storage_type", flat=True))
+                            or validated_request_data.get("custom_config") not in (None, existing.custom_config)
+                        ):
+                            raise BKBaseResourceMappingError(
+                                message="Failed DataConn retry requires the existing Snapshot configuration"
+                            )
+                        self.pre_check(system_id, resource_type_id, existing.join_data_type)
+                        if not bkbase_source._prepare_snapshot_replay_locked(
+                            existing, handler.config, configure=True, retry_connection=True
+                        ):
+                            raise SnapshotPreparingException()
+                        existing.refresh_from_db()
+                        return existing
+                    return snapshot_restore.prepare(
+                        existing,
+                        validated_request_data,
+                        handler,
+                        partial(self.pre_check, system_id, resource_type_id, existing.join_data_type),
+                    )
+                if existing is not None and existing.status == SnapshotRunningStatus.RUNNING:
+                    snapshot_restore.check_available(existing)
+                    validated_request_data = self._existing_request(existing, validated_request_data)
+                    if (
+                        validated_request_data["join_data_type"] != existing.join_data_type
+                        or set(validated_request_data["storage_type"])
+                        != set(existing.storages.values_list("storage_type", flat=True))
+                        or validated_request_data.get("custom_config") not in (None, existing.custom_config)
+                    ):
+                        raise BKBaseResourceMappingError(
+                            message="Running Snapshot requires its existing join and storage configuration"
+                        )
+                    if validated_request_data["pull_type"] == existing.pull_type:
+                        return existing
+                    handler = HttpPullHandler(
+                        System.objects.get(system_id=system_id),
+                        ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id),
+                        existing,
+                        existing.join_data_type,
+                    )
+                    handler.pull_type = validated_request_data["pull_type"]
+                    self.pre_check(system_id, resource_type_id, existing.join_data_type)
+                    if not bkbase_source._prepare_snapshot_replay_locked(
+                        existing, handler.config, configure=True, target_pull_type=handler.pull_type
+                    ):
+                        raise SnapshotPreparingException()
+                    existing.refresh_from_db()
+                    return existing
+                return self._perform_request_atomic(validated_request_data)
+        return self._perform_request_atomic(validated_request_data)
+
+    @atomic
+    def _perform_request_atomic(self, validated_request_data):
         if validated_request_data["is_enabled"]:
+            if (
+                get_bkbase_version() == BKBaseVersion.V4
+                and Snapshot.objects.filter(
+                    system_id=validated_request_data["system_id"],
+                    resource_type_id=validated_request_data["resource_type_id"],
+                    bkbase_v4_resources__asset_etl_maintenance__active=True,
+                ).exists()
+            ):
+                raise SnapshotPreparingException()
+            if (
+                get_bkbase_version() == BKBaseVersion.V4
+                and Snapshot.objects.filter(
+                    system_id=validated_request_data["system_id"],
+                    resource_type_id=validated_request_data["resource_type_id"],
+                    bkbase_v4_resources__pending_action="stop",
+                ).exists()
+            ):
+                raise SnapshotPreparingException()
             self.pre_check(
                 validated_request_data["system_id"],
                 validated_request_data["resource_type_id"],
@@ -560,7 +709,17 @@ class ToggleJoinDataResource(CollectorMeta):
             system_id=validated_request_data["system_id"],
             resource_type_id=validated_request_data["resource_type_id"],
         )[0]
-        if snapshot.status == SnapshotRunningStatus.PREPARING:
+        if get_bkbase_version() == BKBaseVersion.V4:
+            # 启用预检查的网络请求已结束；之后仅操作本地数据，可短事务内串行核对维护意图。
+            snapshot = Snapshot.objects.select_for_update().get(pk=snapshot.pk)
+            maintenance = (snapshot.bkbase_v4_resources or {}).get("asset_etl_maintenance") or {}
+            if not isinstance(maintenance, dict) or maintenance.get("active"):
+                raise SnapshotPreparingException()
+        if snapshot.status == SnapshotRunningStatus.PREPARING or (
+            validated_request_data["is_enabled"]
+            and get_bkbase_version() == BKBaseVersion.V4
+            and (snapshot.bkbase_v4_resources or {}).get("pending_action") == "stop"
+        ):
             raise SnapshotPreparingException()
         is_enabled = validated_request_data["is_enabled"]
         custom_config = validated_request_data.get("custom_config")
@@ -736,10 +895,11 @@ class GetSystemDataIdList(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 没有配置清洗的不算完成接入
-        return CollectorConfig.objects.filter(
-            system_id=validated_request_data["system_id"],
-            source_platform=SourcePlatformChoices.BKBASE.value,
-            bkbase_table_id__isnull=False,
+        return bkbase_clean.configured_collectors(
+            CollectorConfig.objects.filter(
+                system_id=validated_request_data["system_id"],
+                source_platform=SourcePlatformChoices.BKBASE.value,
+            )
         )
 
 
@@ -752,21 +912,24 @@ class GetMyDataIdList(DataIdResource):
     def perform_request(self, validated_request_data):
         # 获取数据
         params = {**validated_request_data, "page": 1, "page_size": 1}
-        data = api.bk_base.get_my_rawdata_list(**params)
+        data = bkbase_source.get_my_rawdata_list(**params)
         total = data["count"]
         request_params = [
             {**validated_request_data, "page": i + 1, "page_size": BKBASE_API_MAX_PAGESIZE}
             for i in range(math.ceil(total / BKBASE_API_MAX_PAGESIZE))
         ]
-        results = api.bk_base.get_my_rawdata_list.bulk_request(request_params)
+        results = bkbase_source.get_my_rawdata_list_bulk(request_params)
         data = []
         for result in results:
             data.extend(result["results"])
         # 增加禁用
         applied_data_id = list(
-            CollectorConfig.objects.all()
-            .exclude(source_platform=SourcePlatformChoices.BKBASE.value, bkbase_table_id__isnull=True)
-            .values_list("bk_data_id", flat=True)
+            (
+                CollectorConfig.objects.exclude(source_platform=SourcePlatformChoices.BKBASE.value)
+                | bkbase_clean.bound_collectors(
+                    CollectorConfig.objects.filter(source_platform=SourcePlatformChoices.BKBASE.value)
+                )
+            ).values_list("bk_data_id", flat=True)
         )
         for item in data:
             item["is_applied"] = item["id"] in applied_data_id
@@ -781,7 +944,7 @@ class GetDataIdDetail(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 获取数据
-        data = api.bk_base.get_rawdata_detail(bk_data_id=validated_request_data["bk_data_id"])
+        data = bkbase_source.get_rawdata_detail(bk_data_id=validated_request_data["bk_data_id"])
         data["bkbase_url"] = (
             get_saas_url(settings.BKBASE_APP_CODE)
             + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
@@ -806,8 +969,8 @@ class GetDataIdDetail(DataIdResource):
         else:
             data.update(
                 {
-                    "created_at": arrow.get(data["created_at"]).strftime(api_settings.DATETIME_FORMAT),
-                    "updated_at": arrow.get(data["updated_at"]).strftime(api_settings.DATETIME_FORMAT),
+                    key: arrow.get(data[key]).strftime(api_settings.DATETIME_FORMAT) if data.get(key) else None
+                    for key in ("created_at", "updated_at")
                 }
             )
         return data
@@ -821,7 +984,27 @@ class GetDataIdTail(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 获取最近数据
-        tail_data = api.bk_base.get_rawdata_tail(**validated_request_data)
+        owner = None
+        request = get_local_request()
+        if get_bkbase_version() == BKBaseVersion.V4 and request is not None:
+            candidate = CollectorConfig.objects.filter(bk_data_id=validated_request_data["bk_data_id"]).first()
+            if candidate and (candidate.bkbase_v4_resources or {}).get("data_id"):
+                if not getattr(getattr(request, "user", None), "is_authenticated", False):
+                    raise PermissionDenied("Authenticated system user required")
+                permission = SystemPermissionHandler.generate_permission(
+                    [ActionEnum.EDIT_SYSTEM], get_instance_id=lambda: candidate.system_id
+                )
+                if not permission.has_permission(request, None):
+                    raise PermissionDenied("System edit permission required")
+                current = CollectorConfig.objects.filter(pk=candidate.pk, bk_data_id=candidate.bk_data_id).first()
+                if (
+                    not current
+                    or current.system_id != candidate.system_id
+                    or current.bkbase_v4_resources != candidate.bkbase_v4_resources
+                ):
+                    raise PermissionDenied("DataId owner changed during authorization")
+                owner = current
+        tail_data = bkbase_source.get_rawdata_tail(owner=owner, **validated_request_data)
         if validated_request_data["parse_json"]:
             for _data in tail_data:
                 _data["parsed_value"] = json.loads(_data.pop("value", "{}"))
@@ -853,12 +1036,15 @@ class ApplyDataIdSource(DataIdResource):
         if not has_permission:
             raise ParamsNotValid(message=gettext("无数据源 %s 的访问权限") % bk_data_id)
         # 检验数据源存在状态，没有配置清洗的数据源可以二次接入
-        if CollectorConfig.objects.filter(bk_data_id=bk_data_id, bkbase_table_id__isnull=False).exists():
+        if bkbase_clean.bound_collectors(CollectorConfig.objects.filter(bk_data_id=bk_data_id)).exists():
             raise ParamsNotValid(message=gettext("DataID %s 已接入") % bk_data_id)
-        # 获取数据源详情
-        raw_data = resource.databus.collector.get_data_id_detail(bk_data_id=bk_data_id)
-        # 兼容已存在的数据源
-        collector = CollectorConfig._objects.filter(bk_data_id=bk_data_id).first()
+        if get_bkbase_version() == BKBaseVersion.V4:
+            raw_data, source_binding = bkbase_source.get_user_source_for_apply(bk_data_id=bk_data_id)
+        else:
+            raw_data = resource.databus.collector.get_data_id_detail(bk_data_id=bk_data_id)
+            source_binding = None
+        candidates = CollectorConfig._objects.filter(bk_data_id=bk_data_id)
+        collector = candidates.first() if source_binding is None else None
         # 初始化参数
         params = {
             "system_id": validated_request_data["system_id"],
@@ -873,7 +1059,6 @@ class ApplyDataIdSource(DataIdResource):
             if not custom_collector_en_name
             else custom_collector_en_name,
             "source_platform": SourcePlatformChoices.BKBASE.value,
-            "custom_type": raw_data["custom_type"],
             "description": raw_data["description"],
             "etl_config": EtlConfigEnum.BK_BASE_JSON.value,
             "is_deleted": False,
@@ -881,13 +1066,49 @@ class ApplyDataIdSource(DataIdResource):
             "select_sdk_type": validated_request_data["select_sdk_type"],
         }
         # 存在则更新
-        if collector is not None:
-            CollectorConfig.objects.filter(bk_data_id=bk_data_id, is_deleted=True).update(**params)
-            collector.refresh_from_db()
-        # 不存在则创建数据源
-        else:
-            collector = CollectorConfig.objects.create(**params)
+        with atomic():
+            if source_binding is None:
+                params["custom_type"] = raw_data.get("custom_type") or CustomTypeEnum.LOG.value
+            else:
+                collector = candidates.select_for_update().first()
+                if collector is not None:
+                    if collector.system_id != validated_request_data["system_id"]:
+                        raise ParamsNotValid(message=gettext("该数据源属于其他系统"))
+                    if collector.source_platform != SourcePlatformChoices.BKBASE:
+                        raise ParamsNotValid(message=gettext("该数据源已通过日志平台接入，不能通过 DataID 重复接入"))
+                    if (
+                        not collector.is_deleted
+                        and bkbase_clean.bound_collectors(CollectorConfig.objects.filter(pk=collector.pk)).exists()
+                    ):
+                        raise ParamsNotValid(message=gettext("DataID %s 已接入") % bk_data_id)
+                params["custom_type"] = self._v4_custom_type(raw_data, collector)
+            if collector is not None:
+                CollectorConfig.objects.filter(bk_data_id=bk_data_id, is_deleted=True).update(**params)
+                collector.refresh_from_db()
+            # 不存在则创建数据源
+            else:
+                collector = CollectorConfig.objects.create(**params)
+            if source_binding:
+                bkbase_source.bind_source(collector, source_binding)
         return {"bk_data_id": collector.bk_data_id}
+
+    @staticmethod
+    def _v4_custom_type(raw_data, collector):
+        """沿用历史类型；新来源记录接入机制，由显式 JSON 配置决定解析。"""
+        max_length = CollectorConfig._meta.get_field("custom_type").max_length
+        if collector is not None:
+            existing = collector.custom_type
+            if isinstance(existing, str) and existing.strip() and len(existing) <= max_length:
+                return existing
+        scenario = raw_data.get("data_scenario")
+        if (
+            not isinstance(scenario, str)
+            or not scenario.strip()
+            or len(scenario) > max_length
+            or scenario in (CustomTypeEnum.OTLP_LOG.value, CustomTypeEnum.OTLP_TRACE.value)
+        ):
+            raise ParamsNotValid(message=gettext("无法确认该数据源的来源类型"))
+        return scenario
 
 
 class DataIdEtlPreview(DataIdResource):
@@ -936,12 +1157,7 @@ class DeleteDataId(DataIdResource):
             bk_data_id=validated_request_data["bk_data_id"],
             source_platform=SourcePlatformChoices.BKBASE.value,
         )
-        # 停止并删除清洗入库
-        if collector.processing_id:
-            stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
-            api.bk_base.databus_cleans_delete(processing_id=collector.processing_id)
-        # 数据库删除
-        CollectorConfig._objects.filter(collector_config_id=collector.collector_config_id).delete()
+        return bkbase_clean.delete_collector(collector)
 
 
 class SnapshotStatisticResource(ModelResource, CollectorMeta):

@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import time
+from copy import deepcopy
 from functools import reduce
 from operator import or_
 from typing import List
@@ -28,6 +29,7 @@ from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils.translation import gettext
 
@@ -41,13 +43,17 @@ from services.web.analyze.constants import (
     CHECK_FLOW_STATUS_SLEEP_SECONDS,
     BaseControlTypeChoices,
     FlowStatusChoices,
-    ObjectType,
 )
 from services.web.analyze.controls.auth import (
     AssetAuthHandler,
     CollectorPluginAuthHandler,
 )
 from services.web.analyze.models import ControlVersion
+from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase import flow_operation
+from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.common.monitor import LostSceneDetectedEvent
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import StrategyStatusChoices
@@ -56,11 +62,17 @@ from services.web.strategy_v2.models import Strategy
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def call_controller(
-    func_name: str, strategy_id: int, base_control_type: BaseControlTypeChoices = None, *args, **kwargs
+    func_name: str,
+    strategy_id: int,
+    base_control_type: BaseControlTypeChoices = None,
+    *args,
+    bkbase_version=BKBaseVersion.V3,
+    **kwargs,
 ):
-    """
-    call controller async
-    """
+    """按生产任务时的 BKBase 版本执行，旧队列未标记消息保持 V3 归属。"""
+    if bkbase_version != get_bkbase_version():
+        logger_celery.warning("[CallControllerSkipped] Strategy %s queued for BKBase %s", strategy_id, bkbase_version)
+        return
     if base_control_type == BaseControlTypeChoices.RULE_AUDIT:
         from services.web.analyze.controls.rule_audit import RuleAuditController
 
@@ -146,6 +158,50 @@ def _sync_bksec_rule_after_status_change(strategy: Strategy) -> None:
         _report_bksec_rule_activation_failed(strategy, last_error)
 
 
+def _sync_pure_flow_rule_after_commit(strategy_id, operation_id, *, configuration, bksec_config):
+    """纯操作落定后复核当前代次与配置，在Flow事务和资源锁外同步规则。"""
+
+    def sync_current():
+        if get_bkbase_version() != BKBaseVersion.V4:
+            return
+        current = Strategy.objects.filter(pk=strategy_id, is_deleted=False).first()
+        if (
+            current is None
+            or not bkbase_flow.is_current_operation(current, operation_id)
+            or not flow_operation.is_pure(current, operation_id)
+        ):
+            return
+        pure = flow_operation.binding(current)["pure_operation"]
+        # 重启的停止步以本次receipt证明受理，accepted只在启动步置True。
+        accepted = pure.get("accepted") is True or (
+            pure.get("restart")
+            and pure.get("target") == "stop"
+            and pure.get("attempted") is True
+            and bool(pure.get("receipt"))
+        )
+        if (
+            not configuration
+            or pure.get("configuration") != configuration
+            or flow_operation._configuration(current) != configuration
+            or current.bksec_config != bksec_config
+            or not accepted
+            or any(pure.get(key) for key in ("observing", "writer", "write_fence", "outcome_unknown"))
+            or not (pure.get("target") == "start" or pure.get("restart"))
+        ):
+            return
+        if current.status == StrategyStatusChoices.RUNNING:
+            if not pure.get("goal_observed") or pure.get("target") != "start":
+                return
+        elif current.status in (StrategyStatusChoices.START_FAILED, StrategyStatusChoices.UPDATE_FAILED):
+            if not (pure.get("restart") or pure.get("observed_failure")):
+                return
+        else:
+            return
+        _sync_bksec_rule_after_status_change(current)
+
+    transaction.on_commit(sync_current)
+
+
 @periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:reconcile_bksec_auto_rule")
 def reconcile_bksec_auto_rule():
@@ -171,50 +227,62 @@ def reconcile_bksec_auto_rule():
 
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str):
-    """
-    check flow status
-    """
+def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str, operation_id=None):
+    """观测Flow并更新策略；过期V4操作回调不推进资源、不回写状态。"""
 
     # load strategy
     strategy: Strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
     if strategy is None:
         logger_celery.error("[CheckFlowStatusFailed] Strategy Not Found => %s", strategy_id)
         return
+    if not bkbase_flow.is_current_operation(strategy, operation_id):
+        return
+    pure = flow_operation.binding(strategy).get("pure_operation") or {}
+    configuration = pure.get("configuration")
+    bksec_config = deepcopy(getattr(strategy, "bksec_config", None))
+    if bkbase_flow.check_pure_operation(strategy, operation_id):
+        _sync_pure_flow_rule_after_commit(
+            strategy_id, operation_id, configuration=configuration, bksec_config=bksec_config
+        )
+        return
 
     # check flow status
-    flow_id = strategy.backend_data["flow_id"]
+    message = None
     try:
-        deploy_data = api.bk_base.get_flow_deploy_data(flow_id=flow_id)
+        deploy_data = bkbase_flow.strategy_deploy_data(strategy)
         status = deploy_data["status"]
         if status == FlowStatusChoices.SUCCESS.value:
-            strategy.status = success_status
+            next_status = success_status
         elif status == FlowStatusChoices.FAILURE.value:
-            strategy.status = failed_status
-            strategy.status_msg = ";".join(
+            next_status = failed_status
+            message = ";".join(
                 [
                     str(log.get("message", ""))
                     for log in deploy_data.get("logs", [])
                     if log.get("level") == BKBASE_ERROR_LOG_LEVEL
                 ]
             )
-            strategy.save(update_record=False, update_fields=["status_msg"])
         else:
-            strategy.status = other_status
+            next_status = other_status
     except (APIRequestError, TypeError, KeyError):
-        strategy.status = other_status
+        next_status = other_status
 
     # update status
-    strategy.save(update_record=False, update_fields=["status"])
+    if not bkbase_flow.persist_operation_status(strategy, operation_id, next_status, message):
+        return
 
     # 状态确认后再同步自动规则：启动成功才启用，启动失败则保持关闭
     _sync_bksec_rule_after_status_change(strategy)
 
     # check re-run
     if strategy.status == other_status:
-        time.sleep(CHECK_FLOW_STATUS_SLEEP_SECONDS)
-        check_flow_status.delay(
-            strategy_id, success_status=success_status, failed_status=failed_status, other_status=other_status
+        retry_params = {"success_status": success_status, "failed_status": failed_status, "other_status": other_status}
+        if operation_id is not None:
+            retry_params["operation_id"] = operation_id
+        check_flow_status.apply_async(
+            args=[strategy_id],
+            kwargs=retry_params,
+            countdown=CHECK_FLOW_STATUS_SLEEP_SECONDS,
         )
 
     # check failed
@@ -246,9 +314,7 @@ def sync_plan_from_bkbase():
 def auth_rt():
     """Auth Result Table For BkBase"""
 
-    from services.web.analyze.controls.aiops import AiopsFeature
-
-    if not AiopsFeature(help_text="auth_rt").available:
+    if not bkbase_permissions.project_auth_available():
         return
 
     # auth collector plugins
@@ -263,14 +329,20 @@ def auth_rt():
 
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def toggle_monitor(strategy_id: int, is_active: bool):
+def toggle_monitor(strategy_id: int, is_active: bool, operation_id=None):
     """
-    切换BKBASE数据监控开关状态
+    切换BKBASE数据监控开关状态；V4生产者携带operation_id，过期消息在平台读写前退出。
     """
 
     # 获取策略并判定关键参数存在
     strategy: Strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
-    if not strategy or not strategy.backend_data or not strategy.backend_data.get("flow_id"):
+    if strategy and (
+        (get_bkbase_version() == BKBaseVersion.V4 and not bkbase_flow.is_current_operation(strategy, operation_id))
+        or (get_bkbase_version() != BKBaseVersion.V4 and operation_id is not None)
+    ):
+        logger_celery.info("[ToggleMonitorSuperseded] %s %s", strategy_id, operation_id)
+        return
+    if not strategy or not bkbase_flow.has_flow(strategy):
         logger_celery.error("[ToggleMonitorFailed] Strategy Status Invalid => %s", strategy_id)
         return
 
@@ -288,19 +360,16 @@ def toggle_monitor(strategy_id: int, is_active: bool):
             if config.get("msg_type") != MsgType.VOICE
         }
     )
-    if not receivers or not notify_config:
+    if (not receivers or not notify_config) and not (get_bkbase_version() == BKBaseVersion.V4 and not is_active):
         logger_celery.error("[ToggleMonitorFailed] %s Notice Group Invalid => %s", strategy_id, strategy.notice_groups)
         return
 
-    # 获取告警配置
-    alert_config = api.bk_base.get_alert_configs(
-        object_type=ObjectType.DATAFLOW, object_id=strategy.backend_data["flow_id"]
+    result = bkbase_flow.configure_monitor(
+        strategy, active=is_active, receivers=receivers, notify_config=notify_config, operation_id=operation_id
     )
-    alert_config["active"] = is_active
-    alert_config["alert_config_id"] = alert_config["id"]
-    alert_config["receivers"] = receivers
-    alert_config["notify_config"] = notify_config
-    api.bk_base.edit_alert_configs(**alert_config)
+    if get_bkbase_version() == BKBaseVersion.V4 and result is None:
+        logger_celery.info("[ToggleMonitorSuperseded] %s %s", strategy_id, operation_id)
+        return
     logger_celery.info("[ToggleMonitorSuccess] %s %s", strategy_id, is_active)
 
 

@@ -6,7 +6,6 @@ import abc
 import uuid
 from typing import List, Optional, Union
 
-from bk_resource import api
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy
 from pydantic import ValidationError as PydanticValidationError
@@ -26,6 +25,7 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
+from services.web.bkbase import query as bkbase_query
 from services.web.log_subscription.constants import (
     GLOBAL_FIELD_BLACKLIST_SOURCE_ID,
     LOG_SUBSCRIPTION_FIELD_BLACKLIST_KEY,
@@ -136,7 +136,7 @@ class QueryLogSubscription(LogSubscriptionMeta):
             return response
 
         # 6. 执行查询
-        data_resp, count_resp = api.bk_base.query_sync.bulk_request([{"sql": query_sql}, {"sql": count_sql}])
+        data_resp, count_resp = bkbase_query.query_sync_bulk([{"sql": query_sql}, {"sql": count_sql}])
 
         results = data_resp.get("list", [])
         count_list = count_resp.get("list", [])

@@ -55,6 +55,7 @@ from core.observability import (
     start_observation_span,
 )
 from core.utils.data import data_chunks
+from services.web.bkbase import query as bkbase_query
 from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 from services.web.common.monitor import (
     AnalyseReportGenerateFailedEvent,
@@ -521,7 +522,7 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
         id_clause = f"""({','.join(f"'{item}'" for item in chunk)})"""
         sql = f"SELECT risk_id FROM {table_ref}.doris WHERE risk_id IN {id_clause}"
         logger_celery.info("[SyncManualRiskStatus] Executing SQL: %s", sql)
-        resp = api.bk_base.query_sync(sql=sql) or {}
+        resp = bkbase_query.query_sync(sql=sql) or {}
         found_ids = {row.get("risk_id") for row in resp.get("list") or [] if row.get("risk_id")}
         if found_ids:
             _ = Risk.objects.filter(risk_id__in=found_ids, manual_synced=False).update(manual_synced=True)

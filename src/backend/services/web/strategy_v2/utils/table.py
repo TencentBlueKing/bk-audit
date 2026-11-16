@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 from typing import List, Set
 
-from bk_resource import api, resource
+from bk_resource import resource
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
@@ -32,6 +32,13 @@ from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.resources import SystemListAllResource
 from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
 from services.web.analyze.utils import is_asset
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import metadata as bkbase_metadata
+from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase import table_capabilities
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.common.constants import ScopeType
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
@@ -170,7 +177,7 @@ class BizAssetTableHandler(TableHandler):
         # 获取所有的RT
         result_table_ids = [
             r["result_table_id"]
-            for r in api.bk_base.get_project_data(project_id=settings.BKBASE_PROJECT_ID, extra_fields=True)
+            for r in bkbase_permissions.get_project_data(project_id=settings.BKBASE_PROJECT_ID, extra_fields=True)
         ]
         request_params = []
         batch_size = 50
@@ -179,7 +186,16 @@ class BizAssetTableHandler(TableHandler):
             request_params.append({"result_table_ids": result_table_ids[i: i + batch_size]})
         # 获取RT信息
         result_tables = []
-        for rts in api.bk_base.get_result_tables.bulk_request(request_params):
+        for rts in bkbase_metadata.get_result_tables_bulk(request_params):
+            if get_bkbase_version() == BKBaseVersion.V4:
+                result_tables.extend(
+                    rt
+                    for rt in rts
+                    if rt
+                    and table_capabilities.asset_status(bkbase_metadata.get_source_capabilities(rt["result_table_id"]))
+                    is True
+                )
+                continue
             result_tables.extend(
                 rt
                 for rt in rts
@@ -224,7 +240,7 @@ class BizRtTableHandler(TableHandler):
         # 获取业务下的RT
         result_table_ids = [
             r["result_table_id"]
-            for r in api.bk_base.get_project_data(
+            for r in bkbase_permissions.get_project_data(
                 project_id=settings.BKBASE_PROJECT_ID, extra_fields=True, related=["storages"]
             )
             if r["result_table_id"] not in exclude_rt_ids
@@ -237,7 +253,18 @@ class BizRtTableHandler(TableHandler):
 
         # 获取RT信息,过滤掉不包含指定存储的 RT
         result_tables = []
-        for rts in api.bk_base.get_result_tables.bulk_request(request_params):
+        for rts in bkbase_metadata.get_result_tables_bulk(request_params):
+            if get_bkbase_version() == BKBaseVersion.V4:
+                for rt in rts:
+                    if not rt:
+                        continue
+                    capability = bkbase_metadata.get_source_capabilities(rt["result_table_id"])
+                    if any(
+                        table_capabilities.source_node_type(capability, mode) is not None
+                        for mode in (RuleAuditSourceType.REALTIME, RuleAuditSourceType.BATCH)
+                    ):
+                        result_tables.append(rt)
+                continue
             result_tables.extend(
                 rt for rt in rts if rt and (rt.get("storages", {}).keys() & BIZ_RT_TABLE_ALLOW_STORAGES)
             )
@@ -261,12 +288,13 @@ class MineBizRtTableHandler(TableHandler):
         - 传 bk_biz_id: 返回该业务下的结果表
         """
         try:
-            # 获取所有业务列表
-            biz_list_result = api.bk_base.get_bizs_list(
-                bk_username=self.bk_username, action_id=UserAuthActionEnum.RT_QUERY, dimension=AUTH_DIMENSION_BIZ
-            )
-            if not isinstance(biz_list_result, list):
-                return []
+            # V4已选业务直接读取个人表权限，避免先为未使用的业务列表重复枚举。
+            if not self.bk_biz_id or get_bkbase_version() == BKBaseVersion.V3:
+                biz_list_result = bkbase_permissions.get_bizs_list(
+                    bk_username=self.bk_username, action_id=UserAuthActionEnum.RT_QUERY, dimension=AUTH_DIMENSION_BIZ
+                )
+                if not isinstance(biz_list_result, list):
+                    return []
 
             # 如果指定了业务 ID，只返回该业务下的结果表
             if self.bk_biz_id:
@@ -275,7 +303,7 @@ class MineBizRtTableHandler(TableHandler):
                     "action_id": UserAuthActionEnum.RT_QUERY.value,
                     "bk_biz_id": self.bk_biz_id,
                 }
-                result_tables = api.bk_base.get_mine_result_tables.request(request_params)
+                result_tables = bkbase_permissions.get_mine_result_tables(request_params)
                 result_tables = (
                     result_tables
                     if isinstance(result_tables, list)
@@ -306,7 +334,11 @@ class MineBizRtTableHandler(TableHandler):
             biz_trees.sort(key=lambda x: int(x["value"]) if x["value"].isdigit() else 0)
             return biz_trees
 
+        except BKBaseResourceMappingError:
+            raise
         except Exception as e:
+            if get_bkbase_version() == BKBaseVersion.V4:
+                raise
             logger.error("[ListTables] 获取业务列表失败: %s", e)
             return []
 
@@ -322,6 +354,23 @@ class RuleAuditSourceTypeChecker:
         2. 离线计算：全部都是资产作为离线维表，或者可以加上日志作为离线流水表；例如：一个日志和其他资产维表关联或者多个资产维表关联
         """
 
+        if get_bkbase_version() == BKBaseVersion.V4:
+            collector_log_rt = CollectorPlugin.build_collector_rt(namespace=self.namespace)
+            rt_ids = list(link_table.rt_ids)
+            if not rt_ids:
+                return []
+            capabilities = {rt_id: bkbase_metadata.get_source_capabilities(rt_id) for rt_id in rt_ids}
+            supported = []
+            for mode in (RuleAuditSourceType.REALTIME, RuleAuditSourceType.BATCH):
+                if mode == RuleAuditSourceType.REALTIME and collector_log_rt not in rt_ids:
+                    continue
+                if all(
+                    table_capabilities.source_node_type(capabilities[rt_id], mode, asset=rt_id != collector_log_rt)
+                    is not None
+                    for rt_id in rt_ids
+                ):
+                    supported.append(mode)
+            return supported
         support_source_types = []
         collector_log_rt = CollectorPlugin.build_collector_rt(namespace=self.namespace)
         rt_ids = link_table.rt_ids.copy()
@@ -330,7 +379,7 @@ class RuleAuditSourceTypeChecker:
             rt_ids.remove(collector_log_rt)
             support_source_types.append(RuleAuditSourceType.REALTIME)
         # 需要确保其他 rt 必须为维表
-        rts = api.bk_base.get_result_tables(result_table_ids=rt_ids, related=["storages"])
+        rts = bkbase_metadata.get_result_tables(result_table_ids=rt_ids, related=["storages"])
         if len(rts) != len(rt_ids):
             return []
         for rt in rts:
@@ -346,8 +395,15 @@ class RuleAuditSourceTypeChecker:
         2. 离线计算：入 HDFS 作为离线流水表，资产作为离线维表；例如：日志，资产，以及入 HDFS 存储的其他数据
         """
 
+        if get_bkbase_version() == BKBaseVersion.V4:
+            capability = bkbase_metadata.get_source_capabilities(rt_id)
+            return [
+                mode
+                for mode in (RuleAuditSourceType.REALTIME, RuleAuditSourceType.BATCH)
+                if table_capabilities.source_node_type(capability, mode) is not None
+            ]
         support_source_types = []
-        rt = api.bk_base.get_result_table(result_table_id=rt_id, related=["storages"])
+        rt = bkbase_metadata.get_result_table(result_table_id=rt_id, related=["storages"])
         storage = set(rt.get("storages", {}).keys())
         # 实时计算中：kafka 可作为实时流水表
         if ALLOWED_REALTIME_STORAGES & storage:
@@ -380,7 +436,7 @@ def enhance_rt_fields(fields, result_table_id):
     )
     if collector_plugin_id:
         plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        if result_table_id == plugin.bkbase_table_id:
+        if result_table_id == bkbase_clean.result_table_id(plugin, require_ready=False):
             standard_fields = {field.field_name: field for field in STANDARD_FIELDS + BKLOG_BUILD_IN_FIELDS}
             for field in result:
                 if field["value"] in standard_fields:

@@ -19,7 +19,6 @@ import abc
 from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 
 import requests
-from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
@@ -29,6 +28,8 @@ from pydantic import BaseModel
 from api.bk_base.constants import UserAuthActionEnum
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase import query as bkbase_query
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.tool.constants import (
@@ -103,7 +104,7 @@ class SmartPageSqlTemplateExecutor(BaseSmartPageDataSourceExecutor):
 
         logger.info(f"[{cls.__name__}] Execute SQL: {rendered_sql}")
         try:
-            bulk_resp = api.bk_base.debug_query_sync.bulk_request([{"sql": rendered_sql}])
+            bulk_resp = bkbase_query.query_sync_bulk([{"sql": rendered_sql}], debug=True)
         except APIRequestError as e:
             logger.error(f"[{cls.__name__}] Request BKBASE Error: {e}")
             raise BkbaseApiRequestError(sql=rendered_sql)
@@ -253,7 +254,7 @@ class SqlDataSearchExecutor(
             }
             for table in tables_to_check
         ]
-        bulk_resp = api.bk_base.user_auth_batch_check({"permissions": permissions})
+        bulk_resp = bkbase_permissions.user_auth_batch_check({"permissions": permissions})
         for rt in bulk_resp:
             if rt.get("result"):
                 continue
@@ -313,7 +314,7 @@ class SqlDataSearchExecutor(
         ]
         # 请求 BKBASE
         try:
-            bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+            bulk_resp = bkbase_query.query_sync_bulk(bulk_req_params)
         except APIRequestError as e:
             logger.error(f"{[self.__class__.__name__]} Request BKBASE Error: {e}")
             raise BkbaseApiRequestError(sql=executable_sql)

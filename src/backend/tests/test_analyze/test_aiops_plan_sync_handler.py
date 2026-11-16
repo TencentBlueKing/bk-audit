@@ -27,8 +27,8 @@ class TestAiopsPlanSyncHandler(TestCase):
     def setUp(self):
         self.handler = AiopsPlanSyncHandler()
 
-    @patch("services.web.analyze.controls.aiops.api.bk_base.get_scene_plans")
-    @patch("services.web.analyze.controls.aiops.api.bk_base.get_plan_detail")
+    @patch("bk_resource.api.bk_base.get_scene_plans")
+    @patch("bk_resource.api.bk_base.get_plan_detail")
     def test_restore_soft_deleted_versions_and_create_new(self, mock_get_plan_detail, mock_get_scene_plans):
         """
         控件版本被软删除，远端新增 V3 → 本地应恢复所有旧版本 + 创建 V3
@@ -76,7 +76,7 @@ class TestAiopsPlanSyncHandler(TestCase):
             self.assertFalse(v.is_deleted)
         self.assertEqual(versions.get(control_version=3).input_config, {"param": "value3"})
 
-    @patch("services.web.analyze.controls.aiops.api.bk_base.get_scene_plans")
+    @patch("bk_resource.api.bk_base.get_scene_plans")
     def test_delete_control_when_remote_missing(self, mock_get_scene_plans):
         """
         控件在本地存在，但远端不存在，应被物理删除
@@ -102,8 +102,8 @@ class TestAiopsPlanSyncHandler(TestCase):
         self.assertFalse(Control.objects.filter(control_id=control.control_id).exists())
         self.assertFalse(ControlVersion.objects.filter(control_id=control.control_id).exists())
 
-    @patch("services.web.analyze.controls.aiops.api.bk_base.get_scene_plans")
-    @patch("services.web.analyze.controls.aiops.api.bk_base.get_plan_detail")
+    @patch("bk_resource.api.bk_base.get_scene_plans")
+    @patch("bk_resource.api.bk_base.get_plan_detail")
     def test_skip_when_version_is_up_to_date(self, mock_get_plan_detail, mock_get_scene_plans):
         """
         控件版本已是最新，跳过不处理

@@ -19,8 +19,8 @@ class DummyStrategy(SimpleNamespace):
 
 
 class TestAiopsFlowLinks(TestCase):
-    @patch("services.web.analyze.controls.aiops.api.bk_base.update_flow_node")
-    @patch("services.web.analyze.controls.aiops.api.bk_base.create_flow_node")
+    @patch("bk_resource.api.bk_base.update_flow_node")
+    @patch("bk_resource.api.bk_base.create_flow_node")
     def test_storage_nodes_link_to_scenario(self, mock_create: MagicMock, mock_update: MagicMock):
         # 预置 create_flow_node 返回的 node_id 顺序：
         # 1) 数据源、2) SQL、3) 场景、4) ES、5) Doris
