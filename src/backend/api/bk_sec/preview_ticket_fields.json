@@ -1,0 +1,94 @@
+{
+  "fields": [
+    {
+      "key": "title",
+      "name": "工单标题",
+      "value": "工单验收v_dryidong",
+      "type": "string"
+    },
+    {
+      "key": "deadline_time",
+      "name": "统一处理期限",
+      "value": "2026-11-16 09:21:20",
+      "type": "timestamp"
+    },
+    {
+      "key": "event_time",
+      "name": "风险发现时间",
+      "value": "2023-03-15 21:20:00",
+      "type": "timestamp"
+    },
+    {
+      "key": "current_followers",
+      "name": "关注人",
+      "value": "durantzhang",
+      "type": "STRING"
+    },
+    {
+      "key": "source_type",
+      "name": "风险发现途径",
+      "value": "bk-audit",
+      "type": "STRING"
+    },
+    {
+      "key": "latest_operator",
+      "name": "当前责任人",
+      "value": "v_dryidong",
+      "type": "STRING"
+    },
+    {
+      "key": "department",
+      "name": "当前责任人所属组织",
+      "value": "腾讯合作伙伴/IEG互动娱乐事业群/IEG公共技术线/技术运营部/SRE平台团队/观测服务团队",
+      "type": "STRING"
+    },
+    {
+      "key": "risk_guide",
+      "name": "处理指引",
+      "value": "11111",
+      "type": "TEXT"
+    },
+    {
+      "key": "risk_desc",
+      "name": "风险描述",
+      "value": "22222",
+      "type": "TEXT"
+    },
+    {
+      "key": "risk_effect",
+      "name": "风险危害",
+      "value": "33333",
+      "type": "TEXT"
+    },
+    {
+      "key": "risk_level",
+      "name": "风险等级",
+      "value": "HIGH",
+      "type": "SELECT"
+    },
+    {
+      "key": "target",
+      "name": "风险资产信息",
+      "value": "20261103134426479458 / v_dryidong 的资产信息",
+      "type": "STRING"
+    },
+    {
+      "key": "target_type",
+      "name": "风险资产类型",
+      "value": "tencentcloud_sub_user",
+      "type": "STRING"
+    },
+    {
+      "key": "timestamp",
+      "name": "风险发现时间",
+      "value": 1678886400000,
+      "type": "STRING"
+    },
+    {
+      "key": "operator",
+      "name": "初始责任人",
+      "value": "v_dryidong",
+      "type": "STRING"
+    }
+  ]
+}
