@@ -1287,3 +1287,6 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
     except Exception as e:
         logger_celery.exception("[RenderAIVariable] Failed to render AI variables: %s", e)
         raise
+
+
+from services.web.risk.whitelist import tasks as whitelist_tasks  # noqa: F401, E402
