@@ -44,8 +44,8 @@ class ChatCompletion(BaseChatCompletion):
     module_name = "bk_plugins_ai_audit_report"
     name = gettext_lazy("智能体对话")
     agent_code = AIAgentCode.AUDIT_REPORT
-    # 默认保留单风险渲染的历史任务级限流；普通 AI 任务可在单次请求中显式启用全局限流。
-    enable_agent_rate_limit = False
+    # 报告渲染按请求启用 Agent 全局限流，避免模板内多 AI 变量扇出打满下游连接。
+    enable_agent_rate_limit = True
 
     def postprocess_agui_final_content(self, content: str) -> tuple[str, str]:
         """审计报告优先返回完整 assistant 正文中的 <final_answer>。"""

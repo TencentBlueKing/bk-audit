@@ -28,9 +28,10 @@ from django.conf import settings
 from jinja2 import nodes
 from markupsafe import Markup
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from core.observability import submit_with_observation_context
 from core.render import jinja2_environment
-from services.web.common.ai import AIWorkloadQueue
+from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.providers import Provider
 
@@ -178,6 +179,9 @@ def _execute_provider_call(call: ProviderCall) -> tuple[ProviderCall, Any]:
         # 直接使用存储的provider实例和调用参数
         result = call.provider.get(**call.call_args)
         return call, result
+    except AgentRateLimited:
+        # 限流必须交给 Celery 任务边界退避重投，不能降级成普通错误文本。
+        raise
     except Exception as e:
         logger_celery.exception("[RenderTemplate] Provider call failed: %s - %s", call.original_expr, e)
         return call, f"[Error: {e}]"
@@ -337,6 +341,8 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
                 if isinstance(result, list):
                     result = ", ".join(str(v) for v in result)
                 results[call.original_expr] = result
+            except AgentRateLimited:
+                raise
             except Exception as e:
                 call = future_to_call[future]
                 logger_celery.exception("[RenderTemplate] Future failed for %s: %s", call.original_expr, e)
@@ -357,8 +363,10 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
 
 
 @celery_app.task(
+    base=AIAgentTask,
     queue=AIWorkloadQueue.RISK_SINGLE,
     rate_limit=settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT,
+    max_retries=settings.AI_AGENT_TASK_MAX_RETRIES,
     acks_late=True,
     time_limit=settings.RENDER_TASK_TIMEOUT,
 )
