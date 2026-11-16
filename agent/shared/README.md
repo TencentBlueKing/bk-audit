@@ -12,6 +12,8 @@
 
 ## 工具与运行环境
 
+新 worktree 的本地材料接入可选用 [worktree 初始化工具](tools/worktree-bootstrap/README.md)：审阅并一次性安装仓库级 hook，按显式专题白名单补链接；不替代技能安装或端内环境验收。
+
 Git、前后端工程工具、提交校验器和技能维护工具 skills CLI 的准备依据见 [工具清单](skills/bk-audit-onboarding/references/capabilities.md#工具与运行环境)。实际版本、命令及 hook 以当前 checkout 的工程源为准，不在此维护第二套规则。
 
 ## MCP 接入
