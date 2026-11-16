@@ -171,11 +171,13 @@
     },
   ];
 
+  // 侧栏分类用联表 tags；行内编辑用全量 meta tag（与页内编辑一致）
   const linkDataLabelList = ref<Array<{
     link_table_count: number,
     tag_id: string,
     tag_name: string
   }>>([]);
+  const allTagList = ref<Array<{ tag_id: string | number; tag_name: string }>>([]);
   const strategyTagMap = ref<Record<string, string>>({});
   const editingTagUid = ref('');
   const editLinkTablePermissionMap = ref<Record<string, boolean>>({});
@@ -208,7 +210,7 @@
       targetRow.tags = tagIds;
     }
     messageSuccess(t('更新成功'));
-    fetchLinkTableTags();
+    Promise.all([fetchLinkTableTags(), fetchAllTags()]);
     return result;
   });
 
@@ -246,7 +248,7 @@
             isEditing={editingTagUid.value === data.uid}
             key={data.id}
             saving={savingTagUid.value === data.uid}
-            tagList={linkDataLabelList.value}
+            tagList={allTagList.value}
             tags={tags}
             onCancel={handleTagEditCancel}
             onEdit={() => handleTagEdit(data)}
@@ -374,7 +376,7 @@
     },
   });
 
-  // 获取标签列表
+  // 侧栏标签分类
   const {
     run: fetchLinkTableTags,
   } = useRequest(LinkDataManageService.fetchLinkTableTags, {
@@ -388,6 +390,21 @@
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
       linkDataLabelList.value = data;
+    },
+  });
+  // 行内编辑候选：与页内编辑同一全量 tag 接口
+  const {
+    run: fetchAllTags,
+  } = useRequest(MetaManageService.fetchTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      data.forEach((item) => {
+        if (item.tag_id !== '-1') {
+          strategyTagMap.value[item.tag_id] = item.tag_name;
+        }
+      });
+      allTagList.value = data.filter(item => !String(item.tag_id).startsWith('-') && item.tag_name);
     },
   });
 
@@ -511,6 +528,7 @@
     data.results.forEach((item) => {
       editLinkTablePermissionMap.value[item.uid] = Boolean(item.permission?.edit_link_table);
     });
+    void fetchAllTags();
     fetchLinkTableTags().then(() => {
       searchData = [
         ...defaultSearchData,

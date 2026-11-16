@@ -104,6 +104,7 @@
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -239,15 +240,15 @@
     },
   });
 
-  // 与列表行内编辑共用联表标签接口，保证候选集一致
+  // 获取标签列表
   const {
     run: fetchTags,
     loading: tagLoading,
-  } = useRequest(LinkDataManageService.fetchLinkTableTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {
-        if (!String(item.tag_id).startsWith('-')) {
+        if (item.tag_id !== '-2') {
           res.push({
             id: item.tag_id,
             name: item.tag_name,

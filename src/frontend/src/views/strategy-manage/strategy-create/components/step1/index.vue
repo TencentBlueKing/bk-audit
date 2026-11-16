@@ -60,6 +60,7 @@
                       display-key="name"
                       has-delete-icon
                       :list="tagData"
+                      :max-result="tagMaxResult"
                       :placeholder="t('请输入并Enter结束')"
                       save-key="id"
                       search-key="name"
@@ -246,6 +247,7 @@
     useRouter,
   } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type ControlModel from '@model/control/control';
@@ -262,7 +264,6 @@
   import ReferenceModel from './components/reference-model/index.vue';
 
   import {
-    getStrategyListScopeParams,
     getStrategyRouteNames,
     isStrategyCloneRoute,
     isStrategyEditRoute,
@@ -567,12 +568,11 @@
     },
   });
 
-  // 与列表行内编辑共用 strategy_tags，保证候选集一致
+  // 获取标签列表（过滤系统内置特殊标签，保留 allow-create 自定义创建）
   const {
     loading: tagLoading,
-  } = useRequest(StrategyManageService.fetchStrategyTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
-    defaultParams: getStrategyListScopeParams(route),
     manual: true,
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {
@@ -593,6 +593,8 @@
       });
     },
   });
+  // bk-tag-input 默认 max-result=10，滚动加载不稳定，一次展示全部
+  const tagMaxResult = computed(() => Math.max(tagData.value.length, 10));
 
   const handleStrategyWay = (way: string) => {
     if (!formData.value.strategy_type

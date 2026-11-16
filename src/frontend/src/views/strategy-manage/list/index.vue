@@ -237,7 +237,7 @@
         :detail-loading="detailLoading"
         :strategy-map="strategyTagMap"
         :tag-editable="isStrategyTagEditable(strategyItem)"
-        :tag-list="strategyLabelList"
+        :tag-list="allTagList"
         :tag-save="handleDetailTagSave"
         :user-group-list="userGroupList"
         @tab-change="handleDetailTabChange" />
@@ -651,8 +651,9 @@
     'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'bksecTicket' | 'riskOther'
   >('riskDetection');
   const styles = shallowRef({ left: '240px' });
-  // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
+  // 侧栏分类用 strategy_tags；行内/详情编辑用全量 meta tag（与页内编辑一致）
   const strategyLabelList = ref<any[]>([]);
+  const allTagList = ref<Array<{ tag_id: string | number; tag_name: string }>>([]);
   const showLabelSkeleton = computed(() => (
     !isPlatformList.value
     && !strategyTagsLoaded.value
@@ -1040,7 +1041,10 @@
       strategyItem.value.tags = tagIds;
     }
     messageSuccess(t('更新成功'));
-    fetchStrategyTags(getStrategyListScopeParams(route)).then(() => {
+    Promise.all([
+      fetchStrategyTags(getStrategyListScopeParams(route)),
+      fetchAllTags(),
+    ]).then(() => {
       refreshSearchData();
     });
   });
@@ -1160,7 +1164,7 @@
             isEditing={editingTagStrategyId.value === data.strategy_id}
             key={`tags-${data.strategy_id}-${tags.join('|')}`}
             saving={savingTagStrategyId.value === data.strategy_id}
-            tagList={strategyLabelList.value}
+            tagList={allTagList.value}
             tags={tags}
             onCancel={handleTagEditCancel}
             onEdit={() => handleTagEdit(data)}
@@ -1897,7 +1901,7 @@
       permissionCheckData.value = data.create_strategy_v2;
     },
   });
-  // 获取标签列表
+  // 侧栏标签分类（带策略计数）
   const {
     run: fetchStrategyTags,
     data: labelList,
@@ -1922,6 +1926,21 @@
     if (failed) {
       strategyTagsLoaded.value = true;
     }
+  });
+  // 行内/详情编辑候选：与页内编辑同一全量 tag 接口
+  const {
+    run: fetchAllTags,
+  } = useRequest(MetaManageService.fetchTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      data.forEach((item) => {
+        if (item.tag_id !== '-1') {
+          strategyTagMap.value[item.tag_id] = item.tag_name;
+        }
+      });
+      allTagList.value = data.filter(item => !String(item.tag_id).startsWith('-') && item.tag_name);
+    },
   });
   // 获取版本信息
   useRequest(ControlManageService.fetchControlTypes, {
@@ -2379,7 +2398,11 @@
         : { page: 1, page_size: 1000 });
     }
     if (!isRequest) {
-      Promise.all([fetchStrategyTags(getStrategyListScopeParams(route)), fetchStrategyCommon()]).then(() => {
+      Promise.all([
+        fetchStrategyTags(getStrategyListScopeParams(route)),
+        fetchAllTags(),
+        fetchStrategyCommon(),
+      ]).then(() => {
         refreshSearchData();
         setSearchKey();
       });
@@ -2464,8 +2487,9 @@
     }
 
     const hasKey = setSearchKey();
-    // 标签与列表并行加载：列表不再依赖标签接口成功，避免标签失败时列表不渲染
+    // 侧栏 strategy_tags 与行内全量 tag 并行加载；列表不依赖标签接口成功
     void fetchStrategyTags(getStrategyListScopeParams(route));
+    void fetchAllTags();
     const tryFetch = (retry = 0) => {
       if (!listRef.value) {
         if (retry < 5) {
