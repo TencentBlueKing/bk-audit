@@ -118,7 +118,7 @@
   }, { flush: 'sync' });
   const hasUnavailableWeixin = computed(() => hasLoadedMsgType.value && !isLoading.value
     && noticeWay.value?.includes('weixin') === true
-    && !msgType.value.some(item => item.id === 'weixin'));
+    && !msgType.value.some((item: { id: string }) => item.id === 'weixin'));
 </script>
 <style lang="postcss">
 .notice-group-detail {
