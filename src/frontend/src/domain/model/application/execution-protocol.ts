@@ -40,14 +40,12 @@ const mapOrderBy = (sort?: string | string[]) => {
 };
 
 /**
- * 套餐筛选值是套餐 id。列表协议的 pa_id 只接受一个整数。
- * 多个 id 不能拼成逗号再交给 IntegerField，也不再回退成 pa_name。
+ * 套餐筛选值是套餐 id。一个 id 传整数，多个 id 用逗号拼成 pa_id。
+ * 已有 id 文本但没有合法数字时，不回退成 pa_name。
  */
-const singlePackageId = (value?: string) => {
-  if (value == null || value === '') return undefined;
-  const parts = String(value).split(',').map(item => item.trim()).filter(Boolean);
-  if (parts.length !== 1 || !/^\d+$/.test(parts[0])) return undefined;
-  return Number(parts[0]);
+const packageIds = (value?: string) => {
+  if (value == null || value === '') return [];
+  return String(value).split(',').map(item => item.trim()).filter(item => /^\d+$/.test(item));
 };
 
 /** 页面筛选名转成执行记录列表协议的 query。任务 ID 筛选项对应协议 id（记录主键）。 */
@@ -56,8 +54,9 @@ export const toExecutionListQuery = (params: ExecutionListQuery = {}) => {
   if (params.page) query.page = params.page;
   if (params.page_size) query.page_size = params.page_size;
   const packageIdText = String(params.application_id || '').trim();
-  const paId = singlePackageId(params.application_id);
-  if (paId != null) query.pa_id = paId;
+  const paIds = packageIds(params.application_id);
+  if (paIds.length === 1) query.pa_id = Number(paIds[0]);
+  else if (paIds.length > 1) query.pa_id = paIds.join(',');
   else if (!packageIdText && params.application_name) query.pa_name = params.application_name;
   if (params.risk_id) query.risk_id = params.risk_id;
   const sceneId = toNumber(params.scene_id);

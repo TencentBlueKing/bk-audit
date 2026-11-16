@@ -515,6 +515,7 @@
           value: String(item.id),
         }));
         return {
+          type: 'multiple' as const,
           component: PackageNameFilter,
           label: t('套餐名称（ID）'),
           showConfirmAndReset: true,
