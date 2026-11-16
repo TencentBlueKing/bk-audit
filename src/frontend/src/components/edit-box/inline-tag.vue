@@ -114,7 +114,8 @@
   const { messageWarn } = useMessage();
 
   const editValue = ref<string[]>([]);
-  const tagInputRef = ref<{ $el?: HTMLElement } | null>(null);
+  // bk-tag-input 通过 focusInputTrigger 进入编辑态并弹出候选；仅 focus 原生 input 无效（input 默认 v-show 隐藏）
+  const tagInputRef = ref<{ focusInputTrigger?: (e?: MouseEvent) => void } | null>(null);
 
   // 负数 tag_id 为系统内置/虚拟分类（全部、无标签、我创建的等），不能作为业务标签选择
   const tagOptions = computed(() => props.tagList.reduce((res, item) => {
@@ -134,14 +135,13 @@
 
   const focusTagInput = async () => {
     await nextTick();
-    const root = tagInputRef.value?.$el;
-    root?.querySelector?.('input')?.focus?.();
+    tagInputRef.value?.focusInputTrigger?.();
   };
 
   watch(() => props.isEditing, (editing) => {
     if (editing) {
       editValue.value = [...(props.tags || [])];
-      // 行内编辑需主动聚焦，否则标签先全量渲染再被折叠，表现为闪屏
+      // 行内编辑需主动聚焦进入编辑态，否则标签先全量渲染再被折叠，表现为闪屏
       void focusTagInput();
     }
   }, { immediate: true });
