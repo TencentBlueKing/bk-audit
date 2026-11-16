@@ -110,6 +110,10 @@ class TestProcessOneRiskRetryCount(TestCase):
         self.assertEqual(self.cache.get(self.cache_key), 2)
         trans_cls.return_value.run.assert_not_called()
 
+    def test_post_success_handling_failure_does_not_raise(self):
+        with mock.patch.object(Risk, "refresh_from_db", side_effect=RuntimeError("risk gone")):
+            self._run()
+
     def test_leaving_auto_flow_clears_count(self):
         self.cache.set(self.cache_key, 2)
 

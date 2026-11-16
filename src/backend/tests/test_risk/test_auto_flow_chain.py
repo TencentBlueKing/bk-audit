@@ -246,8 +246,9 @@ class AutoFlowChainTest(TicketTest):
                 ticket_create.assert_called_once()
 
     def test_process_one_risk_uses_late_ack(self):
-        """异步单步任务开启延迟确认，重复投递依赖状态与业务幂等。"""
+        """短 TTL + owner token 就绪后开启延迟确认：消息不丢；崩溃恢复由锁过期后的周期扫描兜底。"""
         self.assertTrue(process_one_risk.acks_late)
+        self.assertTrue(process_one_risk.reject_on_worker_lost)
 
     def test_handler_match_restricts_auto_flow_statuses(self):
         """自动流转 match 只匹配各自的状态，避免手动操作状态被自动调度。"""
@@ -269,7 +270,7 @@ class AutoFlowChainTest(TicketTest):
 class SyncAutoResultFanoutTest(TicketTest):
     """补偿 fan-out：父任务只派发，子任务单节点同步"""
 
-    def _make_node(self, risk_id: str, action: str, process_result: dict) -> TicketNode:
+    def _make_node(self, risk_id: str, action: str, process_result: dict, is_test: bool = False) -> TicketNode:
         return TicketNode.objects.create(
             risk_id=risk_id,
             operator=uuid.uuid1().hex,
@@ -278,6 +279,7 @@ class SyncAutoResultFanoutTest(TicketTest):
             time="2026-01-01 00:00:00",
             process_result=process_result,
             status=TicketNodeStatus.RUNNING,
+            is_test=is_test,
         )
 
     def test_parent_only_dispatches_without_http(self):
@@ -351,6 +353,25 @@ class SyncAutoResultFanoutTest(TicketTest):
 
             node.refresh_from_db()
             self.assertEqual(node.status, TicketNodeStatus.RUNNING)
+            mock_advance.assert_not_called()
+
+    def test_test_node_finished_does_not_advance_flow(self):
+        """BKSEC 测试单跑完只回写执行记录，不驱动真实风险流转"""
+
+        with RiskContext() as risk:
+            node = self._make_node(risk.risk_id, "AutoProcess", {"task": {"task_id": 1}}, is_test=True)
+
+            with (
+                mock.patch(
+                    "services.web.risk.tasks.api.bk_sops.get_task_status",
+                    mock.Mock(return_value=SOPS_FLOW_FINISHED),
+                ),
+                mock.patch("services.web.risk.tasks.process_one_risk.delay") as mock_advance,
+            ):
+                sync_auto_result(node_id=node.id)
+
+            node.refresh_from_db()
+            self.assertEqual(node.status, TicketNodeStatus.FINISHED)
             mock_advance.assert_not_called()
 
 

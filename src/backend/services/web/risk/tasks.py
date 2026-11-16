@@ -628,11 +628,15 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
 
     每次只执行当前状态对应的一个 handler。handler 事务提交后，若状态推进到
     下一个 handler，则释放锁后重新投递本任务；否则结束，等待周期扫描或外部回调。
+    锁使用短 TTL + owner token：worker 丢失后残留锁在 TTL（默认 5 分钟）内过期，
+    周期扫描即可在下一轮接住；延迟确认保证消息不丢，但立即重投会被未过期的
+    残留锁挡住并跳过，崩溃恢复以"锁过期 + 周期扫描"为准。owner token 保证
+    锁过期后被他人持有时不会误删他人的锁。
     """
 
     lock_name = f"celery:process_one_risk:{risk_id}"
     next_task_kwargs = None
-    with CacheLock(lock_name=lock_name, timeout=settings.DEFAULT_CACHE_LOCK_TIMEOUT) as acquired:
+    with CacheLock(lock_name=lock_name, timeout=settings.PROCESS_ONE_RISK_LOCK_TIMEOUT) as acquired:
         if not acquired:
             logger_celery.warning("[CacheLockCheckFailed] MultiProcessRunning %s", lock_name)
             return
@@ -690,27 +694,33 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
                 # 转人工成功后再删计数；失败时保留，下一轮仍封顶直接再转
                 cache.delete(key=cache_key)
         else:
-            # handler.run() 内的事务已经提交；按最新状态决定失败计数和下一步。
-            risk.refresh_from_db(fields=["status"])
-            if risk.status in _AUTO_FLOW_STATUSES:
-                current = cache.get(key=cache_key)
-                if current:
-                    cache.set(
-                        key=cache_key,
-                        value=current,
-                        timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
-                    )
-            else:
-                cache.delete(key=cache_key)
+            try:
+                # handler.run() 内的事务已经提交；按最新状态决定失败计数和下一步。
+                risk.refresh_from_db(fields=["status"])
+                if risk.status in _AUTO_FLOW_STATUSES:
+                    current = cache.get(key=cache_key)
+                    if current:
+                        cache.set(
+                            key=cache_key,
+                            value=current,
+                            timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+                        )
+                else:
+                    cache.delete(key=cache_key)
 
-            if handler.next_step_required and chain_depth + 1 < len(AUTO_FLOW_HANDLERS):
-                next_task_kwargs = {"risk_id": risk.risk_id, "chain_depth": chain_depth + 1}
-                logger_celery.info("[ProcessRiskTicket] Schedule next step for %s", risk.risk_id)
+                if handler.next_step_required and chain_depth + 1 < len(AUTO_FLOW_HANDLERS):
+                    next_task_kwargs = {"risk_id": risk.risk_id, "chain_depth": chain_depth + 1}
+                    logger_celery.info("[ProcessRiskTicket] Schedule next step for %s", risk.risk_id)
+            except Exception as err:  # NOCC:broad-except(成功后的收尾失败不能覆盖已完成流转)
+                logger_celery.exception("[ProcessRiskTicket] PostProcess Error %s %s", risk_id, err)
         finally:
             logger_celery.info("[ProcessRiskTicket] End %s", risk_id)
 
     if next_task_kwargs:
-        process_one_risk.delay(**next_task_kwargs)
+        try:
+            process_one_risk.delay(**next_task_kwargs)
+        except Exception as err:  # NOCC:broad-except(投递失败由周期扫描兜底)
+            logger_celery.exception("[ProcessRiskTicket] Schedule next step failed %s %s", risk_id, err)
 
 
 def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
@@ -802,8 +812,13 @@ def sync_one_auto_result(node_id: str):
     except Exception as err:  # NOCC:broad-except(需要处理所有错误)
         logger_celery.exception("[SyncAutoResult] Error %s %s", node_id, err)
         return
-    # 回写后 delay 链式 process_one_risk：审批通过→同链建任务、套餐结束→同链关单或转人工
-    if node.action in (ForApprove.__name__, AutoProcess.__name__) and node.status == TicketNodeStatus.FINISHED:
+    # 回写后 delay 链式 process_one_risk：审批通过→同链建任务、套餐结束→同链关单或转人工。
+    # 测试单只回写执行记录，不驱动真实风险流转。
+    if (
+        not node.is_test
+        and node.action in (ForApprove.__name__, AutoProcess.__name__)
+        and node.status == TicketNodeStatus.FINISHED
+    ):
         process_one_risk.delay(risk_id=node.risk_id)
 
 
