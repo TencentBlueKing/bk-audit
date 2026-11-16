@@ -46,6 +46,7 @@ from services.web.risk.whitelist.serializers import (
     UpdateRiskWhitelistReqSerializer,
 )
 from services.web.risk.whitelist.service import (
+    _bind_ticket,
     _format_dt,
     apply_whitelist_result,
     ensure_admin,
@@ -398,8 +399,14 @@ class RiskWhitelistCallback(RiskWhitelistMeta):
         if not ticket_id:
             return {"result": False, "message": "missing ticket id"}
         rule = RiskWhitelist.objects.filter(itsm_ticket_id=ticket_id).first()
+        if rule is None and callback_token:
+            # 回调可能在单据号落库前到达，这时用工单创建时带的 token 找到同一条白名单。
+            rule = RiskWhitelist.objects.filter(callback_token=callback_token).first()
         if rule is None or not callback_token or rule.callback_token != callback_token:
             return {"result": False, "message": "invalid callback"}
+        if not rule.itsm_ticket_id:
+            _bind_ticket(rule, ticket)
+            rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
         if rule.status == WhitelistStatus.PENDING:
-            apply_whitelist_result(rule, ticket)
-        return {"result": True, "message": "success"}
+            rule = apply_whitelist_result(rule, ticket)
+        return {"result": True, "message": "success", "status": rule.status}

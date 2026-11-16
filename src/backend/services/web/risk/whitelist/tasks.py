@@ -19,7 +19,7 @@ def create_risk_whitelist_ticket(rule_id: int) -> None:
 
 
 @periodic_task(
-    run_every=crontab(minute=getattr(settings, "RISK_WHITELIST_SYNC_MINUTE", "*/5")),
+    run_every=crontab(minute=getattr(settings, "RISK_WHITELIST_SYNC_MINUTE", "*/10")),
     queue="risk",
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )

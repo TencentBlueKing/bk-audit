@@ -185,15 +185,14 @@ class WhitelistTicketCreateTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_pass_follows_itsm_ticket(self, is_admin, operate, ticket_detail, apply_result):
+    def test_admin_pass_waits_for_callback(self, is_admin, operate, ticket_detail, apply_result):
         from services.web.risk.whitelist.service import _pass_if_admin
 
-        ticket = {"id": "ticket-1", "status": "running", "approve_result": None}
-        ticket_detail.return_value = ticket
-        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1")
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
         operate.assert_called_once_with(rule, "approve", "alice")
-        apply_result.assert_called_once_with(rule, ticket)
+        ticket_detail.assert_not_called()
+        apply_result.assert_not_called()
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [
@@ -294,6 +293,7 @@ class WhitelistDurationTests(SimpleTestCase):
             },
         )
         self.assertEqual(payload["validity_text"], "2026-12-11 16:33:41")
+        self.assertEqual(payload["rule_id"], "1")
         self.assertEqual(payload["itsm_ticket_id"], "102026111108334100059701")
         self.assertEqual(payload["itsm_sn"], "DE2026111100000001")
         self.assertEqual(payload["itsm_status"], WhitelistStatus.ACTIVE)
@@ -342,6 +342,29 @@ class WhitelistDurationTests(SimpleTestCase):
         self.assertEqual(flow["status_display"], "待审批")
         self.assertEqual(flow["current_processors"], [])
         self.assertEqual(flow["current_steps"], [{"name": "审批"}])
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    def test_list_does_not_write_status(self, ticket_detail, apply_result):
+        ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
+        rule = SimpleNamespace(id=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1", reject_reason="")
+        progress_map([rule])
+        apply_result.assert_not_called()
+        self.assertEqual(rule.status, WhitelistStatus.PENDING)
+
+    @patch("services.web.risk.whitelist.service._close_source_risk")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects")
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result", side_effect=RuntimeError("db"))
+    def test_flow_active_is_written_when_apply_fails(self, apply_result, objects, close_risk):
+        objects.filter.return_value.values_list.return_value.first.return_value = None
+        objects.filter.return_value.update.return_value = 1
+        rule = SimpleNamespace(id=28, pk=28, status=WhitelistStatus.PENDING, reject_reason="", risk_id="")
+        ticket = {"id": "102026111607182800062501", "status": "finished", "approve_result": True}
+        from services.web.risk.whitelist.service import _write_terminal_status
+
+        _write_terminal_status(rule, ticket)
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        self.assertEqual(objects.filter.return_value.update.call_args.kwargs["status"], WhitelistStatus.ACTIVE)
 
     def test_custom_time_is_the_expire_at(self):
         from django.utils import timezone
@@ -410,6 +433,8 @@ class _WhitelistQuery:
             if "pk" in self.kwargs and self.kwargs["pk"] != rule.id:
                 continue
             if "itsm_ticket_id" in self.kwargs and self.kwargs["itsm_ticket_id"] != rule.itsm_ticket_id:
+                continue
+            if "callback_token" in self.kwargs and self.kwargs["callback_token"] != rule.callback_token:
                 continue
             if "status" in self.kwargs and self.kwargs["status"] != rule.status:
                 continue
@@ -553,6 +578,40 @@ class WhitelistFlowTests(SimpleTestCase):
         self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
         close_risk.assert_called_once()
         ticket_detail.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service._close_source_risk")
+    @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
+    def test_callback_before_ticket_id_is_saved_still_writes_active(self, close_risk, refresh_nodes):
+        rule = _Rule(status=WhitelistStatus.PENDING, callback_token="token", risk_id="")
+        rule.itsm_ticket_id = ""
+        manager = _WhitelistManager()
+        manager.rules.append(rule)
+        with patch.object(RiskWhitelist, "objects", manager):
+            result = RiskWhitelistCallback().perform_request(
+                {
+                    "callback_token": "token",
+                    "ticket": {"id": "ticket-9", "sn": "SN9", "status": "finished", "approve_result": True},
+                }
+            )
+        self.assertTrue(result["result"])
+        self.assertEqual(rule.itsm_ticket_id, "ticket-9")
+        self.assertEqual(rule.itsm_sn, "SN9")
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        close_risk.assert_called_once()
+
+
+class WhitelistPollTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    def test_finished_ticket_is_written_active(self, ticket_detail, apply_result):
+        from services.web.risk.whitelist.service import _poll_whitelist_ticket
+
+        ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
+        rule = SimpleNamespace(id=7, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
+        _poll_whitelist_ticket(rule)
+        apply_result.assert_called_once()
+        self.assertTrue(apply_result.call_args.args[1]["approve_result"])
 
 
 class WhitelistRenewTests(SimpleTestCase):
