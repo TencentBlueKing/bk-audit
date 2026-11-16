@@ -308,7 +308,7 @@
   }, { flush: 'sync' });
   const hasUnavailableWeixin = computed(() => hasLoadedMsgType.value && !isMsgTypeLoading.value
     && !!formData.value.notice_config.weixin
-    && !msgType.value.some(item => item.id === 'weixin'));
+    && !msgType.value.some((item: { id: string }) => item.id === 'weixin'));
 
   const handleRemoveWeixin = () => {
     formData.value.notice_config.weixin = false;
