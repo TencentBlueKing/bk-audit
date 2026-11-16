@@ -96,7 +96,7 @@ class SafeAddIndex(migrations.AddIndex):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("risk", "0071_riskwhitelist"),
+        ("risk", "0070_ticketnode_sops_start_time"),
     ]
 
     operations = [
