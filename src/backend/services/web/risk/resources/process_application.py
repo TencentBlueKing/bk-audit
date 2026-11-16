@@ -229,18 +229,18 @@ def _pa_filter_q(pa_ids: list) -> Q:
     return snapshot_q | legacy_q
 
 
-def _filter_execution_nodes_by_scope(nodes, pa_id, scene_id, risk_id=""):
+def _filter_execution_nodes_by_scope(nodes, pa_ids, scene_id, risk_id=""):
     """按风险所属场景和候选套餐收窄执行记录。指定了条件但没有候选套餐时返回空查询。"""
     if scene_id:
         scene_risks = Risk.objects.filter(scene_id=scene_id)
         if risk_id:
             scene_risks = scene_risks.filter(risk_id=risk_id)
         nodes = nodes.filter(risk_id__in=scene_risks.values("risk_id"))
-    if not (pa_id or scene_id):
+    if not (pa_ids or scene_id):
         return nodes
     pa_queryset = ProcessApplication.objects.all()
-    if pa_id:
-        pa_queryset = pa_queryset.filter(id=pa_id)
+    if pa_ids:
+        pa_queryset = pa_queryset.filter(id__in=pa_ids)
     if scene_id:
         pa_queryset = CompositeScopeFilter.filter_queryset(
             queryset=pa_queryset,
@@ -383,6 +383,26 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                 values.append(value)
         return values
 
+    @classmethod
+    def _parse_pa_ids(cls, raw) -> list:
+        """套餐ID多选参数归一化：兼容单值/逗号分隔/列表，转换为整数并保序去重"""
+        if isinstance(raw, (list, tuple, set)):
+            values = [str(value) for value in raw]
+        else:
+            values = str(raw or "").split(",")
+        pa_ids = []
+        for value in values:
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                pa_id = int(value)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(gettext("套餐ID需为逗号分隔的整数"))
+            if pa_id not in pa_ids:
+                pa_ids.append(pa_id)
+        return pa_ids
+
     @staticmethod
     def _filter_by_record_id(nodes, record_id: str):
         """执行记录 ID 精确过滤（字符串比较，与 task_id 筛选同风格）；空值不过滤"""
@@ -473,7 +493,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
     def perform_request(self, validated_request_data):
         record_id = (validated_request_data.get("id") or "").strip()
-        pa_id = validated_request_data.get("pa_id")
+        pa_ids = self._parse_pa_ids(validated_request_data.get("pa_id"))
         risk_id = (validated_request_data.get("risk_id") or "").strip()
         scene_id = validated_request_data.get("scene_id")
         task_id = validated_request_data.get("task_id", "").strip()
@@ -498,7 +518,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         nodes = self._filter_by_record_id(nodes, record_id)
 
         # 场景先按风险所属场景收窄，再按该场景可见套餐过滤。没有候选套餐时返回空结果。
-        nodes = _filter_execution_nodes_by_scope(nodes, pa_id, scene_id, risk_id=risk_id)
+        nodes = _filter_execution_nodes_by_scope(nodes, pa_ids, scene_id, risk_id=risk_id)
         # 开始时间闭区间：from <= sops_start_time <= to。套餐列表缺省近 30 天；风险入口不套默认。
         time_from = validated_request_data.get("from")
         time_to = validated_request_data.get("to")

@@ -981,7 +981,13 @@ class PAExecutionRecordListReqSerializer(serializers.Serializer):
             "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
         ),
     )
-    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
+    pa_id = serializers.CharField(
+        label=gettext_lazy("套餐ID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 1,2），任一命中即返回"),
+    )
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
     task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
@@ -1023,6 +1029,17 @@ class PAExecutionRecordListReqSerializer(serializers.Serializer):
         if time_from is not None and time_to is not None and time_from > time_to:
             raise serializers.ValidationError(gettext("from 不能晚于 to"))
         return attrs
+
+    def validate_pa_id(self, value):
+        for item in str(value or "").split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                int(item)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(gettext("套餐ID需为逗号分隔的整数"))
+        return value
 
 
 # from 是 Python 关键字，不能写成类属性，对外参数名仍然是 from。
