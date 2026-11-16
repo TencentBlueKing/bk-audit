@@ -63,12 +63,12 @@
   const loading = ref(false);
   const fields = ref<EventFieldRow[]>([]);
 
-  const open = (id: number | string) => {
+  const open = (whitelistId: number | string, hitId: number | string) => {
     isShow.value = true;
     loading.value = true;
     fields.value = [];
-    RiskWhitelistService.fetchHitEvent({ id }).then((data) => {
-      fields.value = data.fields || [];
+    RiskWhitelistService.fetchHitEvents({ id: whitelistId, hit_id: hitId }).then((data) => {
+      fields.value = data;
     })
       .finally(() => {
         loading.value = false;

@@ -242,6 +242,7 @@
   import SoapManageService from '@service/soap-manage';
 
   import type RiskManageModel from '@model/risk/risk';
+  import type { WhitelistPayload } from '@model/risk-whitelist/whitelist';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
@@ -541,10 +542,24 @@
       handleSubmitSuccess(t('人工转单成功'));
     },
   });
+  const submitWhitelist = (params: { withMisreport: boolean; payload: WhitelistPayload }) => (
+    params.withMisreport
+      ? RiskManageService.updateRiskLabel({
+        risk_id: props.riskId,
+        risk_label: 'misreport',
+        description: formData.value.misreport_description || '',
+        whitelist: params.payload,
+      })
+      : RiskWhitelistService.create({
+        ...params.payload,
+        scene_id: props.detailData.scene_id || undefined,
+        risk_id: props.riskId,
+      })
+  );
   const {
     run: applyWhitelist,
     loading: applyLoading,
-  } = useRequest(RiskWhitelistService.applyFromRisk, {
+  } = useRequest(submitWhitelist, {
     defaultValue: null,
     onSuccess() {
       const withMisreport = formData.value.method === 'misreport';
@@ -610,11 +625,8 @@
     });
     if (!confirmed) return;
     applyWhitelist({
-      risk_id: props.riskId,
-      ...payload,
-      with_misreport: formData.value.method === 'misreport',
-      misreport_description: formData.value.misreport_description || '',
-      source: 'risk',
+      withMisreport: formData.value.method === 'misreport',
+      payload,
     });
   };
 

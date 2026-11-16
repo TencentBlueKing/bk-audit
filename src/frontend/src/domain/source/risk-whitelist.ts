@@ -14,14 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-import type RiskWhitelist from '@model/risk-whitelist/whitelist';
-import type {
-  ConditionFieldOption,
-  EventFieldRow,
-  HitRecord,
-  RenewPayload,
-  WhitelistPayload,
-} from '@model/risk-whitelist/whitelist';
+import type { EventFieldRow } from '@model/risk-whitelist/whitelist';
 
 import Request, {
   type IRequestPayload,
@@ -30,9 +23,6 @@ import Request, {
 
 import ModuleBase from './module-base';
 
-/**
- * 前端按需求文档起草的契约。路径和字段名等后端（138663193）出接口后对齐。
- */
 class RiskWhitelistSource extends ModuleBase {
   constructor() {
     super();
@@ -40,23 +30,23 @@ class RiskWhitelistSource extends ModuleBase {
   }
 
   getList(params: Record<string, any>, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<RiskWhitelist>>(`${this.module}/`, {
+    return Request.get<IRequestResponsePaginationData<Record<string, any>>>(`${this.module}/`, {
       params,
       payload,
     });
   }
 
-  getDetail(params: { id: number | string }) {
-    return Request.get<RiskWhitelist>(`${this.module}/${params.id}/`);
+  create(params: Record<string, any>) {
+    return Request.post<Record<string, any>>(`${this.module}/`, { params });
   }
 
-  create(params: WhitelistPayload) {
-    return Request.post<RiskWhitelist>(`${this.module}/`, { params });
+  batchCreate(params: Record<string, any>) {
+    return Request.post(`${this.module}/batch/`, { params });
   }
 
-  update(params: WhitelistPayload & { id: number | string }) {
+  update(params: Record<string, any> & { id: number | string }) {
     const { id, ...rest } = params;
-    return Request.put<RiskWhitelist>(`${this.module}/${id}/`, { params: rest });
+    return Request.put<Record<string, any>>(`${this.module}/${id}/`, { params: rest });
   }
 
   approve(params: { id: number | string }) {
@@ -70,16 +60,16 @@ class RiskWhitelistSource extends ModuleBase {
   }
 
   enable(params: { id: number | string }) {
-    return Request.post<RiskWhitelist>(`${this.module}/${params.id}/enable/`);
+    return Request.post<Record<string, any>>(`${this.module}/${params.id}/enable/`);
   }
 
   disable(params: { id: number | string }) {
     return Request.post(`${this.module}/${params.id}/disable/`);
   }
 
-  renew(params: RenewPayload) {
+  renew(params: Record<string, any> & { id: number | string }) {
     const { id, ...rest } = params;
-    return Request.post<RiskWhitelist>(`${this.module}/${id}/renew/`, { params: rest });
+    return Request.post<Record<string, any>>(`${this.module}/${id}/renew/`, { params: rest });
   }
 
   remove(params: { id: number | string }) {
@@ -88,22 +78,15 @@ class RiskWhitelistSource extends ModuleBase {
 
   getHitRecords(params: Record<string, any> & { id: number | string }, payload = {} as IRequestPayload) {
     const { id, ...rest } = params;
-    return Request.get<IRequestResponsePaginationData<HitRecord>>(`${this.module}/${id}/hit_records/`, {
+    return Request.get<IRequestResponsePaginationData<Record<string, any>>>(`${this.module}/${id}/hit_records/`, {
       params: rest,
       payload,
     });
   }
 
-  getHitEvent(params: { id: number | string }) {
-    return Request.get<{ fields: EventFieldRow[] }>(`${this.module}/hit_events/${params.id}/`);
-  }
-
-  getConditionFields(params: { strategy_id?: string; scene_id?: string | number }) {
-    return Request.get<ConditionFieldOption[]>(`${this.module}/condition_fields/`, { params });
-  }
-
-  applyFromRisk(params: Record<string, any>) {
-    return Request.post(`${this.module}/apply/`, { params });
+  getHitEvents(params: { id: number | string; hit_id: number | string }) {
+    const { id, ...rest } = params;
+    return Request.get<{ fields: EventFieldRow[] }>(`${this.module}/${id}/hit_events/`, { params: rest });
   }
 }
 

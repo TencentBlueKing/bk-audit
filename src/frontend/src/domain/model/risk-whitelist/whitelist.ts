@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-/** 误报加白 / 冒险加白。后端枚举未定，先用这两值对齐需求文档。 */
+/** 误报加白 / 冒险加白 */
 export type WhitelistType = 'false_positive' | 'risk_acceptance';
 
 /** 待审批 / 生效中 / 已停用 / 已到期 / 已驳回 */
@@ -28,6 +28,7 @@ export type LogicConnector = 'and' | 'or';
 
 export type CompareOperator = 'eq' | 'neq';
 
+/** 同时是后端 duration_days 的取值：permanent / Nd / Nm / custom（另传 expire_at） */
 export type ValidityMode = 'permanent' | '7d' | '1m' | '3m' | '6m' | '12m' | 'custom';
 
 export interface MatchCondition {
@@ -49,6 +50,15 @@ export interface MatchGroup {
 
 export interface MatchScope {
   groups: MatchGroup[];
+}
+
+/** 后端求值时组间看 scope.connector，组内看 group.connector */
+export interface MatchScopeBody {
+  connector: LogicConnector;
+  groups: Array<{
+    connector: LogicConnector;
+    conditions: MatchCondition[];
+  }>;
 }
 
 export interface WhitelistFlow {
@@ -106,6 +116,76 @@ export interface EventFieldRow {
   field_value: string;
 }
 
+export interface WhitelistBody {
+  match_scope: MatchScopeBody;
+  whitelist_type: WhitelistType;
+  reason: string;
+  duration_days: ValidityMode;
+  expire_at?: string;
+}
+
+const toConnector = (value?: string): LogicConnector => (value === 'or' ? 'or' : 'and');
+
+export const toMatchScopeBody = (scope: MatchScope): MatchScopeBody => ({
+  connector: toConnector(scope.groups[1]?.connector),
+  groups: scope.groups.map((group) => {
+    const inner = toConnector(group.conditions[1]?.connector);
+    return {
+      connector: inner,
+      conditions: group.conditions.map((condition, index) => ({
+        ...condition,
+        connector: index > 0 ? inner : 'and',
+      })),
+    };
+  }),
+});
+
+/** 组间、组内连接优先取后端口径，缺失时回落到逐组、逐条记录的连接 */
+export const fromMatchScopeBody = (raw?: Partial<MatchScopeBody> | null): MatchScope => {
+  const groups = raw && Array.isArray(raw.groups) ? raw.groups : [];
+  const outer = toConnector(raw?.connector || groups[1]?.connector);
+  return {
+    groups: groups.map((group, groupIndex) => {
+      const conditions = Array.isArray(group.conditions) ? group.conditions : [];
+      const inner = toConnector(conditions[1]?.connector || group.connector);
+      return {
+        connector: groupIndex > 0 ? outer : 'and',
+        conditions: conditions.map((condition, index) => ({
+          ...condition,
+          value: String(condition.value ?? ''),
+          value_display: condition.value_display || String(condition.value ?? ''),
+          connector: index > 0 ? inner : 'and',
+        })),
+      };
+    }),
+  };
+};
+
+export const toWhitelistBody = (payload: WhitelistPayload): WhitelistBody => {
+  const durationDays = payload.validity_mode || 'permanent';
+  return {
+    match_scope: toMatchScopeBody(payload.match_scope),
+    whitelist_type: payload.whitelist_type,
+    reason: payload.reason,
+    duration_days: durationDays,
+    ...(durationDays === 'custom' && payload.expire_at ? { expire_at: payload.expire_at } : {}),
+  };
+};
+
+const joinNames = (list: unknown): string => {
+  if (!Array.isArray(list)) return '';
+  return list
+    .map((item) => {
+      if (item && typeof item === 'object') {
+        const named = item as Record<string, any>;
+        return named.name || named.display_name || named.username || named.id || '';
+      }
+      return item;
+    })
+    .filter(Boolean)
+    .join(', ');
+};
+
 const emptyFlow = (): WhitelistFlow => ({
   itsm_sn: '',
   itsm_url: '',
@@ -122,6 +202,8 @@ const emptyFlow = (): WhitelistFlow => ({
 export default class RiskWhitelist {
   id: number | string;
   rule_code: string;
+  scene_id: number | string;
+  risk_id: string;
   match_scope: MatchScope;
   whitelist_type: WhitelistType;
   expire_at: string;
@@ -134,12 +216,17 @@ export default class RiskWhitelist {
   applicant: string;
   validity_mode: ValidityMode;
   custom_days: number;
+  itsm_sn: string;
+  itsm_url: string;
+  actions: string[];
   flow: WhitelistFlow;
 
-  constructor(payload = {} as Partial<RiskWhitelist>) {
+  constructor(payload = {} as Record<string, any>) {
     this.id = payload.id ?? '';
-    this.rule_code = payload.rule_code || (payload.id ? `WL-${String(payload.id).padStart(4, '0')}` : '');
-    this.match_scope = payload.match_scope || { groups: [] };
+    this.rule_code = payload.rule_code || (payload.id ? String(payload.id) : '');
+    this.scene_id = payload.scene_id ?? '';
+    this.risk_id = payload.risk_id || '';
+    this.match_scope = fromMatchScopeBody(payload.match_scope);
     this.whitelist_type = payload.whitelist_type || 'false_positive';
     this.expire_at = payload.expire_at || '';
     this.is_permanent = Boolean(payload.is_permanent);
@@ -149,11 +236,23 @@ export default class RiskWhitelist {
     this.updated_by = payload.updated_by || '';
     this.updated_at = payload.updated_at || '';
     this.applicant = payload.applicant || '';
-    this.validity_mode = payload.validity_mode || (payload.is_permanent ? 'permanent' : '1m');
+    this.validity_mode = payload.validity_mode || (this.is_permanent ? 'permanent' : '1m');
     this.custom_days = Number(payload.custom_days || 1);
+    this.itsm_sn = payload.itsm_sn || '';
+    this.itsm_url = payload.itsm_url || '';
+    this.actions = Array.isArray(payload.actions) ? payload.actions : [];
+    const flow = payload.flow || {};
     this.flow = {
       ...emptyFlow(),
-      ...(payload.flow || {}),
+      itsm_sn: flow.itsm_sn || this.itsm_sn,
+      itsm_url: flow.itsm_url || this.itsm_url,
+      apply_status: flow.status_display || flow.status || '',
+      current_node: joinNames(flow.current_steps),
+      current_approvers: joinNames(flow.current_processors),
+      applicant: this.applicant,
+      rejector: flow.rejector || '',
+      reject_reason: flow.reject_reason || '',
+      rejected_at: flow.rejected_at || '',
     };
   }
 }
