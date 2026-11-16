@@ -254,9 +254,10 @@ def get_rawdata_detail(*, bk_data_id):
 
 
 def get_user_source_for_apply(*, bk_data_id):
-    """从同一次已校验的正式GET取得接入机制与绑定。"""
+    """按已验证的用户来源项目解析绑定，不改变审计输出项目。"""
     context, native = _get_user_source_by_raw_id(bk_data_id)
-    return _legacy_source(native), _source_binding(context, native, bk_data_id)
+    ref = reference(native, context, "DataSource")
+    return _legacy_source(native), _source_binding({**context, "namespace": ref["namespace"]}, native, bk_data_id)
 
 
 def resolve_synced_source(context, collector, *, raw_data_id=None):

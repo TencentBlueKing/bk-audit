@@ -71,12 +71,15 @@ class SourceScenarioTests(TestCase):
 
     def transport(self, method, url, **kwargs):
         self.assertEqual(method, "GET")
-        self.assertIn("/v4/tenants/default/namespaces/audit/datasources/", url)
         self.calls.append(url)
         if url.endswith("/datasources/"):
+            self.assertIn("/v4/tenants/default/namespaces/audit/datasources/", url)
             value = [self.data_source]
         else:
-            self.assertTrue(url.endswith("/datasources/synthetic_source/"))
+            source_namespace = self.data_source["metadata"]["namespace"]
+            self.assertTrue(
+                url.endswith(f"/v4/tenants/default/namespaces/{source_namespace}/datasources/synthetic_source/")
+            )
             value = self.detail or self.data_source
         response = requests.Response()
         response.url = url
@@ -102,6 +105,26 @@ class SourceScenarioTests(TestCase):
             "is_deleted": True,
         }
         return CollectorConfig._objects.create(**{**params, **changes})
+
+    def test_apply_other_project_source_keeps_source_binding(self):
+        self.data_source["metadata"]["namespace"] = "bklog"
+        self.data_source["spec"]["data_id"]["namespace"] = "bklog"
+        self.assertEqual(self.apply(), {"bk_data_id": 81})
+        collector = CollectorConfig.objects.get(bk_data_id=81)
+        self.assertEqual(collector.system_id, "synthetic")
+        self.assertEqual(
+            collector.bkbase_v4_resources,
+            {
+                "data_source": {
+                    "kind": "DataSource",
+                    "tenant": "default",
+                    "namespace": "bklog",
+                    "name": "synthetic_source",
+                },
+                "data_id": {"kind": "DataId", "tenant": "default", "namespace": "bklog", "name": "synthetic_data"},
+                "source_raw_data_id": 81,
+            },
+        )
 
     def test_list_and_detail_map_only_confirmed_source_mechanisms(self):
         for mechanism, expected in (
