@@ -120,6 +120,27 @@ class TestListPAExecutionRecords:
         assert records[0]["result"] == "success"
         assert records[0]["risk_title"] == (risk_a.title or "")
 
+    def test_filter_by_pa_multi_select(self):
+        """套餐ID支持多选（逗号分隔，任一命中），兼容单值"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=31, pa_id=pa_a.id, pa_name="套餐A")
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=32, pa_id=pa_b.id, pa_name="套餐B")
+        # 单值（兼容旧调用方 int）
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"31"}
+        # 多值：逗号分隔
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": f"{pa_a.id},{pa_b.id}"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"31", "32"}
+        # 多值含空白与空项容错
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": f" {pa_a.id} , {pa_b.id} ,"})
+        assert resp["count"] == 2
+        # 无命中
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": f"{pa_a.id},999999999"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"31"}
+        # 非法值拒绝
+        with pytest.raises(ValidateException):
+            resource.risk.list_pa_execution_records.request({"pa_id": f"{pa_a.id},abc"})
+
     def test_duration_sort_running_first_then_duration(self):
         """执行中的记录始终在前；组内按开始时间，已完成的按 duration 排序。"""
         from services.web.risk.constants import TicketNodeStatus
