@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
@@ -252,10 +253,9 @@ def _raw_ticket_status(ticket: dict) -> str:
 
 
 def _is_approved(ticket: dict) -> bool:
-    value = (ticket or {}).get("approve_result")
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes"}
-    return value is True or value == 1
+    """和场景权限一样，直接用工单里的 approve_result，缺省当未通过。"""
+
+    return bool((ticket or {}).get("approve_result", False))
 
 
 def map_whitelist_status(ticket: dict) -> tuple:
@@ -615,17 +615,28 @@ def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
 
 
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
-    """管理员创建后立刻审批。状态只由这次审批触发的回调结果更新。"""
+    """管理员创建后立刻审批。handle 成功即写成生效中；回调若已先写入则保持回调结果。"""
 
     if not username or not is_scene_admin(username, rule.scene_id):
         return
+    payload = None
     try:
-        operate_itsm(rule, "approve", username)
+        payload = operate_itsm(rule, "approve", username)
     except Exception:
         logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
-        return
     if hasattr(rule, "refresh_from_db"):
         rule.refresh_from_db()
+    if getattr(rule, "status", WhitelistStatus.PENDING) != WhitelistStatus.PENDING:
+        return
+    if isinstance(payload, dict) and payload.get("success") is True:
+        apply_whitelist_result(
+            rule,
+            {
+                "id": rule.itsm_ticket_id,
+                "status": ITSMV4TicketStatus.FINISHED,
+                "approve_result": True,
+            },
+        )
 
 
 def renew_whitelist(
@@ -690,12 +701,28 @@ def create_itsm_ticket(rule_id: int) -> None:
     _bind_ticket(rule, ticket)
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     refresh_whitelist_nodes(rule, ticket)
-    _pass_if_admin(rule, rule.created_by or "")
     rule.refresh_from_db()
+    if rule.status == WhitelistStatus.PENDING:
+        _apply_returned_status(rule)
+
+
+def _apply_returned_status(rule: RiskWhitelist) -> RiskWhitelist:
+    """创建后把工单返回的 status 映射并写入数据库。"""
+
+    if rule.status != WhitelistStatus.PENDING or not rule.itsm_ticket_id:
+        return rule
+    try:
+        detail = api.bk_itsm_v4.ticket_detail(id=rule.itsm_ticket_id) or {}
+    except Exception:
+        logger.exception("[RiskWhitelist] ticket_detail failed, id=%s", rule.id)
+        return rule
+    if not isinstance(detail, dict):
+        return rule
+    return apply_whitelist_result(rule, detail)
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:
-    """回调没有写成生效中或已驳回时，轮询仍待审批的记录，按工单详情更新状态。"""
+    """回调没有写成终态时，查待审批记录的工单日志，按日志结果更新状态。"""
 
     rules = list(
         RiskWhitelist.objects.filter(status=WhitelistStatus.PENDING)
@@ -710,22 +737,44 @@ def sync_pending_whitelists(limit: int = 50) -> None:
 
 
 def refresh_pending_whitelist(rule: RiskWhitelist) -> dict:
-    """待审批记录用工单号查工单。已通过写成生效中，驳回或终止写成已驳回。"""
+    """待审批记录查工单日志。已通过写成生效中，驳回或终止写成已驳回。"""
 
     if rule.status != WhitelistStatus.PENDING or not rule.itsm_ticket_id:
         return {}
-    detail = _load_ticket_detail(rule)
-    mapped, _display = map_whitelist_status(detail)
+    ticket = _ticket_from_logs(rule)
+    if not ticket:
+        return {}
+    mapped, _display = map_whitelist_status(ticket)
     logger.info(
-        "[RiskWhitelist] ticket id=%s itsm=%s raw_status=%s mapped=%s",
+        "[RiskWhitelist] logs id=%s itsm=%s raw_status=%s mapped=%s",
         rule.id,
         rule.itsm_ticket_id,
-        _raw_ticket_status(detail),
+        _raw_ticket_status(ticket),
         mapped,
     )
     if mapped != WhitelistStatus.PENDING:
-        _write_terminal_status(rule, detail)
-    return detail
+        _write_terminal_status(rule, ticket)
+    return ticket
+
+
+def _ticket_from_logs(rule: RiskWhitelist):
+    """用工单日志判断审批是否已经结束。和场景权限轮询同一套日志解析。"""
+
+    try:
+        logs = api.bk_itsm_v4.ticket_logs(ticket_id=rule.itsm_ticket_id) or {}
+    except Exception:
+        logger.exception("[RiskWhitelist] ticket_logs failed, id=%s", rule.id)
+        return None
+    from services.web.scene.permission import parse_itsm_ticket_from_logs
+
+    parsed = parse_itsm_ticket_from_logs(logs if isinstance(logs, dict) else {})
+    if parsed.get("status") not in {ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION}:
+        return None
+    return {
+        "id": rule.itsm_ticket_id,
+        "status": parsed["status"],
+        "approve_result": parsed.get("approve_result"),
+    }
 
 
 def _poll_whitelist_ticket(rule: RiskWhitelist) -> None:
@@ -864,13 +913,41 @@ def flow_of(rule: RiskWhitelist, ticket: dict = None):
 
 
 def progress_map(rules) -> dict:
-    """列表只回显工单。状态由回调写入；回调没有结果时由轮询按工单详情写入。"""
+    """待审批、已驳回同时查工单。工单已通过或已驳回时，把同一个结果写回待审批记录。"""
+
+    targets = [rule for rule in rules if rule.status in FLOW_STATUS and rule.itsm_ticket_id]
+    found = _load_ticket_details(targets)
+    for rule in targets:
+        if rule.status != WhitelistStatus.PENDING:
+            continue
+        _write_terminal_status(rule, found.get(str(rule.id)) or {})
+    return found
+
+
+def _load_ticket_details(rules) -> dict:
+    if not rules:
+        return {}
+    if len(rules) == 1:
+        return {str(rules[0].id): _load_ticket_detail(rules[0])}
+
+    def _load(rule):
+        from django.db import close_old_connections
+
+        close_old_connections()
+        try:
+            return _load_ticket_detail(rule)
+        finally:
+            close_old_connections()
 
     found = {}
-    for rule in rules:
-        if rule.status not in FLOW_STATUS or not rule.itsm_ticket_id:
-            continue
-        found[str(rule.id)] = _load_ticket_detail(rule)
+    with ThreadPoolExecutor(max_workers=len(rules)) as pool:
+        futures = {pool.submit(_load, rule): rule for rule in rules}
+        for future, rule in futures.items():
+            try:
+                found[str(rule.id)] = future.result()
+            except Exception:
+                logger.exception("[RiskWhitelist] list ticket_detail failed, id=%s", rule.id)
+                found[str(rule.id)] = {}
     return found
 
 

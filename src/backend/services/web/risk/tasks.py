@@ -1289,4 +1289,29 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
         raise
 
 
-from services.web.risk.whitelist import tasks as whitelist_tasks  # noqa: F401, E402
+@periodic_task(
+    run_every=crontab(minute=getattr(settings, "RISK_WHITELIST_SYNC_MINUTE", "*/10")),
+    queue="risk",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(lock_name="celery:sync_risk_whitelist_approval")
+def sync_risk_whitelist_approval():
+    """回调没有写成终态时，查待审批白名单的工单日志并回写状态。"""
+
+    from services.web.risk.whitelist.service import sync_pending_whitelists
+
+    sync_pending_whitelists()
+
+
+@periodic_task(
+    run_every=crontab(minute=getattr(settings, "RISK_WHITELIST_EXPIRE_MINUTE", "*/10")),
+    queue="risk",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(lock_name="celery:expire_risk_whitelists")
+def expire_risk_whitelists():
+    """把已过期的生效中白名单改为已到期。"""
+
+    from services.web.risk.whitelist.service import expire_whitelists
+
+    expire_whitelists()

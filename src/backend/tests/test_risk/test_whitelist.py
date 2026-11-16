@@ -21,6 +21,7 @@ from services.web.risk.whitelist.service import (
     expire_at_from,
     flow_of,
     intercept_whitelist,
+    map_whitelist_status,
     progress_map,
     renew_whitelist,
     resolve_duration,
@@ -185,14 +186,45 @@ class WhitelistTicketCreateTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_pass_waits_for_callback(self, is_admin, operate, ticket_detail, apply_result):
+    def test_admin_handle_success_writes_active(self, is_admin, operate, ticket_detail, apply_result):
         from services.web.risk.whitelist.service import _pass_if_admin
 
+        operate.return_value = {"success": True, "message": "操作成功"}
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
         operate.assert_called_once_with(rule, "approve", "alice")
         ticket_detail.assert_not_called()
+        apply_result.assert_called_once_with(
+            rule,
+            {"id": "ticket-1", "status": ITSMV4TicketStatus.FINISHED, "approve_result": True},
+        )
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    @patch("services.web.risk.whitelist.service.operate_itsm")
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
+    def test_admin_handle_failure_does_not_read_ticket_detail(self, is_admin, operate, ticket_detail, apply_result):
+        from services.web.risk.whitelist.service import _pass_if_admin
+
+        operate.side_effect = Exception("操作未找到")
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
+        _pass_if_admin(rule, "alice")
+        ticket_detail.assert_not_called()
         apply_result.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    def test_create_writes_returned_ticket_status(self, ticket_detail, apply_result):
+        from services.web.risk.whitelist.service import _apply_returned_status
+
+        detail = {"id": "ticket-1", "status": "finished", "status_display": "已完成"}
+        ticket_detail.return_value = detail
+        rule = SimpleNamespace(id=1, pk=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
+        _apply_returned_status(rule)
+        apply_result.assert_called_once_with(rule, detail)
+        mapped, display = map_whitelist_status(detail)
+        self.assertEqual(mapped, WhitelistStatus.REJECTED)
+        self.assertEqual(display, "已驳回")
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [
@@ -345,12 +377,25 @@ class WhitelistDurationTests(SimpleTestCase):
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_list_does_not_write_status(self, ticket_detail, apply_result):
+    def test_list_writes_active_when_ticket_is_finished(self, ticket_detail, apply_result):
         ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
-        rule = SimpleNamespace(id=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1", reject_reason="")
+        apply_result.return_value = SimpleNamespace(status=WhitelistStatus.ACTIVE, reject_reason="")
+        rule = SimpleNamespace(id=1, pk=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1", reject_reason="")
         progress_map([rule])
-        apply_result.assert_not_called()
-        self.assertEqual(rule.status, WhitelistStatus.PENDING)
+        apply_result.assert_called_once()
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+
+    @patch("services.web.risk.whitelist.service._write_terminal_status")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    def test_list_loads_pending_and_rejected_tickets_together(self, ticket_detail, write_status):
+        ticket_detail.side_effect = lambda id: {"id": id, "status": "running"}
+        pending = SimpleNamespace(id=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
+        rejected = SimpleNamespace(id=2, status=WhitelistStatus.REJECTED, itsm_ticket_id="ticket-2")
+        active = SimpleNamespace(id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="ticket-3")
+        found = progress_map([pending, rejected, active])
+        self.assertEqual(set(found), {"1", "2"})
+        self.assertEqual(ticket_detail.call_count, 2)
+        write_status.assert_called_once()
 
     @patch("services.web.risk.whitelist.service._close_source_risk")
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects")
@@ -603,15 +648,21 @@ class WhitelistFlowTests(SimpleTestCase):
 
 class WhitelistPollTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
-    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_finished_ticket_is_written_active(self, ticket_detail, apply_result):
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_logs")
+    def test_finished_logs_are_written_active(self, ticket_logs, apply_result):
         from services.web.risk.whitelist.service import _poll_whitelist_ticket
 
-        ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
+        ticket_logs.return_value = {
+            "items": [
+                {"activity_type": "APPROVE_TASK", "action": "approve"},
+                {"action": "end"},
+            ]
+        }
         rule = SimpleNamespace(id=7, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
         _poll_whitelist_ticket(rule)
-        apply_result.assert_called_once()
-        self.assertTrue(apply_result.call_args.args[1]["approve_result"])
+        ticket = apply_result.call_args.args[1]
+        self.assertEqual(ticket["status"], ITSMV4TicketStatus.FINISHED)
+        self.assertTrue(ticket["approve_result"])
 
 
 class WhitelistRenewTests(SimpleTestCase):
