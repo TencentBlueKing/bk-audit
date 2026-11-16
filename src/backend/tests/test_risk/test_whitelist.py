@@ -79,6 +79,7 @@ class WhitelistCreateTests(SimpleTestCase):
             username="alice",
         )
         self.assertEqual(len(created["callback_token"]), 32)
+        self.assertEqual(created["risk_id"], "risk-1")
         fields = {
             item["condition"]["field"]["raw_name"]: item["condition"] for item in created["match_scope"]["conditions"]
         }
@@ -161,10 +162,9 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         abort.assert_called_once_with(rule)
 
     @patch("services.web.risk.whitelist.service.Scene.objects.filter")
-    @patch("apps.meta.models.GlobalMetaConfig.get", return_value=["platform-admin"])
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
-    def test_ticket_create_passes_platform_and_scene_admins(self, ticket_create, platform_admins, scene_filter):
+    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_filter):
         from services.web.scene.models import Scene
 
         scene_filter.return_value.first.return_value = Scene(scene_id=3, managers=["scene-admin"])
@@ -179,7 +179,7 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         )
         _submit_itsm_ticket(rule, operator="alice", callback_token="token")
         form_data = ticket_create.call_args.kwargs["form_data"]
-        self.assertEqual(form_data["approver"], ["platform-admin", "scene-admin"])
+        self.assertEqual(form_data["approver"], ["scene-admin"])
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
@@ -503,7 +503,8 @@ class WhitelistFlowTests(SimpleTestCase):
             self.assertEqual(rule.itsm_ticket_id, "ticket-1")
             self.assertEqual(rule.itsm_sn, "SN1")
             self.assertEqual(rule.itsm_ticket_url, "http://itsm/ticket-1")
-            with patch("services.web.risk.whitelist.service._close_source_risk"):
+            self.assertEqual(rule.risk_id, "risk-1")
+            with patch("services.web.risk.whitelist.service._close_source_risk") as close_risk:
                 result = RiskWhitelistCallback().perform_request(
                     {
                         "callback_token": rule.callback_token,
@@ -517,6 +518,8 @@ class WhitelistFlowTests(SimpleTestCase):
                 )
             self.assertTrue(result["result"])
             self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+            close_risk.assert_called_once()
+            self.assertEqual(close_risk.call_args.args[0].risk_id, "risk-1")
             self.assertIsNotNone(rule.expire_at)
             event = {
                 "strategy_id": "9",
@@ -529,6 +532,27 @@ class WhitelistFlowTests(SimpleTestCase):
             self.assertEqual(hit.action, HitAction.SUPPRESS_NEW)
             self.assertEqual(hit.risk_id, "")
             self.assertFalse(intercept_whitelist({**event, "operator": "bob"}, {}, 3))
+
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service._close_source_risk")
+    @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
+    def test_callback_writes_active_from_callback_ticket(self, close_risk, refresh_nodes, ticket_detail):
+        rule = _Rule(status=WhitelistStatus.PENDING, callback_token="token", risk_id="")
+        rule.itsm_ticket_id = "ticket-1"
+        manager = _WhitelistManager()
+        manager.rules.append(rule)
+        with patch.object(RiskWhitelist, "objects", manager):
+            result = RiskWhitelistCallback().perform_request(
+                {
+                    "callback_token": "token",
+                    "ticket": {"id": "ticket-1", "status": "FINISHED", "approve_result": True},
+                }
+            )
+        self.assertTrue(result["result"])
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        close_risk.assert_called_once()
+        ticket_detail.assert_not_called()
 
 
 class WhitelistRenewTests(SimpleTestCase):
@@ -555,6 +579,9 @@ class WhitelistRenewTests(SimpleTestCase):
         def save(update_fields=None):
             saved["fields"] = list(update_fields or [])
 
+        rule.itsm_ticket_id = "ticket-old"
+        rule.itsm_sn = "SN-OLD"
+        rule.itsm_ticket_url = "http://itsm/old"
         rule.save = save
         renew_whitelist(
             rule,
@@ -567,8 +594,50 @@ class WhitelistRenewTests(SimpleTestCase):
         self.assertFalse(rule.is_permanent)
         self.assertIsNotNone(rule.expire_at)
         self.assertEqual(rule.status, WhitelistStatus.PENDING)
+        self.assertEqual(rule.itsm_ticket_id, "ticket-2")
+        self.assertEqual(rule.itsm_sn, "SN2")
+        self.assertEqual(rule.itsm_ticket_url, "http://itsm/ticket-2")
+        self.assertNotEqual(rule.callback_token, "old-token")
         self.assertIn("is_permanent", saved["fields"])
         self.assertIn("expire_at", saved["fields"])
+        self.assertIn("itsm_sn", saved["fields"])
+        self.assertIn("itsm_ticket_id", saved["fields"])
+
+    @patch(
+        "services.web.risk.whitelist.service._submit_itsm_ticket",
+        side_effect=ValidationError("ITSM 工单创建失败"),
+    )
+    @patch("services.web.risk.whitelist.service.validate_match_scope", return_value="")
+    def test_ticket_create_failure_keeps_original_term(self, validate_scope, submit):
+        expire_at = datetime.datetime(2026, 12, 1, tzinfo=datetime.timezone.utc)
+        rule = _Rule(
+            status=WhitelistStatus.ACTIVE,
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            is_permanent=False,
+            expire_at=expire_at,
+            match_scope=_scope(),
+            reason="原来的原因",
+            scene_id=1,
+            callback_token="old-token",
+        )
+        rule.itsm_ticket_id = "ticket-old"
+        rule.itsm_sn = "SN-OLD"
+        rule.itsm_ticket_url = "http://itsm/old"
+        rule.save = lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not save"))
+        with self.assertRaises(ValidationError):
+            renew_whitelist(
+                rule,
+                match_scope=_scope(),
+                reason="改期",
+                duration_days=30,
+                expire_at=None,
+                username="alice",
+            )
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        self.assertEqual(rule.expire_at, expire_at)
+        self.assertEqual(rule.itsm_sn, "SN-OLD")
+        self.assertEqual(rule.itsm_ticket_id, "ticket-old")
+        self.assertEqual(rule.reason, "原来的原因")
 
 
 class WhitelistListQueryTests(SimpleTestCase):
@@ -593,6 +662,20 @@ class WhitelistListQueryTests(SimpleTestCase):
         )
         self.assertEqual(serializer.validated_data["order_fields"], ["-updated_at", "hit_count"])
 
+    def test_match_scope_filter_accepts_field_label_or_value(self):
+        from services.web.risk.whitelist.serializers import (
+            ListRiskWhitelistReqSerializer,
+        )
+
+        serializer = ListRiskWhitelistReqSerializer(
+            data={"match_scope": ["存储", "原始事件ID(event_id)", "命中策略(ID)(strategy_id)"]}
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data["match_scope"],
+            ["存储", "原始事件ID(event_id)", "命中策略(ID)(strategy_id)"],
+        )
+
     def test_default_sort_is_rule_id_desc(self):
         from services.web.risk.whitelist.serializers import (
             ListRiskWhitelistReqSerializer,
@@ -601,6 +684,38 @@ class WhitelistListQueryTests(SimpleTestCase):
         serializer = ListRiskWhitelistReqSerializer(data={})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["order_fields"], ["-id"])
+
+
+class WhitelistApproveCloseTests(SimpleTestCase):
+    @patch("services.web.risk.models.Risk.objects")
+    @patch("services.web.risk.handlers.ticket.CloseRisk")
+    def test_approved_whitelist_closes_risk_from_create(self, close_cls, objects):
+        from services.web.risk.constants import RiskStatus
+        from services.web.risk.whitelist.service import _close_source_risk
+
+        objects.filter.return_value.first.return_value = SimpleNamespace(
+            risk_id="risk-1", status=RiskStatus.AWAIT_PROCESS
+        )
+        _close_source_risk(SimpleNamespace(id=7, risk_id="risk-1", updated_by="alice", created_by="bob"))
+        close_cls.assert_called_once_with(risk_id="risk-1", operator="alice")
+        close_cls.return_value.run.assert_called_once_with(description="白名单审批通过，关闭风险单")
+
+    @patch("services.web.risk.models.Risk.objects")
+    @patch("services.web.risk.handlers.ticket.CloseRisk")
+    def test_already_closed_risk_is_skipped(self, close_cls, objects):
+        from services.web.risk.constants import RiskStatus
+        from services.web.risk.whitelist.service import _close_source_risk
+
+        objects.filter.return_value.first.return_value = SimpleNamespace(risk_id="risk-1", status=RiskStatus.CLOSED)
+        _close_source_risk(SimpleNamespace(id=7, risk_id="risk-1", updated_by="alice", created_by="bob"))
+        close_cls.assert_not_called()
+
+    def test_create_without_risk_does_not_close(self):
+        from services.web.risk.whitelist.service import _close_source_risk
+
+        with patch("services.web.risk.handlers.ticket.CloseRisk") as close_cls:
+            _close_source_risk(SimpleNamespace(id=7, risk_id="", updated_by="alice", created_by="alice"))
+        close_cls.assert_not_called()
 
 
 class WhitelistReviewTests(SimpleTestCase):

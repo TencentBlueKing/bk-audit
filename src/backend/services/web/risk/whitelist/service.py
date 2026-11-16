@@ -239,12 +239,29 @@ def _node_payload(rule: RiskWhitelist, ticket: dict = None, previous: dict = Non
     }
 
 
+def _raw_ticket_status(ticket: dict) -> str:
+    """工单状态统一成小写。回调里可能是 FINISHED，或包在对象里。"""
+
+    raw = (ticket or {}).get("status")
+    if raw in (None, ""):
+        raw = (ticket or {}).get("current_status")
+    if isinstance(raw, dict):
+        raw = raw.get("key") or raw.get("id") or raw.get("value") or raw.get("status") or ""
+    return str(raw or "").strip().lower()
+
+
+def _is_approved(ticket: dict) -> bool:
+    value = (ticket or {}).get("approve_result")
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return value is True or value == 1
+
+
 def map_whitelist_status(ticket: dict) -> tuple:
     """ITSM 工单状态对应到白名单状态。未结束仍是待审批。"""
 
-    status = (ticket or {}).get("status") or ""
-    approved = bool((ticket or {}).get("approve_result"))
-    if status == ITSMV4TicketStatus.FINISHED and approved:
+    status = _raw_ticket_status(ticket)
+    if status == ITSMV4TicketStatus.FINISHED and _is_approved(ticket):
         mapped = WhitelistStatus.ACTIVE
     elif status in {ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION}:
         mapped = WhitelistStatus.REJECTED
@@ -532,24 +549,10 @@ def _scene_admin_usernames(scene_id) -> list:
     return _usernames(getattr(scene, "managers", None))
 
 
-def _platform_admin_usernames() -> list:
-    """平台管理员 platform_admin_users。"""
-
-    from apps.meta.models import GlobalMetaConfig
-    from services.web.entry.constants import PLATFORM_ADMIN_USERS_KEY
-
-    try:
-        configured = GlobalMetaConfig.get(PLATFORM_ADMIN_USERS_KEY, default=[]) or []
-    except Exception:
-        logger.exception("[RiskWhitelist] load platform admins failed")
-        configured = []
-    return _usernames(configured)
-
-
 def _whitelist_approvers(scene_id) -> list:
-    """平台管理员和该场景的场景管理员，写入 ITSM form_data.approver。"""
+    """审批人只取该场景的场景管理员。"""
 
-    return _usernames([*_platform_admin_usernames(), *_scene_admin_usernames(scene_id)])
+    return _scene_admin_usernames(scene_id)
 
 
 def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: str, reason=None, match_scope=None):
@@ -612,7 +615,7 @@ def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
 def renew_whitelist(
     rule: RiskWhitelist, *, match_scope, reason, duration_days, expire_at, username: str
 ) -> RiskWhitelist:
-    """续期不新建白名单。重新提工单，成功后把状态和工单绑回同一条规则。"""
+    """续期不新建白名单。新工单创建成功后才改状态、到期时间和单据号；创建失败保持原样。"""
 
     if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.EXPIRED, WhitelistStatus.DISABLED}:
         raise ValidationError(gettext("只有生效中或已到期的规则可以续期"))

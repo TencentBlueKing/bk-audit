@@ -103,6 +103,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
             queryset = queryset.filter(whitelist_type__in=validated_request_data["whitelist_type"])
         queryset = _filter_any_icontains(queryset, "reason", validated_request_data.get("reason"))
         queryset = _filter_any_icontains(queryset, "updated_by", validated_request_data.get("updated_by"))
+        queryset = _filter_any_icontains(queryset, "match_scope", validated_request_data.get("match_scope"))
         if validated_request_data.get("keyword"):
             queryset = queryset.filter(match_scope__icontains=validated_request_data["keyword"])
         total = queryset.count()
