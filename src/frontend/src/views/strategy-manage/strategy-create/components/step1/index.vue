@@ -246,7 +246,6 @@
     useRouter,
   } from 'vue-router';
 
-  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type ControlModel from '@model/control/control';
@@ -263,6 +262,7 @@
   import ReferenceModel from './components/reference-model/index.vue';
 
   import {
+    getStrategyListScopeParams,
     getStrategyRouteNames,
     isStrategyCloneRoute,
     isStrategyEditRoute,
@@ -567,11 +567,12 @@
     },
   });
 
-  // 获取标签列表（过滤系统内置特殊标签，保留 allow-create 自定义创建）
+  // 与列表行内编辑共用 strategy_tags，保证候选集一致
   const {
     loading: tagLoading,
-  } = useRequest(MetaManageService.fetchTags, {
+  } = useRequest(StrategyManageService.fetchStrategyTags, {
     defaultValue: [],
+    defaultParams: getStrategyListScopeParams(route),
     manual: true,
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {

@@ -21,9 +21,9 @@
       class="audit-inline-tag__editor"
       @click.stop>
       <bk-tag-input
+        ref="tagInputRef"
         v-model="editValue"
         allow-create
-        collapse-tags
         display-key="name"
         has-delete-icon
         :list="tagOptions"
@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, h, ref, watch } from 'vue';
+  import { computed, h, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useMessage from '@hooks/use-message';
@@ -114,6 +114,7 @@
   const { messageWarn } = useMessage();
 
   const editValue = ref<string[]>([]);
+  const tagInputRef = ref<{ $el?: HTMLElement } | null>(null);
 
   // 负数 tag_id 为系统内置/虚拟分类（全部、无标签、我创建的等），不能作为业务标签选择
   const tagOptions = computed(() => props.tagList.reduce((res, item) => {
@@ -131,9 +132,17 @@
     h('span', { class: 'text', title: node.name }, node.name),
   ]);
 
+  const focusTagInput = async () => {
+    await nextTick();
+    const root = tagInputRef.value?.$el;
+    root?.querySelector?.('input')?.focus?.();
+  };
+
   watch(() => props.isEditing, (editing) => {
     if (editing) {
       editValue.value = [...(props.tags || [])];
+      // 行内编辑需主动聚焦，否则标签先全量渲染再被折叠，表现为闪屏
+      void focusTagInput();
     }
   }, { immediate: true });
 
@@ -227,11 +236,17 @@
     width: 100%;
     max-width: 480px;
     gap: 8px;
-    align-items: center;
+    align-items: flex-start;
 
     :deep(.bk-tag-input) {
       flex: 1;
       min-width: 0;
+      height: auto;
+    }
+
+    :deep(.bk-tag-input .bk-tag-input-trigger) {
+      height: auto;
+      min-height: 32px;
     }
   }
 
@@ -279,5 +294,16 @@
     padding-top: var(--bk-theme-space-4);
     padding-bottom: var(--bk-theme-space-4);
     overflow: visible;
+    line-height: normal;
+  }
+
+  /* tdesign 列表主题写死 td 高度，编辑态同样需要随标签换行撑高 */
+  .t-table tbody td:has(.audit-inline-tag__editor),
+  .t-table.t-size-m td:has(.audit-inline-tag__editor) {
+    height: auto;
+    min-height: var(--bk-theme-table-row-height);
+    overflow: visible;
+    line-height: normal;
+    vertical-align: middle;
   }
 </style>

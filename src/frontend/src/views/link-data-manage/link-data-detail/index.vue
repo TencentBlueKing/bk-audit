@@ -58,7 +58,6 @@
   import { useI18n } from 'vue-i18n';
 
   import linkDataManageService from '@service/link-data-manage';
-  import MetaManageService from '@service/meta-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -97,12 +96,8 @@
   ];
   const active = ref<keyof typeof comMap>('basicInfo');
 
-  // 获取标签列表
-  useRequest(MetaManageService.fetchTags, {
-    defaultParams: {
-      page: 1,
-      page_size: 1,
-    },
+  // 与列表行内编辑共用联表标签接口，保证候选集一致
+  useRequest(linkDataManageService.fetchLinkTableTags, {
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {

@@ -117,7 +117,6 @@
   import { useRoute, useRouter } from 'vue-router';
 
   import BksecManageService from '@service/bksec-manage';
-  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import StrategyModel from '@model/strategy/strategy';
@@ -144,6 +143,7 @@
   } from './utils/strategy-protocol';
   import {
     getStrategyBindingScope,
+    getStrategyListScopeParams,
     getStrategyRouteNames,
     isDraftStrategyStatus,
     isPlatformStrategyRoute,
@@ -285,13 +285,15 @@
   const ensureTagMapLoaded = () => {
     if (Object.keys(tagIdToNameMap.value).length > 0) return Promise.resolve();
     if (!tagMapPromise) {
-      tagMapPromise = MetaManageService.fetchTags().then((data: Array<{ tag_id: string; tag_name: string }>) => {
-        data.forEach((item) => {
-          if (item.tag_id !== '-1') {
-            tagIdToNameMap.value[item.tag_id] = item.tag_name;
-          }
+      // 与列表/基础信息步骤共用 strategy_tags，避免 ID→名称映射与下拉候选不一致
+      tagMapPromise = StrategyManageService.fetchStrategyTags(getStrategyListScopeParams(route))
+        .then((data: Array<{ tag_id: string; tag_name: string }>) => {
+          data.forEach((item) => {
+            if (!String(item.tag_id).startsWith('-')) {
+              tagIdToNameMap.value[item.tag_id] = item.tag_name;
+            }
+          });
         });
-      });
     }
     return tagMapPromise;
   };
