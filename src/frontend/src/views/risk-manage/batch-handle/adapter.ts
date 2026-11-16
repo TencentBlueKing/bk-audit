@@ -1,6 +1,8 @@
 import RiskManageService from '@service/risk-manage';
 import RiskWhitelistService from '@service/risk-whitelist';
 
+import type { WhitelistPayload } from '@model/risk-whitelist/whitelist';
+
 import type { BatchActionId, BatchPreview } from './evaluate';
 
 export interface BatchReceipt {
@@ -82,16 +84,19 @@ export const submitBatchConfirm = async (input: {
 
 export const submitBatchWhitelist = async (input: {
   riskIds: string[];
-  payload: Record<string, any>;
+  payload: WhitelistPayload;
   withMisreport: boolean;
   misreportDescription?: string;
 }): Promise<BatchReceipt> => {
-  const data = await RiskWhitelistService.applyFromRisk({
-    risk_ids: input.riskIds,
-    ...input.payload,
-    with_misreport: input.withMisreport,
-    misreport_description: input.misreportDescription || '',
-    source: 'risk',
-  });
+  const data = input.withMisreport
+    ? await RiskManageService.bulkMisreportRisk({
+      risk_ids: input.riskIds,
+      description: input.misreportDescription || '',
+      whitelist: input.payload,
+    })
+    : await RiskWhitelistService.batchCreate({
+      ...input.payload,
+      risk_ids: input.riskIds,
+    });
   return normalizeReceipt(input.riskIds, data);
 };

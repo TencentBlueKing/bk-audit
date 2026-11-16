@@ -74,6 +74,8 @@
 
   import type { CompareOperator, MatchGroup } from '@model/risk-whitelist/whitelist';
 
+  import { FALLBACK_CONDITION_FIELDS } from './constants';
+
   interface Props {
     scope?: Record<string, any> | null;
     mode?: 'tag' | 'text';
@@ -111,10 +113,11 @@
         conditions: rows.map((row: Record<string, any>) => {
           const operator = row.operator === 'ne' ? 'neq' : (row.operator || 'eq');
           const field = row.field || '';
+          const meta = FALLBACK_CONDITION_FIELDS.find(item => item.field === field);
           return {
             field,
-            field_name: row.field_name || (field === 'strategy_id' ? '命中策略(ID)' : field),
-            field_label: row.field_label || row.field_name || field,
+            field_name: row.field_name || meta?.name || field,
+            field_label: row.field_label || row.field_name || meta?.label || field,
             operator,
             value: row.value || '',
             value_display: row.value_display || row.value_label || row.value || '',

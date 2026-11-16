@@ -20,39 +20,87 @@ import type {
   RenewPayload,
   WhitelistPayload,
 } from '@model/risk-whitelist/whitelist';
-import RiskWhitelist from '@model/risk-whitelist/whitelist';
+import RiskWhitelist, {
+  fromMatchScopeBody,
+  toMatchScopeBody,
+  toWhitelistBody,
+} from '@model/risk-whitelist/whitelist';
 
 import RiskWhitelistSource from '../source/risk-whitelist';
 
 import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
-const withScene = <T extends Record<string, any>>(params: T) => ({
-  ...params,
-  scene_id: params.scene_id ?? getSceneSystemParams().scope_id,
-});
+/** 后端 scene_id 是整数，取不到时不传，避免空串校验失败 */
+const sceneParams = (sceneId?: string | number) => {
+  const value = sceneId ?? getSceneSystemParams().scope_id;
+  return /^\d+$/.test(String(value ?? '')) ? { scene_id: Number(value) } : {};
+};
+
+/** 规则标识列按后端整数主键 id 排序 */
+const toSortField = (field: string) => field.replace(/^(-?)rule_code$/, '$1id');
+
+/** 搜索框里的规则标识、匹配范围、包含条件在后端分别是 id / keyword */
+const normalizeListParams = (params: Record<string, any>): Record<string, any> => {
+  const {
+    rule_code: ruleCode,
+    match_scope: matchScope,
+    condition_keyword: conditionKeyword,
+    sort,
+    ...rest
+  } = params;
+  const keyword = [rest.keyword, matchScope, conditionKeyword].filter(Boolean).join(' ');
+  return {
+    ...rest,
+    ...(ruleCode ? { id: ruleCode } : {}),
+    ...(keyword ? { keyword } : {}),
+    ...(sort ? { sort: Array.isArray(sort) ? sort.map(toSortField) : toSortField(String(sort)) } : {}),
+  };
+};
 
 export default {
   fetchList(params: Record<string, any>) {
-    const sort = params.sort?.length ? params.sort : ['-rule_code'];
-    return RiskWhitelistSource.getList(withScene({ ...params, sort }), { permission: 'page' })
+    const { scene_id: sceneId, ...rest } = normalizeListParams(params);
+    return RiskWhitelistSource.getList({ ...rest, ...sceneParams(sceneId) }, { permission: 'page' })
       .then(({ data }) => ({
         ...data,
         results: (data.results || []).map(item => new RiskWhitelist(item)),
       }));
   },
 
-  fetchDetail(params: { id: number | string }) {
-    return RiskWhitelistSource.getDetail(params)
+  /** 菜单新建，或风险单上单独加白（带 risk_id，场景以风险单为准） */
+  create(params: WhitelistPayload & { risk_id?: string }) {
+    return RiskWhitelistSource.create({
+      ...sceneParams(params.scene_id),
+      ...(params.risk_id ? { risk_id: params.risk_id } : {}),
+      ...toWhitelistBody(params),
+    })
       .then(({ data }) => new RiskWhitelist(data));
   },
 
-  create(params: WhitelistPayload) {
-    return RiskWhitelistSource.create(withScene(params))
-      .then(({ data }) => new RiskWhitelist(data));
+  batchCreate(params: WhitelistPayload & { risk_ids: string[] }) {
+    return RiskWhitelistSource.batchCreate({
+      ...sceneParams(params.scene_id),
+      risk_ids: params.risk_ids,
+      ...toWhitelistBody(params),
+    })
+      .then(({ data }) => data);
   },
 
-  update(params: WhitelistPayload & { id: number | string }) {
-    return RiskWhitelistSource.update(withScene(params))
+  /** 带 duration_days 时后端按原规则续期并重新提审，不带只改匹配范围和原因 */
+  update(params: WhitelistPayload & { id: number | string; renew?: boolean }) {
+    const mode = params.validity_mode;
+    const renewParams = params.renew && mode
+      ? {
+        duration_days: mode,
+        ...(mode === 'custom' && params.expire_at ? { expire_at: params.expire_at } : {}),
+      }
+      : {};
+    return RiskWhitelistSource.update({
+      id: params.id,
+      match_scope: toMatchScopeBody(params.match_scope),
+      reason: params.reason,
+      ...renewParams,
+    })
       .then(({ data }) => new RiskWhitelist(data));
   },
 
@@ -74,7 +122,12 @@ export default {
   },
 
   renew(params: RenewPayload) {
-    return RiskWhitelistSource.renew(params)
+    return RiskWhitelistSource.renew({
+      id: params.id,
+      duration_days: params.validity_mode,
+      ...(params.validity_mode === 'custom' && params.expire_at ? { expire_at: params.expire_at } : {}),
+      ...(params.remark ? { remark: params.remark } : {}),
+    })
       .then(({ data }) => new RiskWhitelist(data));
   },
 
@@ -84,21 +137,17 @@ export default {
 
   fetchHitRecords(params: Record<string, any> & { id: number | string }) {
     return RiskWhitelistSource.getHitRecords(params)
-      .then(({ data }) => data as { results: HitRecord[]; total: number; page: number; num_pages: number });
+      .then(({ data }) => ({
+        ...data,
+        results: (data.results || []).map(item => ({
+          ...item,
+          match_scope: fromMatchScopeBody(item.match_scope),
+        })),
+      }) as { results: HitRecord[]; total: number; page: number; num_pages: number });
   },
 
-  fetchHitEvent(params: { id: number | string }) {
-    return RiskWhitelistSource.getHitEvent(params)
-      .then(({ data }) => data as { fields: EventFieldRow[] });
-  },
-
-  fetchConditionFields(params: { strategy_id?: string } = {}) {
-    return RiskWhitelistSource.getConditionFields(withScene(params))
-      .then(({ data }) => data || []);
-  },
-
-  applyFromRisk(params: Record<string, any>) {
-    return RiskWhitelistSource.applyFromRisk(withScene(params))
-      .then(({ data }) => data);
+  fetchHitEvents(params: { id: number | string; hit_id: number | string }) {
+    return RiskWhitelistSource.getHitEvents(params)
+      .then(({ data }): EventFieldRow[] => data?.fields || []);
   },
 };

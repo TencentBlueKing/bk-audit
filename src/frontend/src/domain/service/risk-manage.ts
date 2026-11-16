@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 import RiskManageModel from '@model/risk/risk';
+import { toWhitelistBody, type WhitelistPayload } from '@model/risk-whitelist/whitelist';
 
 import {
   normalizeRiskListExportFilters,
@@ -229,9 +230,16 @@ export default {
   updateRiskLabel(params: {
     risk_id: string,
     risk_label: string,
-    new_operators: string[]
+    new_operators?: string[],
+    description?: string,
+    revoke_process?: boolean,
+    whitelist?: WhitelistPayload,
   }) {
-    return RiskManageSource.updateRiskLabel(params)
+    const { whitelist, ...rest } = params;
+    return RiskManageSource.updateRiskLabel({
+      ...rest,
+      ...(whitelist ? { whitelist: toWhitelistBody(whitelist) } : {}),
+    })
       .then(({ data }) => data);
   },
 
@@ -299,8 +307,14 @@ export default {
   bulkMisreportRisk(params: {
     risk_ids: string[],
     description: string,
+    revoke_process?: boolean,
+    whitelist?: WhitelistPayload,
   }) {
-    return RiskManageSource.bulkMisreportRisk(params)
+    const { whitelist, ...rest } = params;
+    return RiskManageSource.bulkMisreportRisk({
+      ...rest,
+      ...(whitelist ? { whitelist: toWhitelistBody(whitelist) } : {}),
+    })
       .then(({ data }) => data);
   },
 

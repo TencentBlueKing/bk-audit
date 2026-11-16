@@ -87,8 +87,13 @@
     });
     if (!confirmed) return;
     submitting.value = true;
-    const request = isEdit.value && record.value
-      ? RiskWhitelistService.update({ ...payload, id: record.value.id })
+    const current = isEdit.value ? record.value : null;
+    const request = current
+      ? RiskWhitelistService.update({
+        ...payload,
+        id: current.id,
+        renew: preview.editable && !(current.is_permanent && payload.validity_mode === 'permanent'),
+      })
       : RiskWhitelistService.create(payload);
     request.then(() => {
       messageSuccess(t(isEdit.value ? '白名单已更新' : '白名单已生效'));

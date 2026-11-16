@@ -51,6 +51,7 @@
 <script setup lang="tsx">
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RiskWhitelistService from '@service/risk-whitelist';
 
@@ -69,6 +70,7 @@
   }
 
   const { t } = useI18n();
+  const router = useRouter();
   const isShow = ref(false);
   const ruleId = ref<number | string>('');
   const ruleCode = ref('');
@@ -109,12 +111,15 @@
       colKey: 'risk_id',
       width: 160,
       cell: (_: unknown, { row }: { row: HitRecord }) => {
-        if (row.action === 'suppress_new' || !row.risk_id) return '-';
-        if (!row.risk_url) return row.risk_id;
+        if (row.action === 'suppress_new' || !row.risk_id) return t('未生成');
+        const riskUrl = row.risk_url || router.resolve({
+          name: 'riskManageDetail',
+          params: { riskId: row.risk_id },
+        }).href;
         return (
           <span class="risk-cell">
             <span class="risk-text">{row.risk_id}</span>
-            <a class="risk-link" href={row.risk_url} target="_blank" rel="noopener noreferrer">
+            <a class="risk-link" href={riskUrl} target="_blank" rel="noopener noreferrer">
               <audit-icon class="risk-link-icon" type="jump-link" />
             </a>
           </span>
@@ -127,7 +132,7 @@
       width: 100,
       fixed: 'right',
       cell: (_: unknown, { row }: { row: HitRecord }) => (
-        <bk-button text theme="primary" onClick={() => eventRef.value?.open(row.id)}>
+        <bk-button text theme="primary" onClick={() => eventRef.value?.open(ruleId.value, row.id)}>
           {t('事件详情')}
         </bk-button>
       ),

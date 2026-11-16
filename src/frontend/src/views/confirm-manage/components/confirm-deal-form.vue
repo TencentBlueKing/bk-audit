@@ -107,7 +107,6 @@
   import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
-  import RiskWhitelistService from '@service/risk-whitelist';
 
   import type RiskManageModel from '@model/risk/risk';
 
@@ -216,7 +215,7 @@
   const {
     run: applyWhitelist,
     loading: applyLoading,
-  } = useRequest(RiskWhitelistService.applyFromRisk, {
+  } = useRequest(RiskManageService.updateRiskLabel, {
     defaultValue: null,
     onSuccess: () => {
       window.changeConfirm = false;
@@ -272,11 +271,10 @@
         });
         if (!confirmed) return;
         await applyWhitelist({
-          risk_id: props.riskId,
-          ...payload,
-          with_misreport: true,
-          misreport_description: formData.value.misreport_description || '',
-          source: 'confirm',
+          risk_id: String(props.riskId),
+          risk_label: 'misreport',
+          description: formData.value.misreport_description || '',
+          whitelist: payload,
         });
         return;
       }

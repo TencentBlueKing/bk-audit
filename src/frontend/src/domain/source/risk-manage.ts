@@ -215,7 +215,7 @@ class RiskManage extends ModuleBase {
   updateRiskLabel(params: {
     risk_id: string,
     risk_label: string,
-    new_operators: string[]
+    [key: string]: any,
   }) {
     return Request.put(`${this.module}/${params.risk_id}/risk_label/`, {
       params,
@@ -274,6 +274,7 @@ class RiskManage extends ModuleBase {
   bulkMisreportRisk(params: {
     risk_ids: string[],
     description: string,
+    [key: string]: any,
   }) {
     return Request.post(`${this.module}/bulk_misreport/`, {
       params,

@@ -82,9 +82,9 @@ export const FALLBACK_CONDITION_FIELDS: ConditionFieldOption[] = [
     operators: OPERATOR_OPTIONS,
   },
   {
-    field: 'event_id',
+    field: 'raw_event_id',
     name: '原始事件ID',
-    label: '原始事件ID(event_id)',
+    label: '原始事件ID(raw_event_id)',
     value_type: 'text',
     operators: OPERATOR_OPTIONS,
   },
