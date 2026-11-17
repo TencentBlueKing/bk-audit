@@ -46,6 +46,7 @@ from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
+from apps.meta.handlers.tag_binding import create_missing_tag_bindings_in_order
 from apps.meta.models import DataMap, EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.meta.utils.fields import (
@@ -232,11 +233,13 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         relation_qs = StrategyTag.objects.filter(strategy_id=strategy_id)
         existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
         relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
-        StrategyTag.objects.bulk_create(
-            [
-                StrategyTag(strategy_id=strategy_id, tag_id=tag_id)
-                for tag_id in sorted(desired_tag_ids - existing_tag_ids)
-            ]
+        create_missing_tag_bindings_in_order(
+            relation_model=StrategyTag,
+            relation_resource_field="strategy_id",
+            resource_uid=strategy_id,
+            tag_names=tag_names,
+            tags=tags,
+            existing_tag_ids=existing_tag_ids,
         )
 
     def _save_strategy_tools(self, strategy: Strategy, validated_request_data: dict) -> None:
@@ -2251,11 +2254,13 @@ class LinkTableBase(AuditMixinResource, abc.ABC):
         relation_qs = LinkTableTag.objects.filter(link_table_uid=link_table_uid)
         existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
         relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
-        LinkTableTag.objects.bulk_create(
-            [
-                LinkTableTag(link_table_uid=link_table_uid, tag_id=tag_id)
-                for tag_id in sorted(desired_tag_ids - existing_tag_ids)
-            ]
+        create_missing_tag_bindings_in_order(
+            relation_model=LinkTableTag,
+            relation_resource_field="link_table_uid",
+            resource_uid=link_table_uid,
+            tag_names=tag_names,
+            tags=tags,
+            existing_tag_ids=existing_tag_ids,
         )
 
 

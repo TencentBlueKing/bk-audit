@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type, Union
 
 from bk_resource import resource
 from django.db import models, transaction
@@ -25,6 +25,30 @@ from django.http import Http404
 
 from apps.meta.constants import TagBindingResourceType
 from apps.meta.models import Tag
+
+
+def create_missing_tag_bindings_in_order(
+    relation_model: Type[models.Model],
+    relation_resource_field: str,
+    resource_uid: Union[str, int],
+    tag_names: List[str],
+    tags: List[dict],
+    existing_tag_ids: set,
+) -> None:
+    """按请求 tag_names 的顺序创建缺失的标签绑定，已有绑定保持原顺序。
+
+    save_tags 返回的标签受 Tag.Meta.ordering 影响，不能直接按返回顺序创建；
+    这里按请求顺序把标签名映射为 tag_id，保序去重后只创建尚未绑定的部分。
+    """
+    tag_id_by_name = {item["tag_name"]: item["tag_id"] for item in tags}
+    ordered_tag_ids = list(dict.fromkeys(tag_id_by_name[name] for name in tag_names if name in tag_id_by_name))
+    relation_model.objects.bulk_create(
+        [
+            relation_model(**{relation_resource_field: resource_uid, "tag_id": tag_id})
+            for tag_id in ordered_tag_ids
+            if tag_id not in existing_tag_ids
+        ]
+    )
 
 
 @transaction.atomic
@@ -53,11 +77,13 @@ def sync_resource_tags(
     relation_qs = relation_model.objects.filter(**filter_kwargs)
     existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
     relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
-    relation_model.objects.bulk_create(
-        [
-            relation_model(**{relation_resource_field: resource_uid, "tag_id": tag_id})
-            for tag_id in sorted(desired_tag_ids - existing_tag_ids)
-        ]
+    create_missing_tag_bindings_in_order(
+        relation_model=relation_model,
+        relation_resource_field=relation_resource_field,
+        resource_uid=resource_uid,
+        tag_names=tag_names,
+        tags=tags,
+        existing_tag_ids=existing_tag_ids,
     )
 
     if not desired_tag_ids:
