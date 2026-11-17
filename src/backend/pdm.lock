@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:b59b69ce287044c56941f619112f0db3059e8f400cb91c8e29427d0c9137df75"
+content_hash = "sha256:f204f64c317886f5206c9429747db2f8abd28bd1b6ee11dba0928fb1d2b09e8a"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -208,19 +208,34 @@ files = [
 
 [[package]]
 name = "bk-crypto-python-sdk"
-version = "2.0.1"
-requires_python = "<3.13,>=3.8"
-summary = "bk-crypto-python-sdk is a lightweight cryptography toolkit for Python applications based on Cryptodome / tongsuopy and other encryption libraries."
+version = "4.1.1"
+requires_python = "<3.15,>=3.9"
+summary = "bk-crypto-python-sdk is a lightweight cryptography toolkit for Python applications based on cryptography / tongsuopy and other encryption libraries."
 groups = ["default"]
 dependencies = [
+    "cryptography<51.0.0,>=44.0.0",
     "dacite<2.0.0,>=1.8.1",
-    "pycryptodomex<4.0.0,>=3.18.0",
-    "tongsuopy-crayon<2.0.0,>=1.0.2b5",
-    "wrapt<2.0.0,>=1.15.0",
+    "typing-extensions>=4.0",
 ]
 files = [
-    {file = "bk_crypto_python_sdk-2.0.1-py3-none-any.whl", hash = "sha256:6df90b38e75d756fac2016d60e3e820c0026013b0219289f3032bceba300f49b"},
-    {file = "bk_crypto_python_sdk-2.0.1.tar.gz", hash = "sha256:bd33cb86cd287d96eb1f843831b1697b9840feddc95a3cfb5b92669d5246c209"},
+    {file = "bk_crypto_python_sdk-4.1.1-py3-none-any.whl", hash = "sha256:795f8ca88a70d82073a9862f165ec57db42ab0b5138f0a423f50d510b91a0bd5"},
+    {file = "bk_crypto_python_sdk-4.1.1.tar.gz", hash = "sha256:89908ab53e2e71eca7316cf5b64b80cce762b38888c51956fb0850fd1abc7dae"},
+]
+
+[[package]]
+name = "bk-crypto-python-sdk"
+version = "4.1.1"
+extras = ["gm"]
+requires_python = "<3.15,>=3.9"
+summary = "bk-crypto-python-sdk is a lightweight cryptography toolkit for Python applications based on cryptography / tongsuopy and other encryption libraries."
+groups = ["default"]
+dependencies = [
+    "bk-crypto-python-sdk==4.1.1",
+    "tongsuopy-crayon<2.0.0,>=1.0.2b5",
+]
+files = [
+    {file = "bk_crypto_python_sdk-4.1.1-py3-none-any.whl", hash = "sha256:795f8ca88a70d82073a9862f165ec57db42ab0b5138f0a423f50d510b91a0bd5"},
+    {file = "bk_crypto_python_sdk-4.1.1.tar.gz", hash = "sha256:89908ab53e2e71eca7316cf5b64b80cce762b38888c51956fb0850fd1abc7dae"},
 ]
 
 [[package]]
@@ -238,6 +253,20 @@ dependencies = [
 files = [
     {file = "bk_iam-2.0.3-py2.py3-none-any.whl", hash = "sha256:0a388237d226151a3abe0d4e6e7f99d2c2809bb32a7ede475b7808cee9d100a5"},
     {file = "bk_iam-2.0.3.tar.gz", hash = "sha256:28d025237bf8d6e43a143f55657f29e1ce778e585b89c1567ea554acb9a23a97"},
+]
+
+[[package]]
+name = "bk-kms-sdk"
+version = "1.0.0"
+requires_python = "<3.15,>=3.11"
+summary = "Python SDK for BlueKing Key Management Service"
+groups = ["default"]
+dependencies = [
+    "bk-crypto-python-sdk==4.1.1",
+]
+files = [
+    {file = "bk_kms_sdk-1.0.0-py3-none-any.whl", hash = "sha256:ba7357de1ec442e676a2e203ecd465fb7c79f0c5d0614a380d4629e85484107d"},
+    {file = "bk_kms_sdk-1.0.0.tar.gz", hash = "sha256:34962182f15f7e1c6b4edbde25ab43610d0d0344373b2977e9084808484a0fd4"},
 ]
 
 [[package]]
@@ -2393,27 +2422,6 @@ files = [
     {file = "pycryptodome-3.23.0-cp37-abi3-win_amd64.whl", hash = "sha256:c75b52aacc6c0c260f204cbdd834f76edc9fb0d8e0da9fbf8352ef58202564e2"},
     {file = "pycryptodome-3.23.0-cp37-abi3-win_arm64.whl", hash = "sha256:11eeeb6917903876f134b56ba11abe95c0b0fd5e3330def218083c7d98bbcb3c"},
     {file = "pycryptodome-3.23.0.tar.gz", hash = "sha256:447700a657182d60338bab09fdb27518f8856aecd80ae4c6bdddb67ff5da44ef"},
-]
-
-[[package]]
-name = "pycryptodomex"
-version = "3.23.0"
-requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
-summary = "Cryptographic library for Python"
-groups = ["default"]
-files = [
-    {file = "pycryptodomex-3.23.0-cp37-abi3-macosx_10_9_universal2.whl", hash = "sha256:06698f957fe1ab229a99ba2defeeae1c09af185baa909a31a5d1f9d42b1aaed6"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-macosx_10_9_x86_64.whl", hash = "sha256:b2c2537863eccef2d41061e82a881dcabb04944c5c06c5aa7110b577cc487545"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:43c446e2ba8df8889e0e16f02211c25b4934898384c1ec1ec04d7889c0333587"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f489c4765093fb60e2edafdf223397bc716491b2b69fe74367b70d6999257a5c"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:bdc69d0d3d989a1029df0eed67cc5e8e5d968f3724f4519bd03e0ec68df7543c"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:6bbcb1dd0f646484939e142462d9e532482bc74475cecf9c4903d4e1cd21f003"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-musllinux_1_2_i686.whl", hash = "sha256:8a4fcd42ccb04c31268d1efeecfccfd1249612b4de6374205376b8f280321744"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:55ccbe27f049743a4caf4f4221b166560d3438d0b1e5ab929e07ae1702a4d6fd"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-win32.whl", hash = "sha256:189afbc87f0b9f158386bf051f720e20fa6145975f1e76369303d0f31d1a8d7c"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-win_amd64.whl", hash = "sha256:52e5ca58c3a0b0bd5e100a9fbc8015059b05cffc6c66ce9d98b4b45e023443b9"},
-    {file = "pycryptodomex-3.23.0-cp37-abi3-win_arm64.whl", hash = "sha256:02d87b80778c171445d67e23d1caef279bf4b25c3597050ccd2e13970b57fd51"},
-    {file = "pycryptodomex-3.23.0.tar.gz", hash = "sha256:71909758f010c82bc99b0abf4ea12012c98962fbf0583c2164f8b84533c2e4da"},
 ]
 
 [[package]]

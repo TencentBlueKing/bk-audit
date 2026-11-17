@@ -24,11 +24,18 @@ from bk_resource import resource
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
 from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
+from core.kms import (
+    INIT_PASSWORD_ENCODING_CIPHERTEXT,
+    INIT_PASSWORD_ENCODING_FIELD,
+    INIT_PASSWORD_ENCODING_PLAINTEXT,
+    get_secret_json,
+)
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
 from services.web.databus.constants import (
@@ -113,6 +120,23 @@ class SystemInitHelper:
         return config
 
 
+def adapt_auth_password(config: dict) -> None:
+    """按资源层契约适配 auth_info.password 的编码。"""
+    auth_info = config.get("auth_info")
+    if not isinstance(auth_info, dict):
+        return
+    encoding = auth_info.pop(INIT_PASSWORD_ENCODING_FIELD, INIT_PASSWORD_ENCODING_CIPHERTEXT)
+    if not settings.ENABLE_BKCRYPTO:
+        return
+    password = auth_info.get("password")
+    if not password:
+        return
+    if encoding == INIT_PASSWORD_ENCODING_PLAINTEXT:
+        auth_info["password"] = asymmetric_cipher.encrypt(password)
+    elif encoding != INIT_PASSWORD_ENCODING_CIPHERTEXT:
+        print("[InitPassword] Unknown password encoding declaration, password kept as is")
+
+
 class SystemInitHandler:
     def init(self):
         print("[Main] Init Start")
@@ -147,7 +171,9 @@ class SystemInitHandler:
         print(f"[PostInit] {key} Finished")
 
     def _init_es(self, es_config: dict):
-        print(f"[InitEs] Params => {es_config}")
+        # 不打印 es_config：其内容来自 get_secret()，含集群账号密码
+        print("[InitEs] Start")
+        adapt_auth_password(es_config)
         # 创建默认ES集群的时候，已经创建了默认namespace的collector plugin。
         cluster_id = resource.databus.storage.create_storage(es_config)
         print(f"[InitEs] Resp => {cluster_id}")
@@ -159,7 +185,7 @@ class SystemInitHandler:
     def init_es(self):
         if self.pre_check(INIT_ES_FISHED_KEY):
             return
-        es_configs = json.loads(os.getenv("BKAPP_INIT_ES_CONFIG"))
+        es_configs = get_secret_json("BKAPP_INIT_ES_CONFIG")
         for es_config in es_configs:
             self._init_es(es_config)
         self.post_init(INIT_ES_FISHED_KEY)
@@ -167,15 +193,17 @@ class SystemInitHandler:
     def init_doris(self):
         if self.pre_check(INIT_DORIS_FISHED_KEY):
             return
-        doris_configs = json.loads(os.getenv("BKAPP_INIT_DORIS_CONFIG"))
+        doris_configs = get_secret_json("BKAPP_INIT_DORIS_CONFIG")
         for doris_config in doris_configs:
             self._init_doris(doris_config)
         self.post_init(INIT_DORIS_FISHED_KEY)
 
     def _init_doris(self, doris_config: dict):
-        print(f"[InitDoris] Params => {doris_config}")
+        # 不打印 doris_config：其内容来自 get_secret()，含集群账号密码
+        print("[InitDoris] Start")
         if not doris_config.get('pre_defined', False):
             raise ParamsNotValid(message=gettext_lazy("Doris必须是预定义的"))
+        adapt_auth_password(doris_config)
         cluster_id = resource.databus.storage.create_storage(doris_config)
         print(f"[InitDoris] Resp => {cluster_id}")
         GlobalMetaConfig.set(EVENT_DORIS_CLUSTER_ID_KEY, cluster_id)
@@ -189,14 +217,15 @@ class SystemInitHandler:
         print(f"[InitDoris] Default => {cluster_id}")
 
     def _init_redis(self, redis_config: dict):
-        print(f"[InitRedis] Params => {redis_config}")
-        resp = resource.databus.storage.create_or_update_redis(redis_config)
-        print(f"[InitRedis] Resp => {resp}")
+        # 不打印 redis_config / resp：前者来自 get_secret() 含密码，后者可能回显连接信息
+        print("[InitRedis] Start")
+        resource.databus.storage.create_or_update_redis(redis_config)
+        print("[InitRedis] Finished")
 
     def init_redis(self):
         if self.pre_check(INIT_REDIS_FISHED_KEY):
             return
-        redis_configs = json.loads(os.getenv("BKAPP_INIT_REDIS_CONFIG"))
+        redis_configs = get_secret_json("BKAPP_INIT_REDIS_CONFIG")
         for redis_config in redis_configs:
             self._init_redis(redis_config)
         self.post_init(INIT_REDIS_FISHED_KEY)

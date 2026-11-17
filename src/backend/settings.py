@@ -25,9 +25,21 @@ from warnings import warn
 import environ
 import pymysql
 
+from core.kms import inject_kms_secrets
+from core.sensitive import install_redacted_excepthook
+
 # 读取环境变量文件
 # 配置优先级 环境变量 -> .env文件 -> settings.py
 environ.Env.read_env()
+
+# 所有入口（web / celery / beat / manage.py）都会加载 settings，
+# 在这里兜底安装脱敏版异常出口：详细堆栈保留，但不输出敏感局部变量与已登记明文
+install_redacted_excepthook()
+
+# [KMS] 在 config 加载前注入解密后的密钥类环境变量
+# 开关关闭时此调用零副作用；开关开启但解密失败时直接报错退出（fail-fast）
+
+inject_kms_secrets()
 
 if "BKPAAS_ENVIRONMENT" in os.environ:
     ENVIRONMENT = os.getenv("BKPAAS_ENVIRONMENT", "dev")

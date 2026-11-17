@@ -20,6 +20,11 @@ import os
 
 from blueapps.core.wsgi import get_wsgi_application
 
+from core.sensitive import install_redacted_excepthook
+
+# 与 manage.py 保持一致：异常出口不输出敏感局部变量与已登记明文
+install_redacted_excepthook()
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 
 application = get_wsgi_application()

@@ -21,6 +21,9 @@ from blueapps.conf.validators import EnvValidator
 
 from config import RUN_VER
 
+# KMS 注入的凭据（env 注入关闭时回落进程内缓存）
+from core.kms import get_secret
+
 # 环境变量检测
 EnvValidator(RUN_VER).validate()
 
@@ -63,8 +66,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": os.getenv("MYSQL_NAME", APP_CODE),
-        "USER": os.getenv("MYSQL_USER", "root"),
-        "PASSWORD": os.getenv("MYSQL_PASSWORD", ""),
+        "USER": get_secret("MYSQL_USER", "root"),
+        "PASSWORD": get_secret("MYSQL_PASSWORD", ""),
         "HOST": os.getenv("MYSQL_HOST", "localhost"),
         "PORT": os.getenv("MYSQL_PORT", "3306"),
         "OPTIONS": {
