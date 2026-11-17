@@ -148,7 +148,8 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             if nodes.filter(pa_id__isnull=True).exists():
                 pa_ids = {pa.id for pa in process_applications if nodes.filter(_pa_filter_q([pa.id])).exists()}
             else:
-                pa_ids = set(nodes.values_list("pa_id", flat=True).distinct())
+                # 清掉 TicketNode 默认的 -timestamp 排序，避免 DISTINCT 把 timestamp 带入去重维度
+                pa_ids = set(nodes.order_by().values_list("pa_id", flat=True).distinct())
             process_applications = (
                 process_applications.filter(id__in=pa_ids)
                 if has_execution_records
@@ -538,15 +539,14 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         if task_name:
             nodes = nodes.filter(process_result__task_name__icontains=task_name)
 
-        # 套餐名称筛选：先按当前套餐名映射到 pa_id，再走执行记录快照列。
+        # 套餐名称筛选：按执行时名称快照匹配（与展示口径一致）；
+        # 历史无快照记录按当前套餐名映射到 pa_id 兜底，保持与展示回退逻辑一致。
         if pa_name_values:
             pa_name_ids = list(ProcessApplication.objects.filter(name__in=pa_name_values).values_list("id", flat=True))
-            if nodes.filter(pa_id__isnull=True).exists():
-                nodes = nodes.filter(
-                    Q(pa_id__in=pa_name_ids) | Q(pa_id__isnull=True, process_result__pa_name__in=pa_name_values)
-                )
-            else:
-                nodes = nodes.filter(pa_id__in=pa_name_ids) if pa_name_ids else nodes.none()
+            no_snapshot_name_q = Q(process_result__pa_name__isnull=True) | Q(process_result__pa_name="")
+            nodes = nodes.filter(
+                Q(process_result__pa_name__in=pa_name_values) | (no_snapshot_name_q & _pa_filter_q(pa_name_ids))
+            )
 
         # 触发方式筛选（支持多选，任一命中）
         if trigger_values:

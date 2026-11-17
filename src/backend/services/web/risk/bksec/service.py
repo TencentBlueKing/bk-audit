@@ -22,6 +22,7 @@ import uuid
 from typing import List, Optional
 
 from bk_resource import api
+from blueapps.utils.request_provider import get_or_create_local_request_id
 from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
@@ -320,9 +321,14 @@ def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
 
     try:
         result = api.bk_sec.preview_ticket_fields(preview_params) or {}
-    except Exception as err:  # NOCC:broad-except(预览接口异常需转为用户可读错误)
-        logger.exception("[BkSecPreview] preview_ticket_fields failed, risk_id=%s", risk.risk_id)
-        raise serializers.ValidationError(gettext_lazy("BKSEC 工单字段预览失败：%s") % err)
+    except Exception:  # NOCC:broad-except(预览接口异常需转为用户可读错误)
+        request_id = get_or_create_local_request_id()
+        logger.exception(
+            "[BkSecPreview] preview_ticket_fields failed, risk_id=%s, request_id=%s",
+            risk.risk_id,
+            request_id,
+        )
+        raise serializers.ValidationError(gettext_lazy("BKSEC 工单字段预览失败，请稍后重试（request_id: %s）") % request_id)
 
     fields = [
         {
