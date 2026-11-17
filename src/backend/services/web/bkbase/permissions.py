@@ -85,7 +85,12 @@ def list_user_rts(context, *, bk_biz_id=None):
     tables = {}
     projects = _user_projects(context, request)
     batches = metadata.bounded_read_map(
-        lambda namespace: metadata.list_datasets({**context, "namespace": namespace}, user_request=request), projects
+        lambda namespace: metadata.list_datasets(
+            {**context, "namespace": namespace},
+            dataset_name=f"{selected_biz}_" if selected_biz is not None else None,
+            user_request=request,
+        ),
+        projects,
     )
     for rows in batches:
         for row in _rows(rows):
