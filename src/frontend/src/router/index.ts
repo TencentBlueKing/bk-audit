@@ -94,6 +94,44 @@ const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
 };
 
 /**
+ * 选择器里没有可使用场景、也没有系统权限时，
+ * 工具广场、日志检索、报表带具体场景才去申请页。
+ */
+const SCENE_APPLY_PATHS = ['/tools', '/analysis-manage', '/statement-manage'];
+
+const firstQueryValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value[0] ? String(value[0]) : '';
+  }
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+  return String(value);
+};
+
+const isIntegerSceneId = (value: string) => /^[1-9]\d*$/.test(value);
+
+/**
+ * 申请页只接受整数场景 ID。
+ * scope_type=system 时 scene_id / scope_id 都是系统 ID，不能拿去申请场景。
+ */
+const getConcreteSceneId = (to: RouteLocationNormalized) => {
+  const scopeType = firstQueryValue(to.query.scope_type);
+  if (scopeType === 'system' || scopeType === 'cross_system' || scopeType === 'cross_scene') {
+    return '';
+  }
+  const sceneId = firstQueryValue(to.query.scene_id);
+  if (isIntegerSceneId(sceneId)) {
+    return sceneId;
+  }
+  const scopeId = firstQueryValue(to.query.scope_id);
+  if ((scopeType === 'scene' || scopeType === '') && isIntegerSceneId(scopeId)) {
+    return scopeId;
+  }
+  return '';
+};
+
+/**
  * 根据规则检查目标路径是否被拦截
  * @returns 需重定向的路由 name，null 表示放行
  */
@@ -295,6 +333,7 @@ export default (config: ConfigModel) => {
       // 从 systemLanding页 发起的子路由跳转应放行（如接入新系统、选择已有系统）
       const fromSystemLanding = (from.name as string) === 'systemLandingPage';
       const toChildOfNewSystem = to.path.startsWith('/nwe-system-manage');
+      const concreteSceneId = getConcreteSceneId(to);
 
       if (
         (hasSceneRole && ['/statement-manage', '/tools'].some(p => to.path.startsWith(p)))
@@ -302,6 +341,21 @@ export default (config: ConfigModel) => {
         || (fromSystemLanding && toChildOfNewSystem)
       ) {
         // 放行，继续后续检查
+      } else if (
+        userRole.includes('risk_handler')
+        && !hasSceneRole
+        && !hasSystemOrSaasAdmin
+        && concreteSceneId
+        && SCENE_APPLY_PATHS.some(path => to.path.startsWith(path))
+      ) {
+        next({
+          name: 'permissionsPage',
+          query: {
+            role: 'user',
+            scene_id: concreteSceneId,
+          },
+        });
+        return;
       } else {
         // 基于角色策略表进行访问控制
         // saas_admin / scene_admin 角色不受 userLandingPage 重定向限制
