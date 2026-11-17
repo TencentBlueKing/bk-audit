@@ -39,10 +39,18 @@ class AssetCandidateUnknownTests(SimpleTestCase):
         self.project_data = self.enterContext(
             mock.patch.object(table.bkbase_permissions, "get_project_data", return_value=self.rows)
         )
-        self.enterContext(mock.patch.object(table.bkbase_metadata, "get_result_tables_bulk", return_value=[self.rows]))
+        self.enterContext(
+            mock.patch.object(
+                table.bkbase_metadata,
+                "get_result_table",
+                side_effect=lambda rt_id, **kwargs: next(row for row in self.rows if row["result_table_id"] == rt_id),
+            )
+        )
         self.lookup = self.enterContext(
             mock.patch.object(
-                table.bkbase_metadata, "get_source_capabilities", side_effect=lambda rt_id: self.capabilities[rt_id]
+                table.bkbase_metadata,
+                "get_source_capabilities",
+                side_effect=lambda rt_id, **kwargs: self.capabilities[rt_id],
             )
         )
         self.enterContext(
@@ -72,14 +80,14 @@ class AssetCandidateUnknownTests(SimpleTestCase):
                 }
             ],
         )
-        self.assertEqual(
+        self.assertCountEqual(
             [call.args[0] for call in self.lookup.call_args_list], [row["result_table_id"] for row in self.rows]
         )
         self.assertIsNone(table_capabilities.asset_status(self.capabilities["11_unknown"]))
         self.assertEqual(self.capabilities, before)
 
     def test_only_unknown_candidates_produce_no_selected_asset(self):
-        self.lookup.side_effect = lambda rt_id: self.capabilities["11_unknown"]
+        self.lookup.side_effect = lambda rt_id, **kwargs: self.capabilities["11_unknown"]
         result = self.handler.list_tables()
         self.assertEqual(result, [{"label": "Synthetic(11)", "value": "11", "children": []}])
         self.assertIsNone(table_capabilities.asset_status(self.capabilities["11_unknown"]))

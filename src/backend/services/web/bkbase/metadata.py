@@ -4,9 +4,17 @@
 不共享缓存带个人收藏状态的完整Dataset。
 """
 import re
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from contextlib import contextmanager
+from contextvars import copy_context
+from time import monotonic
 
 from bk_resource import api
+from requests.exceptions import ConnectionError as RequestConnectionError
+from requests.exceptions import Timeout as RequestTimeout
+from urllib3.exceptions import ReadTimeoutError
 
+from api.bk_base_v4.default import READ_DEADLINE
 from services.web.bkbase import table_capabilities
 from services.web.bkbase.common import get_bkbase_context
 from services.web.bkbase.constants import (
@@ -14,11 +22,100 @@ from services.web.bkbase.constants import (
     TableBindingKind,
     VerifiedDatasetSensitivity,
 )
-from services.web.bkbase.exceptions import BKBaseResourceMappingError
+from services.web.bkbase.exceptions import BKBaseReadTimeout, BKBaseResourceMappingError
+
+LIST_READ_BUDGET_SECONDS = 50.0
+LIST_READ_WORKERS = 16
+
+
+def _remaining_read_time():
+    """在每次翻页/派发及最终返回前核对同一列表预算。"""
+    deadline = READ_DEADLINE.get()
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise BKBaseReadTimeout()
+    return remaining
+
+
+def _is_request_timeout(error):
+    """沿显式cause识别超时，兼容requests将响应体读超时包装为ConnectionError。"""
+    visited = set()
+    while error is not None and id(error) not in visited:
+        visited.add(id(error))
+        if isinstance(error, RequestTimeout) or (
+            isinstance(error, RequestConnectionError) and error.args and isinstance(error.args[0], ReadTimeoutError)
+        ):
+            return True
+        error = error.__cause__
+    return False
+
+
+@contextmanager
+def list_read_scope():
+    """预算只属于本次读取；嵌套调用及工作线程沿用同一截止时间。"""
+    token = None
+    if READ_DEADLINE.get() is None:
+        token = READ_DEADLINE.set(monotonic() + LIST_READ_BUDGET_SECONDS)
+    try:
+        _remaining_read_time()
+        yield
+        _remaining_read_time()
+    except Exception as error:
+        if not isinstance(error, BKBaseReadTimeout) and (
+            monotonic() >= READ_DEADLINE.get() or _is_request_timeout(error)
+        ):
+            raise BKBaseReadTimeout() from error
+        raise
+    finally:
+        if token is not None:
+            READ_DEADLINE.reset(token)
+
+
+def bounded_read_map(function, items):
+    """最多保留一窗任务，按输入顺序重组；失败取消待执行任务并等待在途读取。"""
+    items = list(items)
+    if not items:
+        return []
+    with list_read_scope():
+        results = [None] * len(items)
+        executor = ThreadPoolExecutor(max_workers=min(LIST_READ_WORKERS, len(items)), thread_name_prefix="bkbase-list")
+        pending, index = {}, 0
+        try:
+            while index < len(items) or pending:
+                _remaining_read_time()
+                while index < len(items) and len(pending) < LIST_READ_WORKERS:
+                    pending[executor.submit(copy_context().run, function, items[index])] = index
+                    index += 1
+                done, _ = wait(pending, timeout=_remaining_read_time(), return_when=FIRST_COMPLETED)
+                if not done:
+                    raise BKBaseReadTimeout()
+                for future in done:
+                    results[pending[future]] = future.result()
+                for future in done:
+                    del pending[future]
+            return results
+        finally:
+            for future in pending:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
 
 
 def _context(context):
     return context if context is not None else get_bkbase_context()
+
+
+def _result_table_info(context, result_table_id):
+    """只在本次候选展开中复用原始RT；权限列表及不同请求之间不共享。"""
+    cache = context.get("_result_table_info")
+    key = (context["tenant"], result_table_id)
+    if cache is not None and key in cache:
+        return cache[key]
+    result = api.bk_base_v4.result_table_info(tenant=context["tenant"], result_table_id=result_table_id)
+    if cache is not None:
+        cache[key] = result
+    return result
 
 
 def result_table_identity(context, result):
@@ -63,7 +160,7 @@ def get_result_table_ref(context, result_table_id):
         or not context["tenant"]
     ):
         raise BKBaseResourceMappingError(message="Invalid ResultTable logical ID or tenant")
-    result = api.bk_base_v4.result_table_info(tenant=context["tenant"], result_table_id=result_table_id)
+    result = _result_table_info(context, result_table_id)
     ref, logical_id = result_table_identity(context, result)
     if logical_id != result_table_id:
         raise BKBaseResourceMappingError(message="ResultTable logical identity mismatch")
@@ -77,7 +174,7 @@ def get_source_capabilities(result_table_id, *, context=None):
         raise BKBaseResourceMappingError(message="Invalid ResultTable logical ID")
     if not isinstance(context.get("tenant"), str) or not context["tenant"]:
         raise BKBaseResourceMappingError(message="Missing ResultTable tenant")
-    result = api.bk_base_v4.result_table_info(tenant=context["tenant"], result_table_id=result_table_id)
+    result = _result_table_info(context, result_table_id)
     ref, logical_id = result_table_identity(context, result)
     if logical_id != result_table_id:
         raise BKBaseResourceMappingError(message="ResultTable logical identity mismatch")
@@ -96,6 +193,19 @@ def get_source_capabilities(result_table_id, *, context=None):
             channel.get("kind") == TableBindingKind.CHANNEL and channel.get("storage_type") == "channel"
         )
     return capabilities
+
+
+def get_result_tables_with_capabilities(result_table_ids, *, context=None):
+    """候选只读取需要的正式详情/能力，共用RT身份且不展开未消费的存储列表。"""
+    context = {**_context(context), "_result_table_info": {}}
+    identifiers = list(dict.fromkeys(result_table_ids))
+    return bounded_read_map(
+        lambda rt_id: (
+            get_result_table(rt_id, related=[], context=context),
+            get_source_capabilities(rt_id, context=context),
+        ),
+        identifiers,
+    )
 
 
 def _dataset_namespace(context, result_table_id):
@@ -206,6 +316,7 @@ def list_datasets(context, *, dataset_name=None, user_request=None):
         raise BKBaseResourceMappingError(message="Missing dataset namespace")
     rows, page = [], 1
     while True:
+        _remaining_read_time()
         params = {"tenant": context["tenant"], "namespace": context["namespace"], "page": page, "page_size": 100}
         if dataset_name is not None:
             params["dataset_name"] = dataset_name
@@ -222,6 +333,8 @@ def list_datasets(context, *, dataset_name=None, user_request=None):
         ):
             raise BKBaseResourceMappingError(message="Invalid dataset pagination response")
         rows.extend(result["list"])
+        if user_request is not None and not result["list"] and len(rows) < result["total"]:
+            raise BKBaseResourceMappingError(message="User Dataset pagination ended before total")
         if not result["list"] or page * params["page_size"] >= result["total"]:
             return rows
         page += 1
