@@ -772,6 +772,10 @@ BKVISION_UPDATE_CRON_MINUTE = os.getenv("BKAPP_BKVISION_UPDATE_CRON_MINUTE", "*/
 # bkvision是否更新任务超时时间
 BKVISION_UPDATE_TASK_TIMEOUT = int(os.getenv("BKAPP_BKVISION_UPDATE_TASK_TIMEOUT", 60 * 10))
 
+# 资源类型 schema 拉取请求超时（秒）：默认 300 对齐项目对外调用档位（bk_base/bk_monitor/AI agent），
+# 保持历史兼容；如需收紧可经环境变量调整（参照 AI_AGENT_API_TIMEOUT_SECONDS 模式）
+FETCH_INSTANCE_SCHEMA_TIMEOUT = int(os.getenv("BKAPP_FETCH_INSTANCE_SCHEMA_TIMEOUT", "300"))
+
 # 反向拉取需要屏蔽的高危端口
 HIGH_RISK_PORTS = {
     int(port)
