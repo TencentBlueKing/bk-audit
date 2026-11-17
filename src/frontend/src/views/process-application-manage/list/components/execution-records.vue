@@ -515,6 +515,7 @@
           value: String(item.id),
         }));
         return {
+          type: 'multiple' as const,
           component: PackageNameFilter,
           label: t('套餐名称（ID）'),
           showConfirmAndReset: true,
@@ -562,8 +563,8 @@
     {
       title: () => t('触发方式'),
       colKey: 'trigger_type',
-      width: 104,
-      minWidth: 104,
+      width: 128,
+      minWidth: 128,
       filter: enumFilter(t('触发方式'), [
         { label: t('手动'), value: 'manual' },
         { label: t('自动'), value: 'auto' },
@@ -617,13 +618,6 @@
     },
   ]);
 
-  const packageNameOf = (id: string) => {
-    const matched = packageOptions.value.find(item => String(item.id) === id);
-    if (matched?.name) return matched.name;
-    if (props.applicationId && id === String(props.applicationId)) return props.applicationName || '';
-    return '';
-  };
-
   const timeQuery = () => {
     const range = new DateRange(timeRange.value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
     if (!range.isValidate || !range.startDisplayText || !range.endDisplayText) return {};
@@ -634,17 +628,17 @@
   };
 
   const dataSource = (params: Record<string, any>) => {
-    const packageNames = fieldValue('application_name')
+    const packageIds = fieldValue('application_name')
       .split(',')
-      .map(id => packageNameOf(id))
-      .filter(Boolean);
+      .map(id => id.trim())
+      .filter(id => /^\d+$/.test(id));
     return ProcessApplicationManageService.fetchExecutionRecords({
       page: params.page,
       page_size: params.page_size,
       sort: params.sort,
       task_id: fieldValue('task_id') || undefined,
       task_name: fieldValue('task_name') || undefined,
-      application_name: packageNames.length ? packageNames.join(',') : undefined,
+      application_id: packageIds.length ? packageIds.join(',') : undefined,
       risk_id: fieldValue('risk_id') || undefined,
       executor: fieldValue('executor') || undefined,
       keyword: keywordValue() || undefined,
@@ -836,6 +830,10 @@
   margin-top: var(--audit-space-16);
   overflow: hidden;
   border: 0;
+
+  :deep(.t-table__th-trigger_type .t-table__th-cell-inner) {
+    white-space: nowrap;
+  }
 
   :deep(.audit-tdesign-list),
   :deep(.bk-nested-loading) {
