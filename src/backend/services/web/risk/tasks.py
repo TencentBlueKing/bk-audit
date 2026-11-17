@@ -628,7 +628,7 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
 
     每次只执行当前状态对应的一个 handler。handler 事务提交后，若状态推进到
     下一个 handler，则释放锁后重新投递本任务；否则结束，等待周期扫描或外部回调。
-    锁使用短 TTL + owner token：worker 丢失后残留锁在 TTL（默认 5 分钟）内过期，
+    锁使用短 TTL + owner token：worker 丢失后残留锁在 TTL（默认 15 分钟）内过期，
     周期扫描即可在下一轮接住；延迟确认保证消息不丢，但立即重投会被未过期的
     残留锁挡住并跳过，崩溃恢复以"锁过期 + 周期扫描"为准。owner token 保证
     锁过期后被他人持有时不会误删他人的锁。
@@ -747,11 +747,6 @@ def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
     )
 
 
-# 每轮补偿派发上限：候选长期 running（审批中/执行中）不会离开候选集，
-# 超出部分留下轮；随机抽样保证长期都被轮到（固定顺序取前 N 会饿死尾部）。
-SYNC_AUTO_RESULT_BATCH_LIMIT = 500
-
-
 @celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def sync_one_auto_result(node_id: str):
     """单节点状态同步：拉外部状态回写 TicketNode，节点已结束则推进风险流转。
@@ -847,16 +842,17 @@ def sync_auto_result(node_id: str = None):
 
     # 无 node_id 时收窄候选集：只有审批/套餐节点需要跟外部系统（ITSM/SOPS）同步状态，
     # 其余节点（NewRisk/转单/记经验等）按设计长期保持 running，进补偿只会拖垮本任务。
-    # 随机序 + 每轮上限：候选长期 running 不会离开候选集，固定顺序取前 N 会饿死尾部。
-    node_ids = list(
+    # 不设每轮派发上限，避免长期 running 节点重复占名额导致其他候选漏轮；
+    # 清掉默认排序并按 id 流式读取，避免全量排序和一次性加载。
+    node_ids = (
         TicketNode.objects.filter(
             status=TicketNodeStatus.RUNNING,
             action__in=[ForApprove.__name__, AutoProcess.__name__],
         )
-        .order_by("?")
-        .values_list("id", flat=True)[:SYNC_AUTO_RESULT_BATCH_LIMIT]
+        .order_by()
+        .values_list("id", flat=True)
     )
-    for current_node_id in node_ids:
+    for current_node_id in node_ids.iterator():
         sync_one_auto_result.delay(node_id=current_node_id)
 
 

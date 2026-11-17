@@ -216,6 +216,12 @@ class Command(BaseCommand):
             WHERE n.status = %s AND n.action IN ({placeholders}) AND r.status = %s
             LIMIT {int(batch_size)}
         """
+        update_sql = f"""
+            UPDATE {node_table} n
+            JOIN {risk_table} r ON r.risk_id = n.risk_id
+            SET n.status = %s
+            WHERE n.id = %s AND n.status = %s AND n.action = %s AND r.status = %s
+        """
 
         with connection.cursor() as cursor:
             cursor.execute(count_sql, params)
@@ -239,6 +245,7 @@ class Command(BaseCommand):
 
         total_updated = 0
         rounds = 0
+        no_progress_rounds = 0
         while True:
             if max_rounds and rounds >= max_rounds:
                 self.stdout.write("达到最大轮次 %s，停止（剩余节点下次命令继续）。" % max_rounds)
@@ -251,23 +258,45 @@ class Command(BaseCommand):
             if not batch:
                 break
 
-            node_ids = [row[0] for row in batch]
-            updated = TicketNode.objects.filter(id__in=node_ids).update(status=TicketNodeStatus.FINISHED)
-            changed.extend({"node_id": r[0], "risk_id": r[1], "action": r[2]} for r in batch)
+            # 逐行条件更新：UPDATE 语句内再次校验 risk.status，避免 SELECT 之后被重开/重试的节点被误关；
+            # 同时只记录真正更新成功的行，保证 --out 审计/回滚记录准确。
+            updated = 0
+            with connection.cursor() as cursor:
+                for node_id, risk_id, action in batch:
+                    cursor.execute(
+                        update_sql,
+                        [
+                            TicketNodeStatus.FINISHED,
+                            node_id,
+                            TicketNodeStatus.RUNNING,
+                            action,
+                            RiskStatus.CLOSED,
+                        ],
+                    )
+                    if cursor.rowcount:
+                        updated += cursor.rowcount
+                        changed.append({"node_id": node_id, "risk_id": risk_id, "action": action})
+
             total_updated += updated
             rounds += 1
             logger.info(
                 "[GovernRunningTicketNode] round=%s batch=%s updated=%s total=%s",
                 rounds,
-                len(node_ids),
+                len(batch),
                 updated,
                 total_updated,
             )
-            self.stdout.write("  round {}: 本批 {} 条，累计 {} 条".format(rounds, updated, total_updated))
+            self.stdout.write(
+                "  round {}: 本批 {} 条，实际更新 {} 条，累计 {} 条".format(rounds, len(batch), updated, total_updated)
+            )
 
             if updated == 0:
-                self.stdout.write("本批更新 0 条，提前结束以避免死循环，请人工核查。")
-                break
+                no_progress_rounds += 1
+                if no_progress_rounds >= 3:
+                    self.stdout.write("连续 3 轮无实际更新，停止以避免死循环，请人工核查。")
+                    break
+            else:
+                no_progress_rounds = 0
 
         self.stdout.write("清理完成，累计更新 %s 条。" % total_updated)
 

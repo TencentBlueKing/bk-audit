@@ -302,20 +302,17 @@ class SyncAutoResultFanoutTest(TicketTest):
             mock_sops.assert_not_called()
             mock_itsm.assert_not_called()
 
-    def test_parent_dispatch_respects_batch_limit(self):
-        """每轮派发上限：超出留下轮"""
+    def test_parent_dispatches_all_candidates(self):
+        """无 node_id：派发全部审批/套餐候选，不设每轮上限"""
 
         with RiskContext() as risk:
             for _ in range(3):
                 self._make_node(risk.risk_id, "AutoProcess", {"task": {"task_id": 1}})
 
-            with (
-                mock.patch("services.web.risk.tasks.SYNC_AUTO_RESULT_BATCH_LIMIT", 2),
-                mock.patch("services.web.risk.tasks.sync_one_auto_result.delay") as mock_delay,
-            ):
+            with mock.patch("services.web.risk.tasks.sync_one_auto_result.delay") as mock_delay:
                 sync_auto_result()
 
-            self.assertEqual(mock_delay.call_count, 2)
+            self.assertEqual(mock_delay.call_count, 3)
 
     def test_node_id_path_syncs_and_advances_flow(self):
         """带 node_id 直调：返回时节点已回写（强制撤销路径），结束后推进流转"""

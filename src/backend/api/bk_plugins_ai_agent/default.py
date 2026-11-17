@@ -33,7 +33,7 @@ from requests.exceptions import HTTPError
 
 from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
 from api.bk_plugins_ai_agent.constants import AI_THINKING_PLACEHOLDERS
-from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited, AGUIStreamProtocolError
 from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
@@ -185,6 +185,9 @@ class ChatCompletion(AIAgentBase):
                         "error_type": error.__class__.__name__,
                     },
                 )
+                # 网关 HTTP/SSE 429 统一为限流信号，交给 AIAgentTask 退避重投，避免被上层当成普通错误文本收敛
+                if isinstance(error, APIRequestError) and str(getattr(error, "status_code", "")) == "429":
+                    raise AgentRateLimited(agent_code=agent_code) from error
                 raise
             logger.info(
                 "AI agent downstream request completed",
