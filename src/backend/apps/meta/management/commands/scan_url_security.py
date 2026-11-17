@@ -46,7 +46,9 @@ class Command(BaseCommand):
             try:
                 validate_resource_path(resource_type.path)
             except URLSecurityError as err:
-                problems.append(f"[ResourceType] unique_id={resource_type.unique_id} path={resource_type.path!r} => {err}")
+                problems.append(
+                    f"[ResourceType] unique_id={resource_type.unique_id} path={resource_type.path!r} => {err}"
+                )
 
         # 3. 扫描拼接后最终 URL（callback_url 非空系统的非空 path 组合，拼接方式与线上 resource_request_url 一致）
         systems_with_callback = {
