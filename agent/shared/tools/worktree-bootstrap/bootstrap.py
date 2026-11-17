@@ -155,7 +155,7 @@ def check_or_apply(root, common, apply):
 
 def install_hook(common):
     # A repository with per-worktree hooksPath needs an explicit integration decision.
-    for entry in git(common, "worktree", "list", "--porcelain", "-z").split("\x00"):
+    for entry in git(common, "--git-dir=" + str(common), "worktree", "list", "--porcelain", "-z").split("\x00"):
         if entry.startswith("worktree "):
             worktree = entry[len("worktree ") :]
             if Path(worktree).exists() and git(
