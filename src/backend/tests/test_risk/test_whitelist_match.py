@@ -94,6 +94,44 @@ class WhitelistMatchTests(SimpleTestCase):
         self.assertTrue(match_scope(scope, {"strategy_id": "312", "event_id": "11"}))
         self.assertFalse(match_scope(scope, {"strategy_id": "312", "event_id": "12"}))
 
+    def test_field_label_still_matches_raw_name(self):
+        scope = {
+            "connector": "and",
+            "groups": [
+                {
+                    "connector": "and",
+                    "conditions": [
+                        {
+                            "field": "strategy_id",
+                            "field_name": "命中策略(ID)",
+                            "operator": "eq",
+                            "value": "359",
+                        }
+                    ],
+                }
+            ],
+        }
+        event = {"strategy_id": 359, "raw_event_id": "abc", "event_data": {"事件ID": "x"}}
+        self.assertTrue(match_scope(scope, event))
+        self.assertFalse(match_scope(scope, {**event, "strategy_id": 1}))
+
+    def test_event_data_display_name_matches(self):
+        scope = {
+            "connector": "and",
+            "groups": [
+                {
+                    "connector": "and",
+                    "conditions": [
+                        {"field": "strategy_id", "field_name": "命中策略(ID)", "operator": "eq", "value": "359"},
+                        {"field": "username", "field_name": "操作人用户名", "operator": "eq", "value": "alice"},
+                    ],
+                }
+            ],
+        }
+        event = {"strategy_id": 359, "event_data": {"操作人用户名": "alice", "事件ID": "e-1"}}
+        self.assertTrue(match_scope(scope, event))
+        self.assertFalse(match_scope(scope, {**event, "event_data": {"操作人用户名": "bob"}}))
+
     def test_blank_event_id_is_not_appended(self):
         scope = append_risk_match_fields({}, strategy_id=9, raw_event_id="")
         self.assertNotIn("raw_event_id", _operators(scope))

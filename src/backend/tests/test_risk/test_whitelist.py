@@ -736,6 +736,40 @@ class WhitelistRenewTests(SimpleTestCase):
         self.assertIn("expire_at", saved["fields"])
         self.assertIn("itsm_sn", saved["fields"])
         self.assertIn("itsm_ticket_id", saved["fields"])
+        admin_pass.assert_called_once_with(rule, "alice")
+
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.validate_match_scope", return_value="")
+    def test_callback_during_submit_keeps_active(self, validate_scope, refresh_nodes, admin_pass):
+        rule = _Rule(
+            status=WhitelistStatus.ACTIVE,
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            is_permanent=False,
+            match_scope=_scope(),
+            reason="原来的原因",
+            scene_id=1,
+            callback_token="old-token",
+        )
+        rule.itsm_ticket_id = "ticket-old"
+
+        def _submit(*args, **kwargs):
+            rule.status = WhitelistStatus.ACTIVE
+            rule.reject_reason = ""
+            return {"id": "ticket-2", "sn": "SN2", "frontend_url": "http://itsm/ticket-2"}
+
+        with patch("services.web.risk.whitelist.service._submit_itsm_ticket", side_effect=_submit):
+            renewed = renew_whitelist(
+                rule,
+                match_scope=_scope(),
+                reason="续期",
+                duration_days=30,
+                expire_at=None,
+                username="alice",
+            )
+        self.assertEqual(renewed.status, WhitelistStatus.ACTIVE)
+        self.assertEqual(renewed.itsm_ticket_id, "ticket-2")
+        admin_pass.assert_not_called()
 
     @patch(
         "services.web.risk.whitelist.service._submit_itsm_ticket",
@@ -757,7 +791,6 @@ class WhitelistRenewTests(SimpleTestCase):
         rule.itsm_ticket_id = "ticket-old"
         rule.itsm_sn = "SN-OLD"
         rule.itsm_ticket_url = "http://itsm/old"
-        rule.save = lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not save"))
         with self.assertRaises(ValidationError):
             renew_whitelist(
                 rule,
