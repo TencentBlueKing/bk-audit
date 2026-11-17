@@ -141,6 +141,27 @@ class TestListPAExecutionRecords:
         with pytest.raises(ValidateException):
             resource.risk.list_pa_execution_records.request({"pa_id": f"{pa_a.id},abc"})
 
+    def test_filter_pa_name_uses_execution_snapshot(self):
+        """名称筛选匹配执行时快照：套餐改名后按旧名可查，按新名只命中无快照的历史记录"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        # 历史无快照节点：展示/筛选都走当前套餐名兜底
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=41)
+        # 执行时快照：记录快照名「套餐A」
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=42, pa_id=pa_a.id, pa_name="套餐A")
+        # 套餐改名为「套餐A-新名」
+        pa_a.name = "套餐A-新名"
+        pa_a.save(update_fields=["name"])
+
+        # 按快照旧名筛：只命中快照记录，展示也是旧名
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_name": "套餐A"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"42"}
+        assert next(r for r in resp["results"] if r["sops_task_id"] == "42")["pa_name"] == "套餐A"
+
+        # 按当前新名筛：只命中无快照的历史记录（展示走当前名兜底），旧快照记录不命中
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_name": "套餐A-新名"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"41"}
+        assert next(r for r in resp["results"] if r["sops_task_id"] == "41")["pa_name"] == "套餐A-新名"
+
     def test_duration_sort_running_first_then_duration(self):
         """执行中的记录始终在前；组内按开始时间，已完成的按 duration 排序。"""
         from services.web.risk.constants import TicketNodeStatus
