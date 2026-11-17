@@ -53,7 +53,7 @@ import Tools from '@views/tools/routes'; // 工具广场
 
 import { changeConfirm } from '@utils/assist';
 
-import { setActiveSceneSelection } from '@/utils/assist/scene-system-params';
+import { isSystemScopedContextQuery, setActiveSceneSelection } from '@/utils/assist/scene-system-params';
 
 
 let lastRouterHrefCache = '/';
@@ -149,6 +149,11 @@ async function resolveSceneConfigSceneAccess(
   from: RouteLocationNormalized,
 ) {
   if (!isSceneConfigBusinessRoute(to)) {
+    return null;
+  }
+
+  // 系统范围的 scene_id 是系统 id。不在这里鉴权，也不改写全局选中，交给选择器按原兜底处理。
+  if (isSystemScopedContextQuery(to.query)) {
     return null;
   }
 

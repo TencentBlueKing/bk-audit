@@ -180,6 +180,7 @@
     clearRecentSceneSwitch,
     getQueryFromLocation,
     isRecentManualSceneSwitch,
+    isSystemScopedContextQuery,
     markSceneSelectorSwitched,
     SCENE_SELECTOR_STORAGE_KEY,
     setActiveSceneSelection,
@@ -450,15 +451,16 @@
     showSystem: boolean,
   ): SelectorItem | null => {
     if (!matchId) return null;
+    const sameId = (item: SelectorItem) => String(item.id) === String(matchId);
     if (showScene && !showSystem) {
-      return sceneItemsForMatch.find(item => item.id === matchId) || null;
+      return sceneItemsForMatch.find(sameId) || null;
     }
     if (!showScene && showSystem) {
-      return systemItemsForMatch.find(item => item.id === matchId) || null;
+      return systemItemsForMatch.find(sameId) || null;
     }
     if (showScene && showSystem) {
-      return sceneItemsForMatch.find(item => item.id === matchId)
-        || systemItemsForMatch.find(item => item.id === matchId)
+      return sceneItemsForMatch.find(sameId)
+        || systemItemsForMatch.find(sameId)
         || null;
     }
     return null;
@@ -494,6 +496,8 @@
    * 4. URL 指向无管理权限场景 → 跳转权限申请页（不自动改选第一个可管理场景）
    */
   const trySelectFromRoute = (options?: { forceAlign?: boolean }) => {
+    // 失活实例不能改路由，否则会把当前页（AI 助手 / 报表 / 广场）踢到无权限
+    if (!isPageActive.value) return;
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
     // 基于当前页面的 listScope 决定实际可用的匹配范围
     const showScene = props.listScope.includes('scene') && hasSceneAccess;
@@ -570,6 +574,23 @@
           });
           return;
         }
+      } else if (isSystemScopedContextQuery(getLiveRouteQuery())) {
+        // 我的所有系统不是具体系统。当前页不展示该项时，走后面的原有兜底
+        const isAggregateSystem = String(urlMatchId) === 'allSystem';
+        if (showSystem && !isAggregateSystem) {
+          // 可选系统的页面保持当前系统，不把系统 id 当成无权限场景，也不改选成场景
+          const savedSystem = readSavedSelection();
+          targetItem = savedSystem
+            && savedSystem.type === 'system'
+            && String(savedSystem.id) === String(urlMatchId)
+            ? savedSystem
+            : {
+              id: String(urlMatchId),
+              name: String(urlMatchId),
+              type: 'system' as const,
+            };
+        }
+        // 不可选系统的页面留给后面的原有兜底，选第一个可用场景
       } else {
         // URL 指向无权限场景 → 权限申请页
         router.replace({
@@ -952,6 +973,7 @@
   });
 
   onUnmounted(() => {
+    isPageActive.value = false;
     offSceneEvent('scene-selector-lost-manage', handleLostManage);
     document.removeEventListener('click', handleClickOutside, true);
   });

@@ -170,6 +170,7 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import { sortByBasicEventFieldOrder } from '@utils/assist';
+  import { isSystemScopedContextQuery } from '@/utils/assist/scene-system-params';
   import {
     applyDatetimeUrlParams,
     ensureDatetimeSynced,
@@ -459,10 +460,11 @@
     if (urlSearchParams[searchFieldName] === undefined
       || urlSearchParams[searchFieldName] === null
       || urlSearchParams[searchFieldName] === '') return;
-    // 场景选择器写入的 allSecen/allSystem 不是「所属场景」筛选
+    // 场景选择器写入的占位值、以及系统范围的 scene_id，都不是「所属场景」筛选
     if (searchFieldName === 'scene_id') {
       const sceneId = String(urlSearchParams.scene_id);
       if (sceneId === 'allSecen' || sceneId === 'allSystem') return;
+      if (isSystemScopedContextQuery(urlSearchParams)) return;
     }
     if (config.type !== 'string') {
       searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
