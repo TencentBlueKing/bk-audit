@@ -149,6 +149,21 @@ class BootstrapTest(unittest.TestCase):
         self.cli("check", cwd=new)
         self.cli("install-hook")
 
+    def test_install_hook_with_explicit_bare_policy_and_separate_git_directory(self):
+        common = self.base / "separate git directory"
+        self.git("init", "--separate-git-dir", common)
+        self.git("worktree", "repair")
+        self.env["GIT_CONFIG_GLOBAL"] = str(self.base / "global gitconfig")
+        self.git("config", "--global", "safe.bareRepository", "explicit")
+        self.configure()
+        self.cli("install-hook")
+        self.assertTrue((common / "hooks/post-checkout").is_file())
+        new = self.base / "strict policy tree"
+        self.git("worktree", "add", "--detach", str(new))
+        self.assertTrue((new / SHARE).is_symlink())
+        self.cli("check", cwd=new)
+        self.assertEqual(self.git("config", "--global", "--get", "safe.bareRepository").stdout.strip(), "explicit")
+
     def test_hook_preserves_checkout_success_on_material_conflict(self):
         self.configure()
         self.cli("install-hook")
