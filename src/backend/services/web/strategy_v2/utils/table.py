@@ -174,6 +174,15 @@ class BuildInTableHandler(TableHandler):
 
 class BizAssetTableHandler(TableHandler):
     def list_tables(self) -> List[dict]:
+        if get_bkbase_version() == BKBaseVersion.V4:
+            with bkbase_metadata.list_read_scope():
+                tables = bkbase_permissions.get_project_data(project_id=settings.BKBASE_PROJECT_ID, extra_fields=True)
+                candidates = bkbase_metadata.get_result_tables_with_capabilities(
+                    [rt["result_table_id"] for rt in tables]
+                )
+                return self.format_result_tables(
+                    [rt for rt, capability in candidates if table_capabilities.asset_status(capability) is True]
+                )
         # 获取所有的RT
         result_table_ids = [
             r["result_table_id"]
@@ -187,15 +196,6 @@ class BizAssetTableHandler(TableHandler):
         # 获取RT信息
         result_tables = []
         for rts in bkbase_metadata.get_result_tables_bulk(request_params):
-            if get_bkbase_version() == BKBaseVersion.V4:
-                result_tables.extend(
-                    rt
-                    for rt in rts
-                    if rt
-                    and table_capabilities.asset_status(bkbase_metadata.get_source_capabilities(rt["result_table_id"]))
-                    is True
-                )
-                continue
             result_tables.extend(
                 rt
                 for rt in rts
@@ -237,6 +237,28 @@ class BizRtTableHandler(TableHandler):
 
     def list_tables(self) -> List[dict]:
         exclude_rt_ids = self.get_exclude_rt_ids()
+        if get_bkbase_version() == BKBaseVersion.V4:
+            with bkbase_metadata.list_read_scope():
+                tables = [
+                    rt
+                    for rt in bkbase_permissions.get_project_data(
+                        project_id=settings.BKBASE_PROJECT_ID, extra_fields=True, related=["storages"]
+                    )
+                    if rt["result_table_id"] not in exclude_rt_ids
+                ]
+                candidates = bkbase_metadata.get_result_tables_with_capabilities(
+                    [rt["result_table_id"] for rt in tables]
+                )
+                return self.format_result_tables(
+                    [
+                        rt
+                        for rt, capability in candidates
+                        if any(
+                            table_capabilities.source_node_type(capability, mode) is not None
+                            for mode in (RuleAuditSourceType.REALTIME, RuleAuditSourceType.BATCH)
+                        )
+                    ]
+                )
         # 获取业务下的RT
         result_table_ids = [
             r["result_table_id"]
@@ -254,17 +276,6 @@ class BizRtTableHandler(TableHandler):
         # 获取RT信息,过滤掉不包含指定存储的 RT
         result_tables = []
         for rts in bkbase_metadata.get_result_tables_bulk(request_params):
-            if get_bkbase_version() == BKBaseVersion.V4:
-                for rt in rts:
-                    if not rt:
-                        continue
-                    capability = bkbase_metadata.get_source_capabilities(rt["result_table_id"])
-                    if any(
-                        table_capabilities.source_node_type(capability, mode) is not None
-                        for mode in (RuleAuditSourceType.REALTIME, RuleAuditSourceType.BATCH)
-                    ):
-                        result_tables.append(rt)
-                continue
             result_tables.extend(
                 rt for rt in rts if rt and (rt.get("storages", {}).keys() & BIZ_RT_TABLE_ALLOW_STORAGES)
             )
