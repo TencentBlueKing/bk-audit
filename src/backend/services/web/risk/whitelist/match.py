@@ -139,6 +139,27 @@ def append_risk_match_fields(scope: dict, *, strategy_id, raw_event_id=None) -> 
     return scope
 
 
+def _event_data(event: dict) -> dict:
+    nested = (event or {}).get("event_data")
+    return dict(nested) if isinstance(nested, dict) else {}
+
+
+def _alias_condition_keys(node, event: dict, data: dict) -> None:
+    if node is None:
+        return
+    condition = getattr(node, "condition", None)
+    field = getattr(condition, "field", None)
+    if field is not None:
+        raw_name = field.raw_name
+        display_name = field.display_name
+        if display_name and display_name not in data and raw_name and raw_name in event and raw_name != "event_data":
+            data[display_name] = event[raw_name]
+        if raw_name and raw_name not in data and raw_name in event and raw_name != "event_data":
+            data[raw_name] = event[raw_name]
+    for child in getattr(node, "conditions", None) or []:
+        _alias_condition_keys(child, event, data)
+
+
 def match_scope(scope: dict, event: dict) -> bool:
     try:
         node = to_condition_tree(as_where_scope(scope))
@@ -146,7 +167,10 @@ def match_scope(scope: dict, event: dict) -> bool:
         return False
     if evaluate_is_empty(node):
         return False
-    return evaluate(node, {"event_data": event or {}})
+    event = event or {}
+    data = _event_data(event)
+    _alias_condition_keys(node, event, data)
+    return evaluate(node, {"event_data": data})
 
 
 def validate_match_scope(scope: dict, whitelist_type: str) -> str:

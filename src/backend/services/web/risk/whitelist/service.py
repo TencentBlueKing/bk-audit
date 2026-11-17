@@ -666,10 +666,28 @@ def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
         )
 
 
+def _renew_snapshot(rule: RiskWhitelist) -> dict:
+    return {
+        "status": rule.status,
+        "callback_token": rule.callback_token,
+        "reject_reason": rule.reject_reason,
+        "itsm_ticket_id": rule.itsm_ticket_id,
+        "itsm_sn": rule.itsm_sn,
+        "itsm_ticket_url": rule.itsm_ticket_url,
+        "updated_by": getattr(rule, "updated_by", "") or "",
+    }
+
+
+def _restore_renew_snapshot(rule: RiskWhitelist, previous: dict) -> None:
+    for key, value in previous.items():
+        setattr(rule, key, value)
+    rule.save(update_fields=[*previous.keys(), "updated_at"])
+
+
 def renew_whitelist(
     rule: RiskWhitelist, *, match_scope, reason, duration_days, expire_at, username: str
 ) -> RiskWhitelist:
-    """续期不新建白名单。新工单创建成功后才改状态、到期时间和单据号；创建失败保持原样。"""
+    """续期不新建白名单。先改成待审批再提工单，和创建一样让回调或管理员审批立刻生效。创建失败恢复原状态。"""
 
     if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.EXPIRED, WhitelistStatus.DISABLED}:
         raise ValidationError(gettext("只有生效中或已到期的规则可以续期"))
@@ -677,29 +695,18 @@ def renew_whitelist(
     if error:
         raise ValidationError(gettext(error))
     is_permanent, resolved_expire = resolve_expire_at(rule.whitelist_type, duration_days, expire_at)
+    previous = _renew_snapshot(rule)
     callback_token = uuid.uuid4().hex
-    ticket = _submit_itsm_ticket(
-        rule,
-        operator=username,
-        callback_token=callback_token,
-        reason=reason,
-        match_scope=match_scope,
-    )
-    rule.match_scope = match_scope
-    rule.reason = (reason or "")[:500]
-    rule.is_permanent = is_permanent
-    rule.expire_at = resolved_expire
+    # 创建是先落待审批和 token 再提工单，回调才能在返回前写成生效中。续期同样先腾出待审批，并清掉旧单号，避免轮询把旧工单当成这次结果。
     rule.status = WhitelistStatus.PENDING
     rule.reject_reason = ""
     rule.callback_token = callback_token
-    _bind_ticket(rule, ticket)
+    rule.itsm_ticket_id = ""
+    rule.itsm_sn = ""
+    rule.itsm_ticket_url = ""
     rule.updated_by = username
     rule.save(
         update_fields=[
-            "match_scope",
-            "reason",
-            "is_permanent",
-            "expire_at",
             "status",
             "reject_reason",
             "callback_token",
@@ -710,8 +717,42 @@ def renew_whitelist(
             "updated_by",
         ]
     )
+    try:
+        ticket = _submit_itsm_ticket(
+            rule,
+            operator=username,
+            callback_token=callback_token,
+            reason=reason,
+            match_scope=match_scope,
+        )
+    except ValidationError:
+        _restore_renew_snapshot(rule, previous)
+        raise
+    rule.refresh_from_db()
+    rule.match_scope = match_scope
+    rule.reason = (reason or "")[:500]
+    rule.is_permanent = is_permanent
+    rule.expire_at = resolved_expire
+    _bind_ticket(rule, ticket)
+    rule.updated_by = username
+    # 不回写 status。回调若已写成生效中，这里再写待审批会把它盖掉。
+    rule.save(
+        update_fields=[
+            "match_scope",
+            "reason",
+            "is_permanent",
+            "expire_at",
+            "callback_token",
+            "itsm_ticket_id",
+            "itsm_sn",
+            "itsm_ticket_url",
+            "updated_at",
+            "updated_by",
+        ]
+    )
     refresh_whitelist_nodes(rule, ticket)
-    _pass_if_admin(rule, username)
+    if rule.status == WhitelistStatus.PENDING:
+        _pass_if_admin(rule, username)
     rule.refresh_from_db()
     return rule
 
