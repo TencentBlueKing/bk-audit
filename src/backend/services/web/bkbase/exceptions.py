@@ -54,3 +54,11 @@ class BKBaseFlowWriteFailed(BKBaseException):
 
     ERROR_CODE = "006"
     MESSAGE = gettext_lazy("Flow发送失败或受理结果未知，请重试")
+
+
+class BKBaseReadTimeout(BKBaseException):
+    """列表预算或单次HTTP超时，不返回未完整读取的权限或候选表。"""
+
+    ERROR_CODE = "007"
+    STATUS_CODE = 504
+    MESSAGE = gettext_lazy("BKBase列表读取超时，请重试")
