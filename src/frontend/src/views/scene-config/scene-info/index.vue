@@ -98,6 +98,7 @@
     clearRecentSceneSwitch,
     getQueryFromLocation,
     getSceneSystemParams,
+    isSystemScopedContextQuery,
     setActiveSceneSelection,
   } from '@/utils/assist/scene-system-params';
 
@@ -110,15 +111,33 @@
 
   const SCENE_SELECTOR_STORAGE_KEY = 'scene-system-selector:selected';
 
-  const getRouteSceneId = () => {
+  const readSceneQuery = () => {
     const locationQuery = getQueryFromLocation();
-    const id = locationQuery.scene_id
-      || locationQuery.scope_id
-      || String(route.query.scene_id || route.query.scope_id || '');
+    return {
+      scene_id: locationQuery.scene_id || route.query.scene_id,
+      scope_id: locationQuery.scope_id || route.query.scope_id,
+      scope_type: locationQuery.scope_type || route.query.scope_type,
+    };
+  };
+
+  // 系统范围的 scene_id 是系统 id，不能拿去请求场景详情
+  const getRouteSceneId = () => {
+    const query = readSceneQuery();
+    if (isSystemScopedContextQuery(query)) return '';
+    const id = String(query.scene_id || query.scope_id || '');
     return id && id !== 'allSecen' ? id : '';
   };
 
-  const sceneId = ref(getRouteSceneId() || getSceneSystemParams().scope_id);
+  const readInitialSceneId = () => {
+    const routeSceneId = getRouteSceneId();
+    if (routeSceneId) return routeSceneId;
+    const params = getSceneSystemParams();
+    return params.scope_type === 'scene' && params.scope_id && params.scope_id !== 'allSecen'
+      ? params.scope_id
+      : '';
+  };
+
+  const sceneId = ref(readInitialSceneId());
   // 骨架屏 loading 状态（仅等待场景基础信息）
   const isSkeletonLoading = ref(true);
   // 基础信息字段保存 loading 状态
@@ -667,6 +686,9 @@
 
   const resolveSceneId = (payload?: unknown) => {
     if (typeof payload === 'string' && payload && payload !== 'allSecen') {
+      const query = readSceneQuery();
+      const systemId = String(query.scene_id || query.scope_id || '');
+      if (isSystemScopedContextQuery(query) && payload === systemId) return '';
       return payload;
     }
     if (payload && typeof payload === 'object') {
