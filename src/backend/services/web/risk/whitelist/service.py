@@ -294,9 +294,36 @@ def _ticket_process_result(rule: RiskWhitelist, ticket: dict, previous: dict = N
     return {"ticket": stored}
 
 
+def _ticket_on_rule(rule: RiskWhitelist) -> dict:
+    """节点上的工单。"""
+
+    ticket = {
+        "id": rule.itsm_ticket_id or "",
+        "sn": rule.itsm_sn or "",
+        "frontend_url": rule.itsm_ticket_url or "",
+    }
+    if rule.status == WhitelistStatus.ACTIVE:
+        ticket["status"] = ITSMV4TicketStatus.FINISHED
+        ticket["approve_result"] = True
+    elif rule.status == WhitelistStatus.REJECTED:
+        ticket["status"] = ITSMV4TicketStatus.FINISHED
+        ticket["approve_result"] = False
+    return ticket
+
+
 def write_whitelist_nodes(rule: RiskWhitelist, risks) -> None:
+    """工单创建完成后再写风险节点。"""
+
     now = datetime.datetime.now()
-    payload = {"whitelist": _node_payload(rule)}
+    with transaction.atomic():
+        current = RiskWhitelist.objects.select_for_update().get(pk=rule.pk)
+        ticket = _ticket_on_rule(current)
+        payload = {"whitelist": _node_payload(current, ticket)}
+        process_result = _ticket_process_result(current, ticket)
+        _insert_whitelist_nodes(current, risks, now, payload, process_result)
+
+
+def _insert_whitelist_nodes(rule: RiskWhitelist, risks, now, payload: dict, process_result: dict) -> None:
     for risk in risks:
         from services.web.risk.models import TicketNode
 
@@ -307,7 +334,7 @@ def write_whitelist_nodes(rule: RiskWhitelist, risks) -> None:
             action=WHITELIST_NODE_ACTION,
             timestamp=now.timestamp(),
             time=now.strftime(api_settings.DATETIME_FORMAT),
-            process_result=_ticket_process_result(rule, {}),
+            process_result=process_result,
             extra=payload,
             status=TicketNodeStatus.FINISHED,
         )
@@ -442,10 +469,10 @@ def _create_whitelist(
         created_by=username,
         updated_by=username,
     )
-    if risks:
-        write_whitelist_nodes(rule, risks)
     create_itsm_ticket(rule.id)
     rule.refresh_from_db()
+    if risks and rule.itsm_ticket_id:
+        write_whitelist_nodes(rule, risks)
     return rule
 
 
@@ -702,23 +729,6 @@ def create_itsm_ticket(rule_id: int) -> None:
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     refresh_whitelist_nodes(rule, ticket)
     rule.refresh_from_db()
-    if rule.status == WhitelistStatus.PENDING:
-        _apply_returned_status(rule)
-
-
-def _apply_returned_status(rule: RiskWhitelist) -> RiskWhitelist:
-    """创建后把工单返回的 status 映射并写入数据库。"""
-
-    if rule.status != WhitelistStatus.PENDING or not rule.itsm_ticket_id:
-        return rule
-    try:
-        detail = api.bk_itsm_v4.ticket_detail(id=rule.itsm_ticket_id) or {}
-    except Exception:
-        logger.exception("[RiskWhitelist] ticket_detail failed, id=%s", rule.id)
-        return rule
-    if not isinstance(detail, dict):
-        return rule
-    return apply_whitelist_result(rule, detail)
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:

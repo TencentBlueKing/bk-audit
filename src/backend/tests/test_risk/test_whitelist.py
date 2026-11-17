@@ -17,11 +17,11 @@ from services.web.risk.whitelist.models import RiskWhitelist
 from services.web.risk.whitelist.service import (
     _node_payload,
     _submit_itsm_ticket,
+    _ticket_on_rule,
     create_itsm_ticket,
     expire_at_from,
     flow_of,
     intercept_whitelist,
-    map_whitelist_status,
     progress_map,
     renew_whitelist,
     resolve_duration,
@@ -62,13 +62,22 @@ class WhitelistCreateTests(SimpleTestCase):
         scene_filter.return_value.exists.return_value = True
         created = {}
 
+        holder = {}
+
         def _create(**kwargs):
             created.update(kwargs)
-            rule = SimpleNamespace(id=1, **kwargs)
+            rule = SimpleNamespace(id=1, itsm_ticket_id="", itsm_sn="", itsm_ticket_url="", **kwargs)
             rule.refresh_from_db = lambda: None
+            holder["rule"] = rule
             return rule
 
+        def _create_ticket(rule_id):
+            holder["rule"].itsm_ticket_id = "ticket-1"
+            holder["rule"].itsm_sn = "SN1"
+            holder["rule"].itsm_ticket_url = "http://itsm/ticket-1"
+
         create.side_effect = _create
+        create_ticket.side_effect = _create_ticket
         risk = SimpleNamespace(strategy_id=9, raw_event_id="evt-1", risk_id="risk-1", scene_id=1, current_operator=[])
         submit_whitelist(
             scene_id=1,
@@ -90,6 +99,8 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertEqual(fields["raw_event_id"]["filter"], "evt-1")
         self.assertNotIn("risk_id", fields)
         write_nodes.assert_called_once()
+        self.assertEqual(write_nodes.call_args.args[0].itsm_ticket_id, "ticket-1")
+        self.assertEqual(write_nodes.call_args.args[0].itsm_ticket_url, "http://itsm/ticket-1")
         create_ticket.assert_called_once_with(1)
 
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
@@ -100,13 +111,28 @@ class WhitelistCreateTests(SimpleTestCase):
         scene_filter.return_value.exists.return_value = True
         created = []
 
+        rules_by_id = {}
+
         def _create(**kwargs):
             created.append(kwargs)
-            rule = SimpleNamespace(id=len(created), **kwargs)
+            rule = SimpleNamespace(
+                id=len(created),
+                itsm_ticket_id="",
+                itsm_sn="",
+                itsm_ticket_url="",
+                **kwargs,
+            )
             rule.refresh_from_db = lambda: None
+            rules_by_id[rule.id] = rule
             return rule
 
+        def _create_ticket(rule_id):
+            rules_by_id[rule_id].itsm_ticket_id = f"ticket-{rule_id}"
+            rules_by_id[rule_id].itsm_sn = f"SN{rule_id}"
+            rules_by_id[rule_id].itsm_ticket_url = f"http://itsm/ticket-{rule_id}"
+
         create.side_effect = _create
+        create_ticket.side_effect = _create_ticket
         risks = [
             SimpleNamespace(strategy_id=9, raw_event_id="evt-1", risk_id="risk-1", scene_id=3, current_operator=[]),
             SimpleNamespace(strategy_id=9, raw_event_id="evt-2", risk_id="risk-2", scene_id=3, current_operator=[]),
@@ -138,6 +164,18 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertNotIn("risk_id", second_fields)
         self.assertEqual(write_nodes.call_count, 2)
         self.assertEqual(create_ticket.call_count, 2)
+
+    def test_node_ticket_follows_callback_status(self):
+        fields = {
+            "itsm_ticket_id": "ticket-1",
+            "itsm_sn": "SN1",
+            "itsm_ticket_url": "http://itsm/ticket-1",
+        }
+        pending = _ticket_on_rule(SimpleNamespace(status=WhitelistStatus.PENDING, **fields))
+        self.assertNotIn("approve_result", pending)
+        active = _ticket_on_rule(SimpleNamespace(status=WhitelistStatus.ACTIVE, **fields))
+        self.assertEqual(active["status"], ITSMV4TicketStatus.FINISHED)
+        self.assertTrue(active["approve_result"])
 
 
 class WhitelistTicketCreateTests(SimpleTestCase):
@@ -211,20 +249,6 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         _pass_if_admin(rule, "alice")
         ticket_detail.assert_not_called()
         apply_result.assert_not_called()
-
-    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
-    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_create_writes_returned_ticket_status(self, ticket_detail, apply_result):
-        from services.web.risk.whitelist.service import _apply_returned_status
-
-        detail = {"id": "ticket-1", "status": "finished", "status_display": "已完成"}
-        ticket_detail.return_value = detail
-        rule = SimpleNamespace(id=1, pk=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
-        _apply_returned_status(rule)
-        apply_result.assert_called_once_with(rule, detail)
-        mapped, display = map_whitelist_status(detail)
-        self.assertEqual(mapped, WhitelistStatus.REJECTED)
-        self.assertEqual(display, "已驳回")
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [

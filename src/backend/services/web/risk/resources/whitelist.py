@@ -150,7 +150,8 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
                 scene_id=scene_id,
                 risks=risks,
                 username=username,
-            )
+            ),
+            progress={},
         )
 
 
@@ -181,7 +182,7 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
         )
         if not isinstance(created, list):
             created = [created]
-        return [serialize_rule(item) for item in created]
+        return [serialize_rule(item, progress={}) for item in created]
 
 
 def _misreport_for_whitelist(risks, validated_request_data) -> None:
