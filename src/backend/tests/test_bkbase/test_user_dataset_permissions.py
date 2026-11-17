@@ -13,7 +13,7 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from api.bk_base_v4 import default as sdk
 from apps.meta.constants import SpaceType
 from services.web.bkbase import metadata, permissions
-from services.web.bkbase.exceptions import BKBaseResourceMappingError
+from services.web.bkbase.exceptions import BKBaseReadTimeout, BKBaseResourceMappingError
 from services.web.strategy_v2.resources import ListTables
 from services.web.strategy_v2.utils import table
 
@@ -136,7 +136,8 @@ class UserDatasetPermissionTests(SimpleTestCase):
         rows = permissions.list_user_rts(self.context)
         self.assertEqual([r["result_table_id"] for r in rows], ["7_alpha", "8_beta", "9_gamma"])
         self.assertEqual(set(rows[0]["storages"]), {"doris", "hdfs", "redis"})
-        self.assertEqual([c["params"].get("page") for c in self.calls], [None, 1, 2, 1])
+        self.assertCountEqual([c["params"].get("page") for c in self.calls], [None, 1, 2, 1])
+        self.assertEqual([c["params"]["page"] for c in self.calls if "/dataset/alpha/" in c["path"]], [1, 2])
         self.assertTrue(all(c.args[0] is self.request for c in self.auth.call_args_list))
         self.calls.clear()
         self.assertEqual(
@@ -150,8 +151,9 @@ class UserDatasetPermissionTests(SimpleTestCase):
             with self.subTest(logical=logical):
                 self.assertFalse(permissions.check_user_rt(self.context, rt_id=logical))
         self.pages[("alpha", 2)] = requests.Timeout("synthetic page failure")
-        with self.assertRaises(APIRequestError):
+        with self.assertRaises(BKBaseReadTimeout) as raised:
             permissions.check_user_rt(self.context, rt_id="7_alpha")
+        self.assertEqual(raised.exception.STATUS_CODE, 504)
 
     def test_biz_menu_comes_from_queryable_tables_and_real_business_names(self):
         self.assertEqual(
@@ -170,23 +172,17 @@ class UserDatasetPermissionTests(SimpleTestCase):
         self.assertEqual(menu, [{"label": "Synthetic 7_alpha", "value": "7_alpha"}])
         with mock.patch.object(
             metadata,
-            "get_result_tables_bulk",
-            side_effect=lambda groups: [
-                [
-                    {
-                        "result_table_id": logical,
-                        "bk_biz_id": int(logical.split("_", 1)[0]),
-                        "result_table_name": "Synthetic " + logical,
-                        "storages": {"doris": {"storage_type": "doris"}},
-                    }
-                    for logical in group["result_table_ids"]
-                ]
-                for group in groups
-            ],
+            "get_result_table",
+            side_effect=lambda logical, **kwargs: {
+                "result_table_id": logical,
+                "bk_biz_id": int(logical.split("_", 1)[0]),
+                "result_table_name": "Synthetic " + logical,
+                "storages": {"doris": {"storage_type": "doris"}},
+            },
         ), mock.patch.object(
             metadata,
             "get_source_capabilities",
-            side_effect=lambda rt_id: {
+            side_effect=lambda rt_id, **kwargs: {
                 "7_alpha": {"redis": True, "channel": False, "hdfs_dimensions": [True], "hdfs_unknown": False},
                 "8_beta": {"redis": False, "channel": False, "hdfs_dimensions": [False], "hdfs_unknown": False},
                 "9_gamma": {"redis": False, "channel": True, "hdfs_dimensions": [], "hdfs_unknown": False},
@@ -285,7 +281,7 @@ class UserDatasetPermissionTests(SimpleTestCase):
         with mock.patch.object(ListTables, "cache_type", None):
             result = ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 7})
         self.assertEqual(result, [{"label": "Synthetic 7_alpha", "value": "7_alpha"}])
-        self.assertEqual([call["params"].get("page") for call in self.calls], [None, 1, 2, 1])
+        self.assertCountEqual([call["params"].get("page") for call in self.calls], [None, 1, 2, 1])
         self.assertEqual(len({(call["path"], call["params"].get("page")) for call in self.calls}), 4)
         self.spaces.assert_not_called()
         self.assertTrue(all(call.args[0] is self.request for call in self.auth.call_args_list))

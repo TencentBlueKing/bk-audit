@@ -4,6 +4,8 @@
 平台及个人鉴权复用BkApiResource既有机制。
 """
 import abc
+from contextvars import ContextVar
+from time import monotonic
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
@@ -11,6 +13,7 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from requests.exceptions import Timeout as RequestTimeout
 from urllib3.util import Timeout
 
 from api.bk_base_v4.serializers import (
@@ -45,6 +48,9 @@ from api.bk_base_v4.serializers import (
     UserTablesRequestSerializer,
 )
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+
+READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
+READ_MAX_TIMEOUT = 10.0
 
 
 class BkBaseV4Resource(BkApiResource, abc.ABC):
@@ -82,7 +88,13 @@ class BkBaseV4Resource(BkApiResource, abc.ABC):
         return payload
 
     def before_request(self, kwargs):
-        """路径参数只进入URL，不混入业务JSON。"""
+        """隔离路径参数；仅在受控列表读取中为GET沿用剩余预算。"""
+        deadline = READ_DEADLINE.get()
+        if self.method == "GET" and deadline is not None:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise RequestTimeout("BKBase list read deadline exceeded")
+            kwargs["timeout"] = Timeout(total=min(READ_MAX_TIMEOUT, remaining))
         key = "params" if self.method == "GET" else "json"
         if key in kwargs:
             kwargs[key] = {k: v for k, v in kwargs[key].items() if k not in self.url_keys}

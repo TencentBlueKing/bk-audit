@@ -337,9 +337,11 @@ class TableCapabilitiesTests(SimpleTestCase):
             "11_stream": self.parse(self.binding("HdfsBinding", False)),
         }
         with mock.patch.object(table.bkbase_permissions, "get_project_data", return_value=rows), mock.patch.object(
-            metadata, "get_result_tables_bulk", return_value=[rows]
+            metadata,
+            "get_result_table",
+            side_effect=lambda rt_id, **kwargs: next(row for row in rows if row["result_table_id"] == rt_id),
         ), mock.patch.object(
-            metadata, "get_source_capabilities", side_effect=lambda rt_id: caps[rt_id]
+            metadata, "get_source_capabilities", side_effect=lambda rt_id, **kwargs: caps[rt_id]
         ), mock.patch.object(
             handler, "format_result_tables", side_effect=lambda values: values
         ):

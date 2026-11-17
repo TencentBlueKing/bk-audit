@@ -77,13 +77,17 @@ def _business_id(value):
     return int(value)
 
 
+@metadata.list_read_scope()
 def list_user_rts(context, *, bk_biz_id=None):
     """完整遍历用户有权项目，严格 query=True 后按租户逻辑 RT 全局去重。"""
     request = require_user(context)
     selected_biz = _business_id(bk_biz_id) if bk_biz_id is not None else None
     tables = {}
-    for namespace in _user_projects(context, request):
-        rows = metadata.list_datasets({**context, "namespace": namespace}, user_request=request)
+    projects = _user_projects(context, request)
+    batches = metadata.bounded_read_map(
+        lambda namespace: metadata.list_datasets({**context, "namespace": namespace}, user_request=request), projects
+    )
+    for rows in batches:
         for row in _rows(rows):
             grant = row.get("permissions")
             if not isinstance(grant, dict) or grant.get("query") is not True:
