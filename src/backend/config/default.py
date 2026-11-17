@@ -15,8 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-import json
-import os
+
 import sys
 
 from bk_audit.constants.utils import LOGGER_NAME
@@ -29,6 +28,7 @@ from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
 from api.ai_agent_codes import AIAgentCode
+from core.kms import DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME, get_secret, get_secret_json
 from core.observability import BKResourceAPIInstrumentor
 from core.utils.distutils import strtobool
 from core.utils.environ import get_env_or_raise
@@ -244,9 +244,9 @@ BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 # 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 为原有逻辑（所有 agent 共用，历史上早于日志检索迭代存在），
 # 注意：若配置的凭证与其网关环境不匹配会导致凭证错配，跨平台 agent 请一律使用 per-agent 变量。
 AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
-AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
+AI_AGENT_SECRET_KEY = get_secret("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
-AI_AUDIT_REPORT_SECRET_KEY = os.getenv("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
+AI_AUDIT_REPORT_SECRET_KEY = get_secret("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
 # 意图识别智能体环境路由开关（值为 AIAgentCode 枚举名，默认专属智能体）：
 # - 生产（上云）：默认 USER_INTENT，BK_API_URL_TMPL 独立域名模板默认链路直接跑通，零额外配置
 # - bkop：PaaS 注入的统一域名模板下 bp-ai-user-intent 未注册（404），配置
@@ -346,8 +346,10 @@ BK_RESOURCE = {
     "REQUEST_VERIFY": strtobool(os.getenv("BKAPP_API_REQUEST_VERIFY", "True")),
     "REQUEST_LOG_SPLIT_LENGTH": int(os.getenv("BKAPP_REQUEST_LOG_SPLIT_LENGTH", 1024)),
     "PLATFORM_AUTH_ENABLED": strtobool(os.getenv("BKAPP_PLATFORM_AUTH_ENABLED", "True")),
-    "PLATFORM_AUTH_ACCESS_TOKEN": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_TOKEN"),
-    "PLATFORM_AUTH_ACCESS_USERNAME": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", "admin"),
+    "PLATFORM_AUTH_ACCESS_TOKEN": get_secret("BKAPP_PLATFORM_AUTH_ACCESS_TOKEN"),
+    "PLATFORM_AUTH_ACCESS_USERNAME": get_secret(
+        "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME
+    ),
 }
 
 APPEND_SLASH = False
@@ -363,7 +365,7 @@ DATABASES["default"]['POOL_OPTIONS'] = {
 
 REDIS_HOST = get_env_or_raise("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+REDIS_PASSWORD = get_secret("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 
 CACHES["db"] = {
@@ -452,7 +454,7 @@ BKBASE_BATCH_RESOURCE_SET_ID = os.getenv("BKAPP_BKBASE_BATCH_RESOURCE", "default
 BKBASE_UDF_JSON_EXTRACT_FUNC = os.getenv("BKAPP_BKBASE_UDF_JSON_EXTRACT_FUNC", "udf_json_extract_one")
 BKBASE_UDF_BUILD_ORIGIN_DATA_FUNC = os.getenv("BKAPP_BKBASE_UDF_BUILD_ORIGIN_DATA_FUNC", "udf_build_origin_data")
 BKBASE_BUILD_ORIGIN_DATA_SEPERATOR = os.getenv("BKAPP_BKBASE_BUILD_ORIGIN_DATA_SEPERATOR", "|!@#$%^&*|")
-BKBASE_DATA_TOKEN = os.getenv("BKAPP_BKBASE_DATA_TOKEN", "")
+BKBASE_DATA_TOKEN = get_secret("BKAPP_BKBASE_DATA_TOKEN", "")
 
 # BKBase协议版本独立于多租户开关，默认保留V3。
 BKBASE_API_VERSION = os.getenv("BKAPP_BKBASE_API_VERSION", "v3")
@@ -467,7 +469,7 @@ AUTHENTICATION_BACKENDS += ("apigw_manager.apigw.authentication.UserModelBackend
 
 # SnapshotUserInfo
 SNAPSHOT_USERINFO_RESOURCE_URL = os.getenv("BKAPP_FETCH_USER_INFO_URL", "")
-SNAPSHOT_USERINFO_RESOURCE_TOKEN = os.getenv("BKAPP_FETCH_USER_INFO_TOKEN", "")
+SNAPSHOT_USERINFO_RESOURCE_TOKEN = get_secret("BKAPP_FETCH_USER_INFO_TOKEN", "")
 
 # Notice
 NOTICE_AGG_MINUTES = int(os.getenv("BKAPP_NOTICE_AGG_MINUTES", 30))
@@ -635,8 +637,8 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = "unsafe-none"
 DEFAULT_QUEUE_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_QUEUE_STORAGE_EXPIRES", 1))
 # HDFS存储时长(天) -1 表示不限制
 DEFAULT_HDFS_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_HDFS_STORAGE_EXPIRES", -1))
-# 审计 kafka 配置
-KAFKA_CONFIG = json.loads(os.getenv("BKAPP_INIT_KAFKA_CONFIG", "{}"))
+# 审计 kafka 配置（KMS 注入的 JSON 型凭据，回落默认空配置）
+KAFKA_CONFIG = get_secret_json("BKAPP_INIT_KAFKA_CONFIG", {})
 # 事件 kafka 拉取超时时长
 EVENT_KAFKA_TIMEOUT_MS = int(os.getenv("BKAPP_EVENT_KAFKA_TIMEOUT_MS", 1000))
 # 事件 kafka 最大拉取记录数
@@ -744,7 +746,7 @@ PROCESS_STUCK_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_STUCK_LOG_TASK_HOUR", "*/
 ALERT_DATA_ID = int(os.getenv("BKAPP_ALERT_DATA_ID", 0))
 
 # BKM 自定义事件数据源访问令牌，必须与 ALERT_DATA_ID 属于同一数据源。
-ALERT_ACCESS_TOKEN = os.getenv("BKAPP_ALERT_ACCESS_TOKEN", "")
+ALERT_ACCESS_TOKEN = get_secret("BKAPP_ALERT_ACCESS_TOKEN", "")
 
 # Metric 异步上报 Celery Task 的硬时限（秒），只限制 BKM 指标 API 投递任务，
 # 不是 Message、Attachment 或其他业务任务的执行超时。
@@ -755,7 +757,7 @@ MONITOR_METRIC_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_METRIC_TASK_TIMEOUT",
 LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
 
 # 共享 BKM 自定义 Metric 数据源访问令牌，必须与 LOG_EXPORT_STATUS_DATA_ID 配对使用。
-LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
+LOG_EXPORT_STATUS_ACCESS_TOKEN = get_secret("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
 
 # Asset Observability（资产可观测性）
 # 卡在启动中超过该时长（秒）视为异常，默认 6 小时
