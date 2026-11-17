@@ -4,9 +4,10 @@
 不共享缓存带个人收藏状态的完整Dataset。
 """
 import re
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, CancelledError, ThreadPoolExecutor, wait
 from contextlib import contextmanager
-from contextvars import copy_context
+from contextvars import ContextVar, copy_context
+from threading import Event
 from time import monotonic
 
 from bk_resource import api
@@ -26,10 +27,14 @@ from services.web.bkbase.exceptions import BKBaseReadTimeout, BKBaseResourceMapp
 
 LIST_READ_BUDGET_SECONDS = 50.0
 LIST_READ_WORKERS = 16
+_READ_CANCELLED = ContextVar("bkbase_list_read_cancelled", default=None)
 
 
 def _remaining_read_time():
-    """在每次翻页/派发及最终返回前核对同一列表预算。"""
+    """翻页、派发和返回前检查本次读取的取消信号及预算。"""
+    cancelled = _READ_CANCELLED.get()
+    if cancelled is not None and cancelled.is_set():
+        raise CancelledError("BKBase list read cancelled")
     deadline = READ_DEADLINE.get()
     if deadline is None:
         return None
@@ -54,27 +59,31 @@ def _is_request_timeout(error):
 
 @contextmanager
 def list_read_scope():
-    """预算只属于本次读取；嵌套调用及工作线程沿用同一截止时间。"""
-    token = None
+    """嵌套调用和工作线程共享本次预算及取消信号，退出后恢复上下文。"""
+    token, cancel_token = None, None
     if READ_DEADLINE.get() is None:
         token = READ_DEADLINE.set(monotonic() + LIST_READ_BUDGET_SECONDS)
+    if _READ_CANCELLED.get() is None:
+        cancel_token = _READ_CANCELLED.set(Event())
     try:
         _remaining_read_time()
         yield
         _remaining_read_time()
     except Exception as error:
         if not isinstance(error, BKBaseReadTimeout) and (
-            monotonic() >= READ_DEADLINE.get() or _is_request_timeout(error)
+            _is_request_timeout(error) or (not _READ_CANCELLED.get().is_set() and monotonic() >= READ_DEADLINE.get())
         ):
             raise BKBaseReadTimeout() from error
         raise
     finally:
+        if cancel_token is not None:
+            _READ_CANCELLED.reset(cancel_token)
         if token is not None:
             READ_DEADLINE.reset(token)
 
 
 def bounded_read_map(function, items):
-    """最多保留一窗任务，按输入顺序重组；失败取消待执行任务并等待在途读取。"""
+    """最多保留一窗任务并按输入顺序返回；首错停止后续分页，等待在途读取。"""
     items = list(items)
     if not items:
         return []
@@ -86,6 +95,7 @@ def bounded_read_map(function, items):
             while index < len(items) or pending:
                 _remaining_read_time()
                 while index < len(items) and len(pending) < LIST_READ_WORKERS:
+                    _remaining_read_time()
                     pending[executor.submit(copy_context().run, function, items[index])] = index
                     index += 1
                 done, _ = wait(pending, timeout=_remaining_read_time(), return_when=FIRST_COMPLETED)
@@ -96,6 +106,10 @@ def bounded_read_map(function, items):
                 for future in done:
                     del pending[future]
             return results
+        except BaseException:
+            # 先阻止已运行任务继续翻页，再等待在途GET；主线程保留首个错误。
+            _READ_CANCELLED.get().set()
+            raise
         finally:
             for future in pending:
                 future.cancel()

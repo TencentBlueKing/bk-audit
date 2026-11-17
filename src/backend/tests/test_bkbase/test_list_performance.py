@@ -3,6 +3,7 @@ import json
 import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
@@ -13,6 +14,7 @@ from bk_resource.exceptions import APIRequestError
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from urllib3.exceptions import ReadTimeoutError
 
+from api.bk_base.default import GetMineResultTables
 from api.bk_base_v4 import default as sdk
 from apps.meta.constants import SpaceType
 from services.web.bkbase import metadata, permissions
@@ -117,7 +119,7 @@ class ListPerformanceTests(SimpleTestCase):
                 for name in self.projects
             ]
         elif path.endswith("/dataset_list/"):
-            if params.get("dataset_name"):
+            if auth.get("bk_username") == "synthetic_admin":
                 kind = "DatasetList"
                 data = {"total": 1, "list": [{"dataset_name": params["dataset_name"], "storage_type": "doris"}]}
             else:
@@ -127,6 +129,8 @@ class ListPerformanceTests(SimpleTestCase):
                 if auth["bk_username"] == "user_b":
                     for row in rows:
                         row["permissions"]["query"] = False
+                if params.get("dataset_name"):
+                    rows = [row for row in rows if params["dataset_name"] in row["dataset_name"]]
                 page, size = params["page"], params["page_size"]
                 data = {"total": len(rows), "list": rows[(page - 1) * size : page * size]}
         elif "/detail/" in path:
@@ -196,10 +200,164 @@ class ListPerformanceTests(SimpleTestCase):
         self.assertTrue(all(call.args[0] is self.request for call in self.auth.call_args_list))
 
     def test_mine_keeps_all_projects_pages_and_strict_query_permissions(self):
+        # 过滤前要多读两页；147_也匹配47_，必须继续按业务号精确剔除。
+        unrelated = [{**self.row(i), "dataset_name": f"48_other_{i}"} for i in range(201)]
+        self.rows["project_999"] = unrelated + self.rows["project_999"]
+        self.rows["shared"].append({**self.row(300), "dataset_name": "147_other_300"})
         result = ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
         self.assertEqual([row["value"] for row in result], [self.rt_id(i) for i in range(152)])
         self.assertEqual(Counter(row["kind"] for row in self.calls), {"UserNamespacesList": 1, "UserDatasetList": 123})
         self.assertTrue(any("project_999" in row["path"] and row["params"].get("page") == 2 for row in self.calls))
+
+    def test_unselected_business_keeps_other_business_tables(self):
+        self.rows["shared"].append({**self.row(300), "dataset_name": "147_other_300"})
+        result = permissions.get_mine_result_tables(bk_username="user_a")
+        self.assertEqual(
+            [row["result_table_id"] for row in result],
+            [self.rt_id(i) for i in range(152)] + ["147_other_300"],
+        )
+
+    @override_settings(BKBASE_API_VERSION="v3")
+    def test_v3_mine_keeps_legacy_endpoint_and_response(self):
+        expected = [{"result_table_id": "47_legacy", "result_table_name": "Legacy", "bk_biz_id": 47}]
+
+        def legacy(method, url, **kwargs):
+            self.assertEqual(method, "GET")
+            self.assertTrue(url.endswith("/v3/meta/result_tables/mine/"))
+            self.assertEqual(kwargs["params"]["bk_biz_id"], 47)
+            self.assertEqual(kwargs["params"]["bk_username"], "user_a")
+            self.assertNotIn("dataset_name", kwargs["params"])
+            response = requests.Response()
+            response.status_code = 200
+            response.url = url
+            response.request = requests.Request(method, url).prepare()
+            response._content = json.dumps({"result": True, "code": "00", "data": expected}).encode()
+            return response
+
+        with mock.patch("requests.sessions.Session.request", side_effect=legacy), mock.patch.object(
+            GetMineResultTables, "build_auth_args", return_value={"bk_token": "synthetic"}
+        ):
+            self.assertEqual(permissions.get_mine_result_tables(bk_username="user_a", bk_biz_id=47), expected)
+
+    def test_successful_map_keeps_input_order_and_default_concurrency_limit(self):
+        barrier = threading.Barrier(16)
+        last_ready = threading.Event()
+        active, peak = 0, 0
+        completed = []
+
+        def worker(index):
+            nonlocal active, peak
+            with self.lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                if index < 16:
+                    barrier.wait(timeout=2)
+                    if index == 0:
+                        self.assertTrue(last_ready.wait(timeout=2))
+                with self.lock:
+                    completed.append(index)
+                if index == 15:
+                    last_ready.set()
+                return index * 2
+            finally:
+                with self.lock:
+                    active -= 1
+
+        self.assertEqual(metadata.bounded_read_map(worker, range(20)), list(range(0, 40, 2)))
+        self.assertEqual(peak, 16)
+        self.assertLess(completed.index(15), completed.index(0))
+        self.assertFalse(any(thread.name.startswith("bkbase-list") for thread in threading.enumerate()))
+        self.assertIsNone(sdk.READ_DEADLINE.get())
+
+    def test_failed_paginated_read_stops_new_pages_and_preserves_first_error(self):
+        for deadline_during_join in (False, True):
+            with self.subTest(deadline_during_join=deadline_during_join):
+                self.projects = [f"failure_{i}" for i in range(8)]
+                self.rows["failure_1"] = [self.row(i) for i in range(201)]
+                barrier = threading.Barrier(2)
+                joining = threading.Event()
+                entered, exited = [], []
+                clock_offset = [0]
+                failure = requests.ConnectionError("Synthetic first error")
+                original = self.transport
+
+                class JoiningExecutor(ThreadPoolExecutor):
+                    def shutdown(executor, *args, **kwargs):
+                        # 仅控制在途响应何时返回，不替换生产调度/分页逻辑。
+                        if deadline_during_join:
+                            clock_offset[0] = 51
+                        joining.set()
+                        return super().shutdown(*args, **kwargs)
+
+                def paginated(method, url, **kwargs):
+                    if not url.endswith("/dataset_list/"):
+                        return original(method, url, **kwargs)
+                    namespace = url.split("/dataset/", 1)[1].split("/", 1)[0]
+                    page = kwargs["params"]["page"]
+                    entered.append((namespace, page))
+                    try:
+                        if page == 1:
+                            barrier.wait(timeout=2)
+                            if namespace == "failure_0":
+                                raise failure
+                            self.assertTrue(joining.wait(timeout=2))
+                        return original(method, url, **kwargs)
+                    finally:
+                        exited.append((namespace, page))
+
+                with mock.patch.object(metadata, "LIST_READ_WORKERS", 2), mock.patch.object(
+                    metadata, "ThreadPoolExecutor", JoiningExecutor
+                ), mock.patch.object(
+                    metadata, "monotonic", side_effect=lambda: time.monotonic() + clock_offset[0]
+                ), mock.patch(
+                    "requests.sessions.Session.request", side_effect=paginated
+                ), self.assertRaises(
+                    APIRequestError
+                ) as raised:
+                    ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
+                self.assertIs(raised.exception.__cause__, failure)
+                self.assertEqual(sorted(entered), [("failure_0", 1), ("failure_1", 1)])
+                self.assertCountEqual(exited, entered)
+                self.assertFalse(any(thread.name.startswith("bkbase-list") for thread in threading.enumerate()))
+                self.assertIsNone(sdk.READ_DEADLINE.get())
+
+    def test_failed_scope_does_not_cancel_concurrent_or_next_request(self):
+        barrier = threading.Barrier(2)
+        failed = threading.Event()
+        original = self.transport
+        self.rows["success"] = [self.row(i) for i in range(201)]
+
+        def isolated(method, url, **kwargs):
+            namespace = url.split("/dataset/", 1)[1].split("/", 1)[0]
+            if kwargs["params"]["page"] == 1:
+                barrier.wait(timeout=2)
+                if namespace == "failure":
+                    raise requests.ConnectionError("Synthetic isolated failure")
+                self.assertTrue(failed.wait(timeout=2))
+            return original(method, url, **kwargs)
+
+        def read(namespace):
+            try:
+                return metadata.bounded_read_map(
+                    lambda ns: metadata.list_datasets(
+                        {"tenant": "tenant_a", "namespace": ns}, user_request=self.request
+                    ),
+                    [namespace],
+                )[0]
+            finally:
+                if namespace == "failure":
+                    failed.set()
+
+        with mock.patch("requests.sessions.Session.request", side_effect=isolated), ThreadPoolExecutor(2) as executor:
+            bad, good = executor.submit(read, "failure"), executor.submit(read, "success")
+            with self.assertRaises(APIRequestError):
+                bad.result(timeout=3)
+            self.assertEqual(
+                [row["dataset_name"] for row in good.result(timeout=3)], [self.rt_id(i) for i in range(201)]
+            )
+        self.assertEqual(len(permissions.get_mine_result_tables(bk_username="user_a")), 152)
+        self.assertIsNone(sdk.READ_DEADLINE.get())
 
     def test_biz_rt_keeps_formal_detail_alias_when_personal_listing_alias_differs(self):
         self.projects = ["project_999"]
