@@ -69,9 +69,10 @@
   const sourceList = computed(() => (props.list.length ? props.list : packageFilterOptions.value));
 
   const normalize = (value: Props['value']) => {
-    if (Array.isArray(value)) return value.map(item => String(item));
-    if (value === undefined || value === null || value === '') return [];
-    return [String(value)];
+    const raw = Array.isArray(value) ? value : (
+      value === undefined || value === null || value === '' ? [] : [value]
+    );
+    return raw.flatMap(item => String(item).split(',')).map(item => item.trim()).filter(Boolean);
   };
 
   const checked = ref<string[]>([]);
