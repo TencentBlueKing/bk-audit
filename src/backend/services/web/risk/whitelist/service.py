@@ -311,13 +311,27 @@ def _ticket_on_rule(rule: RiskWhitelist) -> dict:
     return ticket
 
 
+def _node_ticket(rule: RiskWhitelist, ticket: dict = None) -> dict:
+    """和创建白名单写节点一样，申请状态以白名单当前状态为准。回调只补处理人、步骤和意见。"""
+
+    stored = _ticket_on_rule(rule)
+    incoming = ticket or {}
+    for key in ("sn", "frontend_url"):
+        if not stored.get(key) and incoming.get(key):
+            stored[key] = incoming[key]
+    for key in ("current_processors", "current_steps", "comment"):
+        if key in incoming:
+            stored[key] = incoming[key]
+    return stored
+
+
 def write_whitelist_nodes(rule: RiskWhitelist, risks) -> None:
     """工单创建完成后再写风险节点。"""
 
     now = datetime.datetime.now()
     with transaction.atomic():
         current = RiskWhitelist.objects.select_for_update().get(pk=rule.pk)
-        ticket = _ticket_on_rule(current)
+        ticket = _node_ticket(current)
         payload = {"whitelist": _node_payload(current, ticket)}
         process_result = _ticket_process_result(current, ticket)
         _insert_whitelist_nodes(current, risks, now, payload, process_result)
@@ -345,7 +359,7 @@ def refresh_whitelist_nodes(rule: RiskWhitelist, ticket: dict = None) -> None:
 
     if not rule.risk_id:
         return
-    ticket = ticket or {}
+    ticket = _node_ticket(rule, ticket)
     nodes = TicketNode.objects.filter(risk_id=rule.risk_id, action=WHITELIST_NODE_ACTION)
     for node in nodes:
         if not _node_belongs_to_rule(node, rule):
@@ -508,13 +522,14 @@ def review_whitelist(rule: RiskWhitelist, method: str, operator: str, reject_rea
 
 
 def apply_whitelist_result(rule: RiskWhitelist, ticket: dict) -> RiskWhitelist:
-    """终态才改状态。已经不是待审批时直接返回。"""
+    """终态才改状态。已经不是待审批时仍把当前状态回写到风险节点。"""
 
     status, _display = map_whitelist_status(ticket)
     comment = (ticket or {}).get("comment") or ""
     with transaction.atomic():
         current = RiskWhitelist.objects.select_for_update().get(pk=rule.pk)
         if current.status != WhitelistStatus.PENDING:
+            refresh_whitelist_nodes(current, ticket)
             return current
         if status == WhitelistStatus.ACTIVE:
             current.status = WhitelistStatus.ACTIVE
@@ -1017,10 +1032,12 @@ def _write_terminal_status(rule: RiskWhitelist, ticket: dict) -> None:
     except Exception:
         logger.exception("[RiskWhitelist] write ticket status failed, id=%s", getattr(rule, "id", None))
     if rule.status != WhitelistStatus.PENDING:
+        refresh_whitelist_nodes(rule, ticket)
         return
     stored = RiskWhitelist.objects.filter(pk=rule.pk).values_list("status", "reject_reason").first()
     if stored and stored[0] != WhitelistStatus.PENDING:
         rule.status, rule.reject_reason = stored
+        refresh_whitelist_nodes(rule, ticket)
         return
     comment = (ticket or {}).get("comment") or ""
     reject_reason = "" if mapped == WhitelistStatus.ACTIVE else (comment or getattr(rule, "reject_reason", "") or "")
@@ -1033,8 +1050,44 @@ def _write_terminal_status(rule: RiskWhitelist, ticket: dict) -> None:
         return
     rule.status = mapped
     rule.reject_reason = reject_reason
+    refresh_whitelist_nodes(rule, ticket)
     if mapped == WhitelistStatus.ACTIVE:
         _close_source_risk(rule)
+
+
+def sync_whitelist_nodes_for_risk(risk_id: str) -> None:
+    """打开风险时，把已经生效或驳回的白名单状态写回节点。节点上的申请状态是提工单时的快照。"""
+
+    from services.web.risk.models import TicketNode
+
+    if not risk_id:
+        return
+    nodes = list(TicketNode.objects.filter(risk_id=risk_id, action=WHITELIST_NODE_ACTION))
+    if not nodes:
+        return
+    rule_ids = []
+    for node in nodes:
+        rule_id = ((node.extra or {}).get("whitelist") or {}).get("rule_id")
+        if rule_id not in (None, ""):
+            rule_ids.append(rule_id)
+    if rule_ids:
+        rules = list(RiskWhitelist.objects.filter(pk__in=rule_ids))
+    else:
+        rules = list(RiskWhitelist.objects.filter(risk_id=risk_id))
+    for rule in rules:
+        if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.REJECTED}:
+            continue
+        expected = WhitelistStatus.ACTIVE if rule.status == WhitelistStatus.ACTIVE else WhitelistStatus.REJECTED
+        stale = False
+        for node in nodes:
+            if not _node_belongs_to_rule(node, rule):
+                continue
+            current = ((node.extra or {}).get("whitelist") or {}).get("itsm_status")
+            if current != expected:
+                stale = True
+                break
+        if stale:
+            refresh_whitelist_nodes(rule)
 
 
 def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = None) -> dict:

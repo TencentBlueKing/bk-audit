@@ -54,6 +54,7 @@ from services.web.risk.whitelist.service import (
     get_rule_for_admin,
     managed_scene_ids,
     progress_map,
+    refresh_whitelist_nodes,
     renew_whitelist,
     review_whitelist,
     serialize_rule,
@@ -410,4 +411,6 @@ class RiskWhitelistCallback(RiskWhitelistMeta):
             rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
         if rule.status == WhitelistStatus.PENDING:
             rule = apply_whitelist_result(rule, ticket)
+        elif rule.status in {WhitelistStatus.ACTIVE, WhitelistStatus.REJECTED}:
+            refresh_whitelist_nodes(rule, ticket)
         return {"result": True, "message": "success", "status": rule.status}

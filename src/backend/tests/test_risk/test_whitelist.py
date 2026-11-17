@@ -177,6 +177,36 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertEqual(active["status"], ITSMV4TicketStatus.FINISHED)
         self.assertTrue(active["approve_result"])
 
+    def test_active_rule_node_ignores_running_ticket(self):
+        from services.web.risk.whitelist.service import refresh_whitelist_nodes
+
+        rule = SimpleNamespace(
+            id=1,
+            risk_id="risk-1",
+            status=WhitelistStatus.ACTIVE,
+            itsm_ticket_id="ticket-1",
+            itsm_sn="SN1",
+            itsm_ticket_url="http://itsm/1",
+            match_scope={},
+            created_by="alice",
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            reason="接受",
+            created_at=None,
+            is_permanent=False,
+            expire_at=None,
+        )
+        node = SimpleNamespace(
+            extra={"whitelist": {"rule_id": "1", "itsm_status": WhitelistStatus.PENDING, "itsm_status_display": "待审批"}},
+            process_result={"ticket": {"status": WhitelistStatus.PENDING, "status_display": "待审批"}},
+        )
+        node.save = lambda update_fields=None: None
+        with patch("services.web.risk.models.TicketNode") as ticket_node:
+            ticket_node.objects.filter.return_value = [node]
+            refresh_whitelist_nodes(rule, {"id": "ticket-1", "status": "running", "status_display": "审批中"})
+        self.assertEqual(node.extra["whitelist"]["itsm_status"], WhitelistStatus.ACTIVE)
+        self.assertEqual(node.extra["whitelist"]["itsm_status_display"], "生效中")
+        self.assertEqual(node.process_result["ticket"]["status_display"], "生效中")
+
 
 class WhitelistTicketCreateTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service._abort_whitelist")
@@ -404,7 +434,14 @@ class WhitelistDurationTests(SimpleTestCase):
     def test_list_writes_active_when_ticket_is_finished(self, ticket_detail, apply_result):
         ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
         apply_result.return_value = SimpleNamespace(status=WhitelistStatus.ACTIVE, reject_reason="")
-        rule = SimpleNamespace(id=1, pk=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1", reject_reason="")
+        rule = SimpleNamespace(
+            id=1,
+            pk=1,
+            status=WhitelistStatus.PENDING,
+            itsm_ticket_id="ticket-1",
+            reject_reason="",
+            risk_id="",
+        )
         progress_map([rule])
         apply_result.assert_called_once()
         self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
@@ -669,6 +706,21 @@ class WhitelistFlowTests(SimpleTestCase):
         self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
         close_risk.assert_called_once()
 
+    @patch("services.web.risk.resources.whitelist.refresh_whitelist_nodes")
+    @patch("services.web.risk.resources.whitelist.apply_whitelist_result")
+    def test_finished_callback_repairs_node_when_already_active(self, apply_result, refresh_nodes):
+        rule = _Rule(status=WhitelistStatus.ACTIVE, callback_token="token", risk_id="risk-1")
+        rule.itsm_ticket_id = "ticket-1"
+        manager = _WhitelistManager()
+        manager.rules.append(rule)
+        ticket = {"id": "ticket-1", "status": "finished", "approve_result": True}
+        with patch.object(RiskWhitelist, "objects", manager):
+            result = RiskWhitelistCallback().perform_request({"callback_token": "token", "ticket": ticket})
+        self.assertTrue(result["result"])
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        apply_result.assert_not_called()
+        refresh_nodes.assert_called_once_with(rule, ticket)
+
 
 class WhitelistPollTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
@@ -682,7 +734,7 @@ class WhitelistPollTests(SimpleTestCase):
                 {"action": "end"},
             ]
         }
-        rule = SimpleNamespace(id=7, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
+        rule = SimpleNamespace(id=7, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1", risk_id="")
         _poll_whitelist_ticket(rule)
         ticket = apply_result.call_args.args[1]
         self.assertEqual(ticket["status"], ITSMV4TicketStatus.FINISHED)

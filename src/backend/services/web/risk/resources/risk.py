@@ -242,6 +242,9 @@ class RetrieveRisk(RiskMeta):
             many=False,
         )
         risk = data[0]
+        from services.web.risk.whitelist.service import sync_whitelist_nodes_for_risk
+
+        sync_whitelist_nodes_for_risk(risk_obj.risk_id)
         nodes = (
             TicketNode.objects.filter(risk_id=risk["risk_id"], is_test=False)
             .exclude(action=RiskExperienceRecord.__name__)
