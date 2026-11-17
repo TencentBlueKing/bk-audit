@@ -26,10 +26,11 @@ import os
 # Django starts so that shared_task will use this app.
 from blueapps.core.celery import celery_app
 
-from core.utils.environ import get_env_or_raise
+from core.utils.environ import _kms_cache_value, get_env_or_raise
 
 # 这些变量将由平台通过环境变量提供给应用，本地开发时需手动配置
-APP_CODE = os.getenv("BKPAAS_APP_ID", "bk_audit")
+# APP_CODE 在 env 缺失时回落 KMS 凭据表（BKPAAS_APP_ID），仍是 KMS 可管理的密钥
+APP_CODE = os.getenv("BKPAAS_APP_ID", _kms_cache_value("BKPAAS_APP_ID") or "bk_audit")
 # 应用用于调用云 API 的 Secret
 SECRET_KEY = get_env_or_raise("BKPAAS_APP_SECRET")
 # SaaS运行版本，如非必要请勿修改
