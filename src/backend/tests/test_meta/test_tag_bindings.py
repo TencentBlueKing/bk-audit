@@ -110,6 +110,58 @@ class TagBindingsTest(TestCase):
             ["new-tag", "old-tag"],
         )
 
+    def test_multiple_new_tags_keep_request_order(self):
+        """同次新增多个已有标签时，按请求顺序创建绑定，而不是按 tag_id 排序"""
+        tag_b = Tag.objects.create(tag_name="order-tag-b")
+        tag_a = Tag.objects.create(tag_name="order-tag-a")
+
+        result = self.save_tags("strategy", self.strategy.strategy_id, [tag_a.tag_name, tag_b.tag_name])
+
+        self.assertEqual([item["tag_name"] for item in result], [tag_a.tag_name, tag_b.tag_name])
+        self.assertEqual(
+            list(
+                StrategyTag.objects.filter(strategy_id=self.strategy.strategy_id)
+                .order_by("id")
+                .values_list("tag__tag_name", flat=True)
+            ),
+            [tag_a.tag_name, tag_b.tag_name],
+        )
+
+    def test_strategy_save_tags_keep_request_order(self):
+        """策略保存路径的同次新增多标签也保持请求顺序"""
+        from services.web.strategy_v2.resources import CreateStrategy
+
+        tag_b = Tag.objects.create(tag_name="strategy-order-b")
+        tag_a = Tag.objects.create(tag_name="strategy-order-a")
+
+        CreateStrategy()._save_tags(self.strategy.strategy_id, [tag_a.tag_name, tag_b.tag_name])
+
+        self.assertEqual(
+            list(
+                StrategyTag.objects.filter(strategy_id=self.strategy.strategy_id)
+                .order_by("id")
+                .values_list("tag__tag_name", flat=True)
+            ),
+            [tag_a.tag_name, tag_b.tag_name],
+        )
+
+    def test_link_table_save_tags_keep_request_order(self):
+        """联表保存路径的同次新增多标签也保持请求顺序"""
+        from services.web.strategy_v2.resources import CreateLinkTable
+
+        tag_b = Tag.objects.create(tag_name="link-order-b")
+        tag_a = Tag.objects.create(tag_name="link-order-a")
+
+        CreateLinkTable()._save_tags(self.link_table.uid, [tag_a.tag_name, tag_b.tag_name])
+
+        tag_ids = list(
+            LinkTableTag.objects.filter(link_table_uid=self.link_table.uid)
+            .order_by("id")
+            .values_list("tag_id", flat=True)
+        )
+        tag_name_by_id = {tag.tag_id: tag.tag_name for tag in Tag.objects.filter(tag_id__in=tag_ids)}
+        self.assertEqual([tag_name_by_id[tag_id] for tag_id in tag_ids], [tag_a.tag_name, tag_b.tag_name])
+
     def test_clear_strategy_tags(self):
         self.save_tags("strategy", self.strategy.strategy_id, ["tag-a"])
         result = self.save_tags("strategy", self.strategy.strategy_id, [])
