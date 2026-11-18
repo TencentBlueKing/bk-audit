@@ -39,9 +39,18 @@ def create_missing_tag_bindings_in_order(
 
     save_tags 返回的标签受 Tag.Meta.ordering 影响，不能直接按返回顺序创建；
     这里按请求顺序把标签名映射为 tag_id，保序去重后只创建尚未绑定的部分。
+    save_tags 返回的是库内规范名，MySQL CI 排序规则下请求名可能与规范名仅大小写/重音不同，
+    因此精确名未命中时按数据库语义再解析一次，避免把已复用的标签当作未知标签漏绑。
     """
     tag_id_by_name = {item["tag_name"]: item["tag_id"] for item in tags}
-    ordered_tag_ids = list(dict.fromkeys(tag_id_by_name[name] for name in tag_names if name in tag_id_by_name))
+    ordered_tag_ids = []
+    for name in tag_names:
+        tag_id = tag_id_by_name.get(name)
+        if tag_id is None:
+            tag_id = Tag.objects.filter(tag_name=name).order_by("tag_id").values_list("tag_id", flat=True).first()
+        if tag_id is not None:
+            ordered_tag_ids.append(tag_id)
+    ordered_tag_ids = list(dict.fromkeys(ordered_tag_ids))
     relation_model.objects.bulk_create(
         [
             relation_model(**{relation_resource_field: resource_uid, "tag_id": tag_id})
