@@ -89,7 +89,15 @@ class APIRenderer(JSONRenderer):
             return None
         if inner.get("err_type") in {"non_json_response", "request_error"}:
             return _TOOL_EXECUTE_CONTACT_MESSAGE
-        if inner.get("message") == _TOOL_EXECUTE_CONTACT_MESSAGE:
+        result = inner.get("result")
+        if not isinstance(result, dict):
+            return None
+        third_party_message = result.get("message")
+        if not isinstance(third_party_message, str) or not third_party_message.strip():
+            return None
+        result_failed = result.get("result") is False
+        status_code = inner.get("status_code")
+        if result_failed or (isinstance(status_code, int) and status_code >= 400):
             return _TOOL_EXECUTE_CONTACT_MESSAGE
         return None
 

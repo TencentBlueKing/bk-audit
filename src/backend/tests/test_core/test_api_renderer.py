@@ -42,15 +42,16 @@ class TestAPIRenderer(SimpleTestCase):
             {
                 "data": {
                     "status_code": 404,
-                    "result": {"message": "No Risk matches the given query."},
+                    "result": {"result": False, "message": "No Risk matches the given query."},
                     "err_type": "none",
-                    "message": "内部错误，并联系场景管理员处理",
+                    "message": "",
                 },
                 "tool_type": "api",
             }
         )
 
         self.assertEqual(payload["message"], "内部错误，并联系场景管理员处理")
+        self.assertEqual(payload["data"]["data"]["message"], "")
         self.assertTrue(payload["result"])
         self.assertEqual(payload["code"], 0)
 

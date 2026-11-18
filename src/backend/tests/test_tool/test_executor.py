@@ -1189,7 +1189,7 @@ class ApiToolExecutorTestCase(DjangoTestCase):
         self.assertEqual(result.status_code, 404)
         self.assertEqual(result.result, mock_json_content)
         self.assertEqual(result.err_type, ApiToolErrorType.NONE)
-        self.assertEqual(result.message, "内部错误，并联系场景管理员处理")
+        self.assertEqual(result.message, "")
 
     @patch('requests.request')
     def test_execute_non_json_response(self, mock_requests_request):

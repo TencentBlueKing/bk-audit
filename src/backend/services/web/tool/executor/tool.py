@@ -555,14 +555,11 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
                         response.status_code,
                         third_party_message.strip()[:500],
                     )
-                    returned_message = gettext("内部错误，并联系场景管理员处理")
-                else:
-                    returned_message = ""
                 return ApiToolExecuteResult(
                     status_code=response.status_code,
                     result=parsed_result,
                     err_type=ApiToolErrorType.NONE,
-                    message=returned_message,
+                    message="",
                 )
             except ValueError:
                 return ApiToolExecuteResult(
