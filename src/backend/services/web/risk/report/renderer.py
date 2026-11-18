@@ -343,7 +343,11 @@ def _render_template(
     # 2. 使用线程池并发执行Provider调用；已完成变量从当前渲染任务复用
     checkpoint_results: dict[str, Any] = {}
     if checkpoint_key:
-        cached = cache.get(_checkpoint_cache_key(checkpoint_key))
+        try:
+            cached = cache.get(_checkpoint_cache_key(checkpoint_key))
+        except Exception:  # NOCC:broad-except(缓存异常降级为无 checkpoint，不影响渲染)
+            logger_celery.exception("[RenderTemplate] checkpoint load failed")
+            cached = None
         if isinstance(cached, dict):
             checkpoint_results.update(cached)
     results: dict[str, Any] = dict(checkpoint_results)
@@ -377,7 +381,10 @@ def _render_template(
     if rate_limit_error is not None:
         # 成功变量一次性写入 checkpoint，重投时不会再执行；限流异常交给 AIAgentTask 退避重投
         if checkpoint_key:
-            cache.set(_checkpoint_cache_key(checkpoint_key), checkpoint_results, timeout=_CHECKPOINT_TIMEOUT)
+            try:
+                cache.set(_checkpoint_cache_key(checkpoint_key), checkpoint_results, timeout=_CHECKPOINT_TIMEOUT)
+            except Exception:  # NOCC:broad-except(写入失败不能覆盖限流异常，否则重投语义丢失)
+                logger_celery.exception("[RenderTemplate] checkpoint save failed")
         raise rate_limit_error
 
     # 3. 构建渲染上下文
@@ -392,7 +399,10 @@ def _render_template(
         final_result = f"[Render Error: {e}]"
 
     if checkpoint_key:
-        cache.delete(_checkpoint_cache_key(checkpoint_key))
+        try:
+            cache.delete(_checkpoint_cache_key(checkpoint_key))
+        except Exception:  # NOCC:broad-except(清理失败不能影响已完成的渲染结果)
+            logger_celery.exception("[RenderTemplate] checkpoint clear failed")
 
     return final_result
 
