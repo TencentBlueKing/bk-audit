@@ -166,6 +166,7 @@
   .desc-row {
     display: flex;
     gap: var(--bk-theme-space-12);
+    min-width: 0;
     margin-bottom: var(--bk-theme-space-8);
     font-size: var(--bk-theme-font-size-base);
     line-height: var(--bk-theme-line-height-base);
@@ -179,9 +180,14 @@
     color: var(--bk-theme-text-default);
     text-align: right;
   }
+
+  .desc-row :deep(.match-scope-text),
   .desc-text {
-    color: var(--bk-theme-text-strong);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
     font-size: var(--bk-theme-font-size-sm);
+    color: var(--bk-theme-text-strong);
   }
   .impact-box {
     padding: var(--bk-theme-space-8) var(--bk-theme-space-6);

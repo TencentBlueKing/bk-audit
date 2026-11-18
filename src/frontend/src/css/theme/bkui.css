@@ -241,16 +241,19 @@
   border-color: transparent;
 }
 
-/* miffy Alert：高 32、padding 6/8、gap 8、正文 12/20。设计稿工具广场那条带 Warn/4 描边，不跟。 */
+/* miffy Alert：高 32、padding 6/8、gap 8、正文 12/20。设计稿工具广场那条带 Warn/4 描边，不跟。
+   多行文案时 icon 顶对齐第一行，不要垂直居中整段。 */
 .bk-alert-wraper {
-  align-items: center;
+  align-items: flex-start;
   min-height: var(--bk-theme-space-32);
   padding: var(--bk-theme-space-6) var(--bk-theme-space-8);
   gap: var(--bk-theme-space-8);
 }
 
 .bk-alert .bk-alert-icon-info {
+  margin-top: 2px;
   margin-right: 0;
+  flex-shrink: 0;
 }
 
 .bk-alert-title {

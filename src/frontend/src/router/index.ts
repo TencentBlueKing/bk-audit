@@ -138,9 +138,19 @@ const persistSceneSelection = (sceneId: string) => {
   localStorage.setItem('scene-system-selector:selected', JSON.stringify(selection));
 };
 
+const readManagePlatform = () => {
+  try {
+    const permission = JSON.parse(sessionStorage.getItem('userScenePermission') || '{}');
+    return permission.manage_platform === true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * 场景配置页进入前权限分流：
- * - manage_scene=true：放行
+ * - manage_platform / 当前场景 manage_scene=true：放行
+ * - 无 scene_id：自动落到第一个可管理场景；一个都没有则进引导/申请页
  * - 仅 view_scene + 分享链接进入：跳转 user-landing-page 申请
  * - 仅 view_scene + 应用内其他模块进入：改选第一个有管理权限的场景并放行
  */
@@ -164,18 +174,46 @@ async function resolveSceneConfigSceneAccess(
       // ignore
     }
   }
-  if (!sceneId || sceneId === 'allSecen') {
-    return null;
-  }
-
-  const redirectQuery = buildSceneContextQuery(String(sceneId));
 
   try {
     const sceneList = await SceneManageService.fetchSceneAll({ status: 'enabled' });
+    const firstManageable = (sceneList || []).find(item => item.permission?.manage_scene === true);
+    const redirectToManageable = (manageableSceneId: string) => {
+      persistSceneSelection(manageableSceneId);
+      return {
+        path: to.path,
+        query: {
+          ...to.query,
+          ...buildSceneContextQuery(manageableSceneId),
+        },
+        hash: to.hash,
+        replace: true,
+      };
+    };
+
+    // 地址 / 缓存都没有可用场景：落到第一个可管理场景，否则进引导页
+    if (!sceneId || sceneId === 'allSecen') {
+      if (firstManageable) {
+        return redirectToManageable(String(firstManageable.scene_id));
+      }
+      const firstViewable = (sceneList || []).find(item => item.permission?.view_scene === true);
+      if (firstViewable) {
+        return {
+          name: 'userLandingPage',
+          query: buildSceneContextQuery(String(firstViewable.scene_id)),
+        };
+      }
+      return {
+        name: 'permissionsPage',
+        query: { role: 'manager' },
+      };
+    }
+
+    const redirectQuery = buildSceneContextQuery(String(sceneId));
     const target = (sceneList || []).find(item => String(item.scene_id) === String(sceneId));
     const permission = target?.permission || {};
 
-    if (permission.manage_scene === true) {
+    if (permission.manage_scene === true || readManagePlatform()) {
       persistSceneSelection(String(sceneId));
       return null;
     }
@@ -188,19 +226,8 @@ async function resolveSceneConfigSceneAccess(
         };
       }
 
-      const firstManageable = (sceneList || []).find(item => item.permission?.manage_scene === true);
       if (firstManageable) {
-        const manageableSceneId = String(firstManageable.scene_id);
-        persistSceneSelection(manageableSceneId);
-        return {
-          path: to.path,
-          query: {
-            ...to.query,
-            ...buildSceneContextQuery(manageableSceneId),
-          },
-          hash: to.hash,
-          replace: true,
-        };
+        return redirectToManageable(String(firstManageable.scene_id));
       }
 
       return {
@@ -208,6 +235,14 @@ async function resolveSceneConfigSceneAccess(
         query: redirectQuery,
       };
     }
+
+    return {
+      name: 'permissionsPage',
+      query: {
+        ...redirectQuery,
+        role: 'manager',
+      },
+    };
   } catch {
     // 列表拉取失败时也拦截，避免页面先打业务接口弹出权限申请窗
   }
@@ -215,7 +250,7 @@ async function resolveSceneConfigSceneAccess(
   return {
     name: 'permissionsPage',
     query: {
-      ...redirectQuery,
+      ...(sceneId && sceneId !== 'allSecen' ? buildSceneContextQuery(String(sceneId)) : {}),
       role: 'manager',
     },
   };

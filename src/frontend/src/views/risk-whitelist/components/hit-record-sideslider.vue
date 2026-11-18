@@ -25,7 +25,7 @@
       <div class="hit-header">
         <span>{{ t('命中记录') }}</span>
         <span class="hit-split" />
-        <span>{{ ruleCode }}</span>
+        <span class="hit-code">{{ ruleCode }}</span>
       </div>
     </template>
     <div class="hit-body">
@@ -111,7 +111,7 @@
       colKey: 'risk_id',
       width: 160,
       cell: (_: unknown, { row }: { row: HitRecord }) => {
-        if (row.action === 'suppress_new' || !row.risk_id) return t('未生成');
+        if (row.action === 'suppress_new' || !row.risk_id) return '-';
         const riskUrl = row.risk_url || router.resolve({
           name: 'riskManageDetail',
           params: { riskId: row.risk_id },
@@ -119,7 +119,12 @@
         return (
           <span class="risk-cell">
             <span class="risk-text">{row.risk_id}</span>
-            <a class="risk-link" href={riskUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              class="risk-link"
+              href={riskUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              v-bk-tooltips={{ content: t('打开风险详情'), delay: 80 }}>
               <audit-icon class="risk-link-icon" type="jump-link" />
             </a>
           </span>
@@ -177,7 +182,11 @@
   .hit-split {
     width: 1px;
     height: 14px;
-    background: var(--bk-theme-border-default);
+    background: #979ba5;
+  }
+
+  .hit-code {
+    color: #979ba5;
   }
 
   .hit-body {

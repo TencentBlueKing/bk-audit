@@ -1127,9 +1127,12 @@
 <style lang="postcss">
 .ql-toolbar {
   display: flex;
-  padding: 0 !important;
+  box-sizing: border-box;
+  padding: var(--bk-theme-space-8) !important;
   flex-wrap: wrap;
-  align-items: center;border: 1px solid var(--bk-theme-border-strong);
+  align-items: center;
+  border: 1px solid var(--bk-theme-border-strong);
+  border-bottom: 0;
 }
 
 /* 禁用时候的样式 */
@@ -1165,6 +1168,7 @@
 .ql-container.ql-snow {
   min-height: 120px;
   padding-bottom: var(--bk-theme-space-12);
+  border: 1px solid var(--bk-theme-border-strong);
 }
 
 /* parent 模式：原地增高，保持在文档流内 */

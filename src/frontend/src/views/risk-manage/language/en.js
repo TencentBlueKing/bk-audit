@@ -410,5 +410,6 @@ export default {
     请选择处理方法: 'Select a processing action',
     操作成功: 'Operation succeeded',
     套餐执行记录: 'Package execution records',
+    打开ITSM单据: 'Open ITSM ticket',
   },
 };

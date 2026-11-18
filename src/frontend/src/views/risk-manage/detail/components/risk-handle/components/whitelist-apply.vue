@@ -33,15 +33,21 @@
         v-if="showItsm"
         class="whitelist-apply__row">
         <span class="whitelist-apply__label">{{ t('ITSM单号') }}</span>
-        <a
-          v-if="record.itsmUrl"
-          class="whitelist-apply__link"
-          :href="record.itsmUrl"
-          target="_blank">
-          {{ record.itsmSn || '--' }}
-          <audit-icon type="jump-link" />
-        </a>
-        <span v-else>{{ record.itsmSn || '--' }}</span>
+        <span
+          v-if="record.itsmSn || record.itsmUrl"
+          class="jump-cell">
+          <span class="jump-text">{{ record.itsmSn || '--' }}</span>
+          <a
+            v-if="record.itsmUrl"
+            v-bk-tooltips="{ content: t('打开ITSM单据'), delay: 80 }"
+            class="jump-icon"
+            :href="record.itsmUrl"
+            rel="noopener noreferrer"
+            target="_blank">
+            <audit-icon type="jump-link" />
+          </a>
+        </span>
+        <span v-else>--</span>
       </div>
       <div class="whitelist-apply__row">
         <span class="whitelist-apply__label">{{ t('申请状态') }}</span>
@@ -297,10 +303,19 @@
   text-align: right;
 }
 
-.whitelist-apply__link {
+.jump-cell {
   display: inline-flex;
   gap: var(--bk-theme-space-4);
   align-items: center;
+  min-width: 0;
+}
+
+.jump-text {
+  color: var(--bk-theme-text-strong);
+}
+
+.jump-icon {
+  display: inline-flex;
   color: var(--bk-theme-color-brand-2);
 }
 

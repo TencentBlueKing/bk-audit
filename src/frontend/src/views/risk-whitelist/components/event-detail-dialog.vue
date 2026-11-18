@@ -38,8 +38,17 @@
             :key="item.field">
             <td>{{ item.field }}</td>
             <td>{{ item.field_name }}</td>
-            <td>{{ item.field_type }}</td>
-            <td>{{ item.field_value }}</td>
+            <td class="type-cell">{{ item.field_type }}</td>
+            <td class="value-cell">
+              <show-tooltips-text
+                :data="formatFieldValue(item.field_value)"
+                :flip="false"
+                :line="4"
+                :max-width="360"
+                placement="top"
+                tooltip-content-class="show-tooltips-text-popup"
+                tooltip-max-height="40vh" />
+            </td>
           </tr>
           <tr v-if="!fields.length && !loading">
             <td colspan="4">{{ t('暂无数据') }}</td>
@@ -58,10 +67,22 @@
 
   import type { EventFieldRow } from '@model/risk-whitelist/whitelist';
 
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
   const { t } = useI18n();
   const isShow = ref(false);
   const loading = ref(false);
   const fields = ref<EventFieldRow[]>([]);
+
+  const formatFieldValue = (value: unknown) => {
+    if (value === undefined || value === null || value === '') return '--';
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
 
   const open = (whitelistId: number | string, hitId: number | string) => {
     isShow.value = true;
@@ -80,6 +101,7 @@
 <style lang="postcss" scoped>
   .event-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
   }
 
@@ -90,23 +112,49 @@
   .event-table th,
   .event-table td {
     height: 42px;
-    padding: 0 var(--bk-theme-space-16);
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
     font-family: var(--bk-theme-font-family);
     font-size: var(--bk-theme-font-size-sm);
     font-weight: var(--bk-theme-font-weight-regular);
     line-height: var(--bk-theme-line-height-base);
     text-align: left;
+    vertical-align: top;
     border-bottom: 1px solid var(--bk-theme-border-weak);
     box-sizing: border-box;
   }
 
   .event-table th {
     color: var(--bk-theme-text-strong);
+    white-space: nowrap;
     background: var(--bk-theme-surface-subtle);
+  }
+
+  .event-table th:nth-child(1),
+  .event-table td:nth-child(1) {
+    width: 112px;
+  }
+
+  .event-table th:nth-child(2),
+  .event-table td:nth-child(2) {
+    width: 112px;
+  }
+
+  .event-table th:nth-child(3),
+  .event-table td:nth-child(3) {
+    width: 64px;
   }
 
   .event-table td {
     color: var(--bk-theme-text-default);
+    word-break: break-all;
+  }
+
+  .type-cell {
+    white-space: nowrap;
+  }
+
+  .value-cell {
+    min-width: 0;
   }
 
   :deep(.bk-dialog-footer) {

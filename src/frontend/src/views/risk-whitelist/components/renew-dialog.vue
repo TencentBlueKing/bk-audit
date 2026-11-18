@@ -94,8 +94,8 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-       
-        @click="isShow = false" style="margin-left: var(--bk-theme-space-8)">
+        style="margin-left: var(--bk-theme-space-8)"
+        @click="isShow = false">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -248,7 +248,6 @@
     position: relative;
     flex: 1;
     height: 32px;
-    margin-right: -var(--bk-theme-space-2);
     font-size: var(--bk-theme-font-size-sm);
     line-height: 20px;
     color: var(--bk-theme-text-default);
@@ -257,12 +256,15 @@
     border: 1px solid var(--bk-theme-text-disabled);
   }
 
+  .duration-item + .duration-item {
+    margin-left: -1px;
+  }
+
   .duration-item:first-child {
     border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
   }
 
   .duration-item:last-child {
-    margin-right: 0;
     border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
   }
 

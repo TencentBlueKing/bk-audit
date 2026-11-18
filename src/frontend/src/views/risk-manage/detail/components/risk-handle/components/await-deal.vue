@@ -234,6 +234,7 @@
   import { useI18n } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRouter,
   } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
@@ -261,6 +262,7 @@
     isUserInput,
     syncPaParamVisibility,
   } from '@/utils/assist/pa-param-submit';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
     riskId: string,
@@ -303,6 +305,7 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const router = useRouter();
   const dockEditorExpand = inject<(expanded: boolean) => void>('dockEditorExpand', () => {});
   const dockBoostState = inject<{
     isEditorBoosted: Ref<boolean>;
@@ -493,7 +496,21 @@
     formRef.value?.clearValidate?.();
   };
 
-  const handleSubmitSuccess = (message: string, shouldCollapse = false) => {
+  const goWhitelistList = () => {
+    const sceneId = String(props.detailData.scene_id || getSceneSystemParams().scope_id || '');
+    router.push({
+      name: 'riskWhitelistList',
+      query: sceneId
+        ? {
+          scene_id: sceneId,
+          scope_id: sceneId,
+          scope_type: 'scene',
+        }
+        : {},
+    });
+  };
+
+  const handleSubmitSuccess = (message: string, shouldCollapse = false, jumpWhitelist = false) => {
     handleEditorExpandChange(false);
     resetForm();
     if (shouldCollapse) {
@@ -501,6 +518,9 @@
     }
     emits('update');
     messageSuccess(message);
+    if (jumpWhitelist) {
+      goWhitelistList();
+    }
   };
 
   // 标记误报
@@ -566,9 +586,13 @@
     defaultValue: null,
     onSuccess() {
       const withMisreport = formData.value.method === 'misreport';
-      handleSubmitSuccess(withMisreport
-        ? t(roleText.text.value.misreportSuccess)
-        : t(getWhitelistApplySuccess(lastWhitelistType.value, roleText.isAdmin.value)));
+      handleSubmitSuccess(
+        withMisreport
+          ? t(roleText.text.value.misreportSuccess)
+          : t(getWhitelistApplySuccess(lastWhitelistType.value, roleText.isAdmin.value)),
+        false,
+        true,
+      );
     },
   });
 
@@ -831,7 +855,20 @@
 :deep(.await-deal-rich-editor .quill-editor) {
   width: 100%;
   max-width: 100%;
+  overflow: hidden;
   box-sizing: border-box;
+}
+
+:deep(.await-deal-rich-editor .ql-toolbar.ql-snow) {
+  box-sizing: border-box;
+  padding: var(--bk-theme-space-8) !important;
+  border: 1px solid var(--bk-theme-border-strong);
+  border-bottom: 0;
+}
+
+:deep(.await-deal-rich-editor .ql-container.ql-snow) {
+  box-sizing: border-box;
+  border: 1px solid var(--bk-theme-border-strong);
 }
 
 .misreport-alert,

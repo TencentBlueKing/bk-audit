@@ -17,8 +17,10 @@
 <template>
   <div
     v-if="mode === 'text'"
+    v-bk-tooltips="textScopeTip"
     class="match-scope-text"
-    :class="{ 'is-inline': inline }">
+    :class="{ 'is-inline': inline }"
+    @mouseenter="syncTextOverflow">
     <template v-if="textLines.length">
       <div
         v-for="(line, index) in textLines"
@@ -27,7 +29,7 @@
         <span
           v-if="line.op"
           class="match-scope-text__op">{{ line.op }}</span>
-        <span>{{ line.text }}</span>
+        <span class="match-scope-text__content">{{ line.text }}</span>
       </div>
     </template>
     <span v-else>--</span>
@@ -100,6 +102,7 @@
 
   const { t } = useI18n();
   const expanded = ref(false);
+  const textOverflowed = ref(false);
 
   const groups = computed<MatchGroup[]>(() => {
     const input = props.scope || {};
@@ -195,16 +198,48 @@
     });
     return lines;
   });
+
+  const fullTextContent = computed(() => textLines.value
+    .map(line => (line.op ? `${line.op} ${line.text}` : line.text))
+    .join('\n'));
+
+  const textScopeTip = computed(() => ({
+    content: fullTextContent.value,
+    disabled: props.inline || !textOverflowed.value || !fullTextContent.value,
+    delay: 80,
+    placement: 'top',
+    extCls: 'match-scope-text-tip',
+  }));
+
+  const syncTextOverflow = (event: MouseEvent) => {
+    if (props.inline) {
+      textOverflowed.value = false;
+      return;
+    }
+    const root = event.currentTarget as HTMLElement;
+    const contents = root.querySelectorAll('.match-scope-text__content');
+    textOverflowed.value = Array.from(contents).some((node) => {
+      const el = node as HTMLElement;
+      return el.scrollWidth > el.clientWidth + 1;
+    });
+  };
 </script>
 <style lang="postcss" scoped>
 .match-scope-text {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   font-size: var(--bk-theme-font-size-sm);
   line-height: var(--bk-theme-line-height-sm);
   color: var(--bk-theme-text-strong);
 }
 
 .match-scope-text:not(.is-inline) .match-scope-text__line {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
   line-height: 20px;
 }
 
@@ -220,9 +255,18 @@
 }
 
 .match-scope-text__op {
+  flex-shrink: 0;
   margin-right: var(--bk-theme-space-4);
   font-weight: var(--bk-theme-font-weight-bold);
   color: var(--bk-theme-color-warn-2);
+}
+
+.match-scope-text:not(.is-inline) .match-scope-text__content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .match-scope-tag {
@@ -339,5 +383,14 @@
   cursor: pointer;
   background: transparent;
   border: 0;
+}
+</style>
+<style lang="postcss">
+/* tip 挂到 body，需非 scoped */
+.match-scope-text-tip {
+  max-width: 360px;
+  line-height: 20px;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 </style>

@@ -161,12 +161,12 @@
           :model-value="whitelistType"
           @change="changeWhitelistType">
           <bk-popover
-            :content="t('只有命中策略条件时不允许误报加白')"
-            :disabled="!showFalsePositiveTip"
+            :content="falsePositiveTip"
+            :disabled="!falsePositiveTip"
             placement="top"
-            reference-cls="false-positive-tip"
+            reference-cls="type-radio-tip"
             theme="dark">
-            <span class="false-positive-wrap">
+            <span class="type-radio-wrap">
               <bk-radio
                 :disabled="isTypeLocked || falsePositiveDisabled"
                 label="false_positive">
@@ -174,11 +174,20 @@
               </bk-radio>
             </span>
           </bk-popover>
-          <bk-radio
-            :disabled="isTypeLocked"
-            label="risk_acceptance">
-            {{ t('冒险加白') }}
-          </bk-radio>
+          <bk-popover
+            :content="typeLockedTip"
+            :disabled="!typeLockedTip"
+            placement="top"
+            reference-cls="type-radio-tip"
+            theme="dark">
+            <span class="type-radio-wrap">
+              <bk-radio
+                :disabled="isTypeLocked"
+                label="risk_acceptance">
+                {{ t('冒险加白') }}
+              </bk-radio>
+            </span>
+          </bk-popover>
         </bk-radio-group>
         <bk-alert
           v-if="whitelistType === 'risk_acceptance'"
@@ -333,7 +342,7 @@
     showApplyHint?: boolean;
     embedded?: boolean;
     initialScope?: MatchScope | null;
-    /** 锁定加白类型（误报同时加白仅允许 false_positive）；编辑态也会禁用改类型 */
+    /** 锁定加白类型（如标记误报同时加白仅允许 false_positive） */
     lockedType?: WhitelistType | null;
   }
 
@@ -370,7 +379,7 @@
   const lockedPrefillKeys = ref<Set<string>>(new Set());
 
   const isEdit = computed(() => Boolean(props.record?.id));
-  /** 编辑或外部锁定时不允许改加白类型 */
+  /** 后端编辑接口不接收类型：编辑态或外部锁定（如误报加白）时类型只读 */
   const isTypeLocked = computed(() => isEdit.value || Boolean(props.lockedType));
   const prefillLockKey = (field: string, value: string) => `${field}\u0001${value}`;
 
@@ -399,9 +408,16 @@
     return lockedPrefillKeys.value.has(prefillLockKey(condition.field, String(condition.value)));
   };
   const falsePositiveDisabled = computed(() => hasStrategyOnlyGroup(scope.value));
-  const showFalsePositiveTip = computed(() => (
-    falsePositiveDisabled.value && !isTypeLocked.value
-  ));
+  /** 编辑 / 外部锁定时类型只读，hover 说明原因 */
+  const typeLockedTip = computed(() => {
+    if (!isTypeLocked.value) return '';
+    return isEdit.value ? t('编辑时不可修改加白类型') : t('不可修改');
+  });
+  const falsePositiveTip = computed(() => {
+    if (typeLockedTip.value) return typeLockedTip.value;
+    if (falsePositiveDisabled.value) return t('只有命中策略条件时不允许误报加白');
+    return '';
+  });
   const expectedExpire = computed(() => {
     if (validityMode.value === 'custom') {
       const picked = dayjs(customExpire.value);
@@ -980,12 +996,12 @@
     white-space: nowrap;
   }
 
-  .false-positive-wrap {
+  .type-radio-wrap {
     display: inline-flex;
     align-items: center;
   }
 
-  :deep(.false-positive-tip) {
+  :deep(.type-radio-tip) {
     display: inline-flex;
     vertical-align: middle;
   }
@@ -1169,15 +1185,19 @@
   }
 
   .duration-item {
+    position: relative;
     width: 80px;
     height: 32px;
-    margin-right: -var(--bk-theme-space-2);
     font-size: var(--bk-theme-font-size-sm);
     line-height: 30px;
     color: var(--bk-theme-text-strong);
     cursor: pointer;
     background: var(--bk-theme-surface-default);
     border: 1px solid var(--bk-theme-text-disabled);
+  }
+
+  .duration-item + .duration-item {
+    margin-left: -1px;
   }
 
   .duration-item:first-child {
@@ -1189,7 +1209,6 @@
   }
 
   .duration-item.is-active {
-    position: relative;
     z-index: 1;
     color: var(--bk-theme-color-brand-2);
     background: var(--bk-theme-color-brand-6);
