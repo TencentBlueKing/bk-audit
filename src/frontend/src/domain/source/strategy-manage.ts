@@ -197,7 +197,7 @@ class Strategy extends ModuleBase {
     table_type: string;
     scene_id?: string;
     bk_biz_id?: string | number;
-  }) {
+  }, payload = {} as IRequestPayload) {
     return Request.get<Array<{
       label: string;
       value: string;
@@ -207,13 +207,27 @@ class Strategy extends ModuleBase {
       }>
     }>>(`${this.path}/strategy_table/`, {
       params,
+      payload,
     });
+  }
+  // V4 项目目录与单项目全部 RT；不改变旧无 scope 的表树契约。
+  getTableProjects(params: { table_type: string; scene_id?: string }, payload = {} as IRequestPayload) {
+    return Request.get<Array<{
+      label: string; value: string; namespace: string; node_type: 'project'; leaf: false;
+    }>>(`${this.path}/strategy_table/projects/`, { params, payload });
+  }
+  getProjectTables(params: {
+    table_type: string; bkbase_namespace: string; scene_id?: string;
+  }, payload = {} as IRequestPayload) {
+    return Request.get<Array<{
+      label: string; value: string; table_id: string; namespace: string; node_type: 'table'; leaf: true;
+    }>>(`${this.path}/strategy_table/project_tables/`, { params, payload });
   }
   // 获取场景下有权限的数据表（BuildIn/BizRt）
   getScenePermissionTable(params: {
     table_type: string;
     scene_id?: string;
-  }) {
+  }, payload = {} as IRequestPayload) {
     return Request.get<Array<{
       label: string;
       value: string;
@@ -223,6 +237,7 @@ class Strategy extends ModuleBase {
       }>
     }>>(`${this.path}/strategy_table/scene_permission_tables/`, {
       params,
+      payload,
     });
   }
   // 获取表格的信息

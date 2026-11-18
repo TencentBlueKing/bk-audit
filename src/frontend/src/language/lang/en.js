@@ -644,4 +644,8 @@ export default {
   '请输入类似 pageSize 的字段': 'Enter a field like pageSize',
   搜索字段: 'Search fields',
   暂无可选字段: 'No selectable fields',
+  '加载失败，点击重试': 'Failed to load. Click to retry',
+  '搜索项目 namespace': 'Search project namespace',
+  '请先选择项目': 'Select a project first',
+  '点击加载项目数据': 'Click to load project tables',
 };
