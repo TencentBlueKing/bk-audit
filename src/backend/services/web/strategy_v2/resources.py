@@ -82,7 +82,8 @@ from services.web.bkbase import flow as bkbase_flow
 from services.web.bkbase import metadata as bkbase_metadata
 from services.web.bkbase import permissions as bkbase_permissions
 from services.web.bkbase import query as bkbase_query
-from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.common import get_bkbase_context, get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.bkbase.exceptions import BKBaseFlowOperationPending
 from services.web.common.caller_permission import (
     CurrentType,
@@ -196,6 +197,7 @@ from services.web.strategy_v2.serializers import (
     ListLinkTableResponseSerializer,
     ListLinkTableTagsRequestSerializer,
     ListLinkTableTagsResponseSerializer,
+    ListProjectTablesRequestSerializer,
     ListStrategyAllRequestSerializer,
     ListStrategyFieldsRequestSerializer,
     ListStrategyFieldsResponseSerializer,
@@ -203,6 +205,7 @@ from services.web.strategy_v2.serializers import (
     ListStrategyResponseSerializer,
     ListStrategyTagsRequestSerializer,
     ListStrategyTagsResponseSerializer,
+    ListTableProjectsRequestSerializer,
     ListTablesRequestSerializer,
     PreviewReportRequestSerializer,
     PreviewReportResponseSerializer,
@@ -226,6 +229,7 @@ from services.web.strategy_v2.utils.table import (
     RuleAuditSourceTypeChecker,
     TableHandler,
     enhance_rt_fields,
+    list_scoped_v4_tables,
 )
 
 
@@ -1930,6 +1934,62 @@ class ListTables(StrategyV2Base, CacheResource):
         return TableHandler(**validated_request_data).list_tables()
 
 
+class ListTableProjects(StrategyV2Base, CacheResource):
+    """懒加载的项目目录；缓存按版本、租户、请求空间、场景和用户隔离。"""
+
+    name = gettext_lazy("BKBase项目目录")
+    RequestSerializer = ListTableProjectsRequestSerializer
+    many_response_data = True
+
+    class ResponseSerializer(serializers.Serializer):
+        label = serializers.CharField()
+        value = serializers.CharField()
+        namespace = serializers.CharField()
+        node_type = serializers.ChoiceField(choices=["project"])
+        leaf = serializers.BooleanField()
+
+    def __init__(self, *args, **kwargs):
+        self.cache_type = CacheTypeItem(
+            key=f"ListTableProjects:{bkbase_metadata.metadata_cache_scope()}", timeout=60, user_related=True
+        )
+        super().__init__(*args, **kwargs)
+
+    def perform_request(self, validated_request_data):
+        return [
+            {"label": ns, "value": ns, "namespace": ns, "node_type": "project", "leaf": False}
+            for ns in bkbase_permissions.list_projects()
+        ]
+
+
+class ListProjectTables(ListTableProjects):
+    """完整返回一个项目中的候选表；失败向上抛出，不缓存部分成功。"""
+
+    name = gettext_lazy("BKBase项目数据表")
+    RequestSerializer = ListProjectTablesRequestSerializer
+
+    class ResponseSerializer(serializers.Serializer):
+        label = serializers.CharField()
+        value = serializers.CharField()
+        table_id = serializers.CharField()
+        namespace = serializers.CharField()
+        node_type = serializers.ChoiceField(choices=["table"])
+        leaf = serializers.BooleanField()
+
+    def perform_request(self, validated_request_data):
+        tables = list_scoped_v4_tables(**validated_request_data)
+        return [
+            {
+                "label": rt["result_table_name"],
+                "value": rt["result_table_id"],
+                "table_id": rt["result_table_id"],
+                "namespace": validated_request_data["bkbase_namespace"],
+                "node_type": "table",
+                "leaf": True,
+            }
+            for rt in tables
+        ]
+
+
 class GetScenePermissionTables(StrategyV2Base):
     """获取场景下有权限的数据表"""
 
@@ -1964,6 +2024,17 @@ class GetScenePermissionTables(StrategyV2Base):
         scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
         if not scene_table_ids:
             return []
+
+        if get_bkbase_version() == BKBaseVersion.V4:
+            tables = list_scoped_v4_tables(
+                table_type=table_type, namespace=settings.DEFAULT_NAMESPACE, result_table_ids=scene_table_ids
+            )
+            if not tables:
+                return []
+            groups = TableHandler(table_type=table_type, namespace=settings.DEFAULT_NAMESPACE).format_result_tables(
+                tables
+            )
+            return [group for group in groups if group["children"]]
 
         scene_table_ids_set = set(scene_table_ids)
 
@@ -2032,7 +2103,7 @@ class GetRTMeta(StrategyV2Base, CacheResource):
         """版本和租户改变后不能复用旧元数据，V3保留原缓存键。"""
         scope = bkbase_metadata.metadata_cache_scope()
         if scope:
-            self.cache_type = CacheTypeItem(key=f"GetRTMeta:{scope}", timeout=10 * 60, user_related=False)
+            self.cache_type = CacheTypeItem(key=f"GetRTMeta:{scope}:project-ref", timeout=10 * 60, user_related=False)
         super().__init__(*args, **kwargs)
 
     def perform_request(self, validated_request_data):
@@ -2060,6 +2131,14 @@ class GetRTMeta(StrategyV2Base, CacheResource):
 
     def get_meta(self, result_table_id):
         """获取数据表的元信息。"""
+        if get_bkbase_version() == BKBaseVersion.V4:
+            context = {**get_bkbase_context(), "_result_table_info": {}}
+            ref = bkbase_metadata.get_result_table_ref(context, result_table_id)
+            context["rt_namespaces"] = {result_table_id: ref["namespace"]}
+            result = bkbase_metadata.get_result_table(
+                result_table_id=result_table_id, related=["storages", "fields"], context=context
+            )
+            return {**result, "bkbase_namespace": ref["namespace"]}
         return bkbase_metadata.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
 
     def get_data_manager(self, result_table_id):

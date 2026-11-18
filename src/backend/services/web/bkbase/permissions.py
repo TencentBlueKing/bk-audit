@@ -85,7 +85,6 @@ def _business_id(value):
 def _list_rts(context, *, request=None, bk_biz_id=None):
     """复用完整项目/分页遍历，严格query=True并按租户逻辑RT去重。"""
     selected_biz = _business_id(bk_biz_id) if bk_biz_id is not None else None
-    tables = {}
     projects = _projects(context, request)
     batches = metadata.list_project_datasets(
         context,
@@ -93,6 +92,12 @@ def _list_rts(context, *, request=None, bk_biz_id=None):
         dataset_name=f"{selected_biz}_" if selected_biz is not None else None,
         user_request=request,
     )
+    return _queryable_tables(batches, selected_biz=selected_biz)
+
+
+def _queryable_tables(batches, *, selected_biz=None):
+    """统一 Dataset query 权限校验、逻辑 ID 去重及旧业务投影。"""
+    tables = {}
     for rows in batches:
         for row in _rows(rows):
             grant = row.get("permissions")
@@ -113,6 +118,45 @@ def _list_rts(context, *, request=None, bk_biz_id=None):
             if storage:
                 table["storages"][storage] = {"storage_type": storage}
     return sorted(tables.values(), key=lambda row: (row["bk_biz_id"], row["result_table_id"]))
+
+
+@metadata.list_read_scope()
+def list_projects(context=None):
+    """平台身份仅枚举项目目录，不读取任何 Dataset 或 Binding。"""
+    context = context or get_bkbase_context()
+    if context["version"] != BKBaseVersion.V4:
+        raise BKBaseResourceMappingError(message="Project lazy loading requires BKBase V4")
+    return _projects(context, None)
+
+
+@metadata.list_read_scope()
+def list_namespace_result_tables(namespace, *, context=None):
+    """严格读取一个显式项目的完整可查询表集合，不回退租户全量。"""
+    context = context or get_bkbase_context()
+    if (
+        context["version"] != BKBaseVersion.V4
+        or not isinstance(namespace, str)
+        or not re.fullmatch(r"[A-Za-z0-9_-]+", namespace)
+    ):
+        raise BKBaseResourceMappingError(message="An explicit V4 namespace is required")
+    return _queryable_tables(metadata.list_project_datasets(context, [namespace]))
+
+
+@metadata.list_read_scope()
+def list_queryable_result_tables(result_table_ids, *, context=None):
+    """有限逻辑 ID 按正式项目精确核权；不枚举项目或读取租户全量。"""
+    context = {**(context or get_bkbase_context()), "_result_table_info": {}}
+    if context["version"] != BKBaseVersion.V4:
+        raise BKBaseResourceMappingError(message="Finite Dataset reads require BKBase V4")
+
+    def read(rt_id):
+        ref = metadata.get_result_table_ref(context, rt_id)
+        rows = metadata.list_datasets({**context, "namespace": ref["namespace"]}, dataset_name=rt_id)
+        exact = [row for row in _rows(rows) if row.get("dataset_name") == rt_id]
+        return _queryable_tables([exact])
+
+    batches = metadata.bounded_read_map(read, list(dict.fromkeys(result_table_ids)))
+    return [row for batch in batches for row in batch]
 
 
 def list_user_rts(context, *, bk_biz_id=None):

@@ -21,10 +21,11 @@ from unittest import mock
 from uuid import uuid1
 
 from bkcrypto.contrib.django.ciphers import get_asymmetric_cipher
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from apps.bk_crypto.crypto import FakeAsymmetricCipher, asymmetric_cipher
 from services.web.entry.handler.entry import EntryHandler
+from services.web.entry.resources import HomeResource
 from tests.base import TestCase
 
 
@@ -61,6 +62,17 @@ class EntryHandlerTest(SimpleTestCase):
         data = EntryHandler.entry(self._build_request())
 
         self.assertEqual(data["platform_admin_users"], ["admin", "operator"])
+
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission", return_value={})
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_home_resource_exposes_project_lazy_load_only_in_v4(self, mock_get, mock_permission):
+        mock_get.side_effect = self._get_global_meta_config()
+        for version, expected in (("v3", False), ("v4", True)):
+            with self.subTest(version=version), override_settings(BKBASE_API_VERSION=version), mock.patch(
+                "services.web.entry.resources.get_local_request", return_value=self._build_request()
+            ):
+                data = HomeResource().request()
+                self.assertIs(data["feature_toggle"]["bkbase_project_rt_lazy_load"], expected)
 
 
 class EntryTest(TestCase):

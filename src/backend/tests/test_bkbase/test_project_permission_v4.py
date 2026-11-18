@@ -6,7 +6,11 @@ from rest_framework import serializers
 
 from services.web.bkbase import permissions
 from services.web.bkbase.exceptions import BKBaseCapabilityNotReady
-from services.web.strategy_v2.constants import LinkTableTableType
+from services.web.strategy_v2.constants import (
+    LinkTableTableType,
+    RuleAuditConfigType,
+    StrategyType,
+)
 from services.web.strategy_v2.serializers import (
     LinkTableDataPermissionMixin,
     StrategySerializer,
@@ -73,5 +77,26 @@ class ProjectPermissionV4Tests(SimpleTestCase):
             permissions, "project_data_batch_check"
         ) as check:
             handler._validate_link_table_data_permission(attrs)
+        user.assert_called_once_with(["11_test"])
+        check.assert_not_called()
+
+    @override_settings(BKBASE_API_VERSION="v4")
+    def test_strategy_keeps_scene_external_mine_submission_when_user_is_authorized(self):
+        handler = StrategySerializer()
+        attrs = {
+            "scene_id": 1,
+            "strategy_type": StrategyType.RULE.value,
+            "configs": {"config_type": RuleAuditConfigType.MINE_BIZ_RT.value, "data_source": {"rt_id": "11_test"}},
+        }
+        with mock.patch.object(handler, "get_scene_id", return_value=1), mock.patch(
+            "services.web.scene.data_filter.SceneDataFilter.get_table_ids", return_value=[]
+        ), mock.patch.object(handler, "_check_user_table_permission") as user, mock.patch.object(
+            handler,
+            "_check_table_permission",
+            side_effect=AssertionError("Must not tighten Mine to scene intersection"),
+        ), mock.patch.object(
+            permissions, "project_data_batch_check"
+        ) as check:
+            handler._validate_strategy_data_permission(attrs)
         user.assert_called_once_with(["11_test"])
         check.assert_not_called()

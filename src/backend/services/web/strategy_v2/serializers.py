@@ -2104,6 +2104,20 @@ class ListTablesRequestSerializer(serializers.Serializer):
     bk_biz_id = serializers.CharField(label=gettext_lazy("业务 ID"), required=False)
 
 
+class ListTableProjectsRequestSerializer(serializers.Serializer):
+    """目录沿用审计空间与场景边界，不接收外部租户或用户身份。"""
+
+    namespace = serializers.CharField(required=False, default=settings.DEFAULT_NAMESPACE)
+    scene_id = serializers.IntegerField(required=False, min_value=1)
+
+
+class ListProjectTablesRequestSerializer(ListTableProjectsRequestSerializer):
+    """显式选择一个真实 BKBase 项目，禁止空项目回退为全量读取。"""
+
+    bkbase_namespace = serializers.RegexField(r"^[A-Za-z0-9_-]+$", required=True)
+    table_type = serializers.ChoiceField(choices=["BizRt", "BuildIn"])
+
+
 class GetRTFieldsRequestSerializer(serializers.Serializer):
     """
     Get RT Fields
