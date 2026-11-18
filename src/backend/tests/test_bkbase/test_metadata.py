@@ -86,11 +86,12 @@ class MetadataTests(SimpleTestCase):
             self.assertEqual(len(metadata.list_datasets(self.context)), 101)
             self.assertEqual([c.kwargs["page"] for c in call.call_args_list], [1, 2])
 
-    def test_empty_page_stops_and_bad_response_is_rejected(self):
+    def test_empty_page_before_total_and_bad_response_are_rejected(self):
         with mock.patch.object(
             metadata.api.bk_base_v4, "dataset_list", return_value={"total": 200, "list": []}
         ) as call:
-            self.assertEqual(metadata.list_datasets(self.context), [])
+            with self.assertRaises(BKBaseResourceMappingError):
+                metadata.list_datasets(self.context)
             call.assert_called_once()
         for invalid in (None, {}, {"total": -1, "list": []}, {"total": True, "list": []}, {"total": 1, "list": "x"}):
             with self.subTest(invalid=invalid), mock.patch.object(

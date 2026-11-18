@@ -50,7 +50,7 @@ class PermissionTests(SimpleTestCase):
         ]
         with mock.patch.object(
             permissions.api.bk_base_v4, "user_namespaces_list", return_value=namespaces
-        ), mock.patch.object(permissions.metadata, "list_datasets", return_value=rows) as call:
+        ), mock.patch.object(permissions.metadata, "list_project_datasets", return_value=[rows]) as call:
             result = permissions.list_user_rts(self.context, bk_biz_id=7)
         self.assertEqual([r["result_table_id"] for r in result], ["7_table"])
         self.assertIs(call.call_args.kwargs["user_request"], self.context["request"])

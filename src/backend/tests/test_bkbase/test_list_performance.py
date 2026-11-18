@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import requests
 from bk_resource.exceptions import APIRequestError
+from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from urllib3.exceptions import ReadTimeoutError
 
@@ -31,11 +32,18 @@ from services.web.strategy_v2.utils import table
     APP_CODE="synthetic_app",
     SECRET_KEY="synthetic_secret",
     PLATFORM_AUTH_ACCESS_USERNAME="synthetic_admin",
+    BK_RESOURCE={
+        "PLATFORM_AUTH_ENABLED": True,
+        "PLATFORM_AUTH_ACCESS_USERNAME": "synthetic_admin",
+        "PLATFORM_AUTH_ACCESS_TOKEN": "synthetic_platform_token",
+    },
 )
 class ListPerformanceTests(SimpleTestCase):
     def setUp(self):
         self.request = RequestFactory().get("/synthetic/")
         self.request.user = SimpleNamespace(bk_username="user_a", is_authenticated=True)
+        self.request.COOKIES["bk_token"] = "synthetic_caller_cookie"
+        self.denied_for_all_users = set()
         self.calls = []
         self.lock = threading.Lock()
         self.projects = ["project_999", "shared"] + [f"empty_{i:03}" for i in range(120)]
@@ -45,7 +53,7 @@ class ListPerformanceTests(SimpleTestCase):
             + [self.row(0, storage="hdfs"), self.row(200, query=False), self.row(201, query="true")],
         }
         self.enterContext(mock.patch("services.web.bkbase.common.get_local_request", return_value=self.request))
-        self.enterContext(mock.patch.object(permissions, "get_request_username", return_value="user_a"))
+        self.enterContext(mock.patch("blueapps.utils.request_provider.get_local_request", return_value=self.request))
         self.enterContext(mock.patch.object(table, "get_request_username", return_value="user_a"))
         self.enterContext(mock.patch.object(ListTables, "cache_type", None))
         self.enterContext(mock.patch.object(table.BizRtTableHandler, "get_exclude_rt_ids", return_value=set()))
@@ -107,8 +115,20 @@ class ListPerformanceTests(SimpleTestCase):
         params = kwargs.get("params", {})
         auth = json.loads(kwargs["headers"]["x-bkapi-authorization"])
         self.assertEqual(kwargs["headers"]["X-Bk-Tenant-Id"], "tenant_a")
+        platform = auth.get("bk_username") == "synthetic_admin"
+        if platform:
+            self.assertEqual(
+                auth,
+                {
+                    "bk_app_code": "synthetic_app",
+                    "bk_app_secret": "synthetic_secret",
+                    "bk_username": "synthetic_admin",
+                    "access_token": "synthetic_platform_token",
+                },
+            )
+            self.assertNotIn("cookie", {key.lower() for key in kwargs["headers"]})
         if path.endswith("/namespaces"):
-            kind = "UserNamespacesList"
+            kind = "NamespacesList" if platform else "UserNamespacesList"
             data = [
                 {
                     "kind": "Namespace",
@@ -119,15 +139,17 @@ class ListPerformanceTests(SimpleTestCase):
                 for name in self.projects
             ]
         elif path.endswith("/dataset_list/"):
-            if auth.get("bk_username") == "synthetic_admin":
+            if platform and params.get("dataset_name"):
                 kind = "DatasetList"
                 data = {"total": 1, "list": [{"dataset_name": params["dataset_name"], "storage_type": "doris"}]}
             else:
-                kind = "UserDatasetList"
+                kind = "DatasetList" if platform else "UserDatasetList"
                 namespace = path.split("/dataset/", 1)[1].split("/", 1)[0]
                 rows = deepcopy(self.rows.get(namespace, []))
-                if auth["bk_username"] == "user_b":
-                    for row in rows:
+                for row in rows:
+                    if not platform and (
+                        auth["bk_username"] == "user_b" or row["dataset_name"] in self.denied_for_all_users
+                    ):
                         row["permissions"]["query"] = False
                 if params.get("dataset_name"):
                     rows = [row for row in rows if params["dataset_name"] in row["dataset_name"]]
@@ -187,8 +209,8 @@ class ListPerformanceTests(SimpleTestCase):
         self.assertEqual(
             counts,
             {
-                "UserNamespacesList": 1,
-                "UserDatasetList": 123,
+                "NamespacesList": 1,
+                "DatasetList": 123,
                 "ResultTableInfo": 152,
                 "DatasetDetail": 152,
                 "ChannelDetail": 152,
@@ -196,8 +218,141 @@ class ListPerformanceTests(SimpleTestCase):
         )
         self.assertEqual(len(self.calls), 580)
         self.assertEqual(len({row["deadline"] for row in self.calls}), 1)
-        self.assertTrue(all(0 < row["timeout"].total <= 10 for row in self.calls))
+        self.assertTrue(all(0 < row["timeout"].total <= 30 for row in self.calls))
         self.assertTrue(all(call.args[0] is self.request for call in self.auth.call_args_list))
+
+    def test_biz_rt_uses_same_platform_tables_for_different_callers_while_mine_is_personal(self):
+        self.denied_for_all_users = {self.rt_id(0)}
+        expected = [
+            {
+                "label": "Synthetic(47)",
+                "value": "47",
+                "children": [{"label": f"Alias {i}", "value": self.rt_id(i)} for i in range(62)],
+            }
+        ]
+        for user, personal_ids in (("user_a", [self.rt_id(i) for i in range(1, 152)]), ("user_b", [])):
+            self.request.user.bk_username = user
+            with mock.patch.object(table, "get_request_username", return_value=user):
+                self.assertEqual(ListTables().request({"table_type": "BizRt", "namespace": "audit"}), expected)
+                self.assertEqual(
+                    [row["value"] for row in ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})],
+                    personal_ids,
+                )
+        self.assertEqual(len(permissions.get_project_data(project_id=999, bk_username="spoofed")), 152)
+
+    def test_platform_listing_rejects_disabled_or_missing_platform_credentials(self):
+        for enabled, account, token in (
+            (False, "synthetic_admin", "synthetic_platform_token"),
+            (False, None, "synthetic_platform_token"),
+            (True, None, None),
+            (True, "", ""),
+            (True, "  ", "\t"),
+        ):
+            with self.subTest(enabled=enabled, account=account, token=token), override_settings(
+                BK_RESOURCE={
+                    "PLATFORM_AUTH_ENABLED": enabled,
+                    "PLATFORM_AUTH_ACCESS_USERNAME": account,
+                    "PLATFORM_AUTH_ACCESS_TOKEN": token,
+                }
+            ):
+                self.calls.clear()
+                with self.assertRaises(ImproperlyConfigured):
+                    ListTables().request({"table_type": "BizRt", "namespace": "audit"})
+                self.assertEqual(self.calls, [])
+                personal = ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
+                self.assertEqual([row["value"] for row in personal], [self.rt_id(i) for i in range(152)])
+
+    def test_platform_auth_modes_never_borrow_caller_cookie_or_token(self):
+        modes = (
+            ("synthetic_admin", None, {"bk_username": "synthetic_admin"}),
+            (None, "synthetic_platform_token", {"access_token": "synthetic_platform_token"}),
+            (
+                "synthetic_admin",
+                "synthetic_platform_token",
+                {
+                    "bk_username": "synthetic_admin",
+                    "access_token": "synthetic_platform_token",
+                },
+            ),
+            ("  ", "synthetic_platform_token", {"access_token": "synthetic_platform_token"}),
+            ("synthetic_admin", "\t", {"bk_username": "synthetic_admin"}),
+        )
+        for account, token, expected in modes:
+            with self.subTest(account=account, token=token):
+
+                def send(method, url, **kwargs):
+                    self.assertEqual(method, "GET")
+                    self.assertEqual(
+                        json.loads(kwargs["headers"]["x-bkapi-authorization"]),
+                        {
+                            "bk_app_code": "synthetic_app",
+                            "bk_app_secret": "synthetic_secret",
+                            **expected,
+                        },
+                    )
+                    self.assertNotIn("cookie", {key.lower() for key in kwargs["headers"]})
+                    if url.endswith("/v4/tenants/tenant_a/namespaces"):
+                        data = []
+                    else:
+                        self.assertTrue(url.endswith("/v4/databus/dataset/project_999/dataset_list/"))
+                        data = {"total": 0, "list": []}
+                    response = requests.Response()
+                    response.status_code = 200
+                    response._content = json.dumps({"result": True, "code": "00", "data": data}).encode()
+                    return response
+
+                with override_settings(
+                    BK_RESOURCE={
+                        "PLATFORM_AUTH_ENABLED": True,
+                        "PLATFORM_AUTH_ACCESS_USERNAME": account,
+                        "PLATFORM_AUTH_ACCESS_TOKEN": token,
+                    }
+                ), mock.patch("requests.sessions.Session.request", side_effect=send), mock.patch.object(
+                    sdk.BkBaseV4Resource, "build_auth_args", side_effect=AssertionError("caller auth read")
+                ):
+                    self.assertEqual(
+                        sdk.NamespacesList().request(tenant="tenant_a", _request=self.request, bk_username="user_b"), []
+                    )
+                    self.assertEqual(
+                        sdk.DatasetList().request(
+                            tenant="tenant_a", namespace="project_999", _request=self.request, bk_username="user_b"
+                        ),
+                        {"total": 0, "list": []},
+                    )
+
+    def test_platform_incomplete_last_page_never_returns_partial_tables(self):
+        self.projects = ["project_999"]
+        original = self.transport
+        for last_page, total in (([], 101), ([self.row(100)], 102)):
+            with self.subTest(last_page_count=len(last_page), total=total):
+
+                def incomplete(method, url, **kwargs):
+                    response = original(method, url, **kwargs)
+                    if url.endswith("/dataset_list/"):
+                        payload = response.json()
+                        payload["data"]["total"] = total
+                        if kwargs["params"]["page"] == 2:
+                            payload["data"]["list"] = last_page
+                        response._content = json.dumps(payload).encode()
+                    return response
+
+                with mock.patch("requests.sessions.Session.request", side_effect=incomplete):
+                    with self.assertRaises(BKBaseResourceMappingError):
+                        permissions.get_project_data(project_id=999)
+
+    def test_biz_rt_excludes_snapshot_and_plugin_before_capability_reads(self):
+        with mock.patch.object(
+            table.BizRtTableHandler, "get_exclude_rt_ids", return_value={self.rt_id(0), self.rt_id(1)}
+        ):
+            result = ListTables().request({"table_type": "BizRt", "namespace": "audit"})
+        self.assertEqual([row["value"] for row in result[0]["children"]], [self.rt_id(i) for i in range(2, 62)])
+        self.assertFalse(
+            any(
+                row['kind'] == 'ResultTableInfo'
+                and row['path'].rstrip('/').rsplit('/', 1)[1] in {self.rt_id(0), self.rt_id(1)}
+                for row in self.calls
+            )
+        )
 
     def test_mine_keeps_all_projects_pages_and_strict_query_permissions(self):
         # 过滤前要多读两页；147_也匹配47_，必须继续按业务号精确剔除。
@@ -270,6 +425,219 @@ class ListPerformanceTests(SimpleTestCase):
         self.assertFalse(any(thread.name.startswith("bkbase-list") for thread in threading.enumerate()))
         self.assertIsNone(sdk.READ_DEADLINE.get())
 
+    def test_long_project_pages_share_global_16_or_32_slots_and_keep_complete_order(self):
+        self.projects = ["hot_a", "hot_b"] + [f"mid_{i}" for i in range(7)] + [f"empty_{i}" for i in range(25)]
+        self.rows = {
+            "hot_a": [self.row(i) for i in range(899)],
+            "hot_b": [self.row(i) for i in range(1000, 2751)],
+            **{f"mid_{i}": [self.row(j) for j in range(3000 + i * 101, 3101 + i * 101)] for i in range(7)},
+        }
+        expected = sorted(
+            [self.rt_id(i) for i in range(899)]
+            + [self.rt_id(i) for i in range(1000, 2751)]
+            + [self.rt_id(i) for i in range(3000, 3707)]
+        )
+        original = self.transport
+        for limit in (16, 32):
+            with self.subTest(limit=limit):
+                self.calls.clear()
+                barriers = {1: threading.Barrier(limit), 2: threading.Barrier(limit)}
+                started = Counter()
+                active, peak = 0, 0
+                per_project, project_peak = Counter(), Counter()
+
+                def parallel_pages(method, url, **kwargs):
+                    nonlocal active, peak
+                    if not url.endswith("/dataset_list/"):
+                        return original(method, url, **kwargs)
+                    page = kwargs["params"]["page"]
+                    namespace = url.split("/dataset/", 1)[1].split("/", 1)[0]
+                    phase = 1 if page == 1 else 2
+                    with self.lock:
+                        active += 1
+                        peak = max(peak, active)
+                        per_project[namespace] += 1
+                        project_peak[namespace] = max(project_peak[namespace], per_project[namespace])
+                        started[phase] += 1
+                        ticket = started[phase]
+                    try:
+                        if ticket <= limit:
+                            barriers[phase].wait(timeout=2)
+                        return original(method, url, **kwargs)
+                    finally:
+                        with self.lock:
+                            active -= 1
+                            per_project[namespace] -= 1
+
+                with override_settings(BKBASE_V4_LIST_READ_WORKERS=limit), mock.patch(
+                    "requests.sessions.Session.request", side_effect=parallel_pages
+                ):
+                    result = permissions.get_project_data(project_id=1)
+                self.assertEqual([row["result_table_id"] for row in result], expected)
+                self.assertEqual(peak, limit)
+                self.assertGreater(project_peak["hot_a"], 1)
+                self.assertGreater(project_peak["hot_b"], 1)
+                self.assertEqual(started, {1: 34, 2: 32})
+                self.assertEqual(len({row["deadline"] for row in self.calls}), 1)
+                self.assertFalse(any(thread.name.startswith("bkbase-list") for thread in threading.enumerate()))
+
+    def test_later_page_failure_cancels_rest_and_preserves_cause_after_join(self):
+        self.projects = ["long"]
+        self.rows["long"] = [self.row(i) for i in range(899)]
+        barrier = threading.Barrier(2)
+        failed, joining = threading.Event(), threading.Event()
+        entered, exited = [], []
+        clock_offset = [0]
+        failure = requests.ConnectionError("Synthetic later-page failure")
+        original = self.transport
+
+        class JoiningExecutor(ThreadPoolExecutor):
+            def shutdown(executor, *args, **kwargs):
+                if failed.is_set():
+                    clock_offset[0] = 51
+                    joining.set()
+                return super().shutdown(*args, **kwargs)
+
+        def later_failure(method, url, **kwargs):
+            if not url.endswith("/dataset_list/") or kwargs["params"]["page"] == 1:
+                return original(method, url, **kwargs)
+            page = kwargs["params"]["page"]
+            entered.append(page)
+            try:
+                barrier.wait(timeout=2)
+                if page == 2:
+                    failed.set()
+                    raise failure
+                self.assertTrue(joining.wait(timeout=2))
+                return original(method, url, **kwargs)
+            finally:
+                exited.append(page)
+
+        with override_settings(BKBASE_V4_LIST_READ_WORKERS=2), mock.patch.object(
+            metadata, "ThreadPoolExecutor", JoiningExecutor
+        ), mock.patch.object(metadata, "monotonic", side_effect=lambda: time.monotonic() + clock_offset[0]), mock.patch(
+            "requests.sessions.Session.request", side_effect=later_failure
+        ), self.assertRaises(
+            APIRequestError
+        ) as raised:
+            permissions.get_project_data(project_id=1)
+        self.assertIs(raised.exception.__cause__, failure)
+        self.assertEqual(sorted(entered), [2, 3])
+        self.assertCountEqual(exited, entered)
+        self.assertFalse(any(thread.name.startswith("bkbase-list") for thread in threading.enumerate()))
+        self.assertIsNone(sdk.READ_DEADLINE.get())
+
+    def test_out_of_order_pages_keep_requested_namespace_and_page_order(self):
+        self.rows["beta"] = [self.row(i) for i in range(201)]
+        self.rows["alpha"] = [self.row(i) for i in range(300, 401)]
+        page_three_ready = threading.Event()
+        completed = []
+        original = self.transport
+
+        def reordered(method, url, **kwargs):
+            page = kwargs["params"]["page"]
+            namespace = url.split("/dataset/", 1)[1].split("/", 1)[0]
+            if namespace == "beta" and page == 2:
+                self.assertTrue(page_three_ready.wait(timeout=2))
+            response = original(method, url, **kwargs)
+            completed.append((namespace, page))
+            if namespace == "beta" and page == 3:
+                page_three_ready.set()
+            return response
+
+        with mock.patch("requests.sessions.Session.request", side_effect=reordered):
+            result = metadata.list_project_datasets({"tenant": "tenant_a"}, ["beta", "alpha"])
+        self.assertEqual(result, [self.rows["beta"], self.rows["alpha"]])
+        self.assertLess(completed.index(("beta", 3)), completed.index(("beta", 2)))
+
+    def test_later_pages_wait_until_all_project_first_pages_finish(self):
+        self.projects = ["hot", "late"]
+        self.rows["hot"] = [self.row(i) for i in range(201)]
+        late_started, release_late, later_page_started = (threading.Event() for _ in range(3))
+        original = self.transport
+
+        def staged(method, url, **kwargs):
+            if url.endswith("/dataset_list/"):
+                namespace = url.split("/dataset/", 1)[1].split("/", 1)[0]
+                if namespace == "late" and kwargs["params"]["page"] == 1:
+                    late_started.set()
+                    self.assertTrue(release_late.wait(timeout=2))
+                if kwargs["params"]["page"] > 1:
+                    later_page_started.set()
+            return original(method, url, **kwargs)
+
+        with override_settings(BKBASE_V4_LIST_READ_WORKERS=2), mock.patch(
+            "requests.sessions.Session.request", side_effect=staged
+        ), ThreadPoolExecutor(max_workers=1) as caller:
+            pending = caller.submit(permissions.get_project_data, project_id=1)
+            try:
+                self.assertTrue(late_started.wait(timeout=2))
+                self.assertFalse(later_page_started.wait(timeout=0.1))
+            finally:
+                release_late.set()
+            result = pending.result(timeout=3)
+        self.assertTrue(later_page_started.is_set())
+        self.assertEqual([row["result_table_id"] for row in result], [self.rt_id(i) for i in range(201)])
+
+    def test_environment_concurrency_limit_bounds_all_inflight_reads(self):
+        two_started, exceeded_limit, release = (threading.Event() for _ in range(3))
+        started = []
+
+        def read(index):
+            with self.lock:
+                started.append(index)
+                if len(started) == 2:
+                    two_started.set()
+                if len(started) > 2 and not release.is_set():
+                    exceeded_limit.set()
+            self.assertTrue(release.wait(timeout=2))
+            return index
+
+        with override_settings(BKBASE_V4_LIST_READ_WORKERS=2), ThreadPoolExecutor(max_workers=1) as caller:
+            pending = caller.submit(metadata.bounded_read_map, read, range(4))
+            try:
+                self.assertTrue(two_started.wait(timeout=2))
+                self.assertFalse(exceeded_limit.wait(timeout=0.1))
+            finally:
+                release.set()
+            self.assertEqual(pending.result(timeout=3), [0, 1, 2, 3])
+
+    def test_invalid_concurrency_configuration_fails_before_dispatch(self):
+        for limit in (0, -1, True):
+            with self.subTest(limit=limit), override_settings(BKBASE_V4_LIST_READ_WORKERS=limit):
+                with self.assertRaises(ImproperlyConfigured):
+                    metadata.bounded_read_map(lambda value: value, [1])
+
+    def test_get_can_use_30_seconds_inside_unchanged_50_second_total_budget(self):
+        permissions.get_project_data(project_id=1)
+        self.assertTrue(self.calls)
+        self.assertTrue(all(29 < row["timeout"].total <= 30 for row in self.calls))
+        deadlines = {row["deadline"] for row in self.calls}
+        self.assertEqual(len(deadlines), 1)
+        self.assertTrue(45 < deadlines.pop() - time.monotonic() <= 50)
+
+    def test_changed_total_or_repeated_page_fails_without_partial_tables(self):
+        self.projects = ["long"]
+        self.rows["long"] = [self.row(i) for i in range(201)]
+        original = self.transport
+        for fault in ("changed_total", "repeated_page"):
+            with self.subTest(fault=fault):
+
+                def invalid_page(method, url, **kwargs):
+                    response = original(method, url, **kwargs)
+                    if url.endswith("/dataset_list/") and kwargs["params"]["page"] == 2:
+                        payload = response.json()
+                        if fault == "changed_total":
+                            payload["data"]["total"] = 101
+                        else:
+                            payload["data"]["list"] = [self.row(i) for i in range(100)]
+                        response._content = json.dumps(payload).encode()
+                    return response
+
+                with mock.patch("requests.sessions.Session.request", side_effect=invalid_page):
+                    with self.assertRaises(BKBaseResourceMappingError):
+                        permissions.get_project_data(project_id=1)
+
     def test_failed_paginated_read_stops_new_pages_and_preserves_first_error(self):
         for deadline_during_join in (False, True):
             with self.subTest(deadline_during_join=deadline_during_join):
@@ -306,7 +674,7 @@ class ListPerformanceTests(SimpleTestCase):
                     finally:
                         exited.append((namespace, page))
 
-                with mock.patch.object(metadata, "LIST_READ_WORKERS", 2), mock.patch.object(
+                with override_settings(BKBASE_V4_LIST_READ_WORKERS=2), mock.patch.object(
                     metadata, "ThreadPoolExecutor", JoiningExecutor
                 ), mock.patch.object(
                     metadata, "monotonic", side_effect=lambda: time.monotonic() + clock_offset[0]
@@ -386,7 +754,7 @@ class ListPerformanceTests(SimpleTestCase):
                         active -= 1
             return original(method, url, **kwargs)
 
-        with mock.patch.object(metadata, "LIST_READ_WORKERS", 2), mock.patch(
+        with override_settings(BKBASE_V4_LIST_READ_WORKERS=2), mock.patch(
             "requests.sessions.Session.request", side_effect=concurrent
         ):
             result = ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
@@ -482,8 +850,8 @@ class ListPerformanceTests(SimpleTestCase):
                 raise requests.Timeout("Synthetic deadline-bound read")
             return original(method, url, **kwargs)
 
-        with mock.patch.object(metadata, "LIST_READ_BUDGET_SECONDS", 0.2), mock.patch.object(
-            metadata, "LIST_READ_WORKERS", 2
+        with mock.patch.object(metadata, "LIST_READ_BUDGET_SECONDS", 0.2), override_settings(
+            BKBASE_V4_LIST_READ_WORKERS=2
         ), mock.patch("requests.sessions.Session.request", side_effect=slow_pages):
             with self.assertRaises(BKBaseReadTimeout):
                 ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
@@ -508,7 +876,7 @@ class ListPerformanceTests(SimpleTestCase):
                 time.sleep(0.02)
             return original(method, url, **kwargs)
 
-        with mock.patch.object(metadata, "LIST_READ_WORKERS", 2), mock.patch(
+        with override_settings(BKBASE_V4_LIST_READ_WORKERS=2), mock.patch(
             "requests.sessions.Session.request", side_effect=failing
         ), self.assertRaises(APIRequestError):
             ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
@@ -551,9 +919,7 @@ class ListPerformanceTests(SimpleTestCase):
     def test_next_user_does_not_reuse_permission_rows(self):
         first = ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
         self.request.user.bk_username = "user_b"
-        with mock.patch.object(permissions, "get_request_username", return_value="user_b"), mock.patch.object(
-            table, "get_request_username", return_value="user_b"
-        ):
+        with mock.patch.object(table, "get_request_username", return_value="user_b"):
             second = ListTables().request({"table_type": "MineBizRt", "bk_biz_id": 47})
         self.assertEqual(len(first), 152)
         self.assertEqual(second, [])

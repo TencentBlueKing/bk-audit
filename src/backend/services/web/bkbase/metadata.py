@@ -11,6 +11,8 @@ from threading import Event
 from time import monotonic
 
 from bk_resource import api
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from requests.exceptions import ConnectionError as RequestConnectionError
 from requests.exceptions import Timeout as RequestTimeout
 from urllib3.exceptions import ReadTimeoutError
@@ -26,7 +28,7 @@ from services.web.bkbase.constants import (
 from services.web.bkbase.exceptions import BKBaseReadTimeout, BKBaseResourceMappingError
 
 LIST_READ_BUDGET_SECONDS = 50.0
-LIST_READ_WORKERS = 16
+DATASET_PAGE_SIZE = 100
 _READ_CANCELLED = ContextVar("bkbase_list_read_cancelled", default=None)
 
 
@@ -82,19 +84,24 @@ def list_read_scope():
             READ_DEADLINE.reset(token)
 
 
-def bounded_read_map(function, items):
-    """最多保留一窗任务并按输入顺序返回；首错停止后续分页，等待在途读取。"""
+def bounded_read_map(function, items, *, expand=None):
+    """按入队顺序返回；初始批次全部完成后，同池读取expand派生的下一批。"""
     items = list(items)
     if not items:
         return []
     with list_read_scope():
         results = [None] * len(items)
-        executor = ThreadPoolExecutor(max_workers=min(LIST_READ_WORKERS, len(items)), thread_name_prefix="bkbase-list")
+        limit = settings.BKBASE_V4_LIST_READ_WORKERS
+        if type(limit) is not int or limit <= 0:
+            raise ImproperlyConfigured("BKBASE_V4_LIST_READ_WORKERS must be a positive integer")
+        workers = limit if expand is not None else min(limit, len(items))
+        executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="bkbase-list")
         pending, index = {}, 0
+        following = []
         try:
             while index < len(items) or pending:
                 _remaining_read_time()
-                while index < len(items) and len(pending) < LIST_READ_WORKERS:
+                while index < len(items) and len(pending) < workers:
                     _remaining_read_time()
                     pending[executor.submit(copy_context().run, function, items[index])] = index
                     index += 1
@@ -102,9 +109,16 @@ def bounded_read_map(function, items):
                 if not done:
                     raise BKBaseReadTimeout()
                 for future in done:
-                    results[pending[future]] = future.result()
+                    result = future.result()
+                    results[pending[future]] = result
+                    if expand is not None:
+                        following.extend(expand(result))
                 for future in done:
                     del pending[future]
+                if not pending and index == len(items) and expand is not None:
+                    items.extend(following)
+                    results.extend([None] * len(following))
+                    expand = None
             return results
         except BaseException:
             # 先阻止已运行任务继续翻页，再等待在途GET；主线程保留首个错误。
@@ -324,34 +338,114 @@ def get_sensitivity_info_via_dataset(**params):
     return get_rt_sensitivity(context, params["data_set_id"])
 
 
-def list_datasets(context, *, dataset_name=None, user_request=None):
-    """按 total 记录数分页；显式传入 request 时使用个人接口身份。"""
+def _dataset_page(context, page, *, dataset_name=None, user_request=None, expected_total=None):
+    """以固定身份读取一页，拒绝total变化和不完整页，沿用本轮预算。"""
     if not context.get("tenant") or not context.get("namespace"):
         raise BKBaseResourceMappingError(message="Missing dataset namespace")
-    rows, page = [], 1
-    while True:
-        _remaining_read_time()
-        params = {"tenant": context["tenant"], "namespace": context["namespace"], "page": page, "page_size": 100}
-        if dataset_name is not None:
-            params["dataset_name"] = dataset_name
-        if user_request is not None:
-            params["_request"] = user_request
-            result = api.bk_base_v4.user_dataset_list(**params)
-        else:
-            result = api.bk_base_v4.dataset_list(**params)
-        if (
-            not isinstance(result, dict)
-            or not isinstance(result.get("list"), list)
-            or type(result.get("total")) is not int
-            or result["total"] < 0
-        ):
-            raise BKBaseResourceMappingError(message="Invalid dataset pagination response")
-        rows.extend(result["list"])
-        if user_request is not None and not result["list"] and len(rows) < result["total"]:
-            raise BKBaseResourceMappingError(message="User Dataset pagination ended before total")
-        if not result["list"] or page * params["page_size"] >= result["total"]:
-            return rows
-        page += 1
+    _remaining_read_time()
+    params = {
+        "tenant": context["tenant"],
+        "namespace": context["namespace"],
+        "page": page,
+        "page_size": DATASET_PAGE_SIZE,
+    }
+    if dataset_name is not None:
+        params["dataset_name"] = dataset_name
+    if user_request is not None:
+        params["_request"] = user_request
+        result = api.bk_base_v4.user_dataset_list(**params)
+    else:
+        result = api.bk_base_v4.dataset_list(**params)
+    if (
+        not isinstance(result, dict)
+        or not isinstance(result.get("list"), list)
+        or type(result.get("total")) is not int
+        or result["total"] < 0
+    ):
+        raise BKBaseResourceMappingError(message="Invalid dataset pagination response")
+    if expected_total is not None and result["total"] != expected_total:
+        raise BKBaseResourceMappingError(message="Dataset pagination total changed")
+    expected_count = max(0, min(DATASET_PAGE_SIZE, result["total"] - (page - 1) * DATASET_PAGE_SIZE))
+    if len(result["list"]) != expected_count:
+        raise BKBaseResourceMappingError(message="Incomplete dataset page")
+    return result
+
+
+def _dataset_rows(pages):
+    """按页序汇总同一项目，拒绝重复存储视角掩盖的缺页。"""
+    rows, identities = [], set()
+    for page in pages:
+        for row in page["list"]:
+            if (
+                isinstance(row, dict)
+                and isinstance(row.get("dataset_name"), str)
+                and isinstance(row.get("storage_type"), str)
+            ):
+                identity = (row["dataset_name"], row["storage_type"])
+                if identity in identities:
+                    raise BKBaseResourceMappingError(message="Duplicate Dataset across pagination")
+                identities.add(identity)
+            rows.append(row)
+    return rows
+
+
+def list_datasets(context, *, dataset_name=None, user_request=None):
+    """单项目入口顺序读取，避免调用方已有worker时嵌套开池。"""
+    first = _dataset_page(context, 1, dataset_name=dataset_name, user_request=user_request)
+    pages = [first]
+    for page in range(2, (first["total"] + DATASET_PAGE_SIZE - 1) // DATASET_PAGE_SIZE + 1):
+        pages.append(
+            _dataset_page(
+                context, page, dataset_name=dataset_name, user_request=user_request, expected_total=first["total"]
+            )
+        )
+    return _dataset_rows(pages)
+
+
+@list_read_scope()
+def list_project_datasets(context, namespaces, *, dataset_name=None, user_request=None):
+    """全部项目首屏完成后，同池读取剩余页，按项目/页序返回完整集合。"""
+    namespaces = list(namespaces)
+
+    def read(task):
+        """读取固定项目/页，携带首屏total校验一致性。"""
+        index, page, total = task
+        result = _dataset_page(
+            {**context, "namespace": namespaces[index]},
+            page,
+            dataset_name=dataset_name,
+            user_request=user_request,
+            expected_total=total,
+        )
+        return index, page, result
+
+    def following_pages(result):
+        """只由首屏派生有限后续页，仍由原主调度派发。"""
+        index, page, data = result
+        if page != 1:
+            return []
+        return [
+            (index, next_page, data["total"])
+            for next_page in range(2, (data["total"] + DATASET_PAGE_SIZE - 1) // DATASET_PAGE_SIZE + 1)
+        ]
+
+    results = bounded_read_map(read, [(index, 1, None) for index in range(len(namespaces))], expand=following_pages)
+    pages = [{} for _ in namespaces]
+    for index, page, result in results:
+        if page in pages[index]:
+            raise BKBaseResourceMappingError(message="Repeated Dataset page")
+        pages[index][page] = result
+    batches = []
+    for project_pages in pages:
+        total = project_pages[1]["total"]
+        count = max(1, (total + DATASET_PAGE_SIZE - 1) // DATASET_PAGE_SIZE)
+        if sorted(project_pages) != list(range(1, count + 1)):
+            raise BKBaseResourceMappingError(message="Missing Dataset page")
+        rows = _dataset_rows([project_pages[page] for page in range(1, count + 1)])
+        if len(rows) != total:
+            raise BKBaseResourceMappingError(message="Incomplete Dataset count")
+        batches.append(rows)
+    return batches
 
 
 def metadata_cache_scope():

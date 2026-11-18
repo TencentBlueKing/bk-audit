@@ -47,19 +47,19 @@ class DatasetAndPullConfirmedTests(SimpleTestCase):
         }
         self.pages = [
             {
-                "pages_num": 101,
+                "pages_num": 2,
                 "total": 101,
                 "list": [
                     {"dataset_name": "11_test", "storage_type": "doris"},
                     {"dataset_name": "11_test_suffix", "storage_type": "hdfs"},
-                ],
+                ]
+                + [{"dataset_name": f"11_test_suffix_{index}", "storage_type": "hdfs"} for index in range(98)],
             },
             {
-                "pages_num": 101,
+                "pages_num": 2,
                 "total": 101,
                 "list": [
                     {"dataset_name": "11_test", "storage_type": "channel"},
-                    {"dataset_name": "11_test", "storage_type": "doris"},
                 ],
             },
         ]
