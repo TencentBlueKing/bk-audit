@@ -77,26 +77,33 @@ export const submitBatchConfirm = async (input: {
 }): Promise<BatchReceipt> => {
   const params = { risk_ids: input.riskIds, description: input.description };
   const data = input.result === 'misreport'
-    ? await RiskManageService.bulkMisreportRisk(params)
+    ? await RiskManageService.batchConfirmAsMisreport(params)
     : await RiskManageService.batchConfirmRisk(params);
   return normalizeReceipt(input.riskIds, data);
 };
 
+/** withMisreport 时：bulk=批量误报，confirm=批量确认误报 */
 export const submitBatchWhitelist = async (input: {
   riskIds: string[];
   payload: WhitelistPayload;
   withMisreport: boolean;
   misreportDescription?: string;
+  misreportVia?: 'bulk' | 'confirm';
 }): Promise<BatchReceipt> => {
-  const data = input.withMisreport
-    ? await RiskManageService.bulkMisreportRisk({
-      risk_ids: input.riskIds,
-      description: input.misreportDescription || '',
-      whitelist: input.payload,
-    })
-    : await RiskWhitelistService.batchCreate({
+  if (!input.withMisreport) {
+    const data = await RiskWhitelistService.batchCreate({
       ...input.payload,
       risk_ids: input.riskIds,
     });
+    return normalizeReceipt(input.riskIds, data);
+  }
+  const params = {
+    risk_ids: input.riskIds,
+    description: input.misreportDescription || '',
+    whitelist: input.payload,
+  };
+  const data = input.misreportVia === 'confirm'
+    ? await RiskManageService.batchConfirmAsMisreport(params)
+    : await RiskManageService.bulkMisreportRisk(params);
   return normalizeReceipt(input.riskIds, data);
 };

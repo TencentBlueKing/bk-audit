@@ -139,6 +139,7 @@
     getRiskViewTypeByDetailRoute,
     useRiskListStrategyList,
   } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+  import { shouldPollRiskDetail } from '@views/risk-manage/whitelist';
 
   import BaseInfo from './components/base-info.vue';
   import EditEventReport from './components/event-report/edit-event-report.vue';
@@ -161,7 +162,6 @@
     processing: t('人工处理'),
     for_approve: t('执行处理套餐'),
     auto_process: t('执行处理套餐'),
-    whitelist_approving: t('加白审批中'),
     closed: t('风险单关闭'),
     new: t('风险单产生'),
     stand_by: t('风险创建中'),
@@ -221,8 +221,8 @@
         startReportGeneratingPolling();
       } else {
         stopReportGeneratingPolling();
-        // 原有的状态轮询逻辑
-        if (['for_approve', 'auto_process', 'whitelist_approving'].includes(data.status)) {
+        // 套餐审批/执行中，或最新加白节点 ITSM 仍待审批时轮询（冒险加白风险 status 不变也要拿关单与节点更新）
+        if (shouldPollRiskDetail(data)) {
           startPolling();
         } else {
           clearTimeout(timeout);

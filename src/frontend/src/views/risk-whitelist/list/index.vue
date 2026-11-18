@@ -147,8 +147,15 @@
   const approve = (row: RiskWhitelist) => {
     if (approvingIds.value.has(row.id)) return;
     approvingIds.value = new Set(approvingIds.value).add(row.id);
-    RiskWhitelistService.approve({ id: row.id }).then(() => {
-      messageSuccess(t('已通过，白名单生效并关闭关联风险单'));
+    RiskWhitelistService.approve({ id: row.id }).then((data) => {
+      const status = data?.status;
+      if (status === 'pending') {
+        messageSuccess(t('审批已提交，工单仍在处理中'));
+      } else if (status === 'active') {
+        messageSuccess(t('已通过，白名单生效并关闭关联风险单'));
+      } else {
+        messageSuccess(t('操作成功'));
+      }
       refresh();
     })
       .finally(() => {
@@ -180,57 +187,73 @@
     </bk-dropdown>
   );
 
+  /** 按钮以列表返回的 actions 为准，不按 status 本地推导 */
   const renderActions = (row: RiskWhitelist) => {
-    const edit = <bk-button text theme="primary" onClick={() => editRef.value?.open(row)}>{t('编辑')}</bk-button>;
-    const renew = <bk-button text theme="primary" onClick={() => renewRef.value?.open(row)}>{t('续期')}</bk-button>;
-    const hit = { label: t('命中记录'), onClick: () => hitRef.value?.open(row.id, row.rule_code) };
-    const remove = { label: t('删除'), onClick: () => deleteRef.value?.open(row) };
-    if (row.status === 'pending') {
-      return (
-        <div class="row-actions">
-          <bk-button
-            disabled={approvingIds.value.has(row.id)}
-            loading={approvingIds.value.has(row.id)}
-            text
-            theme="primary"
-            onClick={() => approve(row)}>
-            {t('通过')}
-          </bk-button>
-          <bk-button text theme="primary" onClick={() => rejectRef.value?.open(row)}>{t('驳回')}</bk-button>
-        </div>
+    const set = new Set(row.actions || []);
+    const primary: any[] = [];
+    const more: Array<{ label: string; onClick: () => void }> = [];
+
+    if (set.has('approve')) {
+      primary.push(
+        <bk-button
+          disabled={approvingIds.value.has(row.id)}
+          loading={approvingIds.value.has(row.id)}
+          text
+          theme="primary"
+          onClick={() => approve(row)}>
+          {t('通过')}
+        </bk-button>,
       );
     }
-    if (row.status === 'active') {
-      const more = [hit];
-      if (!row.is_permanent) more.unshift({ label: t('续期'), onClick: () => renewRef.value?.open(row) });
-      return (
-        <div class="row-actions">
-          {edit}
-          <bk-button text theme="primary" onClick={() => toggleRef.value?.open(row, false)}>{t('停用')}</bk-button>
-          {renderMore(more)}
-        </div>
+    if (set.has('reject')) {
+      primary.push(
+        <bk-button text theme="primary" onClick={() => rejectRef.value?.open(row)}>{t('驳回')}</bk-button>,
       );
     }
-    if (row.status === 'disabled') {
-      return (
-        <div class="row-actions">
-          <bk-button text theme="primary" onClick={() => toggleRef.value?.open(row, true)}>{t('启用')}</bk-button>
-          {renderMore([hit, remove])}
-        </div>
+    if (set.has('edit')) {
+      primary.push(
+        <bk-button text theme="primary" onClick={() => editRef.value?.open(row)}>{t('编辑')}</bk-button>,
       );
     }
-    if (row.status === 'expired') {
-      return (
-        <div class="row-actions">
-          {edit}
-          {renew}
-          {renderMore([hit, remove])}
-        </div>
+    if (set.has('disable')) {
+      primary.push(
+        <bk-button text theme="primary" onClick={() => toggleRef.value?.open(row, false)}>{t('停用')}</bk-button>,
       );
     }
+    if (set.has('enable')) {
+      primary.push(
+        <bk-button text theme="primary" onClick={() => toggleRef.value?.open(row, true)}>{t('启用')}</bk-button>,
+      );
+    }
+    if (set.has('renew')) {
+      const renewBtn = (
+        <bk-button text theme="primary" onClick={() => renewRef.value?.open(row)}>{t('续期')}</bk-button>
+      );
+      // 生效中/已停用：续期放更多；已到期等：续期与编辑并列
+      if (set.has('disable') || set.has('enable')) {
+        more.push({ label: t('续期'), onClick: () => renewRef.value?.open(row) });
+      } else {
+        primary.push(renewBtn);
+      }
+    }
+    if (set.has('hits')) {
+      more.push({ label: t('命中记录'), onClick: () => hitRef.value?.open(row.id, row.rule_code) });
+    }
+    if (set.has('delete')) {
+      if (!primary.length && !more.length) {
+        primary.push(
+          <bk-button text theme="primary" onClick={() => deleteRef.value?.open(row)}>{t('删除')}</bk-button>,
+        );
+      } else {
+        more.push({ label: t('删除'), onClick: () => deleteRef.value?.open(row) });
+      }
+    }
+
+    if (!primary.length && !more.length) return null;
     return (
       <div class="row-actions">
-        <bk-button text theme="primary" onClick={() => deleteRef.value?.open(row)}>{t('删除')}</bk-button>
+        {primary}
+        {more.length ? renderMore(more) : null}
       </div>
     );
   };

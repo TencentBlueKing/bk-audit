@@ -66,6 +66,7 @@
         <risk-whitelist-form
           v-if="withWhitelist"
           ref="whitelistFormRef"
+          locked-type="false_positive"
           embedded
           :initial-scope="initialScope"
           show-apply-hint />
@@ -215,7 +216,7 @@
   const {
     run: applyWhitelist,
     loading: applyLoading,
-  } = useRequest(RiskManageService.updateRiskLabel, {
+  } = useRequest(RiskManageService.confirmAsMisreport, {
     defaultValue: null,
     onSuccess: () => {
       window.changeConfirm = false;
@@ -271,10 +272,9 @@
         });
         if (!confirmed) return;
         await applyWhitelist({
-          risk_id: String(props.riskId),
-          risk_label: 'misreport',
+          risk_id: props.riskId,
           description: formData.value.misreport_description || '',
-          whitelist: payload,
+          whitelist: { ...payload, whitelist_type: 'false_positive' },
         });
         return;
       }

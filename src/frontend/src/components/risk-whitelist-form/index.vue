@@ -75,7 +75,7 @@
                     class="inner-col-line" />
                   <bk-select
                     class="field-select"
-                    :disabled="isStrategyRow(groupIndex, conditionIndex)"
+                    :disabled="isPrefillLocked(groupIndex, conditionIndex) || isStrategyRow(groupIndex, conditionIndex)"
                     :model-value="condition.field"
                     @change="(value: string) => changeField(groupIndex, conditionIndex, value)">
                     <bk-option
@@ -86,6 +86,7 @@
                   </bk-select>
                   <bk-select
                     class="operator-select"
+                    :disabled="isPrefillLocked(groupIndex, conditionIndex)"
                     :model-value="condition.operator"
                     @change="(value: string) => changeOperator(groupIndex, conditionIndex, value)">
                     <bk-option
@@ -97,6 +98,7 @@
                   <bk-select
                     v-if="condition.field === 'strategy_id'"
                     class="value-input"
+                    :disabled="isPrefillLocked(groupIndex, conditionIndex)"
                     filterable
                     :loading="strategyLoading"
                     :model-value="condition.value"
@@ -112,6 +114,7 @@
                   <bk-input
                     v-else
                     class="value-input"
+                    :disabled="isPrefillLocked(groupIndex, conditionIndex)"
                     :model-value="condition.value"
                     :placeholder="t('请输入值')"
                     @update:model-value="(value: string) => changeTextValue(groupIndex, conditionIndex, value)" />
@@ -159,19 +162,21 @@
           @change="changeWhitelistType">
           <bk-popover
             :content="t('只有命中策略条件时不允许误报加白')"
-            :disabled="!falsePositiveDisabled"
+            :disabled="!showFalsePositiveTip"
             placement="top"
             reference-cls="false-positive-tip"
             theme="dark">
             <span class="false-positive-wrap">
               <bk-radio
-                :disabled="falsePositiveDisabled"
+                :disabled="isTypeLocked || falsePositiveDisabled"
                 label="false_positive">
                 {{ t('误报加白') }}
               </bk-radio>
             </span>
           </bk-popover>
-          <bk-radio label="risk_acceptance">
+          <bk-radio
+            :disabled="isTypeLocked"
+            label="risk_acceptance">
             {{ t('冒险加白') }}
           </bk-radio>
         </bk-radio-group>
@@ -284,10 +289,10 @@
     </div>
 
     <bk-alert
-      v-if="showApplyHint && !roleText.isAdmin.value"
+      v-if="showApplyHint && applyHintText"
       class="type-alert"
       theme="info"
-      :title="t(roleText.text.value.applyHint)" />
+      :title="t(applyHintText)" />
   </div>
 </template>
 <script setup lang="ts">
@@ -309,7 +314,7 @@
     WhitelistType,
   } from '@model/risk-whitelist/whitelist';
 
-  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
+  import useWhitelistRoleText, { getWhitelistApplyHint } from '@hooks/use-whitelist-role-text';
 
   import {
     calcExpireAt,
@@ -328,6 +333,8 @@
     showApplyHint?: boolean;
     embedded?: boolean;
     initialScope?: MatchScope | null;
+    /** 锁定加白类型（误报同时加白仅允许 false_positive）；编辑态也会禁用改类型 */
+    lockedType?: WhitelistType | null;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -335,6 +342,7 @@
     showApplyHint: false,
     embedded: false,
     initialScope: null,
+    lockedType: null,
   });
 
   const { t } = useI18n();
@@ -342,6 +350,9 @@
 
   const scope = ref<MatchScope>(createDefaultScope());
   const whitelistType = ref<WhitelistType>('false_positive');
+  const applyHintText = computed(() => (
+    getWhitelistApplyHint(whitelistType.value, roleText.isAdmin.value)
+  ));
   const validityMode = ref<ValidityMode>('permanent');
   const customDays = ref(1);
   const customExpire = ref('');
@@ -355,9 +366,42 @@
   const renewEditing = ref(false);
   const strategyLoading = ref(false);
   const strategyOptions = ref<Array<{ id: string; name: string }>>([]);
+  /** 风险单带入的 strategy_id / raw_event_id，按设计稿整行禁用 */
+  const lockedPrefillKeys = ref<Set<string>>(new Set());
 
   const isEdit = computed(() => Boolean(props.record?.id));
+  /** 编辑或外部锁定时不允许改加白类型 */
+  const isTypeLocked = computed(() => isEdit.value || Boolean(props.lockedType));
+  const prefillLockKey = (field: string, value: string) => `${field}\u0001${value}`;
+
+  const syncLockedPrefillKeys = (scopeSource?: MatchScope | null) => {
+    const next = new Set<string>();
+    if (props.embedded && scopeSource?.groups?.length) {
+      scopeSource.groups.forEach((group) => {
+        group.conditions.forEach((condition) => {
+          if (
+            (condition.field === 'strategy_id' || condition.field === 'raw_event_id')
+            && condition.value
+          ) {
+            next.add(prefillLockKey(condition.field, String(condition.value)));
+          }
+        });
+      });
+    }
+    lockedPrefillKeys.value = next;
+  };
+
+  const isPrefillLocked = (groupIndex: number, conditionIndex: number) => {
+    const condition = scope.value.groups[groupIndex]?.conditions[conditionIndex];
+    if (!condition?.field || condition.value === undefined || condition.value === null || condition.value === '') {
+      return false;
+    }
+    return lockedPrefillKeys.value.has(prefillLockKey(condition.field, String(condition.value)));
+  };
   const falsePositiveDisabled = computed(() => hasStrategyOnlyGroup(scope.value));
+  const showFalsePositiveTip = computed(() => (
+    falsePositiveDisabled.value && !isTypeLocked.value
+  ));
   const expectedExpire = computed(() => {
     if (validityMode.value === 'custom') {
       const picked = dayjs(customExpire.value);
@@ -401,13 +445,19 @@
       scope.value = props.initialScope?.groups?.length
         ? JSON.parse(JSON.stringify(props.initialScope))
         : createDefaultScope();
-      whitelistType.value = hasStrategyOnlyGroup(scope.value) ? 'risk_acceptance' : 'false_positive';
+      syncLockedPrefillKeys(props.initialScope);
+      if (props.lockedType) {
+        whitelistType.value = props.lockedType;
+      } else {
+        whitelistType.value = hasStrategyOnlyGroup(scope.value) ? 'risk_acceptance' : 'false_positive';
+      }
       validityMode.value = whitelistType.value === 'risk_acceptance' ? '1m' : 'permanent';
       customDays.value = 1;
       customExpire.value = '';
       reason.value = '';
       return;
     }
+    lockedPrefillKeys.value = new Set();
     scope.value = JSON.parse(JSON.stringify(record.match_scope?.groups?.length
       ? record.match_scope
       : createDefaultScope()));
@@ -425,50 +475,19 @@
     }
   });
   watch(falsePositiveDisabled, (disabled) => {
+    if (isTypeLocked.value) return;
     if (disabled && whitelistType.value === 'false_positive') {
       whitelistType.value = 'risk_acceptance';
     }
   });
-
-  const applyStrategyNames = (named: Array<{ id: string; name: string }>) => {
-    if (!named.length) return;
-    const nameMap = new Map(named.map(item => [item.id, item.name]));
-    strategyOptions.value = [
-      ...named,
-      ...strategyOptions.value.filter(item => !nameMap.has(item.id)),
-    ];
-    scope.value = {
-      ...scope.value,
-      groups: scope.value.groups.map(group => ({
-        ...group,
-        conditions: group.conditions.map((condition) => {
-          if (condition.field !== 'strategy_id') return condition;
-          const name = nameMap.get(String(condition.value));
-          return name ? { ...condition, value_display: name } : condition;
-        }),
-      })),
-    };
-  };
-
-  const loadSelectedStrategyNames = async () => {
-    const ids = [...new Set(scope.value.groups.flatMap(group => group.conditions)
-      .filter(item => item.field === 'strategy_id' && item.value)
-      .map(item => String(item.value)))];
-    const named = (await Promise.all(ids.map(async (id) => {
-      const numericId = Number(id);
-      if (!numericId) return null;
-      const current = strategyOptions.value.find(item => item.id === id);
-      if (current && current.name !== id && !/^\d+$/.test(current.name)) return null;
-      try {
-        const info = await StrategyManageService.fetchStrategyInfo({ strategy_id: numericId });
-        if (!info?.strategy_name) return null;
-        return { id, name: `${info.strategy_name}(${id})` };
-      } catch {
-        return null;
+  watch(() => props.lockedType, (type) => {
+    if (type && !isEdit.value) {
+      whitelistType.value = type;
+      if (type === 'risk_acceptance' && validityMode.value === 'permanent') {
+        validityMode.value = '1m';
       }
-    }))).filter((item): item is { id: string; name: string } => !!item);
-    applyStrategyNames(named);
-  };
+    }
+  });
 
   const seedSelectedStrategies = () => {
     const selected = scope.value.groups.flatMap(group => group.conditions)
@@ -481,18 +500,49 @@
     ];
   };
 
+  /** 从风险单带入时已有策略：只展示当前风险策略，不拉全量列表（与后端 risk_id 预填口径一致） */
+  const isRiskBoundStrategy = computed(() => {
+    if (!props.embedded || !props.initialScope?.groups?.length) return false;
+    return props.initialScope.groups.some(group => (
+      group.conditions.some(item => item.field === 'strategy_id' && item.value)
+    ));
+  });
+
+  /**
+   * 菜单新建：暂用风险侧 /risks/strategies/。
+   * 风险单加白：只保留当前风险策略，不请求列表。
+   * 后端白名单专用策略选项接口就绪后再统一替换。
+   */
   const searchStrategy = (keyword = '') => {
     seedSelectedStrategies();
+    if (isRiskBoundStrategy.value) {
+      strategyOptions.value = scope.value.groups.flatMap(group => group.conditions)
+        .filter(item => item.field === 'strategy_id' && item.value)
+        .map(item => ({ id: String(item.value), name: item.value_display || String(item.value) }));
+      strategyLoading.value = false;
+      return;
+    }
     strategyLoading.value = true;
-    StrategyManageService.fetchStrategyList({
-      name: keyword,
-      page: 1,
-      page_size: 20,
+    const end = dayjs();
+    const start = end.subtract(182, 'day');
+    StrategyManageService.fetchScopedStrategyList({
+      risk_view_type: 'all',
+      start_time: start.format('YYYY-MM-DD HH:mm:ss'),
+      end_time: end.format('YYYY-MM-DD HH:mm:ss'),
+      isNeedSceneParams: true,
     }).then((data) => {
-      const fetched = (data.results || []).map(item => ({
-        id: String(item.strategy_id),
-        name: `${item.strategy_name}(${item.strategy_id})`,
-      }));
+      const kw = String(keyword || '').trim().toLowerCase();
+      const fetched = (Array.isArray(data) ? data : [])
+        .map((item) => {
+          const id = String(item.value ?? '');
+          const label = String(item.label || '').trim();
+          return {
+            id,
+            name: label ? `${label}(${id})` : id,
+          };
+        })
+        .filter(item => item.id)
+        .filter(item => !kw || item.name.toLowerCase().includes(kw) || item.id.includes(kw));
       const selected = scope.value.groups.flatMap(group => group.conditions)
         .filter(item => item.field === 'strategy_id' && item.value)
         .map(item => ({ id: String(item.value), name: item.value_display || String(item.value) }));
@@ -501,8 +551,10 @@
         ...selected.filter(item => !ids.has(item.id)),
         ...fetched,
       ];
-      return loadSelectedStrategyNames();
     })
+      .catch(() => {
+        seedSelectedStrategies();
+      })
       .finally(() => {
         strategyLoading.value = false;
       });
@@ -631,6 +683,7 @@
   };
 
   const changeWhitelistType = (value: WhitelistType) => {
+    if (isTypeLocked.value) return;
     whitelistType.value = value;
     markDirty();
   };
@@ -699,7 +752,8 @@
   };
 
   const addCondition = (groupIndex: number, conditionIndex: number) => {
-    const field = FALLBACK_CONDITION_FIELDS[1];
+    const field = FALLBACK_CONDITION_FIELDS.find(item => item.field !== 'strategy_id')
+      || FALLBACK_CONDITION_FIELDS[1];
     const next: MatchCondition = {
       field: field.field,
       field_name: field.name,
@@ -716,6 +770,7 @@
   const canRemoveCondition = (groupIndex: number, conditionIndex: number) => {
     const group = scope.value.groups[groupIndex];
     if (group.conditions.length <= 1) return false;
+    if (isPrefillLocked(groupIndex, conditionIndex)) return false;
     return !isStrategyRow(groupIndex, conditionIndex);
   };
 
@@ -779,7 +834,7 @@
   const getPayload = (): WhitelistPayload => {
     const payload: WhitelistPayload = {
       match_scope: scope.value,
-      whitelist_type: whitelistType.value,
+      whitelist_type: props.lockedType || whitelistType.value,
       reason: reason.value.trim(),
     };
     if (isValidityEditable()) {

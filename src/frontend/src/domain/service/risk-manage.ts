@@ -341,13 +341,18 @@ export default {
   },
 
   /**
-   * @desc 确认为误报
+   * @desc 确认为误报（可带 whitelist，仅 false_positive）
    */
   confirmAsMisreport(params: {
     risk_id: string | number,
     description?: string,
+    whitelist?: WhitelistPayload,
   }) {
-    return RiskManageSource.confirmAsMisreport(params)
+    const { whitelist, ...rest } = params;
+    return RiskManageSource.confirmAsMisreport({
+      ...rest,
+      ...(whitelist ? { whitelist: toWhitelistBody(whitelist) } : {}),
+    })
       .then(({ data }) => data);
   },
 
@@ -363,13 +368,18 @@ export default {
   },
 
   /**
-   * @desc 批量标记误报
+   * @desc 批量确认为误报（可带 whitelist，仅 false_positive）
    */
   batchConfirmAsMisreport(params: {
     risk_ids: string[],
     description?: string,
+    whitelist?: WhitelistPayload,
   }) {
-    return RiskManageSource.batchConfirmAsMisreport(params)
+    const { whitelist, ...rest } = params;
+    return RiskManageSource.batchConfirmAsMisreport({
+      ...rest,
+      ...(whitelist ? { whitelist: toWhitelistBody(whitelist) } : {}),
+    })
       .then(({ data }) => data);
   },
 

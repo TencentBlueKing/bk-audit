@@ -111,7 +111,6 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
-  import { isWhitelistApproving } from '@views/risk-manage/whitelist';
 
   import AwaitDeal from './components/await-deal.vue';
   import WhitelistApply from './components/whitelist-apply.vue';
@@ -507,7 +506,9 @@
       // await_deal和processing的情况多渲染一个表单
       const latestWhitelist = [...data.ticket_history].reverse()
         .find(item => item.action === 'WhitelistApply');
-      const whitelistStatus = latestWhitelist?.whitelist?.apply_status
+      const whitelistStatus = latestWhitelist?.whitelist?.itsm_status
+        || latestWhitelist?.whitelist?.itsm_status_display
+        || latestWhitelist?.whitelist?.apply_status
         || latestWhitelist?.whitelist?.status
         || '';
       const whitelistRejected = ['rejected', '已驳回'].includes(String(whitelistStatus));
@@ -516,7 +517,7 @@
       }
       const showHandleForm = ['await_deal', 'processing'].includes(data.status)
         || (data.status === 'closed' && data.risk_label === 'normal');
-      if (showHandleForm && !isWhitelistApproving(data.status)) {
+      if (showHandleForm) {
         const item = Object.assign({}, data.ticket_history[data.ticket_history.length - 1]);
         item.action = 'await_deal'; // 使用await_deal组件来处理两种状态
         list.value.push({

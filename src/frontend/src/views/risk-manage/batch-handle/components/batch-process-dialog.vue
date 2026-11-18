@@ -195,6 +195,7 @@
             ref="whitelistFormRef"
             data-testid="batch-whitelist-form"
             embedded
+            locked-type="false_positive"
             :initial-scope="initialScope"
             show-apply-hint />
         </template>
@@ -266,7 +267,9 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
-  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
+  import useWhitelistRoleText, { getWhitelistApplySuccess } from '@hooks/use-whitelist-role-text';
+
+  import type { WhitelistType } from '@model/risk-whitelist/whitelist';
 
   import ApplicationParameter from '@components/application-parameter/index.vue';
   import RichEditor from '@components/editor/index.vue';
@@ -611,6 +614,7 @@
         return;
       }
       const payload = whitelistFormRef.value.getPayload();
+      const whitelistType = payload.whitelist_type as WhitelistType;
       const confirmed = await confirmRef.value?.open({
         scope: payload.match_scope,
         whitelistType: payload.whitelist_type,
@@ -624,10 +628,14 @@
       isSubmitting.value = true;
       failures.value = [];
       try {
+        const withMisreport = formData.value.method === 'misreport';
         const receipt = await submitBatchWhitelist({
           riskIds: props.riskIds,
-          payload,
-          withMisreport: formData.value.method === 'misreport',
+          payload: withMisreport
+            ? { ...payload, whitelist_type: 'false_positive' }
+            : payload,
+          withMisreport,
+          misreportVia: 'bulk',
           misreportDescription: formData.value.misreport_description,
         });
         if (receipt.failed.length) {
@@ -637,7 +645,7 @@
         }
         messageSuccess(t(formData.value.method === 'misreport'
           ? roleText.text.value.misreportSuccess
-          : roleText.text.value.applySuccess));
+          : getWhitelistApplySuccess(whitelistType, roleText.isAdmin.value)));
         isShow.value = false;
         emit('success');
       } catch {

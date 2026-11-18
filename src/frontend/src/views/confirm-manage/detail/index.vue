@@ -109,6 +109,7 @@
   import { execCopy } from '@utils/assist';
 
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+  import { shouldPollRiskDetail } from '@views/risk-manage/whitelist';
 
   import ConfirmRiskHandle from '../components/confirm-risk-handle/index.vue';
   import BaseInfo from '@views/risk-manage/detail/components/base-info.vue';
@@ -176,7 +177,7 @@
         startReportGeneratingPolling();
       } else {
         stopReportGeneratingPolling();
-        if (['for_approve', 'auto_process', 'whitelist_approving'].includes(data.status)) {
+        if (shouldPollRiskDetail(data)) {
           startPolling();
         } else {
           clearTimeout(timeout);

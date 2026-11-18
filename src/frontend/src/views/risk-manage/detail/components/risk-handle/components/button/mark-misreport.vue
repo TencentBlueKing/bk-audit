@@ -18,11 +18,6 @@
   <div v-if="showDirectButton">
     <bk-button
       v-if="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
-      v-bk-tooltips="{
-        content: t('加白审批中，无法同时手工处理'),
-        disabled: data.status !== 'whitelist_approving',
-      }"
-      :disabled="data.status === 'whitelist_approving'"
       style="font-size: 12px;"
       text
       theme="primary"
@@ -164,7 +159,7 @@
   const { messageSuccess } = useMessage();
   const openHandleMethod = inject<((method: string) => void) | null>('openHandleMethod', null);
   const requestMisreport = () => {
-    if (props.data.status === 'whitelist_approving' || !openHandleMethod) return;
+    if (!openHandleMethod) return;
     openHandleMethod('misreport');
   };
   const isForce = ref(true);
@@ -189,13 +184,8 @@
   const isMisreport = computed(() => props.data.risk_label === 'misreport');
   const showDirectButton = computed(() => (
     !isMisreport.value
-    && (
-      props.data.status === 'whitelist_approving'
-      || (
-        typeof openHandleMethod === 'function'
-        && ['await_deal', 'processing'].includes(props.data.status)
-      )
-    )
+    && typeof openHandleMethod === 'function'
+    && ['await_deal', 'processing'].includes(props.data.status)
   ));
   const isShowOperators = computed(() => !(props.lastTicketHistory && props.lastTicketHistory.action === 'AutoProcess'));
   // 标记误报的tip

@@ -16,6 +16,8 @@
 */
 import { computed } from 'vue';
 
+import type { WhitelistType } from '@model/risk-whitelist/whitelist';
+
 const readRoles = () => {
   try {
     const roles = JSON.parse(sessionStorage.getItem('userRole') || '[]');
@@ -23,6 +25,45 @@ const readRoles = () => {
   } catch {
     return [];
   }
+};
+
+/** 后端口径：误报加白会先误报关单；冒险加白等审批通过后再关单。 */
+export const getWhitelistApplyHint = (type: WhitelistType, isAdmin: boolean) => {
+  if (isAdmin) return '';
+  if (type === 'false_positive') {
+    return '提交后将按误报关闭当前风险单，加白规则待场景管理员审批通过后生效。';
+  }
+  return '提交后工单进入加白审批中，场景管理员通过后生效并关单。';
+};
+
+export const getWhitelistApplySuccess = (type: WhitelistType, isAdmin: boolean) => {
+  if (isAdmin) {
+    return type === 'false_positive'
+      ? '已按误报关单，白名单已生效'
+      : '白名单已生效';
+  }
+  return type === 'false_positive'
+    ? '已按误报关单，加白申请已提交'
+    : '加白申请已提交';
+};
+
+export const getWhitelistRiskCloseImpact = (type: WhitelistType, isAdmin: boolean) => {
+  if (type === 'false_positive') {
+    return '当前风险单将按误报关闭。';
+  }
+  return isAdmin
+    ? '当前风险单将关闭。'
+    : '审批通过后当前风险单将关闭。';
+};
+
+export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) => {
+  if (isAdmin) {
+    return '白名单立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
+  }
+  if (type === 'false_positive') {
+    return '加白规则待审批通过后生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
+  }
+  return '审批通过后白名单生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
 };
 
 /**
@@ -43,7 +84,7 @@ export default function useWhitelistRoleText() {
       misreportAlertTail: '请同时加入白名单',
       misreportSuccess: '已标记误报，白名单已生效',
       applySuccess: '白名单已生效',
-      applyHint: '提交后工单进入加白审批中，场景管理员通过后生效并关单。',
+      applyHint: getWhitelistApplyHint('risk_acceptance', false),
     }
     : {
       method: '申请加白',
@@ -53,7 +94,7 @@ export default function useWhitelistRoleText() {
       misreportAlertTail: '请同时申请加白',
       misreportSuccess: '已标记误报，加白申请已提交',
       applySuccess: '加白申请已提交',
-      applyHint: '提交后工单进入加白审批中，场景管理员通过后生效并关单。',
+      applyHint: getWhitelistApplyHint('risk_acceptance', false),
     }));
   return { isAdmin, text };
 }

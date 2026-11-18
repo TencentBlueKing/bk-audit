@@ -115,6 +115,7 @@
           v-if="withWhitelist"
           ref="whitelistFormRef"
           embedded
+          locked-type="false_positive"
           :initial-scope="initialScope"
           show-apply-hint />
       </template>
@@ -242,11 +243,11 @@
   import SoapManageService from '@service/soap-manage';
 
   import type RiskManageModel from '@model/risk/risk';
-  import type { WhitelistPayload } from '@model/risk-whitelist/whitelist';
+  import type { WhitelistPayload, WhitelistType } from '@model/risk-whitelist/whitelist';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
-  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
+  import useWhitelistRoleText, { getWhitelistApplySuccess } from '@hooks/use-whitelist-role-text';
 
   import ApplicationParameter from '@components/application-parameter/index.vue';
   import RichEditor from '@components/editor/index.vue';
@@ -548,7 +549,8 @@
         risk_id: props.riskId,
         risk_label: 'misreport',
         description: formData.value.misreport_description || '',
-        whitelist: params.payload,
+        // 误报接口上的白名单只允许 false_positive
+        whitelist: { ...params.payload, whitelist_type: 'false_positive' },
       })
       : RiskWhitelistService.create({
         ...params.payload,
@@ -556,6 +558,7 @@
         risk_id: props.riskId,
       })
   );
+  const lastWhitelistType = ref<WhitelistType>('false_positive');
   const {
     run: applyWhitelist,
     loading: applyLoading,
@@ -565,7 +568,7 @@
       const withMisreport = formData.value.method === 'misreport';
       handleSubmitSuccess(withMisreport
         ? t(roleText.text.value.misreportSuccess)
-        : t(roleText.text.value.applySuccess));
+        : t(getWhitelistApplySuccess(lastWhitelistType.value, roleText.isAdmin.value)));
     },
   });
 
@@ -616,6 +619,7 @@
       return;
     }
     const payload = whitelistFormRef.value.getPayload();
+    lastWhitelistType.value = payload.whitelist_type;
     const confirmed = await confirmRef.value?.open({
       scope: payload.match_scope,
       whitelistType: payload.whitelist_type,

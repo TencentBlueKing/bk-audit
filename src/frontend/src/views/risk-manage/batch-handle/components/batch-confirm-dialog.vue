@@ -83,6 +83,7 @@
             ref="whitelistFormRef"
             data-testid="batch-confirm-whitelist-form"
             embedded
+            locked-type="false_positive"
             :initial-scope="initialScope"
             show-apply-hint />
         </template>
@@ -264,8 +265,9 @@
       try {
         const receipt = await submitBatchWhitelist({
           riskIds: props.riskIds,
-          payload,
+          payload: { ...payload, whitelist_type: 'false_positive' },
           withMisreport: true,
+          misreportVia: 'confirm',
           misreportDescription: formData.value.description,
         });
         if (receipt.failed.length) {

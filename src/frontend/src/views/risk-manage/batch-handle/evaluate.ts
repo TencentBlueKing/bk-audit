@@ -53,7 +53,6 @@ export const REASON_NONE = '请至少选择 1 条风险单';
 export const REASON_UNLOADED = '所选风险包含未加载数据，暂无法批量处理';
 export const REASON_LIMIT = '所选风险数量超过上限：500，请缩小范围';
 export const REASON_UNSUPPORTED = '所选风险无法批量处理';
-export const REASON_APPROVING = '加白审批中，无法批量处理';
 export const REASON_MIXED = '所选风险状态不同，仅支持标记误报';
 export const REASON_STRATEGY = '所选风险不属于同一审计策略，无法批量加白';
 export const REASON_CLOSED_WHITELIST = '已关单的风险不能单独加白，请通过标记误报同时加白';
@@ -91,9 +90,6 @@ export const createDisabledAvailability = (reason: string): BatchAvailability =>
 });
 
 export const toBatchAvailability = (preview: BatchPreview, rows: BatchRiskRow[] = []): BatchAvailability => {
-  if (rows.some(row => row.status === 'whitelist_approving')) {
-    return createDisabledAvailability(REASON_APPROVING);
-  }
   const rowStrategyIds = strategyIdsOf(rows);
   const previewStrategyId = normalizeIdentity(preview.unique_strategy_id);
   const strategyId = previewStrategyId || (rowStrategyIds.size === 1 ? [...rowStrategyIds][0] : '');

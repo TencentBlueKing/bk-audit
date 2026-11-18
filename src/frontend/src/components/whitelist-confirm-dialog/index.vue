@@ -69,7 +69,11 @@
 
   import type { MatchScope, ValidityMode, WhitelistType } from '@model/risk-whitelist/whitelist';
 
-  import useWhitelistRoleText from '@hooks/use-whitelist-role-text';
+  import useWhitelistRoleText, {
+    getWhitelistApplyHint,
+    getWhitelistEffectImpact,
+    getWhitelistRiskCloseImpact,
+  } from '@hooks/use-whitelist-role-text';
 
   import MatchScopeExpression from '@components/risk-whitelist/match-scope-expression.vue';
   import {
@@ -109,21 +113,19 @@
 
   const impacts = computed(() => {
     const lines: string[] = [];
-    if (!isAdmin.value) {
-      lines.push(roleText.text.value.applyHint);
+    const type = whitelistType.value;
+    if (!isAdmin.value && source.value === 'risk') {
+      const hint = getWhitelistApplyHint(type, false);
+      if (hint) lines.push(hint);
     }
     if (source.value === 'risk') {
-      lines.push(isAdmin.value ? '当前风险单将关闭。' : '审批通过后当前风险单将关闭。');
+      lines.push(getWhitelistRiskCloseImpact(type, isAdmin.value));
     }
-    if (isAdmin.value || source.value === 'menu') {
-      lines.push('白名单立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。');
-    } else {
-      lines.push('审批通过后白名单生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。');
-    }
-    if (whitelistType.value === 'false_positive') {
+    lines.push(getWhitelistEffectImpact(type, isAdmin.value));
+    if (type === 'false_positive') {
       lines.push('误报加白用于检测不准的情况，命中后不再作为风险处理。');
     }
-    if (whitelistType.value === 'risk_acceptance') {
+    if (type === 'risk_acceptance') {
       lines.push('冒险加白表示风险真实存在，可能带来安全风险。因冒险加白导致重大安全事故的，申请人需承担主要责任，请谨慎操作。');
     }
     if (hasStrategyOnlyGroup(scope.value)) {
