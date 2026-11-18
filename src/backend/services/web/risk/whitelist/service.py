@@ -9,7 +9,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from bk_resource import api
-from bk_resource.settings import bk_resource_settings
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
 from django.db.models import Q
@@ -19,9 +18,14 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.settings import api_settings
 
+from apps.meta.handlers.iam_group import IAMGroupManager
+from apps.permission.constants import IAMV4Role
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
+from apps.permission.handlers.resource_types import ResourceEnum
 from core.serializers import FriendlyDateTimeField
+from services.web.common.constants import ScopeType
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.risk.constants import RiskStatus, TicketNodeStatus
 from services.web.risk.whitelist.constants import (
     FLOW_STATUS,
@@ -47,27 +51,22 @@ logger = logging.getLogger(__name__)
 DEFAULT_ACCEPTANCE_DAYS = 30
 
 
-def is_platform_admin(username: str) -> bool:
-    if username == bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME:
-        return True
-    return Permission(username=username).has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
-
-
 def is_scene_admin(username: str, scene_id: int) -> bool:
-    if is_platform_admin(username):
-        return True
-    scene = Scene.objects.filter(pk=scene_id, is_deleted=False).only("managers").first()
-    return bool(scene and username in (scene.managers or []))
+    """场景管理员只看 IAM 的管理场景权限。"""
+
+    if not username or not scene_id:
+        return False
+    return Permission(username=username).is_allowed(
+        ActionEnum.MANAGE_SCENE,
+        [ResourceEnum.SCENE.create_instance(scene_id)],
+        raise_exception=False,
+    )
 
 
 def managed_scene_ids(username: str):
-    """平台管理员返回 None，表示不限场景。"""
+    """返回 IAM 里有管理场景权限的场景。"""
 
-    if is_platform_admin(username):
-        return None
-    return list(
-        Scene.objects.filter(is_deleted=False, managers__contains=[username]).values_list("scene_id", flat=True)
-    )
+    return ScopePermission(username).get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.MANAGE_SCENE)
 
 
 _PERIOD_PATTERN = re.compile(r"^(\d+)([dDmM])$")
@@ -326,7 +325,7 @@ def _node_ticket(rule: RiskWhitelist, ticket: dict = None) -> dict:
 
 
 def write_whitelist_nodes(rule: RiskWhitelist, risks) -> None:
-    """工单创建完成后再写风险节点。"""
+    """工单创建完成后再写风险节点。申请状态直接用白名单上已经写下的状态。"""
 
     now = datetime.datetime.now()
     with transaction.atomic():
@@ -357,6 +356,11 @@ def _insert_whitelist_nodes(rule: RiskWhitelist, risks, now, payload: dict, proc
 def refresh_whitelist_nodes(rule: RiskWhitelist, ticket: dict = None) -> None:
     from services.web.risk.models import TicketNode
 
+    # 回调用内存里的旧对象时，以库里的白名单状态为准，避免把已经生效中的节点写回待审批。
+    if isinstance(rule, RiskWhitelist):
+        current = RiskWhitelist.objects.filter(pk=rule.pk).first()
+        if current is not None:
+            rule = current
     if not rule.risk_id:
         return
     ticket = _node_ticket(rule, ticket)
@@ -485,6 +489,10 @@ def _create_whitelist(
     )
     create_itsm_ticket(rule.id)
     rule.refresh_from_db()
+    # 白名单状态这里已经会是生效中。节点只读这个状态，不再另算一遍。
+    if rule.status == WhitelistStatus.PENDING:
+        _pass_if_admin(rule, username)
+        rule.refresh_from_db()
     if risks and rule.itsm_ticket_id:
         write_whitelist_nodes(rule, risks)
     return rule
@@ -597,16 +605,16 @@ def _usernames(values) -> list:
 
 
 def _scene_admin_usernames(scene_id) -> list:
-    """审批人里的场景管理员直接取该场景的 managers。"""
+    """审批人取 IAM 里该场景的场景管理员。"""
 
+    if not scene_id:
+        return []
     try:
-        scene = Scene.objects.filter(pk=scene_id, is_deleted=False).first()
+        members = IAMGroupManager.get_scene_role_members(IAMV4Role.SCENE_ADMIN, str(scene_id))
     except Exception:
-        logger.exception("[RiskWhitelist] load scene admins failed, scene_id=%s", scene_id)
+        logger.exception("[RiskWhitelist] load iam scene admins failed, scene_id=%s", scene_id)
         return []
-    if scene is None:
-        return []
-    return _usernames(getattr(scene, "managers", None))
+    return _usernames(members)
 
 
 def _whitelist_approvers(scene_id) -> list:
@@ -680,11 +688,14 @@ def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
                 "approve_result": True,
             },
         )
+        if hasattr(rule, "refresh_from_db"):
+            rule.refresh_from_db()
 
 
 def _renew_snapshot(rule: RiskWhitelist) -> dict:
     return {
         "status": rule.status,
+        "whitelist_type": rule.whitelist_type,
         "callback_token": rule.callback_token,
         "reject_reason": rule.reject_reason,
         "itsm_ticket_id": rule.itsm_ticket_id,
@@ -701,20 +712,31 @@ def _restore_renew_snapshot(rule: RiskWhitelist, previous: dict) -> None:
 
 
 def renew_whitelist(
-    rule: RiskWhitelist, *, match_scope, reason, duration_days, expire_at, username: str
+    rule: RiskWhitelist,
+    *,
+    match_scope,
+    reason,
+    duration_days,
+    expire_at,
+    username: str,
+    whitelist_type: str = None,
 ) -> RiskWhitelist:
-    """续期不新建白名单。先改成待审批再提工单，和创建一样让回调或管理员审批立刻生效。创建失败恢复原状态。"""
+    """续期或更换加白方式都不新建白名单。先改成待审批再提工单，和创建一样让回调或管理员审批立刻生效。创建失败恢复原状态和原类型。"""
 
     if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.EXPIRED, WhitelistStatus.DISABLED}:
         raise ValidationError(gettext("只有生效中或已到期的规则可以续期"))
-    error = validate_match_scope(match_scope, rule.whitelist_type)
+    target_type = whitelist_type or rule.whitelist_type
+    if target_type not in WhitelistType.values:
+        raise ValidationError(gettext("不支持的加白类型"))
+    error = validate_match_scope(match_scope, target_type)
     if error:
         raise ValidationError(gettext(error))
-    is_permanent, resolved_expire = resolve_expire_at(rule.whitelist_type, duration_days, expire_at)
+    is_permanent, resolved_expire = resolve_expire_at(target_type, duration_days, expire_at)
     previous = _renew_snapshot(rule)
     callback_token = uuid.uuid4().hex
     # 创建是先落待审批和 token 再提工单，回调才能在返回前写成生效中。续期同样先腾出待审批，并清掉旧单号，避免轮询把旧工单当成这次结果。
     rule.status = WhitelistStatus.PENDING
+    rule.whitelist_type = target_type
     rule.reject_reason = ""
     rule.callback_token = callback_token
     rule.itsm_ticket_id = ""
@@ -724,6 +746,7 @@ def renew_whitelist(
     rule.save(
         update_fields=[
             "status",
+            "whitelist_type",
             "reject_reason",
             "callback_token",
             "itsm_ticket_id",
@@ -745,6 +768,7 @@ def renew_whitelist(
         _restore_renew_snapshot(rule, previous)
         raise
     rule.refresh_from_db()
+    rule.whitelist_type = target_type
     rule.match_scope = match_scope
     rule.reason = (reason or "")[:500]
     rule.is_permanent = is_permanent
@@ -754,6 +778,7 @@ def renew_whitelist(
     # 不回写 status。回调若已写成生效中，这里再写待审批会把它盖掉。
     rule.save(
         update_fields=[
+            "whitelist_type",
             "match_scope",
             "reason",
             "is_permanent",
@@ -785,7 +810,7 @@ def create_itsm_ticket(rule_id: int) -> None:
     _bind_ticket(rule, ticket)
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     rule.refresh_from_db()
-    refresh_whitelist_nodes(rule, ticket)
+    # 节点要等调用方按这里的状态插入。这时刷节点还找不到记录。
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:
@@ -972,11 +997,13 @@ def intercept_whitelist(event: dict, create_params: dict, scene_id) -> bool:
     return True
 
 
-def list_actions(rule: RiskWhitelist, username: str = "") -> list:
+def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list:
     """待审批时只有场景管理员能看到通过和驳回。续期重新进入审批后也一样。"""
 
     if rule.status == WhitelistStatus.PENDING:
-        if username and is_scene_admin(username, rule.scene_id):
+        if is_admin is None:
+            is_admin = bool(username and is_scene_admin(username, rule.scene_id))
+        if is_admin:
             return ["approve", "reject"]
         return []
     if rule.status == WhitelistStatus.ACTIVE:
@@ -999,7 +1026,10 @@ def flow_of(rule: RiskWhitelist, ticket: dict = None):
         return None
     ticket = ticket or {}
     rejected = rule.status == WhitelistStatus.REJECTED
-    status, status_display = map_whitelist_status(ticket) if ticket.get("status") else ("", "")
+    if ticket.get("status"):
+        status, status_display = map_whitelist_status(ticket)
+    else:
+        status, status_display = rule.status, str(WhitelistStatus(rule.status).label)
     return {
         "itsm_ticket_id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
         "itsm_sn": ticket.get("sn") or rule.itsm_sn or "",
@@ -1131,7 +1161,9 @@ def sync_whitelist_nodes_for_risk(risk_id: str) -> None:
             refresh_whitelist_nodes(rule)
 
 
-def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = None, username: str = "") -> dict:
+def serialize_rule(
+    rule: RiskWhitelist, hit_count: int = 0, progress: dict = None, username: str = "", is_admin=None
+) -> dict:
     if progress is None:
         progress = getattr(rule, "_itsm_progress", None)
     if progress is None and rule.status in FLOW_STATUS:
@@ -1155,7 +1187,7 @@ def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = Non
         "itsm_sn": rule.itsm_sn or "",
         "itsm_url": rule.itsm_ticket_url or "",
         "flow": flow_of(rule, progress),
-        "actions": list_actions(rule, username),
+        "actions": list_actions(rule, username, is_admin=is_admin),
     }
 
 

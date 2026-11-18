@@ -54,11 +54,12 @@ def _scope():
 
 
 class WhitelistCreateTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
     @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
     @patch("services.web.risk.whitelist.service.Scene.objects.filter")
-    def test_single_risk_stores_token_and_eq_fields(self, scene_filter, create, write_nodes, create_ticket):
+    def test_single_risk_stores_token_and_eq_fields(self, scene_filter, create, write_nodes, create_ticket, admin_pass):
         scene_filter.return_value.exists.return_value = True
         created = {}
 
@@ -102,12 +103,14 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertEqual(write_nodes.call_args.args[0].itsm_ticket_id, "ticket-1")
         self.assertEqual(write_nodes.call_args.args[0].itsm_ticket_url, "http://itsm/ticket-1")
         create_ticket.assert_called_once_with(1)
+        admin_pass.assert_called_once()
 
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
     @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
     @patch("services.web.risk.whitelist.service.Scene.objects.filter")
-    def test_batch_creates_one_rule_per_risk(self, scene_filter, create, write_nodes, create_ticket):
+    def test_batch_creates_one_rule_per_risk(self, scene_filter, create, write_nodes, create_ticket, admin_pass):
         scene_filter.return_value.exists.return_value = True
         created = []
 
@@ -164,6 +167,47 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertNotIn("risk_id", second_fields)
         self.assertEqual(write_nodes.call_count, 2)
         self.assertEqual(create_ticket.call_count, 2)
+        self.assertEqual(admin_pass.call_count, 2)
+
+    @patch("services.web.risk.whitelist.service.create_itsm_ticket")
+    @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    def test_admin_passes_before_node_is_written(self, scene_filter, create, write_nodes, create_ticket):
+        scene_filter.return_value.exists.return_value = True
+        holder = {}
+        order = []
+
+        def _create(**kwargs):
+            rule = SimpleNamespace(id=1, itsm_ticket_id="", itsm_sn="", itsm_ticket_url="", **kwargs)
+            rule.refresh_from_db = lambda: None
+            holder["rule"] = rule
+            return rule
+
+        def _create_ticket(rule_id):
+            order.append("ticket")
+            holder["rule"].itsm_ticket_id = "ticket-1"
+
+        def _pass(rule, username):
+            order.append("pass")
+            self.assertEqual(username, "alice")
+            rule.status = WhitelistStatus.ACTIVE
+
+        create.side_effect = _create
+        create_ticket.side_effect = _create_ticket
+        risk = SimpleNamespace(strategy_id=9, raw_event_id="evt-1", risk_id="risk-1", scene_id=1, current_operator=[])
+        with patch("services.web.risk.whitelist.service._pass_if_admin", side_effect=_pass):
+            submit_whitelist(
+                scene_id=1,
+                match_scope=_scope(),
+                whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+                reason="接受一段时间",
+                duration_days=15,
+                risks=[risk],
+                username="alice",
+            )
+        self.assertEqual(order, ["ticket", "pass"])
+        self.assertEqual(write_nodes.call_args.args[0].status, WhitelistStatus.ACTIVE)
 
     def test_node_ticket_follows_callback_status(self):
         fields = {
@@ -231,13 +275,13 @@ class WhitelistTicketCreateTests(SimpleTestCase):
             create_itsm_ticket(1)
         abort.assert_called_once_with(rule)
 
-    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    @patch(
+        "services.web.risk.whitelist.service.IAMGroupManager.get_scene_role_members",
+        return_value=["scene-admin"],
+    )
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
-    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_filter):
-        from services.web.scene.models import Scene
-
-        scene_filter.return_value.first.return_value = Scene(scene_id=3, managers=["scene-admin"])
+    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_members):
         rule = SimpleNamespace(
             id=1,
             scene_id=3,
@@ -250,6 +294,7 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         _submit_itsm_ticket(rule, operator="alice", callback_token="token")
         form_data = ticket_create.call_args.kwargs["form_data"]
         self.assertEqual(form_data["approver"], ["scene-admin"])
+        self.assertEqual(scene_members.call_args.args[1], "3")
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
@@ -886,6 +931,74 @@ class WhitelistRenewTests(SimpleTestCase):
         self.assertEqual(rule.itsm_ticket_id, "ticket-old")
         self.assertEqual(rule.reason, "原来的原因")
 
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch(
+        "services.web.risk.whitelist.service._submit_itsm_ticket",
+        return_value={"id": "ticket-2", "sn": "SN2", "frontend_url": "http://itsm/ticket-2"},
+    )
+    @patch("services.web.risk.whitelist.service.validate_match_scope", return_value="")
+    def test_change_type_reopens_same_rule(self, validate_scope, submit, refresh_nodes, admin_pass):
+        rule = _Rule(
+            status=WhitelistStatus.ACTIVE,
+            whitelist_type=WhitelistType.FALSE_POSITIVE,
+            is_permanent=True,
+            expire_at=None,
+            match_scope=_scope(),
+            reason="误报",
+            scene_id=1,
+            callback_token="old-token",
+        )
+        rule.itsm_ticket_id = "ticket-old"
+        renewed = renew_whitelist(
+            rule,
+            match_scope=_scope(),
+            reason="改成冒险加白",
+            duration_days=None,
+            expire_at=None,
+            username="alice",
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+        )
+        self.assertIs(renewed, rule)
+        self.assertEqual(rule.whitelist_type, WhitelistType.RISK_ACCEPTANCE)
+        self.assertFalse(rule.is_permanent)
+        self.assertIsNotNone(rule.expire_at)
+        self.assertEqual(rule.status, WhitelistStatus.PENDING)
+        self.assertEqual(rule.itsm_ticket_id, "ticket-2")
+        self.assertEqual(submit.call_args.args[0].whitelist_type, WhitelistType.RISK_ACCEPTANCE)
+        validate_scope.assert_called_with(_scope(), WhitelistType.RISK_ACCEPTANCE)
+        admin_pass.assert_called_once_with(rule, "alice")
+
+    @patch(
+        "services.web.risk.whitelist.service._submit_itsm_ticket",
+        side_effect=ValidationError("ITSM 工单创建失败"),
+    )
+    @patch("services.web.risk.whitelist.service.validate_match_scope", return_value="")
+    def test_type_change_failure_keeps_original_type(self, validate_scope, submit):
+        rule = _Rule(
+            status=WhitelistStatus.ACTIVE,
+            whitelist_type=WhitelistType.FALSE_POSITIVE,
+            is_permanent=True,
+            match_scope=_scope(),
+            reason="误报",
+            scene_id=1,
+            callback_token="old-token",
+        )
+        rule.itsm_ticket_id = "ticket-old"
+        with self.assertRaises(ValidationError):
+            renew_whitelist(
+                rule,
+                match_scope=_scope(),
+                reason="改成冒险加白",
+                duration_days=None,
+                expire_at=None,
+                username="alice",
+                whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            )
+        self.assertEqual(rule.whitelist_type, WhitelistType.FALSE_POSITIVE)
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        self.assertEqual(rule.itsm_ticket_id, "ticket-old")
+
 
 class WhitelistListQueryTests(SimpleTestCase):
     def test_status_type_and_sort_accept_multiple_values(self):
@@ -966,6 +1079,28 @@ class WhitelistApproveCloseTests(SimpleTestCase):
 
 
 class WhitelistReviewTests(SimpleTestCase):
+    def test_scene_admin_uses_iam_manage_scene(self):
+        from apps.permission.handlers.actions import ActionEnum
+        from services.web.risk.whitelist.service import (
+            is_scene_admin,
+            managed_scene_ids,
+        )
+
+        with patch("services.web.risk.whitelist.service.Permission") as permission_cls, patch(
+            "services.web.risk.whitelist.service.ResourceEnum.SCENE.create_instance", return_value="scene-3"
+        ) as create_instance:
+            permission_cls.return_value.is_allowed.return_value = True
+            self.assertTrue(is_scene_admin("alice", 3))
+            create_instance.assert_called_once_with(3)
+            self.assertEqual(permission_cls.return_value.is_allowed.call_args.args[0], ActionEnum.MANAGE_SCENE)
+            self.assertEqual(permission_cls.return_value.is_allowed.call_args.args[1], ["scene-3"])
+            self.assertFalse(permission_cls.return_value.is_allowed.call_args.kwargs["raise_exception"])
+
+        with patch("services.web.risk.whitelist.service.ScopePermission") as scope_cls:
+            scope_cls.return_value.get_scene_ids.return_value = [3]
+            self.assertEqual(managed_scene_ids("alice"), [3])
+            self.assertEqual(scope_cls.return_value.get_scene_ids.call_args.args[1], ActionEnum.MANAGE_SCENE)
+
     def test_pending_approve_actions_only_for_scene_admin(self):
         from services.web.risk.whitelist.service import list_actions
 

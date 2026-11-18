@@ -53,7 +53,6 @@ from services.web.risk.whitelist.service import (
     ensure_same_strategy_scene,
     get_rule_for_admin,
     managed_scene_ids,
-    progress_map,
     refresh_whitelist_nodes,
     renew_whitelist,
     resolve_callback_ticket,
@@ -88,11 +87,9 @@ class ListRiskWhitelists(RiskWhitelistMeta):
     def perform_request(self, validated_request_data):
         username = get_request_username()
         scene_ids = managed_scene_ids(username)
-        if scene_ids is not None and not scene_ids:
+        if not scene_ids:
             raise ValidationError(gettext("没有白名单权限"))
-        queryset = RiskWhitelist.objects.all()
-        if scene_ids is not None:
-            queryset = queryset.filter(scene_id__in=scene_ids)
+        queryset = RiskWhitelist.objects.filter(scene_id__in=scene_ids)
         scene_id = validated_request_data.get("scene_id")
         if scene_id:
             ensure_admin(username, scene_id)
@@ -117,13 +114,21 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                 *validated_request_data["order_fields"]
             )[(page - 1) * page_size : page * page_size]
         )
-        snapshots = progress_map(rows)
+        # 列表只读库里的状态。不在这里逐条查 ITSM，避免每次打开等工单详情。
+        managed = set(scene_ids)
         return {
             "page": page,
             "page_size": page_size,
             "total": total,
             "results": [
-                serialize_rule(row, getattr(row, "hit_count", 0), snapshots.get(str(row.id)), username) for row in rows
+                serialize_rule(
+                    row,
+                    getattr(row, "hit_count", 0),
+                    {},
+                    username,
+                    is_admin=row.scene_id in managed,
+                )
+                for row in rows
             ],
         }
 
@@ -224,18 +229,21 @@ class UpdateRiskWhitelist(RiskWhitelistMeta):
 
     def perform_request(self, validated_request_data):
         rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
-        error = validate_match_scope(validated_request_data["match_scope"], rule.whitelist_type)
+        target_type = validated_request_data.get("whitelist_type") or rule.whitelist_type
+        error = validate_match_scope(validated_request_data["match_scope"], target_type)
         if error:
             raise ValidationError(gettext(error))
-        # 带了新有效期就是续期：原白名单不新建，重新提工单后把状态和工单绑回去。
-        if validated_request_data.get("duration_days") not in (None, ""):
+        # 换加白方式或带了新有效期，都在原单上重新提工单。不换类型、也不改有效期时，只改匹配范围和原因。
+        type_changed = target_type != rule.whitelist_type
+        if type_changed or validated_request_data.get("duration_days") not in (None, ""):
             renewed = renew_whitelist(
                 rule,
                 match_scope=validated_request_data["match_scope"],
                 reason=validated_request_data["reason"],
-                duration_days=validated_request_data["duration_days"],
+                duration_days=validated_request_data.get("duration_days"),
                 expire_at=validated_request_data.get("expire_at"),
                 username=get_request_username(),
+                whitelist_type=target_type,
             )
             return serialize_rule(renewed, username=get_request_username())
         rule.match_scope = validated_request_data["match_scope"]
