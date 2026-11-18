@@ -1,4 +1,4 @@
-"""当前用户沿正式项目/Dataset接口读取权限，实际菜单与校验不借用平台身份。"""
+"""个人权限沿真实用户读取，业务项目菜单沿配置的平台账号读取。"""
 import json
 from copy import deepcopy
 from types import SimpleNamespace
@@ -24,6 +24,11 @@ from services.web.strategy_v2.utils import table
     BKBASE_V4_NAMESPACE="audit",
     APP_CODE="synthetic_app",
     SECRET_KEY="synthetic_secret",
+    BK_RESOURCE={
+        "PLATFORM_AUTH_ENABLED": True,
+        "PLATFORM_AUTH_ACCESS_USERNAME": "synthetic_admin",
+        "PLATFORM_AUTH_ACCESS_TOKEN": "synthetic-platform-token",
+    },
 )
 class UserDatasetPermissionTests(SimpleTestCase):
     def setUp(self):
@@ -62,7 +67,6 @@ class UserDatasetPermissionTests(SimpleTestCase):
             )
         )
         self.enterContext(mock.patch("services.web.bkbase.common.get_local_request", return_value=self.request))
-        self.enterContext(mock.patch.object(permissions, "get_request_username", return_value="synthetic_user"))
         self.enterContext(mock.patch.object(table, "get_request_username", return_value="synthetic_user"))
         self.spaces = self.enterContext(
             mock.patch.object(
@@ -106,8 +110,13 @@ class UserDatasetPermissionTests(SimpleTestCase):
         path = urlparse(url).path
         auth = json.loads(kwargs["headers"]["x-bkapi-authorization"])
         self.assertEqual(method, "GET")
-        self.assertEqual(auth["bk_username"], "synthetic_user")
-        self.assertEqual(auth["bk_token"], "synthetic-user-token")
+        if auth.get("bk_username") == "synthetic_admin":
+            self.assertEqual(auth["access_token"], "synthetic-platform-token")
+            self.assertNotIn("bk_token", auth)
+            self.assertNotIn("cookie", {key.lower() for key in kwargs["headers"]})
+        else:
+            self.assertEqual(auth["bk_username"], "synthetic_user")
+            self.assertEqual(auth["bk_token"], "synthetic-user-token")
         self.assertEqual(kwargs["headers"]["X-Bk-Tenant-Id"], "tenant_a")
         self.assertNotIn("json", kwargs)
         params = kwargs.get("params", {})

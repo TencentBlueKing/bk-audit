@@ -9,10 +9,11 @@ from time import monotonic
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
+from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from requests.exceptions import Timeout as RequestTimeout
 from urllib3.util import Timeout
 
@@ -50,7 +51,7 @@ from api.bk_base_v4.serializers import (
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
-READ_MAX_TIMEOUT = 10.0
+READ_MAX_TIMEOUT = 30.0
 
 
 class BkBaseV4Resource(BkApiResource, abc.ABC):
@@ -59,7 +60,36 @@ class BkBaseV4Resource(BkApiResource, abc.ABC):
     module_name = "bkbase_v4"
     base_url = BK_BASE_API_URL
     platform_authorization = True
+    requires_platform_auth = False
     IS_STANDARD_FORMAT = False
+
+    def add_esb_info_before_request(self, params):
+        """平台列表只从配置构造身份，缺配置时不得回退到操作者。"""
+        if self.platform_authorization and self.requires_platform_auth:
+            username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+            token = bk_resource_settings.PLATFORM_AUTH_ACCESS_TOKEN
+            valid_username = isinstance(username, str) and bool(username.strip())
+            valid_token = isinstance(token, str) and bool(token.strip())
+            if not bk_resource_settings.PLATFORM_AUTH_ENABLED or not (valid_username or valid_token):
+                raise ImproperlyConfigured(
+                    "BKBase platform listing requires enabled platform authentication and credentials"
+                )
+            credentials = self.add_platform_auth_params(
+                {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
+            )
+            if not valid_username:
+                credentials.pop("bk_username", None)
+            if not valid_token:
+                credentials.pop("access_token", None)
+            return credentials
+        return super().add_esb_info_before_request(params)
+
+    def build_header(self, validated_request_data):
+        """平台资源不透传操作者Cookie；个人接口保留自己的认证协议。"""
+        headers = super().build_header(validated_request_data)
+        if self.platform_authorization:
+            headers.pop("cookie", None)
+        return headers
 
     def parse_response(self, response):
         """兼容V4原生资源对象和网关标准包裹，不丢弃原生payload。"""
@@ -260,6 +290,7 @@ class DatasetList(DatasetResource):
     url_keys = ["namespace"]
     RequestSerializer = DatasetListRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+    requires_platform_auth = True
 
 
 class StorageAssetCreate(DatasetResource):
@@ -309,6 +340,7 @@ class NamespacesList(BkBaseV4Resource):
     url_keys = ["tenant"]
     RequestSerializer = TenantRequestSerializer
     ResponseSerializer = PayloadResponseSerializer
+    requires_platform_auth = True
 
     def build_header(self, validated_request_data):
         """项目列表路径及租户头采用同一校验上下文。"""

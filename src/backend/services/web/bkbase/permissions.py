@@ -1,4 +1,4 @@
-"""统一当前用户可见范围和权限判断。
+"""区分平台可用表与个人权限，统一权限判断。
 
 指定负责人通过应用认证检查 RT 权限，实际 Query 仍使用平台账号。
 个人列表继续使用真实用户身份；未提供的授权写操作保持冻结。
@@ -15,7 +15,6 @@ from api.bk_base_v4.constants import AuthAction
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import SpaceType
-from core.models import get_request_username
 from services.web.bkbase import metadata
 from services.web.bkbase.common import (
     get_bkbase_context,
@@ -39,17 +38,22 @@ def require_user(context):
 
 def _rows(payload):
     if not isinstance(payload, list) or not all(isinstance(x, dict) for x in payload):
-        raise BKBaseResourceMappingError(message="Unsupported BKBase user list response")
+        raise BKBaseResourceMappingError(message="Unsupported BKBase list response")
     return payload
 
 
-def _user_projects(context, request):
-    """项目英文名来自当前用户授权列表，不能拿固定 bkbase 命名空间当项目。"""
+def _projects(context, request):
+    """按固定调用主体枚举租户项目，不能用固定namespace代替项目集合。"""
     tenant = context.get("tenant")
     if not isinstance(tenant, str) or not tenant:
-        raise BKBaseResourceMappingError(message="Missing current-user tenant")
+        raise BKBaseResourceMappingError(message="Missing project tenant")
     projects = set()
-    for row in _rows(api.bk_base_v4.user_namespaces_list(tenant=tenant, _request=request)):
+    rows = (
+        api.bk_base_v4.user_namespaces_list(tenant=tenant, _request=request)
+        if request is not None
+        else api.bk_base_v4.namespaces_list(tenant=tenant)
+    )
+    for row in _rows(rows):
         meta, spec = row.get("metadata"), row.get("spec")
         if (
             row.get("kind") != "Namespace"
@@ -61,10 +65,10 @@ def _user_projects(context, request):
             or not isinstance(spec, dict)
             or spec.get("name") not in (None, meta["name"])
         ):
-            raise BKBaseResourceMappingError(message="Invalid current-user Namespace identity")
+            raise BKBaseResourceMappingError(message="Invalid Namespace identity")
         status = row.get("status")
         if status is not None and not isinstance(status, dict):
-            raise BKBaseResourceMappingError(message="Invalid current-user Namespace status")
+            raise BKBaseResourceMappingError(message="Invalid Namespace status")
         if (status or {}).get("phase") != "Terminating":
             projects.add(meta["name"])
     return sorted(projects)
@@ -78,19 +82,16 @@ def _business_id(value):
 
 
 @metadata.list_read_scope()
-def list_user_rts(context, *, bk_biz_id=None):
-    """完整遍历用户有权项目，严格 query=True 后按租户逻辑 RT 全局去重。"""
-    request = require_user(context)
+def _list_rts(context, *, request=None, bk_biz_id=None):
+    """复用完整项目/分页遍历，严格query=True并按租户逻辑RT去重。"""
     selected_biz = _business_id(bk_biz_id) if bk_biz_id is not None else None
     tables = {}
-    projects = _user_projects(context, request)
-    batches = metadata.bounded_read_map(
-        lambda namespace: metadata.list_datasets(
-            {**context, "namespace": namespace},
-            dataset_name=f"{selected_biz}_" if selected_biz is not None else None,
-            user_request=request,
-        ),
+    projects = _projects(context, request)
+    batches = metadata.list_project_datasets(
+        context,
         projects,
+        dataset_name=f"{selected_biz}_" if selected_biz is not None else None,
+        user_request=request,
     )
     for rows in batches:
         for row in _rows(rows):
@@ -112,6 +113,11 @@ def list_user_rts(context, *, bk_biz_id=None):
             if storage:
                 table["storages"][storage] = {"storage_type": storage}
     return sorted(tables.values(), key=lambda row: (row["bk_biz_id"], row["result_table_id"]))
+
+
+def list_user_rts(context, *, bk_biz_id=None):
+    """个人列表只能使用与真实请求匹配的用户身份。"""
+    return _list_rts(context, request=require_user(context), bk_biz_id=bk_biz_id)
 
 
 def list_user_bizs(context):
@@ -218,12 +224,11 @@ def check_owner_result_tables(context, **params):
 
 
 def get_project_data(request_data=None, **params):
-    """V4菜单使用当前用户有权项目的表集合，V3仍按旧项目读取。"""
+    """V4使用配置平台账号的可查询集合承接项目授权，V3按旧项目读取。"""
     params = dict(request_data or params)
     if get_bkbase_version() == BKBaseVersion.V3:
         return api.bk_base.get_project_data(**params)
-    context = get_bkbase_context(user=params.get("bk_username") or get_request_username())
-    return list_user_rts(context)
+    return _list_rts(get_bkbase_context())
 
 
 def project_data_batch_check(request_data=None, **params):
