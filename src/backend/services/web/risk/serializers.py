@@ -981,7 +981,13 @@ class PAExecutionRecordListReqSerializer(serializers.Serializer):
             "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
         ),
     )
-    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
+    pa_id = serializers.CharField(
+        label=gettext_lazy("套餐ID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 1,2），任一命中即返回"),
+    )
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
     task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
@@ -1024,6 +1030,17 @@ class PAExecutionRecordListReqSerializer(serializers.Serializer):
             raise serializers.ValidationError(gettext("from 不能晚于 to"))
         return attrs
 
+    def validate_pa_id(self, value):
+        for item in str(value or "").split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                int(item)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(gettext("套餐ID需为逗号分隔的整数"))
+        return value
+
 
 # from 是 Python 关键字，不能写成类属性，对外参数名仍然是 from。
 PAExecutionRecordListReqSerializer._declared_fields["from"] = _execution_record_range_field(
@@ -1058,13 +1075,12 @@ class ListBkSecProjectsResponseSerializer(serializers.Serializer):
 
 
 class PreviewTicketResponseSerializer(serializers.Serializer):
-    """工单预览响应（ticket/ticket_header 等动态体以 JSONField 透传）"""
+    """工单预览响应（ticket 动态体以 JSONField 透传）"""
 
     risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"), allow_blank=True)
     risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
     has_sample_risk = serializers.BooleanField(label=gettext_lazy("是否有样例风险单"))
     ticket = serializers.JSONField(label=gettext_lazy("工单报文"))
-    ticket_header = serializers.JSONField(label=gettext_lazy("工单头"), help_text=gettext_lazy("发单前为空，空值由前端展示"))
     warnings = serializers.JSONField(label=gettext_lazy("告警"))
 
 

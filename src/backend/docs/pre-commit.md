@@ -73,8 +73,20 @@ make test-all     # 顺序运行常规与 special 测试
 
 ## CI 与合并约束
 
-GitHub Actions 的 `Backend pre-commit` job 会在后端相关 PR 和 main 推送时执行
-`pre-commit run --all-files --show-diff-on-failure`。仓库管理员应在 main 分支保护规则中将
+GitHub Actions 的 `Backend pre-commit` job 会对所有 PR 上报结果，不能在 PR 事件上用
+`paths` 跳过整个 workflow，否则 required check 会一直等待状态。job 先分页读取 PR 文件列表，
+涉及 `src/backend/`、`agent/backend/`、该 workflow 或其路径检测脚本及测试时，才执行
+`pre-commit run --all-files --show-diff-on-failure`；纯前端和其他无关改动跳过后端安装与检查步骤，
+在 summary 说明后正常通过。重命名同时检查新旧路径，文件列表不完整时保守执行后端检查。
+路径检测、回归测试或后端检查失败都会使同一个 job 失败，不会被后续成功步骤覆盖。
+
+main 推送仍按后端及 CI 相关路径触发；手动执行始终运行完整检查。路径检测回归测试可在仓库根执行：
+
+```bash
+node --test .github/scripts/backend-pre-commit.test.cjs
+```
+
+仓库管理员应在 main 分支保护规则中将
 `Backend pre-commit` 和现有单测 job 设为 required checks。该 job 检查文件质量，
 不会因新增本地 `commit-msg` hook 自动扫描提交历史；历史标题仍需使用明确范围检查或
 对应的上游提交门禁。

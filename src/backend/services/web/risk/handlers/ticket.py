@@ -390,6 +390,7 @@ class RiskFlowBaseHandler:
             "time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
             "process_result": process_result,
             "duration": process_result.get("duration"),
+            "pa_id": process_result.get("pa_id"),
             "extra": extra,
         }
         if action == AutoProcess.__name__:

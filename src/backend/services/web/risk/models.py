@@ -710,6 +710,13 @@ class TicketNode(models.Model):
         db_index=True,
         help_text=gettext_lazy("SOPS 实际开始时间（epoch 秒），用于执行记录筛选/排序；历史记录为空"),
     )
+    pa_id = models.BigIntegerField(
+        gettext_lazy("Process Application ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("执行时套餐快照，用于执行记录按套餐筛选；历史记录由迁移回填"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Ticket History")
@@ -717,6 +724,9 @@ class TicketNode(models.Model):
         ordering = ["-timestamp"]
         indexes = [
             models.Index(fields=["status", "timestamp"], name="risk_tn_status_time_idx"),
+            models.Index(fields=["action", "sops_start_time"], name="risk_tn_act_start_idx"),
+            models.Index(fields=["action", "pa_id", "sops_start_time"], name="risk_tn_act_pa_start_idx"),
+            models.Index(fields=["action", "risk_id", "sops_start_time"], name="risk_tn_act_risk_start_idx"),
         ]
 
 
