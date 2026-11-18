@@ -16,20 +16,22 @@
 -->
 <template>
   <span
-    v-if="riskLevelMap[levelData[data.strategy_id]?.risk_level]"
+    v-if="riskLevelInfo"
     :style="{
-      'background-color': riskLevelMap[levelData[data.strategy_id].risk_level].color,
+      'background-color': riskLevelInfo.color,
       padding: '3px 8px',
       'border-radius': '3px',
       color: 'white'
     }">
-    {{ riskLevelMap[levelData[data.strategy_id].risk_level].label }}
+    {{ riskLevelInfo.label }}
   </span>
   <span v-else>--</span>
 </template>
 
 <script setup lang='ts'>
-
+  import {
+    computed,
+  } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
@@ -37,28 +39,17 @@
   import type RiskManageModel from '@model/risk/risk';
 
   interface RiskItem {
-    current_operator: Array<string>;
-    event_end_time: string;
-    event_time: string;
-    operator: Array<string>;
-    risk_id: string;
-    risk_label: string;
-    risk_level: string
-    status: string;
-    strategy_id: number;
-    title: string;
+    risk_id: string | number;
+    risk_level?: string;
+    strategy_id?: number;
+    title?: string;
   }
 
   interface Props{
-    levelData: {
-      [key: string]: {
-        risk_level: string
-      }
-    },
     data: RiskManageModel | RiskItem,
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const { t } = useI18n();
 
   const riskLevelMap: Record<string, {
@@ -78,4 +69,9 @@
       color: '#979ba5',
     },
   };
+
+  const riskLevelInfo = computed(() => {
+    const level = props.data.risk_level;
+    return level ? riskLevelMap[level] : undefined;
+  });
 </script>

@@ -58,7 +58,6 @@
 
   import IamApplyDataModel from '@model/iam/apply-data';
   import ReportConfigService from '@service/report-config';
-  import ToolManageService from '@service/tool-manage';
 
   import useMessage from '@hooks/use-message';
 
@@ -81,7 +80,7 @@
   const wrapRef = ref<HTMLElement | null>(null);
   const scalerRef = ref<HTMLElement | null>(null);
   const panelRef = ref<HTMLElement | null>(null);
-  /** 由 share_detail.panels 是否含 iframe 组件决定 */
+  /** 由报表元数据 panels 是否含 iframe 组件决定 */
   const isLargeScreenReport = ref(false);
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
@@ -392,7 +391,11 @@
     scope_type: string,
     scope_id: string,
   }) => {
-    if (!scope.scope_type || !scope.scope_id) {
+    const isCrossScope = scope.scope_type === 'cross_scene' || scope.scope_type === 'cross_system';
+    const needsScopeId = scope.scope_type === 'scene' || scope.scope_type === 'system';
+
+    // cross_scene / cross_system 的 scope_id 为空是合法协议，仍需拉取 vision_id
+    if (!scope.scope_type || (needsScopeId && !scope.scope_id)) {
       return {
         vision_id: '',
         default_value_override: {} as Record<string, any>,
@@ -402,7 +405,7 @@
       const detail = await ReportConfigService.fetchPanelDetail({
         panel_id: String(route.params.id),
         scope_type: scope.scope_type,
-        scope_id: String(scope.scope_id),
+        ...(isCrossScope ? {} : { scope_id: String(scope.scope_id) }),
       });
       return {
         vision_id: detail?.vision_id || '',
@@ -418,21 +421,30 @@
   };
 
   /**
-   * 从 share_detail 解析：
+   * 从报表元数据（meta/query）解析：
    * 1) variable / 交互组件 flag
    * 2) panels 是否含 type=iframe（大屏判断）
+   * 不能用 share_detail：它校验当前用户的 BKVision 个人分享权限，与报表查看权限不一致
    */
-  const resolveShareDetailMeta = async (shareUid: string) => {
+  const resolvePanelMeta = async (scope: { scope_type: string, scope_id: string }) => {
     const variableFlags = new Set<string>();
     const filterFlags = new Set<string>();
     let hasIframePanel = false;
 
-    if (!shareUid) {
-      return { variableFlags, filterFlags, hasIframePanel };
+    const params: Parameters<typeof ReportConfigService.fetchPanelMeta>[0] = {
+      share_uid: String(route.params.id),
+      type: 'dashboard',
+    };
+    if (scope.scope_type) {
+      params['constants[scope_type]'] = scope.scope_type;
+    }
+    const isCrossScope = scope.scope_type === 'cross_scene' || scope.scope_type === 'cross_system';
+    if (scope.scope_id && !isCrossScope) {
+      params['constants[scope_id]'] = String(scope.scope_id);
     }
 
     try {
-      const res = await ToolManageService.fetchReportLists({ share_uid: shareUid });
+      const res = await ReportConfigService.fetchPanelMeta(params);
       if (!res?.data) {
         return { variableFlags, filterFlags, hasIframePanel };
       }
@@ -467,7 +479,7 @@
         });
       }
     } catch (e) {
-      console.error('获取报表 share_detail 失败:', e);
+      console.error('获取报表元数据失败:', e);
     }
 
     return { variableFlags, filterFlags, hasIframePanel };
@@ -566,7 +578,7 @@
     const seq = initSeq;
     destroyApp();
     lastInitKey = '';
-    // 先按普通布局占位，等 share_detail 判断后再切大屏
+    // 先按普通布局占位，等报表元数据判断后再切大屏
     isLargeScreenReport.value = false;
     resetWrapLayout();
 
@@ -580,13 +592,11 @@
       const panelDetail = await fetchPanelDetailWithOverride(scopeConstants);
       if (seq !== initSeq) return;
 
-      // share_uid：优先平台配置的 vision_id，否则用路由 panel id
-      const shareUid = panelDetail.vision_id || String(route.params.id);
       const {
         variableFlags,
         filterFlags,
         hasIframePanel,
-      } = await resolveShareDetailMeta(shareUid);
+      } = await resolvePanelMeta(scopeConstants);
       if (seq !== initSeq) return;
 
       // panels 含 iframe → 大屏布局

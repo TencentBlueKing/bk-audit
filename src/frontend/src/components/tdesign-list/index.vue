@@ -18,9 +18,16 @@
   <div
     ref="rootRef"
     class="audit-tdesign-list"
-    :class="[{ 'is-loading': isLoading }]">
+    :class="[{ 'is-loading': isLoading && !showSkeleton }]">
+    <table-skeleton
+      v-if="showSkeleton"
+      :columns="skeletonColumns"
+      :row-count="skeletonRowCount"
+      row-size="medium"
+      :style="skeletonBoxStyle" />
     <bk-loading
-      :loading="isLoading"
+      v-show="!showSkeleton"
+      :loading="useSkeleton ? false : isLoading"
       style="z-index: 1999;">
       <div
         v-if="settings.length > 0"
@@ -123,6 +130,7 @@
           class="tdesign-list"
           :columns="tableColumns"
           :data="tableData"
+          :filter-row="hideFilterResultRow ? null : undefined"
           :first-full-row="enableCrossPageSelect ? selectAllBanner : undefined"
           :height="height"
           hover
@@ -236,6 +244,8 @@
 
   import { PrimaryTable } from '@blueking/tdesign-ui';
 
+  import TableSkeleton from '@components/table-skeleton/index.vue';
+
   import {
     getOffset,
     isPageReload,
@@ -243,7 +253,7 @@
   import type { IRequestResponsePaginationData } from '@utils/request';
 
   import '@blueking/tdesign-ui/vue3/index.css';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getSceneSystemParams, isSceneSelectorSentinelId } from '@/utils/assist/scene-system-params';
 
   export interface IPagination {
     count: number;
@@ -264,6 +274,8 @@
     isNeedHideClearSearchTip?: boolean,
     border?: boolean,
     needEmptySearchTip?: boolean,
+    /** 列筛选结果为 0 时不展示筛选条，改用搜索空态 */
+    hideFilterRowWhenEmpty?: boolean,
     height?: number | string,
     noUseRresults?: boolean;
     settings?: any[];
@@ -285,6 +297,10 @@
     persistTableFilters?: boolean,
     /** 表头筛选 sessionStorage 键后缀，默认使用 pathname */
     tableFilterPersistKey?: string,
+    /** 用表格骨架替代 bk-loading，默认关闭 */
+    useSkeleton?: boolean,
+    /** 按视口计算最大高度和每页条数。侧滑等固定容器传 false，避免表头被撑出空白 */
+    fitViewportHeight?: boolean,
   }
 
   interface Emits {
@@ -314,6 +330,9 @@
       isSelectAll: boolean,
     },
     resolveSelectedRowKeys: (options?: { maxCount?: number }) => Promise<Array<string | number>>,
+    resolveSelectAllRows: (options?: { maxCount?: number }) => Promise<Array<Record<string, any>>>,
+    getSelectedKeys: () => Array<string | number>,
+    clearSelection: () => void,
     resolveExportSelection: () => Promise<{
       keys: Array<string | number>,
       truncated: boolean,
@@ -330,6 +349,7 @@
     reverseSortFields: () => [],
     secondarySortField: '',
     needEmptySearchTip: true,
+    hideFilterRowWhenEmpty: false,
     paginationValidator: undefined,
     border: false,
     isNeedHideClearSearchTip: false,
@@ -347,6 +367,8 @@
     enableCrossPageSelect: false,
     persistTableFilters: true,
     tableFilterPersistKey: undefined,
+    useSkeleton: false,
+    fitViewportHeight: true,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -484,6 +506,7 @@
     tempVisibleColumnKeys.value = keys;
   };
   const isUnload = ref(true);
+  const pageSizeLocked = ref(false);
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
   const slot = useSlots();
@@ -550,6 +573,100 @@
       }
     },
   });
+  const showSkeleton = ref(props.useSkeleton);
+  const lastSkeletonRowCount = ref(3);
+  // 淡入 0.3s。请求在首帧前结束时，骨架会停在 opacity: 0，需要至少撑过这段动画
+  const SKELETON_MIN_VISIBLE_MS = 300;
+  let skeletonShownAt = props.useSkeleton ? Date.now() : 0;
+  let skeletonHideToken = 0;
+  const waitForPaint = () => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  const readColumnSize = (value: unknown) => {
+    const num = Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  };
+  const skeletonColumns = computed(() => {
+    const source = props.settings.length === 0
+      ? props.columns
+      : props.columns.filter((column) => {
+        if (!column.colKey || column.colKey === 'row-select' || column.colKey === 'action') {
+          return true;
+        }
+        if (String(column.colKey).startsWith('event_data.')) {
+          return true;
+        }
+        if (!visibleColumnKeys.value.length) {
+          return true;
+        }
+        return visibleColumnKeys.value.includes(column.colKey);
+      });
+    const columns = source.map((column) => {
+      const width = readColumnSize(column.width);
+      const minWidth = readColumnSize(column.minWidth);
+      if (column.colKey === 'row-select' && width <= 0) {
+        return { width: 50, grow: false };
+      }
+      if (width > 0) {
+        return { width, grow: false };
+      }
+      return { width: minWidth || 160, grow: true };
+    });
+    return columns.length ? columns : [{ width: 160, grow: true }];
+  });
+  const skeletonRowCount = computed(() => Math.max(lastSkeletonRowCount.value, 1));
+  const skeletonBoxStyle = computed(() => {
+    const raw = props.height !== 'auto' && props.height !== undefined && props.height !== null
+      ? props.height
+      : effectiveTableMaxHeight.value;
+    const num = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+    if (!Number.isFinite(num) || num <= 0) {
+      // 侧滑不按视口算高度时，骨架跟着列表容器铺满，避免表体 flex 基线为 0 把行裁掉
+      return {
+        flex: '1 1 auto',
+        height: '100%',
+        minHeight: '0',
+        overflow: 'hidden',
+      };
+    }
+    return {
+      height: `${num}px`,
+      overflow: 'hidden',
+    };
+  });
+  watch(isLoading, async (loading) => {
+    if (!props.useSkeleton) {
+      showSkeleton.value = false;
+      return;
+    }
+    if (loading) {
+      skeletonHideToken += 1;
+      if (!showSkeleton.value) {
+        skeletonShownAt = Date.now();
+      }
+      showSkeleton.value = true;
+      return;
+    }
+    if (!showSkeleton.value) {
+      return;
+    }
+    const token = skeletonHideToken;
+    const elapsed = Date.now() - skeletonShownAt;
+    const remain = Math.max(0, SKELETON_MIN_VISIBLE_MS - elapsed);
+    if (remain > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, remain);
+      });
+    }
+    await nextTick();
+    await waitForPaint();
+    if (token !== skeletonHideToken || isLoading.value) {
+      return;
+    }
+    showSkeleton.value = false;
+  });
 
   // 计算表格数据，处理 noUseRresults 的情况
   const tableData = computed(() => {
@@ -572,9 +689,15 @@
     }
 
     const memoWithoutScene = { ...paramsMemo };
-    delete memoWithoutScene.scene_id;
-    delete memoWithoutScene.scope_id;
-    delete memoWithoutScene.scope_type;
+    // 仅在由场景选择器注入范围时覆盖；否则保留页面传入的 scope_type（如待我确认的 cross_scene）
+    if (needSceneParams) {
+      delete memoWithoutScene.scope_id;
+      delete memoWithoutScene.scope_type;
+    }
+    // 场景选择器注入 scene_id 时才覆盖；否则保留搜索条件里的所属场景
+    if (isNeedSceneId) {
+      delete memoWithoutScene[props.sceneIdKey || 'scene_id'];
+    }
 
     const rawParams: Record<string, any> = {
       ...memoWithoutScene,
@@ -583,6 +706,11 @@
       ...(isNeedSceneParams ? sceneParams : {}),
       ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
     };
+    const sceneIdKey = props.sceneIdKey || 'scene_id';
+    // 跨场景时不传选择器占位 scene_id（allSecen/allSystem）
+    if (isSceneSelectorSentinelId(rawParams[sceneIdKey])) {
+      delete rawParams[sceneIdKey];
+    }
     Object.keys(rawParams).forEach((key) => {
       const value = rawParams[key];
       if (value === '' || value === undefined || value === null) {
@@ -618,6 +746,9 @@
         }
       });
       tableFilterValue.value = getColumnsResetValue(tableColumns.value);
+      if (props.searchParams) {
+        syncTableFilterValueFromParams(props.searchParams);
+      }
       saveTableFilterState();
     } else {
       paramsMemo = {
@@ -663,9 +794,11 @@
     resetCrossPageSelection,
     clearAllSelection,
     preservePageSelectionForPageSizeChange,
+    releasePageSelectionForPageChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
+    resolveSelectAllRows,
     resolveExportSelection,
     getSelectionMeta,
   } = useCrossPageSelect({
@@ -751,6 +884,10 @@
     if (newData && typeof newData.total === 'number') {
       pagination.count = newData.total;
     }
+    const length = Array.isArray(newData) ? newData.length : newData?.results?.length;
+    if (length > 0) {
+      lastSkeletonRowCount.value = length;
+    }
   }, { deep: true, immediate: true });
 
   const isListResponseEqual = (oldData: any, newData: any) => {
@@ -810,7 +947,12 @@
           isLoading.value = true;
           run(params);
           if (fetchSeq === latestFetchSeq) {
-            replaceSearchParams(params);
+            // 所属场景筛选不要写进场景选择器上下文（scene_id/scope_*）
+            const urlParams = { ...params };
+            delete urlParams.scene_id;
+            delete urlParams.scope_id;
+            delete urlParams.scope_type;
+            replaceSearchParams(urlParams);
           }
         }
       });
@@ -1064,6 +1206,12 @@
     return `搜索"${result}"，找到 ${pagination.count} 条结果`;
   });
 
+  const hideFilterResultRow = computed(() => (
+    props.hideFilterRowWhenEmpty
+    && tableData.value.length === 0
+    && !!tableFilterResultText.value
+  ));
+
   watch([showSelectAllBanner, tableFilterResultText], () => {
     if (showSelectAllBanner.value) {
       updateSelectBannerPosition();
@@ -1109,20 +1257,15 @@
   };
 
   const handleFilterChange = (filters: Record<string, any>) => {
-    pagination.current = 1;
-    isUnload.value = false;
-    // TDesign 会返回 { colKey: value | value[] }
     const nextParams: Record<string, any> = { ...paramsMemo };
 
     Object.keys(filters || {}).forEach((key) => {
       const value = filters[key];
 
-      // 数组：多选或单选但返回数组
       if (Array.isArray(value)) {
         if (!value.length) {
           delete nextParams[key];
         } else {
-          // 后端大多接受逗号分隔的字符串；如果只选一个就是单值
           nextParams[key] = value.length === 1 ? value[0] : value.join(',');
         }
       } else if (value === undefined || value === null || value === '') {
@@ -1132,6 +1275,12 @@
       }
     });
 
+    const keys = new Set([...Object.keys(paramsMemo), ...Object.keys(nextParams)]);
+    const unchanged = [...keys].every(key => String(paramsMemo[key] ?? '') === String(nextParams[key] ?? ''));
+    if (unchanged) return;
+
+    pagination.current = 1;
+    isUnload.value = false;
     paramsMemo = nextParams;
     saveTableFilterState();
     clearSelectionOnSearchScopeChange();
@@ -1232,8 +1381,14 @@
     fetchListData();
   };
 
+  // bk-pagination 在 current 被程序重置时也会触发 change，切换每页条数期间不能当作翻页处理
+  let isPageLimitChanging = false;
+
   // 切换页码
   const handlePageChange = (pageValue: number) => {
+    if (props.enableCrossPageSelect && !isPageLimitChanging) {
+      releasePageSelectionForPageChange();
+    }
     pagination.current = normalizePage(pageValue);
     isUnload.value = false;
     isLoading.value = true;
@@ -1242,8 +1397,10 @@
 
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
+    pageSizeLocked.value = true;
     if (props.enableCrossPageSelect) {
       preservePageSelectionForPageSizeChange();
+      isPageLimitChanging = true;
     }
     pagination.limit = pageLimit;
     pagination.current = 1; // 切换每页条数时重置到第一页
@@ -1255,6 +1412,7 @@
     isLoading.value = true;
     // 确保响应式更新完成后再调用 fetchListData
     nextTick(() => {
+      isPageLimitChanging = false;
       fetchListData();
     });
   };
@@ -1325,9 +1483,6 @@
     nextTick(() => {
       fetchListData();
     });
-    setTimeout(() => {
-      isLoading.value = true;
-    }, 0);
   });
 
   // 监听通知中心状态，重新计算表格高度
@@ -1338,6 +1493,11 @@
   // 传入的 tableMaxHeight 变化时，重新计算每页条数
   watch(() => props.tableMaxHeight, () => {
     calcTableHeight();
+  });
+
+  watch(isLoading, (loading, wasLoading) => {
+    if (loading || !wasLoading || typeof props.tableMaxHeight !== 'number') return;
+    nextTick(() => calcTableHeight());
   });
 
   // 销毁组件时去除监听，防止多次绑定触发
@@ -1369,7 +1529,32 @@
     } else {
       return 0;
     }
+    if (typeof height === 'number') {
+      const root = rootRef.value as HTMLElement | undefined;
+      const header = root?.querySelector('.t-table thead tr') as HTMLElement | null;
+      const row = root?.querySelector('.t-table tbody tr:not(.t-table__empty-row)') as HTMLElement | null;
+      const headerHeight = header ? Math.round(header.getBoundingClientRect().height) : 42;
+      const rawRow = row ? row.getBoundingClientRect().height : 0;
+      const rowHeight = rawRow >= 24 && rawRow <= 64 ? Math.round(rawRow) : 42;
+      return Math.max(1, Math.floor((pixelHeight - (headerHeight > 0 ? headerHeight : 42)) / rowHeight));
+    }
     return Math.max(0, Math.floor((pixelHeight - TABLE_HEADER_HEIGHT - TABLE_PADDING) / TABLE_ROW_HEIGHT) - 1);
+  };
+
+  const applyAutoPageSize = (rowNum: number) => {
+    if (rowNum < 1 || pageSizeLocked.value) return;
+    if (!pagination.limitList.includes(rowNum)) {
+      pagination.limitList = [...pagination.limitList, rowNum].sort((a, b) => a - b);
+    }
+    if (pagination.limit === rowNum) return;
+    const shouldFetch = !isUnload.value;
+    pagination.limit = rowNum;
+    if (!shouldFetch) return;
+    pagination.current = 1;
+    isLoading.value = true;
+    nextTick(() => {
+      fetchListData();
+    });
   };
 
   // 计算表格尺寸信息
@@ -1401,6 +1586,10 @@
   };
 
   const calcTableHeight = () => {
+    if (!props.fitViewportHeight) {
+      internalTableMaxHeight.value = 'auto';
+      return;
+    }
     nextTick(() => {
       const dimensions = calculateTableDimensions();
       // 传入 tableMaxHeight 时，根据传入高度计算行数；默认时也 -1（已在 calculateTableDimensions 中处理）
@@ -1417,8 +1606,9 @@
           rowNum,
         ]);
         pagination.limitList = Array.from(pageLimit).sort((a, b) => a - b);
-        // 首次加载时，自动将每页条数设置为根据表格高度计算出的行数
-        if (isUnload.value) {
+        if (typeof props.tableMaxHeight === 'number') {
+          applyAutoPageSize(rowNum);
+        } else if (isUnload.value) {
           pagination.limit = rowNum;
         }
       }
@@ -1489,7 +1679,14 @@
       });
     },
     getSelectionMeta,
+    getSelectedKeys() {
+      return [...selectedRowKeys.value];
+    },
+    clearSelection() {
+      clearAllSelection();
+    },
     resolveSelectedRowKeys,
+    resolveSelectAllRows,
     resolveExportSelection,
     initTableHeight() {
       initTableHeight();

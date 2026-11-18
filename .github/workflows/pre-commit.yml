@@ -2,18 +2,20 @@ name: Backend Pre-commit
 
 permissions:
   contents: read
+  pull-requests: read
 
 on:
   pull_request:
+    # Required checks must report a result even for frontend-only PRs.
     branches: ["**"]
-    paths:
-      - "src/backend/**"
-      - ".github/workflows/pre-commit.yml"
   push:
     branches: ["main"]
     paths:
       - "src/backend/**"
+      - "agent/backend/**"
       - ".github/workflows/pre-commit.yml"
+      - ".github/scripts/backend-pre-commit.cjs"
+      - ".github/scripts/backend-pre-commit.test.cjs"
   workflow_dispatch:
 
 jobs:
@@ -24,20 +26,54 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Test backend change detection
+        run: node --test .github/scripts/backend-pre-commit.test.cjs
+
+      - name: Detect backend changes
+        id: changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const needsBackendChecks = require('./.github/scripts/backend-pre-commit.cjs');
+            return await needsBackendChecks({ github, context });
+
+      - name: Report frontend-only skip
+        if: steps.changes.outputs.result == 'false'
+        run: echo 'No backend changes; backend pre-commit is not required.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set up Python
+        if: steps.changes.outputs.result == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Cache pre-commit environments
+        if: steps.changes.outputs.result == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('src/backend/.pre-commit-config.yaml') }}
+          key: pre-commit-secure-pip-${{ runner.os }}-${{ hashFiles('src/backend/.pre-commit-config.yaml', 'src/backend/bootstrap_pip.sh') }}
+
+      - name: Update OS certificates
+        if: steps.changes.outputs.result == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates
+
+      - name: Bootstrap verified pip
+        if: steps.changes.outputs.result == 'true'
+        run: sh src/backend/bootstrap_pip.sh python "$RUNNER_TEMP/python-bootstrap"
 
       - name: Install pre-commit
+        if: steps.changes.outputs.result == 'true'
         run: python -m pip install pre-commit==4.2.0
 
       - name: Check all backend files
+        if: steps.changes.outputs.result == 'true'
         working-directory: src/backend
+        env:
+          VIRTUALENV_PIP: "26.2.2"
+          VIRTUALENV_EXTRA_SEARCH_DIR: ${{ runner.temp }}/python-bootstrap
+          VIRTUALENV_DOWNLOAD: "false"
+          VIRTUALENV_NO_PERIODIC_UPDATE: "true"
         run: pre-commit run --all-files --show-diff-on-failure

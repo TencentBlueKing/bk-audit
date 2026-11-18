@@ -34,14 +34,46 @@
       </div>
     </div>
 
-    <div class="table-section">
+    <div
+      v-if="showFieldSkeleton"
+      class="skeleton-rows"
+      data-testid="strategy-field-skeleton">
+      <div
+        v-for="row in skeletonRows"
+        :key="row"
+        class="skeleton-row">
+        <div class="skeleton-cell field-name">
+          <audit-skeleton
+            height="16"
+            width="96" />
+        </div>
+        <div class="skeleton-cell display-name">
+          <audit-skeleton
+            height="16"
+            width="120" />
+        </div>
+        <div class="skeleton-cell is-priority">
+          <audit-skeleton
+            height="16"
+            width="36" />
+        </div>
+        <div class="skeleton-cell drill-config">
+          <audit-skeleton
+            height="16"
+            width="88" />
+        </div>
+      </div>
+    </div>
+    <div
+      v-else
+      class="table-section">
       <div class="rows-container">
         <table-row
           ref="tableRowRef"
           :all-tools-data="allToolsData"
           :event-item-arr="tableData"
           event-item-key="event_basic_field_configs"
-          :output-fields="[]"
+          :output-fields="outputFields"
           :select="select"
           :strategy-name="strategyName"
           :strategy-type="strategyType"
@@ -64,7 +96,7 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -81,7 +113,15 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
-  import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
+  import {
+    getStrategySystemScopeParams,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+  import {
+    buildStrategyEventOutputFields,
+    isSameSelectField,
+  } from '../../../../utils/strategy-protocol';
 
   interface Exposes {
     getData: () => { risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'] };
@@ -100,8 +140,8 @@
   const { t, locale } = useI18n();
   const route = useRoute();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   const disabledList = ['risk_level', 'status', 'current_operator'];
   const isPriorityList = ['risk_id', 'risk_tags', 'risk_hazard', 'risk_guidance'];
 
@@ -130,14 +170,69 @@
   });
 
   const tableData = ref<StrategyFieldEvent['risk_meta_field_config']>([]);
+  const eventFieldConfigs = ref({
+    event_basic_field_configs: [] as StrategyFieldEvent['event_basic_field_configs'],
+    event_data_field_configs: [] as StrategyFieldEvent['event_data_field_configs'],
+    event_evidence_field_configs: [] as StrategyFieldEvent['event_evidence_field_configs'],
+  });
 
-  useRequest(StrategyManageService.fetchStrategyEvent, {
+  const syncEventFieldConfigsFromEditData = () => {
+    eventFieldConfigs.value = {
+      event_basic_field_configs: props.data.event_basic_field_configs || [],
+      event_data_field_configs: props.data.event_data_field_configs || [],
+      event_evidence_field_configs: props.data.event_evidence_field_configs || [],
+    };
+    if (props.data.risk_meta_field_config?.length && !tableData.value.length) {
+      tableData.value = props.data.risk_meta_field_config.map(item => ({ ...item }));
+    }
+  };
+  syncEventFieldConfigsFromEditData();
+
+  const outputFields = computed(() => {
+    const riskFields = tableData.value
+      .filter(item => item.field_name)
+      .map(item => ({
+        raw_name: item.field_name,
+        display_name: item.display_name || '',
+        description: item.description || '',
+        target_field_type: 'basic' as const,
+      }));
+    const eventFields = buildStrategyEventOutputFields({
+      ...eventFieldConfigs.value,
+      strategy_type: props.strategyType,
+    });
+    const selectDataFields = (props.select || [])
+      .map(item => ({
+        raw_name: item.raw_name || item.display_name || '',
+        display_name: item.display_name || item.raw_name || '',
+        description: '',
+        target_field_type: 'data' as const,
+      }))
+      .filter(item => item.raw_name);
+    const mergedEventFields = eventFields.filter(item => !riskFields.some(risk => risk.raw_name === item.raw_name));
+    const existingFields = [...riskFields, ...mergedEventFields];
+    return [
+      ...riskFields,
+      ...mergedEventFields,
+      ...selectDataFields.filter(item => !existingFields.some(field => (
+        isSameSelectField(item, field.raw_name) || isSameSelectField(item, field.display_name)
+      ))),
+    ];
+  });
+
+  const skeletonRows = [1, 2, 3, 4, 5, 6];
+  const { loading: fieldsLoading } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
     defaultParams: {
       strategy_id: props.strategyId,
     },
     manual: true,
     onSuccess: (data) => {
+      eventFieldConfigs.value = {
+        event_basic_field_configs: data.event_basic_field_configs || [],
+        event_data_field_configs: data.event_data_field_configs || [],
+        event_evidence_field_configs: data.event_evidence_field_configs || [],
+      };
       tableData.value = data.risk_meta_field_config.map(item => ({
         ...item,
         is_priority: disabledList.concat(isPriorityList).includes(item.field_name) ? true : item.is_priority,
@@ -179,7 +274,10 @@
     },
   });
 
-  const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
+  const buildToolListParams = () => ({
+    ...getStrategySystemScopeParams(route),
+    status: 'published',
+  });
 
   // 获取所有工具
   const {
@@ -206,6 +304,7 @@
     fetchAllTools(buildToolListParams());
     fetchToolTags(buildToolListParams());
   };
+  const showFieldSkeleton = computed(() => fieldsLoading.value && tableData.value.length === 0);
 
   defineExpose<Exposes>({
     getData() {
@@ -241,6 +340,44 @@
       @include cell-base;
 
       background-color: #f5f7fa;
+      font-weight: 500;
+      color: #313238;
+
+      &.field-name {
+        width: 250px;
+      }
+
+      &.display-name {
+        width: 250px;
+      }
+
+      &.is-priority {
+        width: 200px;
+      }
+
+      &.drill-config {
+        width: 250px;
+      }
+
+      &:last-child {
+        flex: 1;
+      }
+    }
+  }
+
+  .skeleton-rows {
+    border-bottom: 1px solid #dcdee5;
+  }
+
+  .skeleton-row {
+    display: flex;
+    height: 42px;
+    background: #fff;
+
+    .skeleton-cell {
+      @include cell-base;
+
+      background: #fff;
 
       &.field-name {
         width: 250px;

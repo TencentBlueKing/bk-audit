@@ -36,7 +36,8 @@
           v-if="selectedItem"
           class="type-tag"
           :class="[`type-${selectedItem.type}`]">
-          {{ getTypeLabel(selectedItem.type) }}
+          <span class="type-tag-full">{{ getTypeLabel(selectedItem.type) }}</span>
+          <span class="type-tag-short">{{ getTypeShortLabel(selectedItem.type) }}</span>
         </bk-tag>
         <show-tooltips-text
           class="selector-text"
@@ -66,13 +67,9 @@
         </div>
         <!-- 审计场景分组 -->
         <div
-          v-if="listScope.includes('scene') && (
-            userRole.includes('scene_admin') || userRole.includes('scene_user') || userRole.includes('saas_admin')
-          )"
+          v-if="showSceneGroup && filteredSceneList.length > 0"
           class="dropdown-group">
-          <div
-            v-show="filteredSceneList.length > 0"
-            class="group-title">
+          <div class="group-title">
             {{ t('审计场景') }}
           </div>
 
@@ -110,7 +107,7 @@
 
         <!-- 接入系统分组 -->
         <div
-          v-if="listScope.includes('system') &&( userRole.includes('system_admin') || userRole.includes('saas_admin'))"
+          v-if="showSystemGroup && filteredSystemList.length > 0"
           class="dropdown-group">
           <div class="group-title">
             {{ t('接入系统') }}
@@ -135,6 +132,11 @@
             </div>
           </div>
         </div>
+        <div
+          v-if="isSearchEmpty"
+          class="dropdown-empty">
+          {{ t('无匹配数据') }}
+        </div>
       </div>
     </template>
   </bk-popover>
@@ -144,6 +146,9 @@
   import { InfoBox } from 'bkui-vue';
   import {
     computed,
+    nextTick,
+    onActivated,
+    onDeactivated,
     onMounted,
     onUnmounted,
     ref,
@@ -160,11 +165,13 @@
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { changeConfirm } from '@/utils/assist/change-confirm';
   import {
     buildSceneContextQueryFromSelection,
     clearRecentSceneSwitch,
     getQueryFromLocation,
     isRecentManualSceneSwitch,
+    isSystemScopedContextQuery,
     markSceneSelectorSwitched,
     SCENE_SELECTOR_STORAGE_KEY,
     setActiveSceneSelection,
@@ -250,6 +257,28 @@
       || item.id.toLowerCase().includes(keyword));
   });
 
+  const showSceneGroup = computed(() => (
+    props.listScope.includes('scene') && (
+      userRole.includes('scene_admin')
+      || userRole.includes('scene_user')
+      || userRole.includes('saas_admin')
+    )
+  ));
+
+  const showSystemGroup = computed(() => (
+    props.listScope.includes('system') && (
+      userRole.includes('system_admin')
+      || userRole.includes('saas_admin')
+    )
+  ));
+
+  const isSearchEmpty = computed(() => {
+    if (!sceneSearchKey.value.trim()) return false;
+    const sceneEmpty = !showSceneGroup.value || filteredSceneList.value.length === 0;
+    const systemEmpty = !showSystemGroup.value || filteredSystemList.value.length === 0;
+    return sceneEmpty && systemEmpty;
+  });
+
   // 接入系统列表
   const systemList = ref<SelectorItem[]>([]);
 
@@ -274,6 +303,15 @@
       system: t('系统'),
     };
     return labelMap[type] || type;
+  };
+
+  const getTypeShortLabel = (type: string) => {
+    const shortMap: Record<string, string> = {
+      aggregate: '聚',
+      scene: '场',
+      system: '系',
+    };
+    return shortMap[type] || getTypeLabel(type).slice(0, 1);
   };
 
   // 判断是否选中
@@ -317,6 +355,35 @@
 
   // 标记是否已执行过默认选中逻辑
   let hasInitializedSelection = false;
+  // keep-alive 激活态：失活时不因 URL 同步去抢路由 / 触发父页 change
+  const isPageActive = ref(true);
+
+  const readSavedSelection = (): SelectorItem | null => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && saved.id) {
+        return saved as SelectorItem;
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  onActivated(() => {
+    isPageActive.value = true;
+    // 失活期间其他页可能已改 scene；仅在 URL/选中不一致时对齐，避免无意义 replace 打断 keep-alive 导航
+    nextTick(() => {
+      if (sceneList.value.length === 0 && systemList.value.length === 0) return;
+      const liveId = String((getLiveRouteQuery().scene_id || getLiveRouteQuery().scope_id || ''));
+      if (liveId && selectedItem.value?.id === liveId) return;
+      trySelectFromRoute({ forceAlign: true });
+    });
+  });
+  onDeactivated(() => {
+    isPageActive.value = false;
+    // keep-alive 失活时关掉 teleport 到 body 的 popover，避免遮罩残留挡住其他页点击
+    isPopoverShow.value = false;
+    popoverRef.value?.hide?.();
+  });
 
   /** 根据角色确定可用列表范围 */
   const getRoleScope = () => ({
@@ -341,14 +408,6 @@
   });
 
   const buildSceneQuery = buildSceneContextQueryFromSelection;
-
-  const getSavedSelection = (): SelectorItem | null => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    } catch {
-      return null;
-    }
-  };
 
   // 用户手动切换场景后，短暂忽略 route 守护，避免 stale URL 把选中项打回旧场景
   let suppressRouteResyncUntil = 0;
@@ -381,15 +440,16 @@
     showSystem: boolean,
   ): SelectorItem | null => {
     if (!matchId) return null;
+    const sameId = (item: SelectorItem) => String(item.id) === String(matchId);
     if (showScene && !showSystem) {
-      return sceneItemsForMatch.find(item => item.id === matchId) || null;
+      return sceneItemsForMatch.find(sameId) || null;
     }
     if (!showScene && showSystem) {
-      return systemItemsForMatch.find(item => item.id === matchId) || null;
+      return systemItemsForMatch.find(sameId) || null;
     }
     if (showScene && showSystem) {
-      return sceneItemsForMatch.find(item => item.id === matchId)
-        || systemItemsForMatch.find(item => item.id === matchId)
+      return sceneItemsForMatch.find(sameId)
+        || systemItemsForMatch.find(sameId)
         || null;
     }
     return null;
@@ -405,10 +465,13 @@
     hasInitializedSelection = true;
     selectedItem.value = targetItem;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
-    syncSceneIdToRoute(targetItem);
+    // keep-alive 失活实例不写路由、不抛 change，避免把当前页（如 AI 助手）强行导航走
+    if (isPageActive.value) {
+      syncSceneIdToRoute(targetItem);
+    }
     if (!isSame) {
       emits('update:modelValue', targetItem);
-      if (emitChange) {
+      if (emitChange && isPageActive.value) {
         emits('change', targetItem);
       }
     }
@@ -421,7 +484,9 @@
    * 3. URL无ID时恢复 localStorage / 兜底选第一项
    * 4. URL 指向无管理权限场景 → 跳转权限申请页（不自动改选第一个可管理场景）
    */
-  const trySelectFromRoute = () => {
+  const trySelectFromRoute = (options?: { forceAlign?: boolean }) => {
+    // 失活实例不能改路由，否则会把当前页（AI 助手 / 报表 / 广场）踢到无权限
+    if (!isPageActive.value) return;
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
     // 基于当前页面的 listScope 决定实际可用的匹配范围
     const showScene = props.listScope.includes('scene') && hasSceneAccess;
@@ -434,6 +499,7 @@
     const unlockedSceneItems = sceneItems.filter(item => !isSceneLocked(item));
     const systemItems = systemItemsForMatch.filter(item => item.type !== 'aggregate');
     const urlMatchId = getUrlMatchId();
+    const savedSelection = readSavedSelection();
 
     // 检查当前页面所需列表是否已加载完毕（仅检查 listScope 范围内的）
     if (showScene && sceneItems.length === 0) return;
@@ -457,14 +523,18 @@
       return;
     }
 
-    // 已初始化且当前选中与 URL 一致 → 无需重复处理（上锁场景除外，需重新兜底）
-    if (
-      hasInitializedSelection
-      && selectedItem.value
-      && (!urlMatchId || selectedItem.value.id === urlMatchId)
-      && !isSceneLocked(selectedItem.value)
-    ) {
-      return;
+    // 已初始化且与权威来源一致 → 无需重复处理（上锁场景除外，需重新兜底）
+    // URL 有值以 URL 为准；URL 无值以 localStorage 为准（避免 keep-alive 失活期间错过跨页切换）
+    // forceAlign 时强制重新对齐（如 keep-alive 激活后）
+    if (!options?.forceAlign && hasInitializedSelection && selectedItem.value && !isSceneLocked(selectedItem.value)) {
+      if (urlMatchId) {
+        if (selectedItem.value.id === urlMatchId) return;
+      } else if (
+        !savedSelection
+        || (savedSelection.id === selectedItem.value.id && savedSelection.type === selectedItem.value.type)
+      ) {
+        return;
+      }
     }
 
     let targetItem: SelectorItem | null = null;
@@ -480,6 +550,8 @@
       );
       if (matchedItem && !isSceneLocked(matchedItem)) {
         targetItem = matchedItem;
+      } else if (!matchedItem && urlMatchId === 'allSecen' && !props.isAllSecen) {
+        // 当前页面不支持「我的所有场景」，回退到具体场景
       } else if (matchedItem && isSceneLocked(matchedItem)) {
         // URL 指向仅使用权限场景：应用内进入时兜底第一个可管理场景（外链由路由守卫跳转申请页）
         if (unlockedSceneItems.length > 0) {
@@ -491,6 +563,23 @@
           });
           return;
         }
+      } else if (isSystemScopedContextQuery(getLiveRouteQuery())) {
+        // 我的所有系统不是具体系统。当前页不展示该项时，走后面的原有兜底
+        const isAggregateSystem = String(urlMatchId) === 'allSystem';
+        if (showSystem && !isAggregateSystem) {
+          // 可选系统的页面保持当前系统，不把系统 id 当成无权限场景，也不改选成场景
+          const savedSystem = readSavedSelection();
+          targetItem = savedSystem
+            && savedSystem.type === 'system'
+            && String(savedSystem.id) === String(urlMatchId)
+            ? savedSystem
+            : {
+              id: String(urlMatchId),
+              name: String(urlMatchId),
+              type: 'system' as const,
+            };
+        }
+        // 不可选系统的页面留给后面的原有兜底，选第一个可用场景
       } else {
         // URL 指向无权限场景 → 权限申请页
         router.replace({
@@ -502,18 +591,17 @@
     }
 
     // ── 阶段2.5：恢复用户上次的选择（跨页面记忆，需在当前页面可见范围内）──
-    if (!targetItem) {
-      const saved = getSavedSelection();
-      if (saved && saved.id) {
-        // 只在当前页面实际展示的列表中恢复（包括聚合项）
-        const availableItems = [
-          ...sceneItemsForMatch,
-          ...systemItemsForMatch,
-        ];
-        const savedItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
-        // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
-        targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
-      }
+    if (!targetItem && savedSelection?.id) {
+      // 只在当前页面实际展示的列表中恢复（包括聚合项）
+      const availableItems = [
+        ...sceneItemsForMatch,
+        ...systemItemsForMatch,
+      ];
+      const savedItem = availableItems.find(item => (
+        item.id === savedSelection.id && item.type === savedSelection.type
+      )) || null;
+      // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
+      targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
     }
 
     // ── 阶段3：URL无ID / 匹配失败 / 上次选择不可用时的兜底逻辑 ──
@@ -553,7 +641,18 @@
       });
       return;
     }
-    if ((!window.changeConfirm || window.changeConfirm === 'popover') && route.meta.changeSceneIsBackedList) {
+    const applySelection = () => {
+      hasInitializedSelection = true;
+      selectedItem.value = item;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
+      // 先同步改地址栏，再通知列表刷新，避免列表按旧 scene_id 请求并把旧 ID 写回 URL
+      syncSceneIdToRoute(item);
+      emits('update:modelValue', item);
+      emits('change', item);
+      isPopoverShow.value = false;
+    };
+    // 路由守卫不拦截同路径的 query 变化，切换场景的离开确认需在这里处理
+    if (route.meta.changeSceneIsBackedList) {
       InfoBox({
         title: t('确认离开当前页？'),
         subTitle: t('离开将会导致未保存信息丢失'),
@@ -564,13 +663,8 @@
         footerAlign: 'center',
         class: 'change-confirm-info-box',
         onConfirm() {
-          hasInitializedSelection = true;
-          selectedItem.value = item;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-          syncSceneIdToRoute(item);
-          isPopoverShow.value = false;
-          emits('update:modelValue', item);
-          emits('change', item);
+          window.changeConfirm = false;
+          applySelection();
           router.push({
             name: route.meta.ListPageName as string || 'strategyList',
             query: buildSceneQuery(item),
@@ -579,23 +673,40 @@
         onClose() {
         },
       });
+    } else if (window.changeConfirm === true) {
+      changeConfirm()
+        .then(applySelection)
+        .catch(() => {});
     } else {
-      hasInitializedSelection = true;
-      selectedItem.value = item;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-      // 先同步改地址栏，再通知列表刷新，避免列表按旧 scene_id 请求并把旧 ID 写回 URL
-      syncSceneIdToRoute(item);
-      emits('update:modelValue', item);
-      emits('change', item);
-      isPopoverShow.value = false;
+      applySelection();
     }
   };
 
   // 同步场景参数到地址栏（以 replaceState 为准，再让 vue-router 对齐地址栏，避免 route.query 旧值覆盖）
   const syncSceneIdToRoute = (item: SelectorItem | null) => {
+    // keep-alive 失活实例绝不能写路由；否则切回 AI 助手后补 query 会触发 parentNode 空引用并打断导航
+    if (!isPageActive.value) return;
     const nextQuery = buildSceneQuery(item);
-    syncSceneContextToUrl(nextQuery);
-    router.replace({ query: getQueryFromLocation() }).catch(() => {});
+    if (!Object.keys(nextQuery).length) return;
+
+    const locationQuery = getQueryFromLocation();
+    const routeQuery = route.query as Record<string, unknown>;
+    const sceneKeys = ['scene_id', 'scope_id', 'scope_type'] as const;
+    const locationAligned = sceneKeys.every(key => (
+      !nextQuery[key] || locationQuery[key] === nextQuery[key]
+    ));
+    const routeAligned = sceneKeys.every(key => (
+      !nextQuery[key] || String(routeQuery[key] ?? '') === nextQuery[key]
+    ));
+    // 已对齐则跳过，避免无意义 replace/popstate 在 keep-alive 下打爆 Vue 更新
+    if (locationAligned && routeAligned) return;
+
+    if (!locationAligned) {
+      syncSceneContextToUrl(nextQuery);
+    }
+    if (!routeAligned || !locationAligned) {
+      router.replace({ query: getQueryFromLocation() }).catch(() => {});
+    }
   };
 
   // 弹出层显示
@@ -659,11 +770,29 @@
       trySelectFromRoute();
     },
   });
+
+  const applySceneListAggregate = () => {
+    const pureScenes = sceneList.value.filter(item => item.id !== 'allSecen');
+    sceneList.value = props.isAllSecen
+      ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...pureScenes]
+      : pureScenes;
+  };
+
+  watch(() => props.isAllSecen, () => {
+    if (!sceneList.value.length) {
+      return;
+    }
+    applySceneListAggregate();
+    if (!props.isAllSecen && selectedItem.value?.id === 'allSecen') {
+      trySelectFromRoute();
+    }
+  });
+
   // 监听外部值变化
   watch(() => props.modelValue, (newVal) => {
     selectedItem.value = newVal;
-    // 外部设置选中项时也同步 URL
-    if (newVal) {
+    // 外部设置选中项时也同步 URL（失活实例不写，避免抢路由）
+    if (newVal && isPageActive.value) {
       syncSceneIdToRoute(newVal);
     }
   });
@@ -672,8 +801,12 @@
   // （防止其他组件的路由跳转丢失 query 参数）
   // 若 URL 已明确指向其他场景，不回写（优先走 URL 临时切换）
   watch(selectedItem, (newVal) => {
+    if (!isPageActive.value) return;
     if (!newVal || !newVal.id) return;
     const q = getLiveRouteQuery();
+    const urlId = (q.scene_id || q.scope_id) as string | undefined;
+    // URL 已明确指向其他场景时不回写（优先走 URL 临时切换）
+    if (urlId && urlId !== newVal.id) return;
     const needsFix = (
       q.scene_id !== newVal.id
       || (newVal.type === 'scene' && q.scope_id !== newVal.id)
@@ -690,6 +823,7 @@
   // - URL 有场景参数且与当前选中不一致 → 按 URL 临时切换（并回写 localStorage）
   // - URL 丢失场景参数 → 用当前选中项补回 query
   watch(() => route.query, () => {
+    if (!isPageActive.value) return;
     if (shouldSuppressRouteResync()) {
       return;
     }
@@ -719,8 +853,20 @@
       return;
     }
 
+    // URL 无场景时：先按 localStorage 对齐，再补回 query（避免把失活前的旧选中写回去）
+    if (sceneList.value.length > 0 || systemList.value.length > 0) {
+      trySelectFromRoute({ forceAlign: true });
+      return;
+    }
     if (!item || !item.id) return;
-    setTimeout(() => syncSceneIdToRoute(item), 50);
+    setTimeout(() => {
+      if (!isPageActive.value) return;
+      const latest = selectedItem.value;
+      if (!latest?.id) return;
+      const liveId = (route.query.scene_id || route.query.scope_id) as string | undefined;
+      if (liveId) return;
+      syncSceneIdToRoute(latest);
+    }, 50);
   });
 
   // 获取数据的方法（按角色按需请求）
@@ -778,6 +924,10 @@
     getLists,
     sceneList,
     systemList,
+    close: () => {
+      isPopoverShow.value = false;
+      popoverRef.value?.hide?.();
+    },
   });
 
   // 点击外部区域关闭 popover
@@ -799,6 +949,7 @@
   });
 
   onUnmounted(() => {
+    isPageActive.value = false;
     offSceneEvent('scene-selector-lost-manage', handleLostManage);
     document.removeEventListener('click', handleClickOutside, true);
   });
@@ -809,6 +960,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
   height: 32px;
   padding: 0 10px;
   cursor: pointer;
@@ -852,6 +1004,7 @@
     display: flex;
     flex: 1;
     align-items: center;
+    min-width: 0;
     overflow: hidden;
 
     .type-tag {
@@ -864,6 +1017,10 @@
       color: #fff;
       border: none;
       border-radius: 2px;
+
+      .type-tag-short {
+        display: none;
+      }
 
       &.type-aggregate {
         background-color: #ba69f4;
@@ -899,6 +1056,16 @@
       transform: rotate(180deg);
     }
   }
+}
+
+:global(.audit-navigation-side.is-side-collapsed) .type-tag .type-tag-full {
+  display: none;
+}
+
+:global(.audit-navigation-side.is-side-collapsed) .type-tag .type-tag-short {
+  display: inline;
+  font-size: 12px;
+  line-height: 22px;
 }
 
 .scene-system-dropdown {
@@ -946,6 +1113,10 @@
 
     &::-webkit-scrollbar-thumb:hover {
       background: #3c4558;
+    }
+
+    .dropdown-empty {
+      color: #63656e;
     }
 
     .dropdown-group {
@@ -1023,6 +1194,14 @@
     padding: 0 12px 8px;
     background: #fff;
     align-items: center;
+  }
+
+  .dropdown-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    text-align: center;
   }
 
   .dropdown-group {

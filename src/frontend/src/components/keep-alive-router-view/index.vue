@@ -7,26 +7,28 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
+    software distributed under the License is distributed on
+    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+    either express or implied. See the License for the
+    specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
   <router-view v-slot="{ Component, route: currentRoute }">
     <template v-if="Component">
-      <keep-alive>
-        <component
-          :is="Component"
-          v-if="currentRoute.meta?.keepAlive"
-          :key="String(currentRoute.meta?.keepAliveKey || currentRoute.name)" />
-      </keep-alive>
-      <component
-        :is="Component"
-        v-if="!currentRoute.meta?.keepAlive"
-        :key="String(currentRoute.meta?.keepAliveKey || currentRoute.name)" />
+      <!--
+        必须在 RouterView 子树内读取 matchedRouteKey：
+        只认「当前这一层」路由自己的 keepAlive，避免子路由 keepAlive
+        把父级 layout 也缓存，导致详情 teleport Dock 残留两份。
+      -->
+      <keep-alive-route-renderer
+        :component="Component"
+        :route-name="String(currentRoute.meta?.keepAliveKey || currentRoute.name || '')" />
     </template>
   </router-view>
 </template>
+
+<script setup lang="ts">
+  import KeepAliveRouteRenderer from './keep-alive-route-renderer.vue';
+</script>

@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from .ai_assistant import *  # noqa
 from .base import *  # noqa
 from .doris import *  # noqa
 from .es import *  # noqa

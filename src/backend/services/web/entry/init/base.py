@@ -26,6 +26,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
+from apps.itsm.utils import is_itsm_v4_enabled
 from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
@@ -36,8 +37,12 @@ from core.kms import (
     INIT_PASSWORD_ENCODING_PLAINTEXT,
     get_secret_json,
 )
+from core.sql.constants import Operator
 from core.utils.distutils import strtobool
-from services.web.databus.collector.snapshot.system.base import create_iam_data_link
+from services.web.databus.collector.snapshot.system.base import (
+    create_iam_data_link,
+    init_itsm_v4,
+)
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     ClusterMode,
@@ -61,6 +66,7 @@ from services.web.entry.constants import (
     INIT_ES_FISHED_KEY,
     INIT_EVENT_FINISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
+    INIT_ITSM_V4_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
     INIT_SDK_CONFIG_FINISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
@@ -75,7 +81,7 @@ from services.web.risk.constants import (
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.scene.constants import DEFAULT_SCENE_NAME
+from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 
@@ -139,6 +145,12 @@ def adapt_auth_password(config: dict) -> None:
 
 class SystemInitHandler:
     def init(self):
+        """
+        执行系统初始化。
+
+        返回 True 表示全部完成；返回 False 表示存在未完成项（如 ITSM V4 迁移），
+        调用方必须据此返回非零退出码，否则 pre_release_hook 的 && 链会把未完成的迁移当作发布成功。
+        """
         print("[Main] Init Start")
         self.pre_init()
         self.init_standard_fields()
@@ -152,7 +164,29 @@ class SystemInitHandler:
         self.init_asset()
         self.init_system_rule_audit()
         self.init_global_meta_config()
+        if not self.init_itsm_v4():
+            return False
         print("[Main] Init Finished")
+        return True
+
+    def init_itsm_v4(self):
+        """返回 True 表示迁移已完成；未完成时返回 False，由 init() 阻断发布"""
+        if not is_itsm_v4_enabled():
+            # 未升级 ITSM V4 的部署环境：不做套餐迁移，也不写完成标记，保留 V3 接口契约
+            print("[InitItsmV4] Disabled by BKAPP_ENABLE_ITSM_V4, Skip")
+            return True
+        if self.pre_check(INIT_ITSM_V4_FINISHED_KEY):
+            print("[InitItsmV4] Already Finished, Skip")
+            return True
+        result = init_itsm_v4()
+        if result:
+            self.post_init(INIT_ITSM_V4_FINISHED_KEY)
+            return True
+        # ITSM V4 未迁移完成时，部分套餐仍保存 V3 id，而新版本审批链路统一按 V4 调用，
+        # 放行发布会导致这批审批直接失败，因此必须把未完成状态传播出去阻断发布。
+        print("[InitItsmV4] Unfinished: 仍有套餐保持 V3 id，下一轮 init_system 会继续迁移")
+        print("[Main] Init Unfinished: ITSM V4 迁移未完成，阻断发布；请排查后重试 init_system")
+        return False
 
     def pre_init(self):
         enable_system_init = strtobool(os.getenv("BKAPP_INIT_SYSTEM", "False"))
@@ -397,6 +431,39 @@ class SystemInitHandler:
         GlobalMetaConfig.set(INIT_ASSET_FINISHED_KEY, status_map)
         print("[InitAsset] Finished")
 
+    def _build_manual_event_rule(self, rt_id: str, config: dict) -> dict:
+        """
+        构造系统默认规则审计策略的发现规则。
+
+        将原手写 SQL 中的 WHERE `{rt_id}`.manual_synced = 'false' 迁移为规则级 where 条件，
+        并将风险信息（risk_*）下沉到规则级，交由系统根据 rules 自动生成 SQL。
+        """
+        return {
+            "rule_name": "默认发现规则",
+            "conditions": {
+                "where": {
+                    "connector": "and",
+                    "condition": {
+                        "field": {
+                            "table": rt_id,
+                            "raw_name": "manual_synced",
+                            "display_name": "manual_synced",
+                            "field_type": "string",
+                        },
+                        "operator": Operator.EQ.value,
+                        "filter": "false",
+                    },
+                },
+                "having": None,
+            },
+            "risk_title": config.get("risk_title"),
+            "risk_level": config.get("risk_level"),
+            "risk_hazard": config.get("risk_hazard"),
+            "risk_guidance": config.get("risk_guidance"),
+            "processor": config.get("processor_groups") or [],
+            "follower": config.get("notice_groups") or [],
+        }
+
     def _build_system_rule_audit_params(self, rt_id: str) -> dict:
         """
         使用 quick_run.py 的模板生成系统默认规则审计参数。
@@ -409,20 +476,16 @@ class SystemInitHandler:
             "control_id",
             "control_version",
             "strategy_type",
-            "sql",
             "configs",
             "tags",
             "notice_groups",
             "description",
-            "risk_level",
-            "risk_hazard",
-            "risk_guidance",
-            "risk_title",
             "processor_groups",
             "event_basic_field_configs",
             "event_data_field_configs",
             "event_evidence_field_configs",
             "risk_meta_field_config",
+            "source",
         ]
         params = {field: config.get(field) for field in required_fields if field in config}
         params.setdefault("namespace", settings.DEFAULT_NAMESPACE)
@@ -434,6 +497,7 @@ class SystemInitHandler:
         default_scene = Scene.objects.filter(name=DEFAULT_SCENE_NAME).order_by("scene_id").first()
         if not default_scene:
             return {}
+        params["binding_type"] = BindingType.SCENE_BINDING
         params["scene_id"] = default_scene.scene_id
         configs = params.get("configs")
         if not configs:
@@ -441,6 +505,7 @@ class SystemInitHandler:
         data_source = configs.setdefault("data_source", {})
         data_source["rt_id"] = rt_id
         data_source.setdefault("display_name", rt_id)
+        params["rules"] = [self._build_manual_event_rule(rt_id, config)]
         return params
 
     def init_system_rule_audit(self):

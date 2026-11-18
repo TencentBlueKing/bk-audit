@@ -110,6 +110,14 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     }
   };
 
+  /** 本页全选只作用于当前页：翻页时退出 page 模式，保留已勾选的 key，避免新页被自动勾选 */
+  const releasePageSelectionForPageChange = () => {
+    if (!enabled.value || selectCheckMode.value !== 'page') {
+      return;
+    }
+    selectCheckMode.value = '';
+  };
+
   const waitForSelectAllLoadingPaint = async () => {
     await nextTick();
     await new Promise<void>((resolve) => {
@@ -349,7 +357,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     });
   };
 
-  const fetchSelectAllRowKeys = async (maxCount?: number) => {
+  const fetchSelectAllRows = async (maxCount?: number) => {
     const total = pagination.count;
     if (!total) {
       return [];
@@ -365,10 +373,12 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       page: 1,
       page_size: targetCount,
     });
-    const results = data?.results || [];
-    return results
-      .map((row: Record<string, any>) => getRowKeyValue(row))
-      .slice(0, targetCount);
+    return (data?.results || []).slice(0, targetCount);
+  };
+
+  const fetchSelectAllRowKeys = async (maxCount?: number) => {
+    const rows = await fetchSelectAllRows(maxCount);
+    return rows.map((row: Record<string, any>) => getRowKeyValue(row));
   };
 
   const resolveSelectedRowKeys = async (options?: { maxCount?: number }) => {
@@ -376,6 +386,13 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       return [...selectedRowKeys.value];
     }
     return fetchSelectAllRowKeys(options?.maxCount);
+  };
+
+  const resolveSelectAllRows = async (options?: { maxCount?: number }) => {
+    if (!enabled.value || selectCheckMode.value !== 'all') {
+      return [];
+    }
+    return fetchSelectAllRows(options?.maxCount);
   };
 
   const resolveExportSelection = async () => {
@@ -428,9 +445,11 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     resetCrossPageSelection,
     clearAllSelection,
     preservePageSelectionForPageSizeChange,
+    releasePageSelectionForPageChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
+    resolveSelectAllRows,
     resolveExportSelection,
     getSelectionMeta,
   };

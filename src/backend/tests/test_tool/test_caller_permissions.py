@@ -209,6 +209,7 @@ class TestToolViewPermissions(TestCase):
             strategy=strategy,
             event_time=timezone.now(),
             event_data={},
+            scene_id=scene.scene_id,
         )
         # 3) mock list_event 顶层字段 operator=admin；以及 BKBASE 查询
         mocked_event = {
@@ -356,6 +357,7 @@ class TestToolViewPermissions(TestCase):
             strategy=strategy,
             event_time=timezone.now(),
             event_data={},
+            scene_id=scene.scene_id,
         )
 
         with (

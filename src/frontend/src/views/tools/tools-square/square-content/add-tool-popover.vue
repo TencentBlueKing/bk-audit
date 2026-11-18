@@ -370,6 +370,7 @@
 
   import useRequest from '@/hooks/use-request';
   import userProfileIcon from '@/images/user.svg';
+  import { groupToolsByScene } from '@/views/tools/tools-square/utils/tool-scene-groups';
 
   interface TagItem {
     tag_id: string;
@@ -388,6 +389,7 @@
     };
     sceneNameMap?: Record<number, string>;
     systemNameMap?: Record<string, string>;
+    accessibleSceneIds?: number[] | null;
   }
 
   const props = defineProps<Props>();
@@ -501,37 +503,17 @@
   }
 
   const buildSceneGroups = (tools: ToolInfo[]): ToolGroup[] => {
-    const groupMap = new Map<string, ToolInfo[]>();
-    const sceneOrder: string[] = [];
-    tools.forEach((tool) => {
-      const sceneIds = tool.visibility?.scene_ids || [];
-      if (sceneIds.length === 0) {
-        if (!groupMap.has('0')) {
-          groupMap.set('0', []);
-          sceneOrder.push('0');
-        }
-        groupMap.get('0')!.push(tool);
-      } else {
-        sceneIds.forEach((sid: number) => {
-          const key = String(sid);
-          if (!groupMap.has(key)) {
-            groupMap.set(key, []);
-            sceneOrder.push(key);
-          }
-          groupMap.get(key)!.push(tool);
-        });
-      }
-    });
     const nameMap = props.sceneNameMap || {};
-    return sceneOrder.map((key) => {
-      const sid = Number(key);
-      return {
-        groupKey: key,
-        groupId: sid,
-        groupName: sid === 0 ? t('未分类') : (nameMap[sid] || `场景 ${sid}`),
-        tools: groupMap.get(key) || [],
-      };
-    }).sort((a, b) => Number(b.groupKey) - Number(a.groupKey));
+    return groupToolsByScene(tools, props.accessibleSceneIds ?? null)
+      .map(({ groupKey, tools: groupTools }) => {
+        const sid = Number(groupKey);
+        return {
+          groupKey,
+          groupId: sid,
+          groupName: sid === 0 ? t('未分类') : (nameMap[sid] || `场景 ${sid}`),
+          tools: groupTools,
+        };
+      });
   };
 
   const buildSystemGroups = (tools: ToolInfo[]): ToolGroup[] => {

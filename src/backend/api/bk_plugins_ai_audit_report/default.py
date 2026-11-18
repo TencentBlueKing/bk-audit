@@ -22,6 +22,7 @@ from django.utils.translation import gettext_lazy
 from api.bk_plugins_ai_agent.default import AIAgentBase
 from api.bk_plugins_ai_agent.default import ChatCompletion as BaseChatCompletion
 from api.bk_plugins_ai_audit_report.agui import AuditReportFinalAnswerExtractor
+from api.constants import AIAgentCode
 from api.domains import AI_AUDIT_REPORT_API_URL
 
 
@@ -42,6 +43,9 @@ class ChatCompletion(BaseChatCompletion):
 
     module_name = "bk_plugins_ai_audit_report"
     name = gettext_lazy("智能体对话")
+    agent_code = AIAgentCode.AUDIT_REPORT
+    # 默认保留单风险渲染的历史任务级限流；普通 AI 任务可在单次请求中显式启用全局限流。
+    enable_agent_rate_limit = False
 
     def postprocess_agui_final_content(self, content: str) -> tuple[str, str]:
         """审计报告优先返回完整 assistant 正文中的 <final_answer>。"""

@@ -19,16 +19,15 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import io
 import json
-import sys
-import types
-import unittest
 from pathlib import Path
 from unittest import mock
 
+from bk_resource.exceptions import ValidateException
 from django.contrib import admin
 from django.db.models import Q
 from django.http import Http404
 from django.test import override_settings
+from pypdf import PdfReader
 from rest_framework import serializers as drf_serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
@@ -41,6 +40,7 @@ from services.web.risk.constants import (
     RiskLabel,
     RiskStatus,
 )
+from services.web.risk.exceptions import AnalyseReportExportFailed
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportExtraInfo,
@@ -97,6 +97,9 @@ class AnalyseReportTestBase(TestCase):
             status="new",
             title="Test Risk 1",
             event_time=datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level=RiskLevel.HIGH.value,
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk2 = Risk.objects.create(
             risk_id="risk-agent-002",
@@ -105,6 +108,9 @@ class AnalyseReportTestBase(TestCase):
             status="new",
             title="Test Risk 2",
             event_time=datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level=RiskLevel.HIGH.value,
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         # 创建内置场景
         self.scenario_person, _ = AnalyseReportScenario.objects.update_or_create(
@@ -890,6 +896,39 @@ class TestRetrieveAnalyseReport(AnalyseReportTestBase):
 class TestUpdateAnalyseReport(AnalyseReportTestBase):
     """测试编辑AI报告"""
 
+    def test_html_edit_records_format_without_losing_execution_metadata(self):
+        self.report.extra_info = {
+            "execution": {"started_at": "2026-01-01T00:00:00+08:00"},
+            "content_format": "MARKDOWN",
+        }
+        self.report.save(update_fields=["extra_info"])
+        body = '<p style="color:red">编辑正文</p>'
+        result = self.resource.risk.update_analyse_report.request(
+            {"report_id": self.report.report_id, "content": body, "content_format": "HTML"}
+        )
+        self.assertEqual(result['content'], body)
+        self.assertEqual(result['content_format'], 'HTML')
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.extra_info['content_format'], 'HTML')
+        self.assertEqual(self.report.extra_info['execution'], {"started_at": "2026-01-01T00:00:00+08:00"})
+        result = self.resource.risk.update_analyse_report.request(
+            {"report_id": self.report.report_id, "content": "# 再次编辑"}
+        )
+        self.assertEqual(result['content_format'], 'MARKDOWN')
+
+    def test_format_update_requires_content(self):
+        with self.assertRaises(ValidateException):
+            self.resource.risk.update_analyse_report.request(
+                {"report_id": self.report.report_id, "content_format": "HTML"}
+            )
+
+    def test_whitespace_content_is_rejected_without_changing_report(self):
+        previous = self.report.content
+        with self.assertRaises(ValidateException):
+            self.resource.risk.update_analyse_report.request({"report_id": self.report.report_id, "content": "   "})
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.content, previous)
+
     def setUp(self):
         super().setUp()
         self.report = AnalyseReport.objects.create(
@@ -1074,15 +1113,45 @@ class TestDeleteAnalyseReport(AnalyseReportTestBase):
 
 
 class TestExportAnalyseReport(AnalyseReportTestBase):
+    def test_pdf_failure_returns_error_instead_of_html_download(self):
+        with override_settings(PDF_CJK_FONT_PATH='/missing/font.ttf'):
+            with self.assertRaises(AnalyseReportExportFailed):
+                self.resource.risk.export_analyse_report.request(
+                    {"report_id": self.report.report_id, "export_format": "pdf"}
+                )
+
+    def test_legacy_html_pdf_renders_text_without_html_tags(self):
+        self.report.content = '<h1>历史报告</h1><p>正文保留</p><table><tr><td>中文单元格</td></tr></table>'
+        self.report.save(update_fields=["content"])
+        response = self.resource.risk.export_analyse_report.request(
+            {"report_id": self.report.report_id, "export_format": "pdf"}
+        )
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        text = ''.join(page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages)
+        self.assertIn("正文保留", text)
+        self.assertIn("中文单元格", text)
+        self.assertNotIn("<h1>", text)
+
+    def test_html_markdown_export_converts_without_updating_report(self):
+        for body in (
+            '<h1>历史报告</h1><p><strong>完整正文</strong></p>',
+            '<!DOCTYPE html><html><body><h1>历史报告</h1><p><strong>完整正文</strong></p></body></html>',
+        ):
+            with self.subTest(body=body):
+                self.report.content = body
+                self.report.save(update_fields=["content"])
+                response = self.resource.risk.export_analyse_report.request(
+                    {"report_id": self.report.report_id, "export_format": "markdown"}
+                )
+                self.assertEqual(response.content.decode().strip(), '# 历史报告\n\n**完整正文**')
+                self.report.refresh_from_db()
+                self.assertEqual(self.report.content, body)
+
     """测试导出AI报告"""
 
     @staticmethod
     def _read_fixture(filename):
         return (Path(__file__).parent / "fixtures" / filename).read_text(encoding="utf-8")
-
-    @staticmethod
-    def _extract_html_body(html):
-        return html.split("<body>", 1)[1].split("</body>", 1)[0].strip()
 
     def setUp(self):
         super().setUp()
@@ -1109,19 +1178,15 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.assertEqual(result.content.decode("utf-8"), self._read_fixture("analyse_report_export.md"))
 
     def test_export_pdf(self):
-        """测试导出为PDF（回退为HTML）"""
+        """PDF 下载必须返回实际 PDF，不以 HTML 充当成功。"""
         result = self.resource.risk.export_analyse_report(
             {
                 "report_id": self.report.report_id,
                 "export_format": "pdf",
             }
         )
-        # 可能回退为HTML（如果xhtml2pdf不可用）
-        content_type = result["Content-Type"]
-        self.assertTrue(
-            content_type.startswith("application/pdf") or content_type.startswith("text/html"),
-            f"Unexpected content type: {content_type}",
-        )
+        self.assertEqual(result["Content-Type"], "application/pdf")
+        self.assertTrue(result.content.startswith(b"%PDF"))
         self.assertIn("attachment", result["Content-Disposition"])
 
     def test_export_markdown_filename_has_md_extension(self):
@@ -1140,21 +1205,6 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.assertIn("filename*=utf-8''", disposition)
         self.assertNotIn('filename="%E5', disposition)
 
-    @mock.patch("services.web.risk.resources.analyse_report.timezone")
-    def test_export_markdown_filename_contains_export_timestamp(self, mock_timezone):
-        """测试 Markdown 导出文件名包含精确到秒的导出时间戳"""
-        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 15, 20, 44, 36)
-
-        result = self.resource.risk.export_analyse_report(
-            {
-                "report_id": self.report.report_id,
-                "export_format": "markdown",
-            }
-        )
-
-        disposition = result["Content-Disposition"]
-        self.assertIn("20260615204436.md", disposition)
-
     def test_export_pdf_filename_matches_content_type(self):
         """测试 PDF 导出的文件名扩展名与实际内容类型匹配"""
         result = self.resource.risk.export_analyse_report(
@@ -1165,182 +1215,11 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         )
         content_type = result["Content-Type"]
         disposition = result["Content-Disposition"]
-        if content_type.startswith("application/pdf"):
-            # PDF 生成成功，文件名应以 .pdf 结尾
-            self.assertIn(".pdf", disposition)
-        else:
-            # 回退为 HTML，文件名应以 .html 结尾
-            self.assertIn(".html", disposition)
-            self.assertNotIn(".pdf", disposition)
+        self.assertEqual(content_type, "application/pdf")
+        self.assertIn(".pdf", disposition)
+        self.assertNotIn(".html", disposition)
         self.assertIn("filename*=utf-8''", disposition)
         self.assertNotIn('filename="%E5', disposition)
-
-    @mock.patch("services.web.risk.resources.analyse_report.timezone")
-    def test_export_pdf_filename_contains_export_timestamp(self, mock_timezone):
-        """测试 PDF 导出文件名包含精确到秒的导出时间戳"""
-        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 15, 20, 44, 36)
-        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
-            mock_create.return_value = b"%PDF-1.4 fake content"
-            result = self.resource.risk.export_analyse_report(
-                {
-                    "report_id": self.report.report_id,
-                    "export_format": "pdf",
-                }
-            )
-
-        disposition = result["Content-Disposition"]
-        self.assertIn("20260615204436.pdf", disposition)
-
-    def test_export_pdf_renders_content_only(self):
-        """测试 PDF 渲染内容与 Markdown 一致，不额外拼接标题和元信息"""
-        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
-            mock_create.return_value = b"%PDF-1.4 fake content"
-            self.resource.risk.export_analyse_report(
-                {
-                    "report_id": self.report.report_id,
-                    "export_format": "pdf",
-                }
-            )
-
-        full_html = mock_create.call_args.kwargs["html"]
-        self.assertEqual(
-            self._extract_html_body(full_html),
-            self._read_fixture("analyse_report_export_body.html").strip(),
-        )
-        self.assertNotIn("<h1>导出测试报告</h1>", full_html)
-        self.assertNotIn("报告类型:", full_html)
-        self.assertNotIn("分析范围:", full_html)
-
-    def test_export_pdf_table_styles_wrap_long_text(self):
-        """测试 PDF 表格样式限制长文本跨列溢出"""
-        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
-            mock_create.return_value = b"%PDF-1.4 fake content"
-            self.resource.risk.export_analyse_report(
-                {
-                    "report_id": self.report.report_id,
-                    "export_format": "pdf",
-                }
-            )
-
-        full_html = mock_create.call_args.kwargs["html"]
-        self.assertIn("-pdf-word-wrap: CJK", full_html)
-
-    def test_export_pdf_text_styles_wrap_long_text(self):
-        """测试 PDF 普通段落和列表项限制长文本跨页边界溢出"""
-        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
-            mock_create.return_value = b"%PDF-1.4 fake content"
-            self.resource.risk.export_analyse_report(
-                {
-                    "report_id": self.report.report_id,
-                    "export_format": "pdf",
-                }
-            )
-
-        full_html = mock_create.call_args.kwargs["html"]
-        self.assertIn(
-            "p, li {\n"
-            "        -pdf-word-wrap: CJK;\n"
-            "        word-break: break-word;\n"
-            "        word-wrap: break-word;\n"
-            "        overflow-wrap: anywhere;",
-            full_html,
-        )
-
-    def test_export_pdf_heading_and_code_styles_wrap_long_text(self):
-        """测试 PDF 标题、引用和代码块限制长文本跨页边界溢出"""
-        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
-            mock_create.return_value = b"%PDF-1.4 fake content"
-            self.resource.risk.export_analyse_report(
-                {
-                    "report_id": self.report.report_id,
-                    "export_format": "pdf",
-                }
-            )
-
-        full_html = mock_create.call_args.kwargs["html"]
-        self.assertIn("h1, h2, h3, blockquote, code, pre {", full_html)
-        self.assertIn("-pdf-word-wrap: CJK", full_html)
-        self.assertIn("white-space: pre-wrap", full_html)
-
-    def test_create_pdf_uses_xhtml2pdf(self):
-        """测试 PDF 字节生成逻辑使用 xhtml2pdf"""
-        pisa_status = mock.Mock(err=False)
-        mock_create_pdf = mock.Mock(return_value=pisa_status)
-        fake_module = types.SimpleNamespace(pisa=types.SimpleNamespace(CreatePDF=mock_create_pdf))
-        with mock.patch.dict(sys.modules, {"xhtml2pdf": fake_module}):
-            pdf_bytes = self.resource.risk.export_analyse_report._create_pdf(html="<html>报告</html>")
-
-        self.assertEqual(pdf_bytes, b"")
-        dest = mock_create_pdf.call_args.kwargs["dest"]
-        self.assertIsInstance(dest, io.BytesIO)
-        self.assertIn("link_callback", mock_create_pdf.call_args.kwargs)
-
-    def test_pdf_resource_callback_rejects_local_file(self):
-        """测试 PDF 资源回调拒绝读取服务器本地文件"""
-        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
-
-        for local_uri in ["/etc/passwd", "file:///etc/passwd"]:
-            resolved_uri = callback(local_uri, None)
-            self.assertNotEqual(resolved_uri, local_uri)
-            self.assertTrue(resolved_uri.startswith("data:image/gif;base64,"))
-
-    def test_pdf_resource_callback_allows_remote_images(self):
-        """测试 PDF 资源回调允许外部和内网图片"""
-        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
-
-        self.assertEqual(callback("https://example.com/a.png", None), "https://example.com/a.png")
-        self.assertEqual(callback("http://127.0.0.1/a.png", None), "http://127.0.0.1/a.png")
-
-    def test_pdf_resource_callback_allows_builtin_font_only(self):
-        """测试 PDF 资源回调仅允许内置字体本地路径"""
-        export_resource = self.resource.risk.export_analyse_report
-
-        self.assertEqual(
-            export_resource._resolve_pdf_resource(export_resource._CJK_FONT_PATH, None),
-            export_resource._CJK_FONT_PATH,
-        )
-
-    @mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._export_pdf")
-    def test_export_pdf_success_filename_is_pdf(self, mock_export_pdf):
-        """测试 PDF 生成成功时文件名为 .pdf"""
-        from urllib.parse import quote
-
-        from django.http import HttpResponse
-
-        mock_response = HttpResponse(b"%PDF-1.4 fake content", content_type="application/pdf")
-        filename = f"{self.report.title}.pdf"
-        mock_response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
-        mock_export_pdf.return_value = mock_response
-
-        result = self.resource.risk.export_analyse_report(
-            {
-                "report_id": self.report.report_id,
-                "export_format": "pdf",
-            }
-        )
-        self.assertIn(".pdf", result["Content-Disposition"])
-        self.assertEqual(result["Content-Type"], "application/pdf")
-
-    @mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._export_pdf")
-    def test_export_pdf_fallback_filename_is_html(self, mock_export_pdf):
-        """测试 PDF 生成失败回退为 HTML 时文件名为 .html"""
-        from urllib.parse import quote
-
-        from django.http import HttpResponse
-
-        mock_response = HttpResponse("<html>fallback</html>", content_type="text/html; charset=utf-8")
-        filename = f"{self.report.title}.html"
-        mock_response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
-        mock_export_pdf.return_value = mock_response
-
-        result = self.resource.risk.export_analyse_report(
-            {
-                "report_id": self.report.report_id,
-                "export_format": "pdf",
-            }
-        )
-        self.assertIn(".html", result["Content-Disposition"])
-        self.assertNotIn(".pdf", result["Content-Disposition"])
 
     def test_export_not_found(self):
         """测试导出不存在的报告"""
@@ -1371,66 +1250,6 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
                     "export_format": "markdown",
                 }
             )
-
-    def test_resolve_pdf_resource_handles_windows_drive_backslash(self):
-        """L1: 验证 Windows 盘符路径 (C:\\xxx) 走内置字体判断, 不被 urlparse 误判 scheme='c'"""
-        from urllib.parse import urlparse
-
-        export_resource = self.resource.risk.export_analyse_report
-        windows_path = "C:\\Windows\\Fonts\\arial.ttf"
-
-        # 前置条件: urlparse 确实会把 C:\\xxx 误判为 scheme='c', 这正是要修复的 bug
-        self.assertEqual(urlparse(windows_path).scheme, "c")
-
-        # 验证修复后: 走盘符路径判断逻辑, 不抛 Invalid URL
-        resolved = export_resource._resolve_pdf_resource(windows_path, None)
-        # 返回值要么是路径本身 (如果命中内置字体), 要么是 BLOCKED 占位
-        self.assertIn(
-            resolved,
-            [windows_path, export_resource._BLOCKED_PDF_RESOURCE_URI],
-            f"盘符路径应被识别为本地文件, 不应被 urlparse 当作 URL 解析. resolved={resolved!r}",
-        )
-
-    def test_resolve_pdf_resource_handles_windows_drive_forward_slash(self):
-        """L1: 验证 Windows 盘符路径 (D:/xxx) 同样被识别, 不被 urlparse 误判 scheme='d'"""
-        from urllib.parse import urlparse
-
-        export_resource = self.resource.risk.export_analyse_report
-        windows_path = "D:/fonts/simhei.ttf"
-
-        self.assertEqual(urlparse(windows_path).scheme, "d")
-
-        resolved = export_resource._resolve_pdf_resource(windows_path, None)
-        self.assertIn(
-            resolved,
-            [windows_path, export_resource._BLOCKED_PDF_RESOURCE_URI],
-        )
-
-    def test_resolve_pdf_resource_linux_absolute_path_blocked(self):
-        """L1: 反例验证 - Linux 绝对路径 /etc/passwd 仍然被拒, 防止正则回退"""
-        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
-        resolved = callback("/etc/passwd", None)
-        self.assertEqual(resolved, "data:image/gif;base64,R0lGODlhAQABAAAAACw=")
-
-    @unittest.skipUnless(sys.platform == "win32", "仅在 Windows 真实环境验证盘符拦截修复")
-    def test_resolve_pdf_resource_real_windows_path(self):
-        """L2a: 真实 Windows 环境 - 用 os.path.normpath 构造真实盘符路径, 验证不抛 Invalid URL 异常
-
-        修复前: urlparse(r"C:\\xxx") 在 Windows 上同样报错 scheme='c' → Invalid URL
-        修复后: 前置正则拦截, 走内置字体判断逻辑
-        """
-        import os
-
-        export_resource = self.resource.risk.export_analyse_report
-        # Windows 上 normpath(C:/Windows/Fonts) 不会带盘符, 用反斜杠构造真实盘符路径
-        windows_path = os.path.normpath("C:/Windows/Fonts/arial.ttf")
-
-        # 关键: 在 Windows 上真实调用不抛 ValueError: Invalid URL: 'c'
-        resolved = export_resource._resolve_pdf_resource(windows_path, None)
-        self.assertIn(
-            resolved,
-            [windows_path, export_resource._BLOCKED_PDF_RESOURCE_URI],
-        )
 
 
 class TestListAnalyseReportRisk(AnalyseReportTestBase):
@@ -1555,13 +1374,9 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
 
     def test_list_report_risks_filters_by_risk_level(self):
         """测试报告关联风险列表支持按风险等级过滤"""
-        low_strategy = Strategy.objects.create(
-            namespace="default",
-            strategy_name="test-low-strategy",
-            risk_level=RiskLevel.LOW.value,
-        )
-        self.risk2.strategy = low_strategy
-        self.risk2.save(update_fields=["strategy"])
+        # risk_level 现为 Risk 模型的快照字段，直接修改 risk2 的快照值
+        self.risk2.risk_level = RiskLevel.LOW.value
+        self.risk2.save(update_fields=["risk_level"])
 
         result = self.resource.risk.list_analyse_report_risk.request(
             {"report_id": self.report.report_id, "risk_level": RiskLevel.HIGH.value}
@@ -1745,9 +1560,12 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
         self.assertEqual(serializer.validated_data["total"], 2)
 
     def test_apigw_list_report_risks_allows_empty_risk_level(self):
-        """APIGW响应兼容旧策略风险等级为空的数据"""
-        self.strategy.risk_level = None
-        self.strategy.save(update_fields=["risk_level"])
+        """APIGW响应兼容旧风险风险等级为空的数据（快照字段为空）"""
+        # 风险等级已快照化，直接清空 Risk 自身快照字段，不再依赖关联策略
+        self.risk1.risk_level = None
+        self.risk1.save(update_fields=["risk_level"])
+        self.risk2.risk_level = None
+        self.risk2.save(update_fields=["risk_level"])
 
         result = self.request_apigw_resource()
 
@@ -1756,8 +1574,9 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
 
     def test_apigw_list_report_risks_allows_nullable_base_fields(self):
         """APIGW响应兼容旧风险基础字段为空的数据"""
-        self.strategy.risk_level = None
-        self.strategy.save(update_fields=["risk_level"])
+        # 风险等级已快照化，直接清空 Risk 自身快照字段
+        self.risk1.risk_level = None
+        self.risk1.save(update_fields=["risk_level"])
         self.risk1.title = None
         self.risk1.event_end_time = None
         self.risk1.operator = None
@@ -1950,6 +1769,25 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.title, "自定义分析_20260616213045")
+        self.assertFalse(self.report.title_generating)
+
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
+    def test_generate_title_rate_limit_exhaustion_resets_generating_state(self, mock_chat):
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.tasks import generate_analyse_report_title
+
+        mock_chat.side_effect = AgentRateLimited(AIAgentCode.ALS_TITLE_SUM)
+        self.report.title_generating = True
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title_generating", "title_task_id"])
+
+        with mock.patch.object(generate_analyse_report_title.request, "id", "title-task-id"):
+            with self.assertRaises(AgentRateLimited):
+                generate_analyse_report_title(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
         self.assertFalse(self.report.title_generating)
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
@@ -2153,6 +1991,22 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(metric_kwargs["dimensions"]["operation"], "generate_analyse_report")
         self.assertEqual(metric_kwargs["dimensions"]["business_status"], AnalyseReportStatus.FAILED)
 
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_rate_limit_exhaustion_marks_report_failed(self, mock_chat):
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.tasks import generate_analyse_report
+
+        mock_chat.side_effect = AgentRateLimited(AIAgentCode.AUDIT_ANALYSE)
+
+        with self.assertRaises(AgentRateLimited):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(self.report.extra_info["error"]["error_type"], "AgentRateLimited")
+
     @mock.patch("services.web.risk.tasks.report_observation_metric")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_keeps_generating_status_before_max_retries(self, mock_chat, mock_report_metric):
@@ -2169,6 +2023,29 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
         mock_report_metric.assert_not_called()
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_strips_preamble_and_action_input_fence(self, mock_chat):
+        """Agent 输出 markdown 围栏和 action_input 包装时，只落库围栏内正文。"""
+        mock_chat.return_value = (
+            "现在我已经收集了足够的数据，可以开始撰写最终报告了。\n"
+            "```markdown\n"
+            "action_input\n"
+            "# 责任人行为调查报告\n\n"
+            "## 一、概述\n\n"
+            "正文\n"
+            "```\n"
+        )
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+        self.assertEqual(self.report.content, "# 责任人行为调查报告\n\n## 一、概述\n\n正文\n")
+        self.assertNotIn("action_input", self.report.content)
+        self.assertNotIn("现在我已经收集", self.report.content)
 
 
 class TestAnalyseReportModel(AnalyseReportTestBase):

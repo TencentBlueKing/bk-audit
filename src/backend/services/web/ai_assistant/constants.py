@@ -1,0 +1,206 @@
+from django.db.models import TextChoices
+from django.utils.translation import gettext_lazy
+
+from services.web.common.constants import ScopeType
+
+MYSQL_DEADLOCK_ERROR_CODE = 1213
+
+CONCRETE_SCOPE_CHOICES = (
+    (ScopeType.SCENE.value, ScopeType.SCENE.label),
+    (ScopeType.SYSTEM.value, ScopeType.SYSTEM.label),
+)
+
+
+class ScopePermissionSource(TextChoices):
+    """HTTP action 的 Scope 来源，供 View 声明权限绑定。"""
+
+    REQUEST = "request", "请求具体范围"
+    QUERY = "query", "查询范围"
+    CONVERSATION = "conversation", "会话"
+    GROUP = "group", "分组"
+    MESSAGE = "message", "消息"
+    ATTACHMENT_SOURCE = "attachment_source", "附件来源消息"
+    ATTACHMENT = "attachment", "附件"
+    FEEDBACK = "feedback", "反馈"
+    FEEDBACK_SOURCE = "feedback_source", "反馈来源"
+    CONVERSATION_NODE = "conversation_node", "会话节点"
+    SIDEBAR_NODE = "sidebar_node", "移动来源节点"
+
+
+class ExecutionMode(TextChoices):
+    """消息处理器固定的执行方式。"""
+
+    SYNC = "SYNC", gettext_lazy("同步")
+    ASYNC = "ASYNC", gettext_lazy("异步")
+
+
+class ExecutionStatus(TextChoices):
+    """消息和附件的执行状态。"""
+
+    PROCESSING = "PROCESSING", gettext_lazy("处理中")
+    SUCCESS = "SUCCESS", gettext_lazy("成功")
+    FAILED = "FAILED", gettext_lazy("失败")
+
+
+class ExecutionObjectType(TextChoices):
+    """平台异步执行与可观测性使用的对象类型。"""
+
+    MESSAGE = "MESSAGE", gettext_lazy("消息")
+    ATTACHMENT = "ATTACHMENT", gettext_lazy("附件")
+
+
+class MessageErrorCode(TextChoices):
+    """平台消息执行链路写入快照的稳定错误码。"""
+
+    TASK_DISPATCH_FAILED = "TASK_DISPATCH_FAILED", gettext_lazy("任务投递失败")
+    TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("任务执行失败")
+    TASK_EXECUTION_TIMEOUT = "TASK_EXECUTION_TIMEOUT", gettext_lazy("任务执行超时")
+
+
+class UserIntentErrorCode(TextChoices):
+    """USER_INTENT 成功终态中的稳定业务错误码，供前端选择交互分支。"""
+
+    UNRECOGNIZED_INTENT = "UNRECOGNIZED_INTENT", gettext_lazy("无法识别用户意图")
+    SYSTEM_REQUIRED = "SYSTEM_REQUIRED", gettext_lazy("需要明确系统")
+    SYSTEM_UNAVAILABLE = "SYSTEM_UNAVAILABLE", gettext_lazy("目标系统不在当前可用范围")
+    INVALID_CONDITION = "INVALID_CONDITION", gettext_lazy("检索条件不支持")
+    AI_OUTPUT_INVALID = "AI_OUTPUT_INVALID", gettext_lazy("AI 输出不符合协议")
+    PERMISSION_DENIED = "PERMISSION_DENIED", gettext_lazy("无日志检索权限")
+
+
+class AttachmentErrorCode(TextChoices):
+    """平台附件执行链路写入快照的稳定错误码。"""
+
+    TASK_DISPATCH_FAILED = "TASK_DISPATCH_FAILED", gettext_lazy("附件任务投递失败")
+    TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("附件任务执行失败")
+    TASK_EXECUTION_TIMEOUT = "TASK_EXECUTION_TIMEOUT", gettext_lazy("附件任务执行超时")
+    OUTPUT_VALIDATION_FAILED = "OUTPUT_VALIDATION_FAILED", gettext_lazy("附件产物格式错误")
+
+
+class ArtifactCandidateState(TextChoices):
+    """最终文本候选的诊断状态，不参与产物成功判定。"""
+
+    NOT_STARTED = "NOT_STARTED", gettext_lazy("尚未收到候选")
+    STREAMING = "STREAMING", gettext_lazy("候选尚未闭合")
+    COMPLETE = "COMPLETE", gettext_lazy("候选已闭合")
+    CONTENT_LIMIT_EXCEEDED = "CONTENT_LIMIT_EXCEEDED", gettext_lazy("候选超限丢弃")
+    RUN_ERROR = "RUN_ERROR", gettext_lazy("上游错误清空候选")
+    ROLE_CHANGED = "ROLE_CHANGED", gettext_lazy("消息角色变更丢弃候选")
+
+
+class AIStatisticsArtifactErrorReason(TextChoices):
+    """AI 统计最终产物的标签提取失败原因；日志只记录稳定原因值。"""
+
+    START_TAG_COUNT_INVALID = "START_TAG_COUNT_INVALID", gettext_lazy("起始标签缺失或重复")
+    END_TAG_COUNT_INVALID = "END_TAG_COUNT_INVALID", gettext_lazy("结束标签缺失或重复")
+    TAG_ORDER_INVALID = "TAG_ORDER_INVALID", gettext_lazy("起止标签顺序错误")
+    EMPTY_CONTENT = "EMPTY_CONTENT", gettext_lazy("标签内没有有效内容")
+
+
+class MessageType(TextChoices):
+    """平台首期支持的消息类型。"""
+
+    SYSTEM_SELECTION = "SYSTEM_SELECTION", gettext_lazy("系统选择")
+    # 用户意图识别（User Intent Recognition）：唯一自然语言入口，单次 Agent 调用生成
+    # 系统选择、日志检索或二者组合（一期设计方案 v6 §二）
+    USER_INTENT = "USER_INTENT", gettext_lazy("用户意图识别")
+    LOG_SEARCH = "LOG_SEARCH", gettext_lazy("日志检索")
+
+
+class MessageHistoryDirection(TextChoices):
+    """消息历史相对锚点的滚动方向。"""
+
+    BEFORE = "BEFORE", gettext_lazy("锚点之前")
+    AFTER = "AFTER", gettext_lazy("锚点之后")
+
+
+class AttachmentType(TextChoices):
+    """日志检索消息下可挂载的产物类型。"""
+
+    FIELD_STATISTICS = "FIELD_STATISTICS", gettext_lazy("字段统计")
+    AI_STATISTICS = "AI_STATISTICS", gettext_lazy("AI 统计")
+    AI_ANALYSIS = "AI_ANALYSIS", gettext_lazy("AI 分析")
+
+
+class AnalysisMode(TextChoices):
+    """日志分析报告的指令来源。"""
+
+    DEFAULT = "DEFAULT", gettext_lazy("默认分析")
+    CUSTOM = "CUSTOM", gettext_lazy("自定义分析")
+
+
+class AttachmentExportFormat(TextChoices):
+    """Attachment Handler 可声明的后端导出格式。"""
+
+    MARKDOWN = "MARKDOWN", gettext_lazy("Markdown")
+    PDF = "PDF", gettext_lazy("PDF")
+
+
+class FeedbackSourceType(TextChoices):
+    """反馈支持关联的平台对象类型。"""
+
+    MESSAGE = "MESSAGE", gettext_lazy("消息")
+    ATTACHMENT = "ATTACHMENT", gettext_lazy("附件")
+
+
+class FeedbackType(TextChoices):
+    """用户对平台对象的反馈类型。"""
+
+    LIKE = "LIKE", gettext_lazy("赞")
+    DISLIKE = "DISLIKE", gettext_lazy("踩")
+
+
+class SidebarNodeType(TextChoices):
+    """会话侧栏中的节点类型。"""
+
+    GROUP = "GROUP", gettext_lazy("分组")
+    CONVERSATION = "CONVERSATION", gettext_lazy("会话")
+
+
+class StreamArchiveStatus(TextChoices):
+    """MySQL 事件归档相对实时流的完整性；仅影响 UI 展示，不影响最终产物。"""
+
+    COMPLETE = "COMPLETE", gettext_lazy("完整")
+    DEGRADED = "DEGRADED", gettext_lazy("降级")
+    TRUNCATED = "TRUNCATED", gettext_lazy("已截断")
+
+
+class PlatformStreamEvent(TextChoices):
+    """平台保留的流控制事件名称；前端据此切换或结束渲染。"""
+
+    STREAM_RESET = "platform.stream_reset", gettext_lazy("流已切换")
+    STREAM_END = "platform.stream_end", gettext_lazy("流已结束")
+
+
+# AI 会话标题生成（一期复刻 risk generate_analyse_report_title 调用方式，共用智能体 ALS_TITLE_SUM）：
+# User Prompt 单行 label 格式与清洗规则见 services/web/ai_assistant/services/title_agent.py
+# 会话标题默认最大长度（BKAPP_AI_CONVERSATION_TITLE_MAX_LENGTH 覆盖）
+AI_CONVERSATION_TITLE_MAX_LENGTH = 35
+
+# 自然语言解析失败（AI 返回内容不合格，具随机性）任务内自动重试预算：
+# 不含首发最多重试 NL_PARSE_MAX_RETRIES 次；重试间隔与总时长上限双约束，
+# 任一超限即放弃并冒泡收敛 FAILED（用户手动重试会重新获得整段预算）
+NL_PARSE_MAX_RETRIES = 2
+NL_PARSE_RETRY_INTERVAL_SECONDS = 2
+NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
+
+# 日志分析默认标准由 GlobalMetaConfig 运营维护；Handler 在创建时将实际值固化到 context_data。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY = "ai_assistant_log_analysis_default_prompt"
+DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"
+
+# 日志分析重试退避（秒）；上限短于平台失活阈值，避免排队期间被巡检收敛。
+LOG_ANALYSIS_RETRY_DELAY_SECONDS = 30
+LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS = 120
+
+
+class AttachmentSortField(TextChoices):
+    """附件列表公开排序字段；不开放内部任务和关联模型字段。"""
+
+    CONTENT_UPDATED_AT = "content_updated_at", gettext_lazy("内容更新时间")
+    CREATED_AT = "created_at", gettext_lazy("创建时间")
+    UPDATED_AT = "updated_at", gettext_lazy("记录更新时间")
+    TITLE = "title", gettext_lazy("附件标题")
+
+
+ATTACHMENT_DEFAULT_ORDER_FIELDS = ("-content_updated_at",)
+ATTACHMENT_LIST_MAX_LIMIT = 100

@@ -34,7 +34,7 @@ from core.sql.constants import (
     JoinType,
     Operator,
 )
-from core.sql.exceptions import TableNotRegisteredError
+from core.sql.exceptions import InvalidRuleConfigError, TableNotRegisteredError
 from core.sql.model import (
     Condition,
     Field,
@@ -43,6 +43,7 @@ from core.sql.model import (
     LinkField,
     Order,
     Pagination,
+    RuleFilterConfig,
     SqlConfig,
     Table,
     WhereCondition,
@@ -1177,12 +1178,13 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
             page=1,
             page_size=10,
         )
-        sql = builder.build_data_sql()
+        with self.assertRaisesRegex(ValueError, "unsupported JSON field key"):
+            builder.build_data_sql()
 
         field = DorisVariantField(keys=[payload], name="snapshot_resource_type_info")
         expected = field._sanitize_variant_key(payload)
         expected_fragment = f"[{DORIS_FIELD_KEY_QUOTE}{expected}{DORIS_FIELD_KEY_QUOTE}]"
-        self.assertIn(expected_fragment, sql)
+        self.assertIn(expected_fragment, field.get_sql())
         # 模拟 escape_string 返回 bytes 类型，让 isinstance 分支执行
         with patch("pymysql.converters.escape_string", return_value=b"foo\\'\\'\\''] !=0 or 1=1; --"):
             field_bytes = DorisVariantField(
@@ -1207,12 +1209,9 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
                 page=1,
                 page_size=10,
             )
-            sql_bytes = builder_bytes.build_data_sql()
-            self.assertIn(
-                expected_fragment_bytes,
-                sql_bytes,
-                msg=f"\nExpected fragment (bytes):\n{expected_fragment_bytes}\nGot SQL:\n{sql_bytes}",
-            )
+            with self.assertRaisesRegex(ValueError, "unsupported JSON field key"):
+                builder_bytes.build_data_sql()
+            self.assertIn(expected_fragment_bytes, field_bytes.get_sql())
 
     def test_format_keys_quote_normal_keys(self):
         """正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE）"""
@@ -1244,7 +1243,7 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
     def test_variant_like_with_injection_payload(self):
         """
         恶意 payload 作为 LIKE 条件参与 Variant 查询时：
-        - 字段访问仍然是 snapshot_resource_type_info['id'] 这种受控形式
+        - 字段访问使用受控的 JSON 字面路径
         """
         payload = r"foo'\''] !=0 or 1=1; --"
 
@@ -1266,15 +1265,150 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
         )
 
         sql = builder.build_data_sql()
-        print(sql)
-        self.assertIn("`snapshot_resource_type_info`['id']", sql)
-
-        # 2）确认是 LIKE 查询，并且前缀形如 LIKE '%foo...'
-        self.assertIn("LIKE '%foo", sql)
-
-        expected_sub = "foo''\\''''] !=0 or 1=1; --"
-        self.assertIn(
-            expected_sub,
+        # 字面反斜杠经过 LIKE 模式与 SQL 字符串两层转义，SQL 中应为四个反斜杠。
+        # 单引号仍由 PyPika 成对转义，完整断言同时约束字段路径与条件边界。
+        self.assertEqual(
             sql,
-            msg=f"\n原始 payload:\n{payload}\n" f"期望转义后片段:\n{expected_sub}\n" f"实际 SQL:\n{sql}",
+            "SELECT * FROM test_table WHERE CASE WHEN JSON_TYPE(`snapshot_resource_type_info`,'$.id')='null' "
+            "THEN NULL ELSE JSON_EXTRACT_STRING(`snapshot_resource_type_info`,'$.id') END "
+            + r"LIKE '%foo''\\\\''''] !=0 or 1=1; --%' LIMIT 10",
         )
+
+
+class TestRuleModeEmptyWhere(SimpleTestCase):
+    """多规则模式：空 where 场景的 SQL 生成测试"""
+
+    def setUp(self):
+        self.query_builder = QueryBuilder()
+        self.generator = SQLGenerator(self.query_builder)
+        self.table = Table(table_name="events")
+        self.dim_field = Field(
+            table="events", raw_name="username", display_name="username", field_type=FieldType.STRING
+        )
+        self.agg_field = Field(
+            table="events",
+            raw_name="event_id",
+            display_name="event_id_COUNT",
+            field_type=FieldType.STRING,
+            aggregate=AggregateType.COUNT,
+        )
+        self.strategy_where = WhereCondition(
+            condition=Condition(
+                field=Field(
+                    table="events", raw_name="system_id", display_name="system_id", field_type=FieldType.STRING
+                ),
+                operator=Operator.EQ,
+                filter="bk-audit",
+            )
+        )
+
+    def test_empty_where_with_having_generates_correct_sql(self):
+        """场景①：where 为空 + having 命中，生成的 SQL 无 CASE 包裹且 HAVING 正确"""
+        config = SqlConfig(
+            select_fields=[self.dim_field, self.agg_field],
+            from_table=self.table,
+            where=self.strategy_where,
+            rules=[
+                RuleFilterConfig(
+                    rule_id=348,
+                    where=WhereCondition(),
+                    having=HavingCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="events",
+                                raw_name="event_id",
+                                display_name="event_id_COUNT",
+                                field_type=FieldType.STRING,
+                                aggregate=AggregateType.COUNT,
+                            ),
+                            operator=Operator.GT,
+                            filter=1,
+                        )
+                    ),
+                ),
+            ],
+        )
+        query = self.generator.generate_rule_mode(config)
+        sql = str(query)
+
+        # 聚合列不应包 CASE（空 where = 全量聚合）
+        self.assertNotIn("CASE", sql.upper())
+        self.assertIn("COUNT", sql.upper())
+        # 守卫列应为 COUNT(*)（空 where = 全组计数）
+        self.assertIn("COUNT(*)", sql.upper())
+        # WHERE 子句只应有策略级条件（system_id），不应有规则级条件（username）
+        where_part = sql.lower().split("where")[1].split("group by")[0] if "where" in sql.lower() else ""
+        self.assertNotIn("username", where_part, "规则级 WHERE 不应生成（空 where 跳过）")
+
+    def test_mixed_rules_empty_and_non_empty_where(self):
+        """场景②：一个规则 where 为空、另一个不为空，L1 不生成规则级 WHERE 且各自 CASE/guard 正确"""
+        config = SqlConfig(
+            select_fields=[self.dim_field, self.agg_field],
+            from_table=self.table,
+            where=self.strategy_where,
+            rules=[
+                RuleFilterConfig(
+                    rule_id=100,
+                    where=WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="events",
+                                raw_name="username",
+                                display_name="username",
+                                field_type=FieldType.STRING,
+                            ),
+                            operator=Operator.EQ,
+                            filter="admin",
+                        )
+                    ),
+                ),
+                RuleFilterConfig(
+                    rule_id=200,
+                    where=WhereCondition(),
+                    having=HavingCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="events",
+                                raw_name="event_id",
+                                display_name="event_id_COUNT",
+                                field_type=FieldType.STRING,
+                                aggregate=AggregateType.COUNT,
+                            ),
+                            operator=Operator.GT,
+                            filter=5,
+                        )
+                    ),
+                ),
+            ],
+        )
+        query = self.generator.generate_rule_mode(config)
+        sql = str(query)
+
+        # 无规则级 WHERE（Rule2 为空，all() 不满足，跳过 WHERE）
+        # 策略级 WHERE 仍应存在
+        self.assertIn("system_id", sql)
+
+        # Rule1 的聚合列应有 CASE（有 where）
+        # Rule2 的聚合列不应有 CASE（空 where）
+        # 通过检查 CASE 出现次数来验证：Rule1 有1个 CASE（聚合列），Rule2 没有
+        case_count = sql.upper().count("CASE")
+        self.assertGreaterEqual(case_count, 1, "Rule1 应生成 CASE 包裹的聚合列")
+
+    def test_empty_where_and_having_raises_error(self):
+        """场景③：where/having 同时为空在生成层拒绝"""
+        config = SqlConfig(
+            select_fields=[self.dim_field, self.agg_field],
+            from_table=self.table,
+            where=self.strategy_where,
+            rules=[
+                RuleFilterConfig(
+                    rule_id=999,
+                    where=WhereCondition(),
+                    having=None,
+                ),
+            ],
+        )
+        with self.assertRaises(InvalidRuleConfigError) as cm:
+            self.generator.generate_rule_mode(config)
+        self.assertIn("where", str(cm.exception))
+        self.assertIn("having", str(cm.exception))

@@ -35,9 +35,9 @@ export default {
    * @desc 获取通知组列表
    */
   fetchGroupList(params: {
-    page: number,
-    page_size : number,
-    scene_id?: string | number;
+    page?: number,
+    page_size?: number,
+    scene_id?: string | number | null;
   }) {
     return NoticeGroupSource.getGroupList(
       params,
@@ -68,9 +68,12 @@ export default {
   /**
    * @desc 获取通知组下拉列表
    */
-  fetchGroupSelectList() {
-    return NoticeGroupSource.getGroupSelectList()
-      .then(({ data }) => data);
+  fetchGroupSelectList(params?: { scene_id?: string | number }) {
+    return NoticeGroupSource.getGroupSelectList(params)
+      .then(({ data }) => (data || []).map(item => ({
+        id: item.id,
+        name: item.name,
+      })));
   },
 
   /**

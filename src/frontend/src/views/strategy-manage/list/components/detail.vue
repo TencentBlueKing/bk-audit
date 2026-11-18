@@ -16,66 +16,115 @@
 -->
 <template>
   <div class="strategy-detail">
-    <bk-tab
-      v-model:active="active"
-      type="card-grid">
-      <bk-tab-panel
-        v-for="item in panels"
-        :key="item.name"
-        :label="item.label"
-        :name="item.name">
-        <scroll-faker>
-          <component
-            :is="comMap[item.name]"
-            v-if="active === item.name"
-            :active-tab="active"
-            :data="data"
-            :strategy-map="strategyMap"
-            style="height: calc(100% - 50px)"
-            :user-group-list="userGroupList" />
-        </scroll-faker>
-      </bk-tab-panel>
-    </bk-tab>
+    <bk-loading
+      class="strategy-detail-loading"
+      :loading="detailLoading"
+      mode="spin"
+      size="small">
+      <bk-tab
+        v-model:active="active"
+        type="card-grid">
+        <bk-tab-panel
+          v-for="item in panels"
+          :key="item.name"
+          :label="item.label"
+          :name="item.name">
+          <div class="strategy-detail-body">
+            <component
+              :is="comMap[item.name]"
+              v-show="active === item.name"
+              :active-tab="active"
+              :data="data"
+              :detail-loading="detailLoading"
+              :strategy-map="strategyMap"
+              :user-group-list="userGroupList" />
+          </div>
+        </bk-tab-panel>
+      </bk-tab>
+    </bk-loading>
   </div>
 </template>
 <script setup lang="ts">
   import {
+    computed,
+    onMounted,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
+
+  import BksecManageService from '@service/bksec-manage';
 
   import type StrategyModel from '@model/strategy/strategy';
 
   import RiskDetection from './risk-detection.vue';
+  import RiskDiscoveryRules from './risk-discovery-rules.vue';
   import RiskDisplay from './risk-display.vue';
   import RiskOther from './risk-other.vue';
+  import BksecTicket from './bksec-ticket.vue';
   import StrategyEventReport from './strategy-event-report.vue';
+
+  import { isPlatformStrategyRoute } from '../../utils/strategy-routes';
 
   interface Props {
     data: StrategyModel,
     strategyMap: Record<string, string>,
-    userGroupList: Array<{id: number, name: string}>
+    userGroupList: Array<{id: number, name: string}>,
+    detailLoading?: boolean,
   }
 
-  defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    detailLoading: false,
+  });
   const emits = defineEmits(['tab-change']);
   const { t } = useI18n();
+  const route = useRoute();
 
   const comMap: Record<string, any> = {
     riskDetection: RiskDetection,
+    riskDiscoveryRules: RiskDiscoveryRules,
     riskDisplay: RiskDisplay,
     eventReport: StrategyEventReport,
+    bksecTicket: BksecTicket,
     riskOther: RiskOther,
   };
 
-  const panels = [
-    { name: 'riskDetection', label: t('风险发现') },
-    { name: 'riskDisplay', label: t('单据展示') },
-    { name: 'eventReport', label: t('事件调查报告') },
-    { name: 'riskOther', label: t('其他配置') },
-  ];
+  const bksecFeatureEnabled = ref(!isPlatformStrategyRoute(route.name));
+  const panels = computed(() => {
+    const list = [
+      { name: 'riskDetection', label: t('基础信息') },
+      { name: 'riskDiscoveryRules', label: t('风险发现规则') },
+      { name: 'riskDisplay', label: t('单据展示') },
+      { name: 'eventReport', label: t('事件调查报告') },
+    ];
+    if (!isPlatformStrategyRoute(route.name) && bksecFeatureEnabled.value) {
+      list.push({ name: 'bksecTicket', label: t('BKSEC安全工单') });
+    }
+    if (isPlatformStrategyRoute(route.name)) {
+      list.push({ name: 'riskOther', label: t('风险分派规则') });
+    }
+    return list;
+  });
   const active = ref<keyof typeof comMap>('riskDetection');
+
+  onMounted(() => {
+    if (isPlatformStrategyRoute(route.name)) return;
+    BksecManageService.fetchFeature()
+      .then((data) => {
+        bksecFeatureEnabled.value = !!data?.enabled;
+      })
+      .catch(() => {
+        bksecFeatureEnabled.value = false;
+      });
+  });
+
+  watch(
+    () => props.data?.strategy_id,
+    () => {
+      active.value = 'riskDetection';
+    },
+  );
 
   watch(
     active,
@@ -88,21 +137,95 @@
 </script>
 <style scoped lang="postcss">
 .strategy-detail {
+  height: 100%;
+  min-height: 0;
   padding-top: 24px;
+  overflow: hidden;
   background-color: #f5f7fa;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  .strategy-detail-loading {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  :deep(.bk-loading-wrapper) {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1;
+    flex-direction: column;
+  }
 
   :deep(.bk-tab) {
-    height: calc(100vh - 115px);
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    flex-direction: column;
 
     .bk-tab-header {
       margin-left: 24px;
       font-size: 14px;
+      flex-shrink: 0;
     }
 
     .bk-tab-content {
-      height: 100%;
-      padding: 24px;
+      flex: 1;
+      min-height: 0;
+      padding: 24px 40px 24px;
+      overflow-y: auto;
+      background: #fff;
+      box-sizing: border-box;
     }
+
+    .bk-tab-panel {
+      height: auto;
+      min-height: 100%;
+    }
+  }
+
+  .strategy-detail-body {
+    overflow: visible;
+  }
+
+  :deep(.render-info-block) {
+    margin: 0;
+  }
+
+  :deep(.render-info-item) {
+    display: flex;
+    gap: var(--audit-space-8);
+    align-items: flex-start;
+    min-height: 32px;
+    padding: 6px 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+  }
+
+  :deep(.info-label) {
+    flex: 0 0 84px;
+    width: 84px;
+    min-width: 84px;
+    overflow: visible;
+    color: var(--audit-neutral-text-02);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  :deep(.info-value) {
+    padding-left: 0;
+    overflow: visible;
+    color: var(--audit-neutral-text-01);
+    text-overflow: unset;
+    word-break: break-all;
   }
 }
 </style>

@@ -30,7 +30,13 @@
               :disabled="isEditMode"
               :label="item.id">
               <div style="display: flex; align-items: center; line-height: 16px;">
+                <img
+                  v-if="item.id === 'smart_page'"
+                  alt="smart_page"
+                  class="tool-type-icon-img"
+                  :src="userProfileIcon">
                 <audit-icon
+                  v-else
                   style=" margin-right: 5px;font-size: 16px;"
                   svg
                   :type="iconMap[item.id as keyof typeof iconMap]" />
@@ -137,7 +143,7 @@
 
 <script setup lang="ts">
   import _ from 'lodash';
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RootManageService from '@service/root-manage';
@@ -151,6 +157,8 @@
   import type { ChartListModel, FormData } from '../types';
 
   import CardPartVue from './card-part.vue';
+
+  import userProfileIcon from '@/images/user.svg';
 
   const props = defineProps<{
     isEditMode: boolean;
@@ -181,22 +189,33 @@
     value: 'sql',
   }];
 
-  const toolTypeList = ref<Array<{
+  const isPortraitTool = computed(() => formData.value.tool_type === 'smart_page');
+
+  const toolTypeList = computed<Array<{
     id: string;
     name: string;
     tips?: string;
-  }>>([{
-    id: 'data_search',
-    name: t('数据查询'),
-    tips: t('根据输入条件，使用 SQL 查询数据库以获得结果；可定义输入与输出'),
-  }, {
-    id: 'api',
-    name: t('API接口'),
-    tips: t('根据输入条件，使用 API 接口调用以获得结果。可定义输入与输出'),
-  }, {
-    id: 'bk_vision',
-    name: t('BKVision图表'),
-  }]);
+  }>>(() => {
+    const list: Array<{ id: string; name: string; tips?: string }> = [{
+      id: 'data_search',
+      name: t('数据查询'),
+      tips: t('根据输入条件，使用 SQL 查询数据库以获得结果；可定义输入与输出'),
+    }, {
+      id: 'api',
+      name: t('API接口'),
+      tips: t('根据输入条件，使用 API 接口调用以获得结果。可定义输入与输出'),
+    }, {
+      id: 'bk_vision',
+      name: t('BKVision图表'),
+    }];
+    if (isPortraitTool.value) {
+      list.push({
+        id: 'smart_page',
+        name: t('智能用户画像'),
+      });
+    }
+    return list;
+  });
 
   const iconMap = {
     data_search: 'sqlxiao',
@@ -434,7 +453,11 @@
   });
 
   // 监听工具类型变化，获取图表列表
-  watch(() => formData.value.tool_type, (val) => {
+  watch(() => formData.value.tool_type, (val, oldVal) => {
+    if (oldVal === 'smart_page' && val !== 'smart_page') {
+      formData.value.tool_type = 'smart_page';
+      return;
+    }
     if (val === 'bk_vision') {
       fetchChartLists();
     }
@@ -479,6 +502,14 @@
 </script>
 
 <style lang="postcss" scoped>
+  .tool-type-icon-img {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
+    border-radius: 2px;
+  }
+
   .chart-cascade {
     display: flex;
   }

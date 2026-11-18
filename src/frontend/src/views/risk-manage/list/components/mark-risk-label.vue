@@ -15,7 +15,23 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <div
+    v-if="disabled"
+    class="mark-risk-label-disabled">
+    <bk-button
+      v-bk-tooltips="{ content: disabledTipText, disabled: !disabledTipText }"
+      class="is-disabled"
+      style="font-size: 12px;"
+      text
+      theme="primary">
+      <audit-icon
+        style="margin-right: 6px;"
+        :type="isMisreport ? 'jiechuwubao' : 'biaojiwubao'" />
+      {{ isMisreport ? t('解除误报') : t('标记误报') }}
+    </bk-button>
+  </div>
   <audit-popconfirm
+    v-else
     ref="popRef"
     :confirm-handler="handleConfirm"
     :confirm-text="isMisreport ? t('解除') : t('标记')"
@@ -45,7 +61,7 @@
             style="margin-bottom: 6px;">
             <bk-input
               v-model.trim="formData.description"
-              :maxlength="100"
+              :maxlength="2000"
               :placeholder="t('请输入')"
               show-word-limit
               style="resize: none;"
@@ -124,8 +140,13 @@
       username: string,
     },
     data: RiskManageModel,
+    disabled?: boolean,
+    disabledTip?: string,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    disabled: false,
+    disabledTip: '',
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -149,6 +170,14 @@
   const formData = ref<Record<string, any>>({});
 
   const isMisreport = computed(() => props.data.risk_label === 'misreport');
+  const disabledTipText = computed(() => {
+    if (props.disabledTip) {
+      return props.disabledTip;
+    }
+    return isMisreport.value
+      ? t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+      : t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。');
+  });
   // 标记误报的tip
   const markMisreportTipMap = {
     closed: t('策略方案可能采集误报数据作为优化依据，请谨慎确认是否为误报？'),
@@ -217,6 +246,11 @@
   });
 </script>
 <style lang="postcss">
+.mark-risk-label-disabled {
+  display: inline-block;
+  line-height: 1;
+}
+
 .tippy-content div {
   white-space: pre-line;
 }

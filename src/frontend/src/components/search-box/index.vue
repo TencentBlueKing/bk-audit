@@ -166,6 +166,8 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import { sortByBasicEventFieldOrder } from '@utils/assist';
+  import { isSystemScopedContextQuery } from '@/utils/assist/scene-system-params';
+  import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
   import {
     applyDatetimeUrlParams,
     ensureDatetimeSynced,
@@ -184,6 +186,7 @@
     (e: 'export'): void;
     (e: 'batch'): void;
     (e: 'modelValueWatch', value: Record<string, any>): void;
+    (e: 'sync', value: Record<string, any>, otherValue?: any): void;
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
@@ -204,6 +207,7 @@
     ) => Promise<unknown>;
     initSelectedItems:(val: Array< Record<string, any>>) => void;
     getSelectedItemList: (val: Array< Record<string, any>>) => void;
+    syncTableFilterFields: (filters: Record<string, any>) => void;
   }
 
 
@@ -451,6 +455,12 @@
     if (urlSearchParams[searchFieldName] === undefined
       || urlSearchParams[searchFieldName] === null
       || urlSearchParams[searchFieldName] === '') return;
+    // 场景选择器写入的占位值、以及系统范围的 scene_id，都不是「所属场景」筛选
+    if (searchFieldName === 'scene_id') {
+      const sceneId = String(urlSearchParams.scene_id);
+      if (sceneId === 'allSecen' || sceneId === 'allSystem') return;
+      if (isSystemScopedContextQuery(urlSearchParams)) return;
+    }
     if (config.type !== 'string') {
       searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
     } else {
@@ -523,6 +533,15 @@
   };
   const handleSubmit = (isClear = false) => {
     emit('change', getSearchParams(), eventFiltersParams.value, isClear);
+  };
+  const syncTableFilterFields = (filters: Record<string, any>) => {
+    searchModel.value = applyTableFiltersToSearchModel(
+      searchModel.value,
+      filters,
+      props.fieldConfig,
+    );
+    syncSearchParamsToUrl();
+    emit('sync', getSearchParams(), eventFiltersParams.value);
   };
   const handleClear = () => {
     searchModel.value = {
@@ -628,6 +647,7 @@
     getSelectedItemList() {
       return selectedItemList.value;
     },
+    syncTableFilterFields,
   });
 
 </script>

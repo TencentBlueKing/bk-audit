@@ -19,6 +19,7 @@ from typing import List
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from rest_framework.permissions import IsAuthenticated
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
@@ -31,8 +32,11 @@ from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from core.view_sets import APIGWViewSet
 from services.web.risk.permissions import (
     BatchRiskTicketPermission,
+    BkSecTestTaskStatusPermission,
+    RiskConfirmPermission,
     RiskTicketPermission,
     RiskViewPermission,
+    strategy_id_of_risk,
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
@@ -105,6 +109,16 @@ class AnalyseReportAPIGWViewSet(APIGWViewSet):
     ]
 
 
+class BkSecTicketAPIGWViewSet(APIGWViewSet):
+    """
+    BKSEC Ticket APIGW - 供发单插件在 BKSEC 推单成功后回写发单结果，校验 app 信息
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.report_bk_sec_ticket_sent, endpoint="ticket_sent"),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks
@@ -126,15 +140,30 @@ class RisksViewSet(ResourceViewSet):
             return [
                 RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK, lookup_field="pk")
             ]
-        if self.action in ["bulk_trans"]:
+        if self.action in [
+            "bulk_trans",
+            "bulk_close",
+            "bulk_misreport",
+            "bulk_unmisreport",
+            "bulk_auto_process",
+            "batch_actions/preview",
+        ]:
             return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
+        # 二次确认：确认人，或平台管理员
+        if self.action in ["confirm", "confirm_as_misreport", "batch_confirm", "batch_confirm_as_misreport"]:
+            get_risk_ids = self.get_bulk_risk_ids if self.action.startswith("batch_") else None
+            return [RiskConfirmPermission(get_risk_ids=get_risk_ids)]
         # 风险编辑相关权限
         if self.action in ["update"]:
             return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
         return []
 
     def get_bulk_risk_ids(self) -> List[str]:
-        return self.request.data.get("risk_ids", [])
+        from services.web.risk.resources.risk import resolve_bulk_risk_ids
+
+        username = getattr(getattr(self.request, "user", None), "username", "") or ""
+        data = self.request.data if isinstance(self.request.data, dict) else {}
+        return resolve_bulk_risk_ids(data, username)
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.retrieve_risk, pk_field="risk_id"),
@@ -213,6 +242,31 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute(
             "GET", resource.risk.list_nl2_risk_filter_log, endpoint="nl2risk_filter_log", enable_paginate=True
         ),
+        # 风险二次确认
+        ResourceRoute(
+            "POST",
+            resource.risk.list_pending_confirm_risk,
+            endpoint="pending_confirm",
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
+                    data_field=lambda data: data["results"],
+                    id_field=lambda risk: risk["risk_id"],
+                )
+            ],
+        ),
+        ResourceRoute("POST", resource.risk.confirm_risk, endpoint="confirm", pk_field="risk_id"),
+        ResourceRoute("POST", resource.risk.confirm_as_mis_report, endpoint="confirm_as_misreport", pk_field="risk_id"),
+        # 批量确认风险
+        ResourceRoute("POST", resource.risk.batch_confirm_risk, endpoint="batch_confirm"),
+        # 批量确认为误报
+        ResourceRoute("POST", resource.risk.batch_confirm_as_mis_report, endpoint="batch_confirm_as_misreport"),
+        # 批量处理 · 弹窗预览 + 关单 + 转单 + 误报 + 处理套餐
+        ResourceRoute("POST", resource.risk.batch_actions_preview, endpoint="batch_actions/preview"),
+        ResourceRoute("POST", resource.risk.bulk_close_risk, endpoint="bulk_close"),
+        ResourceRoute("POST", resource.risk.bulk_misreport, endpoint="bulk_misreport"),
+        ResourceRoute("POST", resource.risk.bulk_unmisreport, endpoint="bulk_unmisreport"),
+        ResourceRoute("POST", resource.risk.bulk_auto_process, endpoint="bulk_auto_process"),
     ]
 
 
@@ -279,7 +333,22 @@ class ProcessApplicationsViewSet(ResourceViewSet):
             .first()
         )
 
+    def get_scene_id_for_pa_rules(self):
+        """套餐规则列表的鉴权场景。
+
+        场景套餐沿用自身绑定的场景。全局套餐没有场景实例，改用请求中的 scene_id，
+        校验调用方在该场景下的规则查看权限。
+        """
+        scene_id = self.get_scene_id_by_pa()
+        if scene_id is not None:
+            return scene_id
+        return self.get_scene_id()
+
     def get_permissions(self):
+        # 执行记录（列表/详情）为只读审计流水，登录即可查看，不做场景实例级鉴权；
+        # 数据范围由资源内部按风险授权（IAM + 本地授权）收敛，与风险列表同口径
+        if self.action in ["execution_records", "execution_record_detail"]:
+            return [IsAuthenticated()]
         if self.action in ["list"]:
             return [
                 InstanceActionPermission(
@@ -309,7 +378,7 @@ class ProcessApplicationsViewSet(ResourceViewSet):
                 InstanceActionPermission(
                     actions=[ActionEnum.LIST_RULE],
                     resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id_by_pa,
+                    get_instance_id=self.get_scene_id_for_pa_rules,
                 ),
             ]
         return []
@@ -322,6 +391,8 @@ class ProcessApplicationsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_rule_by_pa, pk_field="id", endpoint="rules", enable_paginate=True),
         ResourceRoute("PUT", resource.risk.toggle_process_application, pk_field="id", endpoint="toggle"),
         ResourceRoute("GET", resource.risk.approve_build_in_fields, endpoint="approve_build_in_fields"),
+        ResourceRoute("GET", resource.risk.list_pa_execution_records, endpoint="execution_records"),
+        ResourceRoute("GET", resource.risk.get_pa_execution_record_detail, endpoint="execution_record_detail"),
     ]
 
 
@@ -459,6 +530,58 @@ class AnalyseReportViewSet(ResourceViewSet):
         # 风险反查报告
         ResourceRoute("GET", resource.risk.list_analyse_report_by_risk, endpoint="by_risk"),
     ]
+
+
+class BkSecViewSet(ResourceViewSet):
+    """
+    BKSEC 元数据查询（项目下拉 → 风险类型下拉）
+    """
+
+    resource_routes = [
+        ResourceRoute("GET", resource.risk.list_bk_sec_projects, endpoint="projects"),
+    ]
+
+
+class TicketViewSet(ResourceViewSet):
+    """
+    预览 / 测试发送 / 任务状态查询
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.preview_ticket, endpoint="preview"),
+        ResourceRoute("POST", resource.risk.send_test_ticket, endpoint="test_send"),
+        ResourceRoute("GET", resource.risk.get_task_status, endpoint="test_task_status"),
+    ]
+
+    def get_sample_risk_id(self):
+        """预览和测试发送只认请求体里的 risk_id，与 POST Resource 取数一致。"""
+
+        data = getattr(self.request, "data", None) or {}
+        if not isinstance(data, dict):
+            return None
+        return data.get("risk_id")
+
+    def get_sample_strategy_id(self):
+        """样例风险单所属策略。与 get_sample_risk_id 使用同一个请求体 risk_id。"""
+
+        return strategy_id_of_risk(self.get_sample_risk_id())
+
+    def get_permissions(self):
+        if self.action in ["preview", "test_send"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_STRATEGY],
+                    resource_meta=ResourceEnum.STRATEGY,
+                    get_instance_id=self.get_sample_strategy_id,
+                ),
+                RiskViewPermission(
+                    actions=[ActionEnum.LIST_RISK],
+                    resource_meta=ResourceEnum.RISK,
+                    get_instance_id=self.get_sample_risk_id,
+                ),
+            ]
+        if self.action == "test_task_status":
+            return [IsAuthenticated(), BkSecTestTaskStatusPermission()]
 
 
 class RiskEventSubscriptionApigwViewSet(APIGWViewSet):

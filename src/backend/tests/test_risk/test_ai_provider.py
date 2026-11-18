@@ -6,13 +6,16 @@ AIProvider 缓存功能单元测试
 from datetime import timedelta
 from unittest import mock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from jinja2 import nodes
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+from api.constants import AIAgentCode
 from services.web.risk.constants import AI_ERROR_PREFIX, AI_ERROR_SUFFIX
 from services.web.risk.models import Risk
 from services.web.risk.report.providers import AIProvider
+from services.web.risk.tasks import render_ai_variable
 from services.web.strategy_v2.models import Strategy, StrategyTool
 from services.web.tool.models import Tool
 
@@ -159,6 +162,19 @@ class TestAIProviderCache(TestCase):
         provider._execute_ai_agent("test prompt")
 
         self.assertEqual(mock_chat_completion.call_args.kwargs["user"], "admin")
+
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
+    @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
+    def test_render_ai_variable_uses_global_limit_and_propagates_rejection(self, mock_chat_completion):
+        mock_chat_completion.side_effect = AgentRateLimited(AIAgentCode.AUDIT_REPORT)
+
+        with self.assertRaises(AgentRateLimited):
+            render_ai_variable(
+                risk_id=self.risk.risk_id,
+                ai_variables=[{"name": "ai.summary", "prompt_template": "生成摘要"}],
+            )
+
+        self.assertTrue(mock_chat_completion.call_args.kwargs["_enable_agent_rate_limit"])
 
     def test_generate_cache_key_contains_risk_id(self):
         """测试缓存 key 包含 risk_id"""
@@ -325,40 +341,29 @@ class TestAIProviderCache(TestCase):
         """测试缓存命中时不重复调用 AI API"""
         from django.core.cache import cache
 
-        # 清除缓存
         cache.clear()
 
-        # Mock 返回值
         mock_bkbase_query.return_value = {"list": [{"count": 10}]}
         mock_chat_completion.return_value = "这是 AI 生成的内容"
-
         ai_variables = [{"name": "ai.test_cache", "prompt_template": "测试缓存"}]
 
-        # 第一次调用（缓存未命中，应调用 API）
         provider1 = AIProvider(
             context={"risk_id": self.risk.risk_id},
             ai_variables_config=ai_variables,
             enable_cache=True,
         )
         result1 = provider1.get(name="test_cache")
-
-        # 验证第一次调用了 API
         self.assertEqual(mock_chat_completion.call_count, 1)
         self.assertIn("AI 生成的内容", result1)
 
-        # 第二次调用（缓存命中，不应再次调用 API）
         provider2 = AIProvider(
             context={"risk_id": self.risk.risk_id},
             ai_variables_config=ai_variables,
             enable_cache=True,
         )
         result2 = provider2.get(name="test_cache")
-
-        # 验证第二次没有再调用 API（call_count 仍为 1）
         self.assertEqual(mock_chat_completion.call_count, 1)
         self.assertEqual(result1, result2)
-
-        # 清理缓存
         cache.clear()
 
     @mock.patch("services.web.risk.report.providers.check_and_report_quality", return_value=[])

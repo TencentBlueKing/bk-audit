@@ -19,6 +19,7 @@
     <nl-search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
+      risk-view-type="all"
       :scenes="nlSearchBoxScenes"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
@@ -40,6 +41,12 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <batch-handle-entry
+          ref="batchHandleRef"
+          :list-ref="listRef"
+          scope="all"
+          :selection-meta="selectionMeta"
+          :username="userInfo.username" />
         <all-risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runAllRiskExport"
@@ -108,8 +115,12 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { RISK_STATUS_TAG_MAP, resolveRiskStatusName } from '@views/risk-manage/constants';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+
+  import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
 
   import addRisk from './add-risk/index.vue';
   import AllRiskExportButton from './components/all-risk-export-button.vue';
@@ -169,22 +180,11 @@
               </auth-button>
           )
         }
-        {
-          row.status === 'auto_process'
-            ? <bk-button text theme='primary'
-              class="is-disabled"
-              v-bk-tooltips={{
-                content: row.risk_label === 'normal'
-                  ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                  : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-              }}>
-                {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-              </bk-button>
-            : <MarkRiskLabel
-                onUpdate={() => fetchList()}
-                userInfo={userInfo.value}
-                data={row} />
-        }
+        <MarkRiskLabel
+          onUpdate={() => fetchList()}
+          userInfo={userInfo.value}
+          data={row}
+          disabled={row.status === 'auto_process'} />
         <bk-dropdown
           style="margin-left: 8px">
           {{
@@ -203,6 +203,14 @@
                     text>
                     {row.has_report ? t('编辑调查报告') : t('创建调查报告')}
                   </auth-button>
+                </bk-dropdown-item>
+                <bk-dropdown-item>
+                  <bk-button
+                    style="width: 100%;"
+                    text
+                    onClick={() => handleOpenPackageRecords(row)}>
+                    {t('套餐执行记录')}
+                  </bk-button>
                 </bk-dropdown-item>
               </bk-dropdown-menu>
             ),
@@ -229,8 +237,9 @@
 
   const buildBaseTableColumns = () => useRiskColumns({
     t,
-    deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+    deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
     detailRouteName: 'riskManageDetail',
+    includeBksecColumn: true,
     overrides: {
       // risk_id 列：stand_by 状态不可点击
       risk_id: {
@@ -298,7 +307,7 @@
                     theme={statusToMap[row.status]?.tag}>
                     <p style='display: flex;align-items: center;'>
                       <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                      <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                      <span>{resolveRiskStatusName(row.status, riskStatusCommon.value) || '--'}</span>
                     </p>
                   </bk-tag>
                   <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
@@ -311,7 +320,7 @@
                   theme={statusToMap[row.status]?.tag}>
                   <p style='display: flex;align-items: center;'>
                     <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                    <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                    <span>{resolveRiskStatusName(row.status, riskStatusCommon.value) || '--'}</span>
                   </p>
                 </bk-tag>))
         ),
@@ -329,6 +338,13 @@
   });
 
   const tableColumns = computed(() => {
+    touchRiskColumnDeps({
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
     const baseColumns = buildBaseTableColumns();
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
@@ -378,7 +394,12 @@
     return result;
   });
 
+  interface BatchHandleExpose {
+    sync: () => void;
+  }
+
   const listRef = ref();
+  const batchHandleRef = ref<BatchHandleExpose>();
   const addRiskRef = ref();
   const newAddedRiskIds = ref<string[]>([]);
   const searchBoxRef = ref();
@@ -453,12 +474,7 @@
       }));
     },
   });
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('all');
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
@@ -499,12 +515,6 @@
     scene_id: Number(item.scene_id || item.id),
     name: item.name,
   })) || []);
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
 
   const {
     run: fetchRiskList,
@@ -518,6 +528,7 @@
   });
 
   const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
+    nextTick(() => batchHandleRef.value?.sync());
     aiAnalyzesRef.value?.changeIsSearch();
     window.changeConfirm = false;
     totalCount.value = total || 0;
@@ -529,10 +540,6 @@
       return;
     }
 
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
     if (results.some(item => item.status === 'stand_by')) {
       // 执行定时器
       safeSetTimeout(() => {
@@ -569,6 +576,19 @@
         openEditReport: data.has_report ? 'true' : 'false',
       },
     });
+  };
+
+  const handleOpenPackageRecords = (row: RiskManageModel) => {
+    const sceneId = row.scene_id ? String(row.scene_id) : '';
+    const resolved = router.resolve({
+      name: 'applicationManageList',
+      query: {
+        openRecords: '1',
+        riskId: row.risk_id,
+        ...(sceneId ? { sceneId } : {}),
+      },
+    });
+    window.open(resolved.href, '_blank');
   };
 
   const handleToDetail = (data: RiskManageModel, needToRiskContent = false) => {
@@ -665,6 +685,7 @@
       title: '',
       notice_users: '',
       has_report: '',
+      bksec_push_status: '',
       scene_id: '',
     };
     const dataParams: Record<string, any> = {
@@ -728,6 +749,8 @@
       timeout = undefined;
     }
   });
+
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   // 添加定时器执行前的组件状态检查
   const safeSetTimeout = (callback: () => void, delay: number) => {

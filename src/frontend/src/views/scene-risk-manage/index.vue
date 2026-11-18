@@ -16,13 +16,18 @@
 -->
 <template>
   <div class="risk-manage-list-page-wrap">
-    <search-box
+    <nl-search-box
       :key="fieldConfigKey"
       ref="searchBoxRef"
       :field-config="FieldConfig"
+      risk-view-type="scene"
+      :scenes="nlSearchBoxScenes"
+      with-scene-selector
       @change="handleSearchChange"
       @change-table-height="handleChangeTableHeight"
-      @model-value-watch="handleModelValueWatch" />
+      @model-value-watch="handleModelValueWatch"
+      @parsing="handleParsing"
+      @sync="handleSearchSync" />
     <div
       :key="fieldConfigKey"
       class="risk-manage-list">
@@ -40,6 +45,12 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <batch-handle-entry
+          ref="batchHandleRef"
+          :list-ref="listRef"
+          scope="scene"
+          :selection-meta="selectionMeta"
+          :username="userInfo.username" />
         <risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runExport"
@@ -58,6 +69,7 @@
         secondary-sort-field="-event_time"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @filter-change="handleTableFilterChange"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
         @selection-change="handleSelectionChange" />
@@ -87,7 +99,6 @@
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
@@ -100,13 +111,16 @@
   import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
 
-  import SearchBox from '@components/search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
+  import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
   import addRisk from '@views/risk-manage/list/add-risk/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import NlSearchBox from '@views/risk-manage/list/components/nl-search-box/index.vue';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import FieldConfig from './components/config';
 
@@ -128,32 +142,35 @@
     width: 180,
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
-      <auth-button
-        text
-        theme='primary'
-        class='mr16'
-        permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
-        action-id='process_risk'
-        resource={row.risk_id}
-        onClick={() => handleToDetail(row)}>
-        {t('处理')}
-      </auth-button>
       {
-        row.status === 'auto_process'
-          ? <bk-button text theme='primary'
-            class="is-disabled"
-            v-bk-tooltips={{
-              content: row.risk_label === 'normal'
-                ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-            }}>
-            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-          </bk-button>
-          : <MarkRiskLabel
-            onUpdate={() => fetchList()}
-            userInfo={userInfo.value}
-            data={row} />
+        ['for_approve', 'auto_process'].includes(row.status)
+          ? (
+            <bk-button
+              v-bk-tooltips={t('当前状态不支持人工处理')}
+              text
+              theme='primary'
+              class='mr16 is-disabled'>
+              {t('处理')}
+            </bk-button>
+          )
+          : (
+            <auth-button
+              text
+              theme='primary'
+              class='mr16'
+              permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
+              action-id='process_risk'
+              resource={row.risk_id}
+              onClick={() => handleToDetail(row)}>
+              {t('处理')}
+            </auth-button>
+          )
       }
+      <MarkRiskLabel
+        onUpdate={() => fetchList()}
+        userInfo={userInfo.value}
+        data={row}
+        disabled={row.status === 'auto_process'} />
       <bk-dropdown
         style="margin-left: 8px">
         {{
@@ -173,6 +190,14 @@
                   {row.has_report ? t('编辑调查报告') : t('创建调查报告')}
                 </auth-button>
               </bk-dropdown-item>
+              <bk-dropdown-item>
+                <bk-button
+                  style="width: 100%;"
+                  text
+                  onClick={() => handleOpenPackageRecords(row)}>
+                  {t('套餐执行记录')}
+                </bk-button>
+              </bk-dropdown-item>
             </bk-dropdown-menu>
           ),
         }}
@@ -181,16 +206,21 @@
   };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
-  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      initTableColumns = useRiskColumns({
-        t,
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'sceneRiskManageDetail',
-        appendColumns: [actionColumn],
-      });
-    }
+    touchRiskColumnDeps({
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
+    const initTableColumns = useRiskColumns({
+      t,
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      detailRouteName: 'sceneRiskManageDetail',
+      includeBksecColumn: true,
+      appendColumns: [actionColumn],
+    });
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -213,7 +243,7 @@
   });
 
   // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 用于在场景切换时强制刷新 settings 计算属性
   const settingsVersion = ref(0);
@@ -239,21 +269,25 @@
       result = defaultSettings;
     }
     // 选择具体场景时，默认不展示所属场景(scene_id)列；
-    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id
+    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id（放在风险描述后面）
     const sceneParams = getSceneSystemParams();
     const isAllRisks = !sceneParams.scope_id
       || sceneParams.scope_type === 'cross_scene'
       || sceneParams.scope_type === 'cross_system';
     if (isAllRisks && !result.includes('scene_id')) {
-      // 在 event_time 之后插入 scene_id，保持合理顺序
-      const idx = result.indexOf('event_time');
-      result.splice(idx + 1, 0, 'scene_id');
+      const idx = result.indexOf('event_content');
+      result.splice(idx >= 0 ? idx + 1 : result.length, 0, 'scene_id');
     } else if (!isAllRisks) {
       result = result.filter((key: string) => key !== 'scene_id');
     }
     return result;
   });
+  interface BatchHandleExpose {
+    sync: () => void;
+  }
+
   const listRef = ref();
+  const batchHandleRef = ref<BatchHandleExpose>();
   const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
@@ -298,6 +332,19 @@
     });
   };
 
+  const handleOpenPackageRecords = (row: RiskManageModel) => {
+    const sceneId = getSceneSystemParams().scope_id;
+    const resolved = router.resolve({
+      name: 'applicationManageList',
+      query: {
+        openRecords: '1',
+        riskId: row.risk_id,
+        ...(sceneId ? { sceneId } : {}),
+      },
+    });
+    window.open(resolved.href, '_blank');
+  };
+
   const handleToDetail = (data: RiskManageModel, needToRiskContent = false) => {
     const params: Record<string, any> = {
       name: 'sceneRiskManageDetail',
@@ -326,6 +373,23 @@
     listRef.value?.initTableHeight?.();
     fetchList(isClear);
   };
+
+  const handleParsing = (isParsing: boolean) => {
+    if (listRef.value) {
+      listRef.value.loading = isParsing;
+    }
+  };
+
+  const handleSearchSync = (value: Record<string, any>, exValue: Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue,
+    };
+  };
+
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    searchBoxRef.value?.syncTableFilterFields(filters);
+  };
   const handleChangeTableHeight = () => {
     nextTick(() => {
       listRef.value?.initTableHeight?.();
@@ -341,6 +405,7 @@
     const params = {
       risk_id: '',
       tags: '',
+      scene_id: '',
       start_time: '',
       end_time: '',
       strategy_id: '',
@@ -353,6 +418,7 @@
       title: '',
       notice_users: '',
       has_report: '',
+      bksec_push_status: '',
     };
     const dataParams: Record<string, any> = {
       ...params,
@@ -417,12 +483,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('all');
 
   // 获取标签列表
   const {
@@ -444,19 +505,28 @@
     defaultValue: [],
   });
 
+  // AI 搜索用的场景列表，与「所属场景」下拉选项保持一致（随顶部场景选择器收窄）
   const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
+    data: riskScenesData,
+    run: fetchRiskScenes,
+  } = useRequest(RiskManageService.fetchRiskScenes, {
+    defaultValue: [],
+    manual: true,
   });
 
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
-    if (!results.length) return;
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
+  const nlSearchBoxScenes = computed(() => riskScenesData.value?.map((item: any) => ({
+    scene_id: Number(item.scene_id || item.id),
+    name: item.name,
+  })) || []);
+
+  const fetchNlSearchScenes = () => {
+    fetchRiskScenes(FieldConfig.scene_id.defaultParams || {});
+  };
+
+  const handleRequestSuccess = () => {
+    nextTick(() => batchHandleRef.value?.sync());
+    // 通知搜索框：表格数据加载完成（用于智能搜索成功提示和 input 按钮停止转动）
+    searchBoxRef.value?.notifySearchComplete();
   };
 
   const handleModelValueWatch = (val: any) => {
@@ -480,10 +550,12 @@
       scope_id: getSceneSystemParams().scope_id,
       scope_type: getSceneSystemParams().scope_type,
     });
+    fetchNlSearchScenes();
     on('scene-change', () => {
       fieldConfigKey.value += 1;
       // 场景切换时刷新表格列设置（所属场景列的显示/隐藏随场景变化）
       settingsVersion.value += 1;
+      fetchNlSearchScenes();
       fetchList();
     });
   });
@@ -493,6 +565,7 @@
     fieldConfigKey.value = 0;
   });
 
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'sceneRiskManageDetail') {
@@ -514,6 +587,9 @@
 </script>
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
+  position: relative;
+  overflow-x: hidden;
+
   .risk-manage-list {
     padding: 5px 20px;
     margin-top: 16px;

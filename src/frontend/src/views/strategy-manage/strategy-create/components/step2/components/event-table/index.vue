@@ -15,15 +15,17 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="event-table">
+  <div
+    class="event-table"
+    :class="{ 'is-model': strategyType !== 'rule' }"
+    :style="{ '--group-col': locale === 'en-US' ? '140px' : '80px' }">
     <!-- 表头 -->
     <div class="head">
       <div
         v-for="(item, index) in columns"
         :key="index"
         class="header-cell"
-        :class="getHeaderClass(item.key)"
-        :style="{minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px'}">
+        :class="getHeaderClass(item.key)">
         <span
           v-bk-tooltips="{
             disabled: !item.tips,
@@ -35,6 +37,31 @@
       </div>
     </div>
 
+    <div
+      v-if="showFieldSkeleton"
+      class="table-section is-skeleton"
+      data-testid="event-field-skeleton">
+      <div class="group-cell">
+        <audit-skeleton
+          height="16"
+          width="48" />
+      </div>
+      <div class="rows-container">
+        <div
+          v-for="row in skeletonRows"
+          :key="row"
+          class="skeleton-row">
+          <div
+            v-for="(column, columnIndex) in skeletonColumns"
+            :key="columnIndex"
+            class="cell">
+            <audit-skeleton
+              height="16"
+              :width="column" />
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- 表格内容 -->
     <template
       v-for="(item, key) in tableData"
@@ -44,9 +71,7 @@
       <div
         v-else
         class="table-section">
-        <div
-          class="group-cell"
-          :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
+        <div class="group-cell">
           <span>{{ groupMap[key] }}</span>
         </div>
         <div class="rows-container">
@@ -80,7 +105,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, onActivated, ref } from 'vue';
+  import { computed, onActivated, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -98,7 +123,16 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
-  import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
+  import {
+    getStrategySystemScopeParams,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+  import {
+    buildStrategyEventOutputFields,
+    findSelectField,
+    isSameSelectField,
+  } from '../../../../utils/strategy-protocol';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -128,8 +162,8 @@
     handleOpenTool,
   } = useToolDialog();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   // 用于自动填充参数
   const fieldMap: Record<string, string> = {
     event_id: 'raw_event_id',
@@ -167,39 +201,41 @@
   const groupMap = computed(() => (props.strategyType === 'rule'
     ? {
       event_basic_field_configs: t('基本信息'),
-      event_data_field_configs: t('事件结果'),
+      event_data_field_configs: t('事件内容'),
     } : {
       event_basic_field_configs: t('基本信息'),
-      event_data_field_configs: t('事件结果'),
+      event_data_field_configs: t('事件内容'),
       event_evidence_field_configs: t('事件证据'),
     }));
 
   const outputFields = computed(() => {
-    const basicFields = tableData.value.event_basic_field_configs.map(item => ({
-      raw_name: item.field_name,
-      display_name: item.display_name,
-      description: item.description,
-      target_field_type: 'basic',
-    }));
-    const dataFields = tableData.value.event_data_field_configs.map(item => ({
-      raw_name: item.field_name,
-      display_name: item.display_name,
-      description: item.description,
-      target_field_type: 'data',
-    }));
-    const evidenceFields = props.strategyType === 'rule'
-      ? tableData.value.event_evidence_field_configs.map(item => ({
-        raw_name: item.field_name,
-        display_name: item.display_name,
-        description: item.description,
-        target_field_type: 'evidence',
+    const eventFields = buildStrategyEventOutputFields({
+      event_basic_field_configs: tableData.value.event_basic_field_configs,
+      event_data_field_configs: tableData.value.event_data_field_configs,
+      event_evidence_field_configs: tableData.value.event_evidence_field_configs,
+      strategy_type: props.strategyType,
+    });
+    const selectDataFields = (props.select || [])
+      .map(item => ({
+        raw_name: item.raw_name || item.display_name || '',
+        display_name: item.display_name || item.raw_name || '',
+        description: '',
+        target_field_type: 'data' as const,
       }))
-      : [];
-    return basicFields.concat(dataFields, evidenceFields);
+      .filter(item => item.raw_name);
+    return [
+      ...eventFields,
+      ...selectDataFields.filter(item => !eventFields.some(field => (
+        isSameSelectField(item, field.raw_name) || isSameSelectField(item, field.display_name)
+      ))),
+    ];
   });
 
 
-  const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
+  const buildToolListParams = () => ({
+    ...getStrategySystemScopeParams(route),
+    status: 'published',
+  });
 
   // 获取所有工具
   const {
@@ -263,12 +299,16 @@
         tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
           if (item.map_config && !item.map_config.target_value) {
             const value = item.map_config.source_field || item.map_config.target_value;
-            if (!props.select.some(selectItem => selectItem.display_name === value)) {
+            const matched = findSelectField(props.select, value);
+            if (!matched) {
               // eslint-disable-next-line no-param-reassign
               item.map_config = {
                 source_field: undefined,
                 target_value: undefined,
               };
+            } else {
+              // eslint-disable-next-line no-param-reassign
+              item.map_config.source_field = matched.display_name;
             }
           }
           return item;
@@ -286,25 +326,20 @@
       break;
     case 'event_data_field_configs':
       if (props.select && props.select.length) {
-        // 保持原有顺序，只保留 props.select 中存在的字段
+        // 保持原有顺序，只保留 props.select 中存在的字段（兼容 raw_name / 中文名(raw_name)）
         tableData.value.event_data_field_configs = tableData.value.event_data_field_configs
-          .filter(fieldItem => props.select.some(item => item.display_name === fieldItem.field_name))
-          .map((fieldItem) => {
-            // 找到对应的 props.select 项
-            const selectItem = props.select.find(item => item.display_name === fieldItem.field_name);
-            if (selectItem) {
-              return {
-                ...fieldItem,
-                // 可以在这里添加需要更新的属性
-              };
-            }
-            return fieldItem;
-          });
+          .filter(fieldItem => props.select.some(item => (
+            isSameSelectField(item, fieldItem.field_name)
+            || isSameSelectField(item, fieldItem.display_name)
+          )));
 
         // 添加 props.select 中有但 tableData 中没有的新字段到末尾
         props.select.forEach((item) => {
           const existingField = tableData.value.event_data_field_configs
-            .find(fieldItem => fieldItem.field_name === item.display_name);
+            .find(fieldItem => (
+              isSameSelectField(item, fieldItem.field_name)
+              || isSameSelectField(item, fieldItem.display_name)
+            ));
 
           if (!existingField) {
             tableData.value.event_data_field_configs.push(createField(item));
@@ -314,13 +349,24 @@
     }
   };
 
+  const skeletonRows = [1, 2, 3, 4, 5, 6];
+  const skeletonColumnWidths = [72, 96, 36, 36, 36, 88, 72, 72, 64];
+  const skeletonColumns = computed(() => {
+    const count = Math.max(columns.value.length - 1, 1);
+    return skeletonColumnWidths.slice(0, count);
+  });
+  const hasVisibleEventRows = computed(() => Object.entries(tableData.value).some(([key, rows]) => {
+    if (props.strategyType === 'rule' && key === 'event_evidence_field_configs') return false;
+    return Array.isArray(rows) && rows.length > 0;
+  }));
+
   const process = () => {
     // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
   };
 
-  useRequest(StrategyManageService.fetchStrategyEvent, {
+  const { loading: fieldsLoading } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
     defaultParams: {
       strategy_id: props.strategyId,
@@ -381,9 +427,19 @@
     },
   });
 
+  const showFieldSkeleton = computed(() => fieldsLoading.value && !hasVisibleEventRows.value);
+
   onActivated(() => {
     process();
   });
+
+  watch(
+    () => props.select,
+    () => {
+      process();
+    },
+    { deep: true },
+  );
 
   defineExpose<Exposes>({
     getData() {
@@ -397,72 +453,92 @@
 
 <style lang="postcss" scoped>
 .event-table {
+  --group-col: 80px;
+  --table-min: 1260px;
+  --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(168px, 1.5fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
+
+  &.is-model {
+    --table-min: 1092px;
+    --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
+  }
+
   @mixin cell-base {
     display: flex;
     padding: 0 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;
+    box-sizing: border-box;
+    min-width: 0;
   }
 
   display: flex;
   margin-bottom: 10px;
+  overflow-x: auto;
   color: #63656e;
   border-top: 1px solid #dcdee5;
   border-left: 1px solid #dcdee5;
   flex-direction: column;
 
   .head {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--group-col) var(--event-row-cols);
+    width: 100%;
+    min-width: var(--table-min);
     height: 42px;
     background-color: #f5f7fa;
 
     .header-cell {
       @include cell-base;
 
+      overflow: hidden;
       background-color: #f5f7fa;
+      font-weight: 500;
+      color: #313238;
 
-      &.field-name {
-        width: 200px;
-      }
-
-      &.display-name {
-        width: 200px;
-      }
-
-      &.is-priority {
-        width: 120px;
-      }
-
-      &.map-config {
-        width: 230px;
-      }
-
-      &.drill-config {
-        width: 230px;
-      }
-
-      &:last-child {
-        flex: 1;
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     }
   }
 
+  .skeleton-row {
+    display: grid;
+    grid-template-columns: var(--event-row-cols);
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    background: #fff;
+
+    .cell {
+      @include cell-base;
+
+      background: #fff;
+    }
+  }
+
   .table-section {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--group-col) minmax(0, 1fr);
+    width: 100%;
+    min-width: var(--table-min);
     min-height: 42px;
 
     .group-cell {
       @include cell-base;
 
-      display: flex;
-      background-color: #f5f7fa;
-      align-items: center;
+      background-color: #fafbfd;
       justify-content: center;
     }
 
     .rows-container {
-      width: calc(100% - 80px);
+      min-width: 0;
+
+      :deep(> *) {
+        width: 100%;
+      }
     }
   }
 }

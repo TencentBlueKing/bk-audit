@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="render-info-item">
-    <span class="info-label">{{ label }}: </span>
+    <span class="info-label">{{ label }}：</span>
     <span
       v-bk-tooltips="{
         content,

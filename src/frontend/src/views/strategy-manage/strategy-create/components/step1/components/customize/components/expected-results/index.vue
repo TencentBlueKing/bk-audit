@@ -17,6 +17,7 @@
 <template>
   <vuedraggable
     class="panel-edit flex"
+    :class="{ 'is-empty': !expectedResultList.length }"
     item-key="name"
     :list="expectedResultList">
     <template #item="{ element, index }: { element: DatabaseTableFieldModel, index: number }">
@@ -49,6 +50,11 @@
         :expected-result-list="expectedResultList"
         :table-fields="localTableFields"
         @add-expected-result="handleAdd" />
+      <span
+        v-if="!expectedResultList.length"
+        class="expected-result-placeholder">
+        {{ t('未配置时，默认查询语句为 select *') }}
+      </span>
       <div
         v-if="expectedResultList.length"
         v-bk-tooltips="t('清空选项')"
@@ -57,11 +63,6 @@
           class="clear-field-icon"
           type="delete"
           @click="handleClear" />
-      </div>
-      <div
-        v-else
-        style="margin-left: 8px; color: #979ba5; user-select: none;">
-        {{ t('未配置时，默认查询语句为 select *') }}
       </div>
     </template>
   </vuedraggable>
@@ -76,11 +77,14 @@
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { formatFieldDisplayLabel } from '../../../../../../utils/strategy-protocol';
+
   import AddFields from './add-fields.vue';
 
   interface Expose {
     resetFormData: () => void,
     setSelect: (select: Array<DatabaseTableFieldModel>) => void;
+    getSelect: () => Array<DatabaseTableFieldModel>;
   }
   interface Emits {
     (e: 'updateExpectedResult', value: Array<DatabaseTableFieldModel>): void;
@@ -131,7 +135,7 @@
       || ((element.aggregate === null || element.aggregate === undefined)
         && (item.value === null || item.value === undefined || item.value === ''))
     ));
-    return `[${item?.label || t('不聚合')}] ${element.display_name}`;
+    return `[${item?.label || t('不聚合')}] ${formatFieldDisplayLabel(element.display_name, element.raw_name)}`;
   };
 
   const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
@@ -160,11 +164,15 @@
     setSelect(select: Array<DatabaseTableFieldModel>) {
       expectedResultList.value = select;
     },
+    getSelect() {
+      return expectedResultList.value;
+    },
   });
 </script>
 <style scoped lang="postcss">
 .panel-edit {
   position: relative;
+  width: 100%;
   min-height: 32px;
   padding: 0 3px;
   background: #f5f7fa;
@@ -226,6 +234,24 @@
     background: #eaebf0;
     border-radius: 2px;
     justify-content: center;
+  }
+
+  .expected-result-placeholder {
+    margin-left: var(--audit-space-8);
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-03);
+  }
+
+  &.is-empty {
+    min-height: 26px;
+    padding: 0;
+    background: transparent;
+    align-items: center;
+
+    :deep(.add-field-btn) {
+      margin: 0;
+    }
   }
 }
 </style>

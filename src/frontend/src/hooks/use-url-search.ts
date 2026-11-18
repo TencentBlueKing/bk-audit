@@ -14,11 +14,17 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import { useRouter } from 'vue-router';
+
 import { buildURLParams } from '@utils/assist';
 
-import { getSceneContextQuery } from '@/utils/assist/scene-system-params';
+import {
+  getSceneContextQuery,
+  isSceneSelectorSentinelId,
+} from '@/utils/assist/scene-system-params';
 
 export default function () {
+  const router = useRouter();
   const searchParams = new URLSearchParams(window.location.search);
   const notifyUrlChange = () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -111,19 +117,43 @@ export default function () {
 
   const SCENE_CONTEXT_KEYS = ['scene_id', 'scope_id', 'scope_type'];
 
+  const shouldInjectSceneContext = () => {
+    const route = router.currentRoute.value;
+    const isRiskMenu = route?.matched?.some(record => record.meta?.navName === 'auditRiskManage');
+    const showSelector = Boolean(route?.meta?.isShowSceneSelector);
+    // 风险菜单除「场景风险」外没有场景选择器，不能把空间 scene_id 写进 URL
+    if (isRiskMenu && !showSelector) {
+      return false;
+    }
+    return true;
+  };
+
   const replaceSearchParams = (params: Record<string, any>) => {
     const restParams = { ...params };
-    let sceneContext = getSceneContextQuery();
-    if (restParams.scene_id !== undefined && restParams.scene_id !== '') {
-      sceneContext = {
-        scene_id: String(restParams.scene_id),
-        scope_id: String(restParams.scope_id ?? restParams.scene_id),
-        scope_type: String(restParams.scope_type || 'scene'),
-      };
+    const keepSceneContext = shouldInjectSceneContext();
+    let sceneContext: Record<string, string> = {};
+    if (keepSceneContext) {
+      sceneContext = getSceneContextQuery();
+      if (restParams.scene_id !== undefined && restParams.scene_id !== '') {
+        sceneContext = {
+          scene_id: String(restParams.scene_id),
+          scope_id: String(restParams.scope_id ?? restParams.scene_id),
+          scope_type: String(restParams.scope_type || 'scene'),
+        };
+      }
     }
     SCENE_CONTEXT_KEYS.forEach((key) => {
       delete restParams[key];
     });
+    // 无场景选择器时，真实 scene_id 只作为「所属场景」筛选保留（带 scope_type 的是空间上下文残留）
+    if (
+      !keepSceneContext
+      && params.scene_id
+      && !isSceneSelectorSentinelId(params.scene_id)
+      && !params.scope_type
+    ) {
+      restParams.scene_id = String(params.scene_id);
+    }
     window.history.replaceState({}, '', `?${buildURLParams({
       ...sceneContext,
       ...restParams,

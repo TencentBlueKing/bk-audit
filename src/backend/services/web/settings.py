@@ -1,10 +1,16 @@
+import math
 import os
+
+from django.core.exceptions import ImproperlyConfigured
+
+from config import default as platform_settings
 
 INSTALLED_APPS = (
     "services.web.analyze",
     "services.web.databus",
     "services.web.entry",
     "services.web.query",
+    "services.web.ai_assistant",
     "services.web.log_subscription",
     "services.web.strategy_v2",
     "services.web.risk",
@@ -24,6 +30,8 @@ RENDER_TASK_TIMEOUT = int(os.getenv("BKAPP_RENDER_TASK_TIMEOUT", 30 * 60))
 RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", 60 * 5))
 # 渲染任务限流，格式: "次数/时间单位"，如 "10/m", "100/m", "1000/h"
 RENDER_TASK_RATE_LIMIT = os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "5/m")
+# 单风险报告自动渲染量较大，继续使用历史任务级限流，避免迁移影响线上吞吐。
+RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT = os.getenv("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m")
 # 渲染任务重试延迟时间（秒），默认 10 秒
 RENDER_RETRY_DELAY = int(os.getenv("BKAPP_RENDER_RETRY_DELAY", 10))
 # AI Provider 缓存超时时间（秒），默认 2 小时
@@ -35,6 +43,275 @@ REPORT_CONTENT_MIN_LENGTH = int(os.getenv("BKAPP_REPORT_CONTENT_MIN_LENGTH", 10)
 # MCP 事件字段简化接口返回上限
 AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))
 
+# ============== 审计 AI 日志字段探索配置 ==============
+# 单层字段探索最多返回的字段数，限制 Agent 工具响应体积；Web 递归不限制字段数。
+# 单次采样行数复用 AI_ASSISTANT_FIELD_SAMPLE_ROWS（默认100）。
+AI_LOG_FIELD_METADATA_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_MAX_FIELDS", 50))
+# 单字段保留的脱敏样例值数量，值在去重和稳定排序后截断。
+AI_LOG_FIELD_METADATA_SAMPLE_VALUES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUES", 3))
+# 单个标量样例的 UTF-8 JSON 编码字节上限；超限样例直接跳过，避免伪截断值参与后续查询推理。
+AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = int(
+    os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES", 1024)
+)
+AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES", 1024 * 1024))
+
+# ============== 审计 AI 日志明细查询配置 ==============
+# 限制单次查询投影、排序与响应大小；累计读取预算由调用方控制，不截断可访问页码。
+AI_LOG_SEARCH_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_FIELDS", 20))
+AI_LOG_SEARCH_MAX_SORT_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_SORT_FIELDS", 3))
+# page_size 的公开默认值属于固定接口契约；运行上限只能在 20 至协议硬上限之间收紧。
+AI_LOG_SEARCH_DEFAULT_PAGE_SIZE = 20
+AI_LOG_SEARCH_MAX_PAGE_SIZE = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_PAGE_SIZE", 100))
+if AI_LOG_SEARCH_MAX_PAGE_SIZE < AI_LOG_SEARCH_DEFAULT_PAGE_SIZE:
+    raise ImproperlyConfigured("AI_LOG_SEARCH_MAX_PAGE_SIZE 不能小于公开默认值 20")
+# Agent 工具业务 data 的 UTF-8 字节预算；标准响应 envelope 由 renderer 额外封装。
+AI_LOG_SEARCH_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_SEARCH_RESPONSE_MAX_BYTES", 1024 * 1024))
+
+# 聚合先按全范围类别排名，再返回完整结果；运行配置只能收紧协议预算。
+AI_LOG_AGGREGATION_DEFAULT_TOP_N = 10
+AI_LOG_AGGREGATION_MAX_TOP_N = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_MAX_TOP_N", 500))
+AI_LOG_AGGREGATION_MAX_TIME_BUCKETS = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_MAX_TIME_BUCKETS", 1440))
+AI_LOG_AGGREGATION_MAX_CELLS = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_MAX_CELLS", 100000))
+AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES", 4 * 1024 * 1024))
+
+# 程序统计与 MCP 统一的 AUTO 可读性阈值，容量上限仍单独检查。
+AI_LOG_STATISTICS_AUTO_MIN_BUCKETS = int(os.getenv("BKAPP_AI_LOG_STATISTICS_AUTO_MIN_BUCKETS", 12))
+if AI_LOG_STATISTICS_AUTO_MIN_BUCKETS < 1:
+    raise ImproperlyConfigured("AI_LOG_STATISTICS_AUTO_MIN_BUCKETS 必须为正整数")
+
+# Agent 日志工具公共请求成本；代码中的冻结硬上限仍会阻止环境配置放大。
+AI_LOG_TOOL_MAX_CONDITIONS = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_CONDITIONS", 100))
+AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION", 1000))
+AI_LOG_TOOL_MAX_CONDITION_BYTES = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_CONDITION_BYTES", 256 * 1024))
+AI_LOG_TOOL_MAX_FILTER_BYTES = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FILTER_BYTES", 16 * 1024))
+AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH", 128))
+AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH", 16))
+AI_LOG_TOOL_MAX_FIELD_PATH_BYTES = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FIELD_PATH_BYTES", 1024))
+AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH", 255))
+
+# ============== 审计 AI 日志分析报告配置 ==============
+# 用户自定义分析指令的字符上限；默认 Prompt 由 GlobalMetaConfig 运营管理，不受此值限制。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH", 2048))
+# 额外自动重试次数；0 表示禁用，默认最多执行 4 次（首次 + 3 次重试）。
+AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES", 3))
+if AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES < 0:
+    raise ImproperlyConfigured("AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES 必须大于等于 0")
+# Celery 硬时限（秒）仅作为 Worker 最终保险；默认 30 分钟。
+AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT", 30 * 60))
+# 业务执行时限（秒）必须短于硬时限；默认 29 分钟，以普通异常进入重试或最终 FAILED/流终态链路。
+AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT", 29 * 60))
+if not 0 < AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT < AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT:
+    raise ImproperlyConfigured(
+        "AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT 必须大于 0 且小于 " "AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT"
+    )
+# ============== 审计日志统计附件配置 ==============
+# 程序统计进入 default；AI 统计与分析共用 ai_default，按 Agent Code 限流并配置超时/重试。
+# 正文默认值沿用平台已有配置，不重新定义公共 Markdown 上限；运行时可独立收紧。
+AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES = int(
+    os.getenv(
+        "BKAPP_AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES",
+        platform_settings.AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES,
+    )
+)
+AI_ASSISTANT_AI_STATISTICS_INSTRUCTION_MAX_LENGTH = int(
+    os.getenv("BKAPP_AI_ASSISTANT_AI_STATISTICS_INSTRUCTION_MAX_LENGTH", 2048)
+)
+if AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES <= 0 or AI_ASSISTANT_AI_STATISTICS_INSTRUCTION_MAX_LENGTH <= 0:
+    raise ImproperlyConfigured("AI 统计正文及指令上限必须大于 0")
+
+AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG = os.getenv(
+    "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG",
+    "<!--DASH_AI_CHART_CONFIG-->",
+)
+AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG = os.getenv(
+    "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG",
+    "<!--/DASH_AI_CHART_CONFIG-->",
+)
+if (
+    not AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG
+    or not AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG
+    or AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG in AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG
+    or AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG in AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG
+):
+    raise ImproperlyConfigured("AI 统计图表配置起止标签必须非空、不相同且互不包含")
+
+AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT", 30 * 60))
+AI_ASSISTANT_FIELD_STATISTICS_BUSINESS_TIMEOUT = int(
+    os.getenv("BKAPP_AI_ASSISTANT_FIELD_STATISTICS_BUSINESS_TIMEOUT", 29 * 60)
+)
+AI_ASSISTANT_FIELD_STATISTICS_MAX_RETRIES = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_STATISTICS_MAX_RETRIES", 3))
+AI_ASSISTANT_FIELD_STATISTICS_RETRY_DELAY_SECONDS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_FIELD_STATISTICS_RETRY_DELAY_SECONDS", 30)
+)
+AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS", 120)
+)
+if not 0 < AI_ASSISTANT_FIELD_STATISTICS_BUSINESS_TIMEOUT < AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT:
+    raise ImproperlyConfigured("AI_ASSISTANT_FIELD_STATISTICS_BUSINESS_TIMEOUT 必须大于 0 且小于硬时限")
+if AI_ASSISTANT_FIELD_STATISTICS_MAX_RETRIES < 0:
+    raise ImproperlyConfigured("AI_ASSISTANT_FIELD_STATISTICS_MAX_RETRIES 必须大于等于 0")
+if not 0 < AI_ASSISTANT_FIELD_STATISTICS_RETRY_DELAY_SECONDS <= AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS:
+    raise ImproperlyConfigured("AI_ASSISTANT_FIELD_STATISTICS 重试延迟必须大于 0 且不超过退避上限")
+
+AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT", 30 * 60))
+AI_ASSISTANT_AI_STATISTICS_BUSINESS_TIMEOUT = int(
+    os.getenv("BKAPP_AI_ASSISTANT_AI_STATISTICS_BUSINESS_TIMEOUT", 29 * 60)
+)
+AI_ASSISTANT_AI_STATISTICS_MAX_RETRIES = int(os.getenv("BKAPP_AI_ASSISTANT_AI_STATISTICS_MAX_RETRIES", 3))
+AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS", 30)
+)
+AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS", 120)
+)
+if not 0 < AI_ASSISTANT_AI_STATISTICS_BUSINESS_TIMEOUT < AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT:
+    raise ImproperlyConfigured("AI_ASSISTANT_AI_STATISTICS_BUSINESS_TIMEOUT 必须大于 0 且小于硬时限")
+if AI_ASSISTANT_AI_STATISTICS_MAX_RETRIES < 0:
+    raise ImproperlyConfigured("AI_ASSISTANT_AI_STATISTICS_MAX_RETRIES 必须大于等于 0")
+if not 0 < AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS <= AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS:
+    raise ImproperlyConfigured("AI_ASSISTANT_AI_STATISTICS 重试延迟必须大于 0 且不超过退避上限")
+
 # ============== AI 风险分析报告相关配置 ==============
 ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))
 ANALYSE_REPORT_AI_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_ANALYSE_REPORT_AI_TITLE_MAX_LENGTH", 20))
+
+# ============== AI 助手附件流式传输相关配置 ==============
+# 单个 execution Redis Stream 的滑动 TTL（秒）。每次成功追加事件都会原子刷新；
+# 任务结束后不再刷新并自然过期。过期只影响实时追赶，不删除 MySQL 快照或最终产物。
+AI_ASSISTANT_STREAM_TTL = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_TTL", 60 * 60))
+# 单个业务 UI 事件序列化后的字节上限。超限事件不写 Redis 也不归档，
+# 当前 execution 标记为 TRUNCATED；平台终态事件和最终 output_data 不受此限制。
+AI_ASSISTANT_STREAM_MAX_EVENT_BYTES = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_MAX_EVENT_BYTES", 256 * 1024))
+# 单个 execution 允许归档的业务事件条数上限。超限后停止后续业务事件归档
+# 并标记 TRUNCATED，但 Redis 实时写入仍继续，另受 REDIS_MAX_BYTES 限制；平台事件不计入。
+AI_ASSISTANT_STREAM_MAX_EVENTS = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_MAX_EVENTS", 10_000))
+# 单个 execution 在 MySQL `stream_archive` JSON 中允许持久化的编码字节上限。
+# 超限后停止后续业务事件 checkpoint 并标记 TRUNCATED，不影响 Redis 实时流和最终产物。
+AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES", 10 * 1024 * 1024))
+# 单个 execution 写入 Redis 实时流的业务事件累计字节上限。超限后停止业务实时写入
+# 并标记 DEGRADED，MySQL 归档和最终产物继续执行；平台控制事件不受此限制。
+AI_ASSISTANT_STREAM_REDIS_MAX_BYTES = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_MAX_BYTES", 10 * 1024 * 1024))
+# SSE 连接连续未读到业务事件时的滑动空闲超时（秒）。只有有效业务事件刷新计时；
+# heartbeat、平台控制事件和无法解析的 Redis entry 都不刷新，到期仅主动断开当前 SSE 连接。
+AI_ASSISTANT_STREAM_IDLE_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_IDLE_TIMEOUT", 300))
+# 流式 Worker 最长间隔多少秒向 MySQL 持久化一次 `last_activity_at`。该活动只能由业务
+# send 触发，用于避免低频长任务被巡检误判失活；它不控制 SSE 连接超时。
+AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS", 60)
+)
+
+
+# Redis 流使用独立读/写池，不修改 Django cache 或 Celery 的共享连接配置。
+# 配置在客户端首次使用后缓存，变更须重启；上限属于单个池，不能当作进程/集群总连接上限。
+# 同一短预算用于TCP建连和实时写入；不再支持分别调节二者。
+AI_ASSISTANT_STREAM_REDIS_IO_TIMEOUT = float(os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_IO_TIMEOUT", 1))
+AI_ASSISTANT_STREAM_REDIS_WRITE_MAX_CONNECTIONS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_WRITE_MAX_CONNECTIONS", 16)
+)
+AI_ASSISTANT_STREAM_REDIS_READ_MAX_CONNECTIONS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_READ_MAX_CONNECTIONS", 32)
+)
+# 即使连续收到实时数据，也按此间隔核对持久状态与可见性；XREAD BLOCK 不超过15秒或该间隔。
+# 读端socket超时按该BLOCK上限加固定5秒裕量推导，默认20秒，不提供独立覆盖。
+AI_ASSISTANT_STREAM_STATE_POLL_INTERVAL = float(os.getenv("BKAPP_AI_ASSISTANT_STREAM_STATE_POLL_INTERVAL", 15))
+for _stream_limit in (
+    AI_ASSISTANT_STREAM_REDIS_IO_TIMEOUT,
+    AI_ASSISTANT_STREAM_REDIS_WRITE_MAX_CONNECTIONS,
+    AI_ASSISTANT_STREAM_REDIS_READ_MAX_CONNECTIONS,
+    AI_ASSISTANT_STREAM_STATE_POLL_INTERVAL,
+):
+    if not math.isfinite(_stream_limit) or _stream_limit <= 0:
+        raise ImproperlyConfigured(
+            "AI_ASSISTANT_STREAM timeout, interval and capacity settings must be finite and positive"
+        )
+
+# ============== AI 助手异步执行巡检与 SLO 配置 ==============
+# 异步 Message 的 SLO 目标（秒），从对象首次 `created_at` 计算到终态。
+# 该值用于计算 SLO Metric 及 BKM 达标率告警，不参与失活巡检或直接修改 Message 状态。
+AI_ASSISTANT_MESSAGE_SLO_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_SLO_SECONDS", 120))
+# 异步 Message 的无活动告警阈值（秒），从当前执行 `last_activity_at` 计算。
+# 巡检只将达线对象计入 warning Metric，不修改状态；应小于硬失效阈值。
+AI_ASSISTANT_MESSAGE_WARNING_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_WARNING_SECONDS", 300))
+# 异步 Message 的硬失效阈值（秒），从当前执行 `last_activity_at` 计算。
+# 达线且自动失败开关开启时，巡检通过 CAS 将 Message 收敛为 FAILED。
+AI_ASSISTANT_MESSAGE_FAILURE_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_FAILURE_SECONDS", 900))
+# 异步 Attachment 的 SLO 目标（秒），从对象首次 `created_at` 计算到终态。
+# 该值用于计算 SLO Metric 及 BKM 达标率告警，不参与失活巡检或直接修改 Attachment 状态。
+AI_ASSISTANT_ATTACHMENT_SLO_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_ATTACHMENT_SLO_SECONDS", 1800))
+# 异步 Attachment 的无活动告警阈值（秒），从当前执行 `last_activity_at` 计算。
+# 巡检只将达线对象计入 warning Metric，不修改状态；应小于硬失效阈值。
+AI_ASSISTANT_ATTACHMENT_WARNING_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_ATTACHMENT_WARNING_SECONDS", 3600))
+# 异步 Attachment 的硬失效阈值（秒），从当前执行 `last_activity_at` 计算。
+# 达线且自动失败开关开启时，巡检通过 CAS 将 Attachment 收敛为 FAILED。
+AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS", 7200))
+# 失活巡检的 Celery Beat 调度间隔（秒），同时用于派生去重短锁 TTL。
+# 应大于单次任务 time limit，避免正常执行重叠。
+AI_ASSISTANT_RECONCILE_INTERVAL_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_RECONCILE_INTERVAL_SECONDS", 60))
+# 每轮巡检对 Message 和 Attachment 各自允许加载的硬失效候选数上限。
+# 它只限制单轮收敛量，不限制 PROCESSING 聚合统计的数据范围。
+AI_ASSISTANT_RECONCILE_BATCH_SIZE = int(os.getenv("BKAPP_AI_ASSISTANT_RECONCILE_BATCH_SIZE", 200))
+# 单次巡检 Celery Task 的硬时限（秒），防止巡检自身长期占用 Worker。
+# 该值不是 Message/Attachment 业务超时，并且必须小于巡检调度间隔。
+AI_ASSISTANT_RECONCILE_TIME_LIMIT_SECONDS = int(os.getenv("BKAPP_AI_ASSISTANT_RECONCILE_TIME_LIMIT_SECONDS", 50))
+# 是否执行失活巡检主体。关闭后 Beat 仍周期投递任务，但 Worker 在访问 Redis/DB 前
+# 立即返回：不扫描、不上报存量/心跳，也不修改对象状态。该开关不能停止 Beat 入队。
+AI_ASSISTANT_RECONCILE_ENABLED = os.getenv("BKAPP_AI_ASSISTANT_RECONCILE_ENABLED", "true").lower() == "true"
+# 是否允许巡检将硬失效的 PROCESSING 对象 CAS 更新为 FAILED。关闭后仍扫描并上报
+# PROCESSING/过期指标，但不修改业务状态；这是误判事故时的首选止损开关。
+AI_ASSISTANT_RECONCILE_AUTO_FAIL_ENABLED = (
+    os.getenv("BKAPP_AI_ASSISTANT_RECONCILE_AUTO_FAIL_ENABLED", "true").lower() == "true"
+)
+
+# 附件类型可覆盖失活阈值，未列出的类型仍使用平台默认值。
+# Retry 退出时平台刷新 last_activity_at，因此窗口覆盖一次硬时限与最大退避，
+# 再留一个巡检周期；不乘总重试次数。队列积压的额外缓冲可由部署配置放大。
+AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS = {
+    "FIELD_STATISTICS": {
+        "warning_seconds": int(
+            os.getenv(
+                "BKAPP_AI_ASSISTANT_FIELD_STATISTICS_WARNING_SECONDS",
+                AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT + AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS,
+            )
+        ),
+        "failure_seconds": int(
+            os.getenv(
+                "BKAPP_AI_ASSISTANT_FIELD_STATISTICS_FAILURE_SECONDS",
+                AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT
+                + AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS
+                + AI_ASSISTANT_RECONCILE_INTERVAL_SECONDS,
+            )
+        ),
+    },
+    "AI_STATISTICS": {
+        "warning_seconds": int(
+            os.getenv(
+                "BKAPP_AI_ASSISTANT_AI_STATISTICS_WARNING_SECONDS",
+                AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT + AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS,
+            )
+        ),
+        "failure_seconds": int(
+            os.getenv(
+                "BKAPP_AI_ASSISTANT_AI_STATISTICS_FAILURE_SECONDS",
+                AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT
+                + AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS
+                + AI_ASSISTANT_RECONCILE_INTERVAL_SECONDS,
+            )
+        ),
+    },
+}
+if not (
+    0
+    < AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS["FIELD_STATISTICS"]["warning_seconds"]
+    < AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS["FIELD_STATISTICS"]["failure_seconds"]
+    and AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS["FIELD_STATISTICS"]["failure_seconds"]
+    > AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT + AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS
+):
+    raise ImproperlyConfigured("AI_ASSISTANT_FIELD_STATISTICS 巡检失败阈值必须覆盖硬时限和重试退避，且大于预警阈值")
+if not (
+    0
+    < AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS["AI_STATISTICS"]["warning_seconds"]
+    < AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS["AI_STATISTICS"]["failure_seconds"]
+    and AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS["AI_STATISTICS"]["failure_seconds"]
+    > AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT + AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS
+):
+    raise ImproperlyConfigured("AI_ASSISTANT_AI_STATISTICS 巡检失败阈值必须覆盖硬时限和重试退避，且大于预警阈值")

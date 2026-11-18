@@ -17,7 +17,7 @@
 <template>
   <div class="no-module">
     <img
-      src="@images/empty.svg"
+      :src="emptySvg"
       style="width: 220px;height: 100px;">
     <div style="font-size: 14px;">
       {{ t('该模型暂无参数') }}
@@ -26,6 +26,8 @@
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
+
+  import emptySvg from '@images/empty.svg?inline';
 
   const { t } = useI18n();
 </script>

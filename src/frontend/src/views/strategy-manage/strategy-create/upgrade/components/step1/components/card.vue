@@ -32,9 +32,7 @@
           <img
             v-if="item.type"
             class="field-type-icon"
-            :src="item.highlight
-              ? getAssetsFile(`field-type/y-${item.type}.png`)
-              : getAssetsFile(`field-type/${item.type}.png`)">
+            :src="getFieldTypeIcon(item.type, { highlight: item.highlight })">
           <tool-tip
             class="content"
             :data="item.label" />
@@ -71,9 +69,7 @@
               <img
                 v-if="item.type"
                 class="field-type-icon"
-                :src="item.disabled || item.new
-                  ? getAssetsFile(`field-type/y-${item.type}.png`)
-                  : getAssetsFile(`field-type/${item.type}.png`)">
+                :src="getFieldTypeIcon(item.type, { highlight: item.disabled || item.new })">
               <tool-tip
                 class="content"
                 :data="item.label" />
@@ -102,7 +98,7 @@
 
   import ToolTip from '@components/show-tooltips-text/index.vue';
 
-  import getAssetsFile from '@utils/getAssetsFile';
+  import getFieldTypeIcon from '@utils/getFieldTypeIcon';
 
   import type { ColumnType } from '../index.vue';
 

@@ -1,0 +1,460 @@
+# 海量多值场景：操作人数量梯度、分隔形态混排、多字段多值并行、拓展字段多值、中英文与大小写、泛指不猜。
+# 固定时钟 2026-08-31T18:00:00+08:00（周一）；缺省时间 = 7 天滚动窗口（与 core_filters C2 对齐）。
+# 核心断言目标：多值必须完整提取（N 个值 → filters 恰好 N 个）、单条件 include、值保持原样不转写、不串字段。
+
+# ---- A1-A5：操作人数量梯度（3 → 12 人）----
+- description: 'A1-多值梯度3人：顿号列举'
+  vars:
+    query: '查一下张三、李四、王五的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A2-多值梯度5人：逗号列举 + 和收尾'
+  vars:
+    query: '查一下张三,李四,王五,赵六和钱七的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A3-多值梯度8人：倒装列举 + 语气词'
+  vars:
+    query: '张三、李四、王五、赵六、钱七、孙八、周九、吴十最近的操作记录帮我查一下呗'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A4-多值梯度10人：近三天窗口'
+  vars:
+    query: '帮我看看张三、李四、王五、赵六、钱七、孙八、周九、吴十、郑一、王二近三天的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十', '郑一', '王二']
+    expected_start_time: '2026-08-28T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A5-多值梯度12人：混合分隔（顿号+逗号+以及+还有）+ 上周'
+  vars:
+    query: '张三、李四，王五以及赵六，还有钱七、孙八、周九、吴十、郑一、王二、冯三、陈四上周的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十', '郑一', '王二', '冯三', '陈四']
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- A6-A8：分隔形态专测 ----
+- description: 'A6-纯连词链：和 + 还有 + 跟'
+  vars:
+    query: '查一下张三和李四还有王五跟赵六的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A7-顿号+和 + 失败语义组合'
+  vars:
+    query: '张三、李四和王五的失败操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: [-1]
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A8-逗号+以及列举'
+  vars:
+    query: '查一下张三，李四，以及王五的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- A9-A12：多字段多值并行 ----
+- description: 'A9-多人+失败+Web+关键词四维组合（X1 海量版）'
+  vars:
+    query: '上周张三、李四、王五、赵六在Web控制台上做的跟权限有关的失败操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六']
+      - raw_name: 'access_type'
+        keys: []
+        operator: 'include'
+        filters: ['WEB']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: [-1]
+    allow_extra_conditions: 'true'
+    expected_log_keywords: '["权限"]'
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:log_keyword_contains'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A10-多人+多资源类型跨字段多值'
+  vars:
+    query: '查一下张三、李四、王五对host和app的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五']
+      - raw_name: 'resource_type_id'
+        keys: []
+        operator: 'include'
+        filters: ['host', 'app']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A11-多人+多来源IP'
+  vars:
+    query: '张三和李四从192.0.2.10和192.0.2.11发起的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四']
+      - raw_name: 'access_source_ip'
+        keys: []
+        operator: 'include'
+        filters: ['192.0.2.10', '192.0.2.11']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A12-多人+多实例ID'
+  vars:
+    query: '实例10001、10002上张三和李四的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四']
+      - raw_name: 'instance_id'
+        keys: []
+        operator: 'include'
+        filters: ['10001', '10002']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- A13：拓展字段多值 ----
+- description: 'A13-多工单号拓展下钻 + 多人'
+  vars:
+    query: '查一下工单号是Story-3000、Story-3001和Story-3002的张三、李四的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['ticket_id']
+        operator: 'include'
+        filters: ['Story-3000', 'Story-3001', 'Story-3002']
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- A14-A16：中英文/大小写/特殊字符 ----
+- description: 'A14-英文账号多值'
+  vars:
+    query: '查一下admin、root和ops这三个账号的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['admin', 'root', 'ops']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A15-中英混合人名原样保持'
+  vars:
+    query: '查一下张三、John和hermit的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', 'John', 'hermit']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A16-大小写敏感保持（不转写不归一）'
+  vars:
+    query: '查一下HermitWJ、hermitwj和ADMIN的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['HermitWJ', 'hermitwj', 'ADMIN']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- A17-A18：泛指不猜（观察）与口语多人 ----
+- description: 'A17-泛指集合禁止展开（他们组的人，观察）'
+  vars:
+    query: '查一下张三他们组的人最近做的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    limitation_reason: '泛指集合（他们组的人）不是明确名单，禁止猜测展开；观察模型只提取张三/全文兜底/忽略该维度三种行为'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:known_limitation_observer'
+
+- description: 'A18-冗余修饰口语 + 三人列举'
+  vars:
+    query: '哦对了对了帮我查一下就是那个张三还有李四跟王五他们仨昨天的操作哈'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五']
+    expected_start_time: '2026-08-30T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- A19-A20：多请求ID / 多实例+多工单 ----
+- description: 'A19-多请求ID检索'
+  vars:
+    query: '帮我查一下request-001、request-002和request-003这几条请求的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'request_id'
+        keys: []
+        operator: 'include'
+        filters: ['request-001', 'request-002', 'request-003']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'A20-超长句压力：10人+双资源类型+失败+上周（五维组合）'
+  vars:
+    query: '麻烦帮我查一下上周张三、李四、王五、赵六、钱七、孙八、周九、吴十、郑一、王二这十个人对host和app两类资源做的那些失败的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十', '郑一', '王二']
+      - raw_name: 'resource_type_id'
+        keys: []
+        operator: 'include'
+        filters: ['host', 'app']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: [-1]
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'

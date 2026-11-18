@@ -1,0 +1,71 @@
+/* 骨架流光对齐 bk-vision：底 #F2F6FC，高光 #E4E9F2。审计中性色偏灰，盖在白底上几乎看不见。 */
+
+@keyframes audit-skeleton-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes audit-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.audit-skeleton {
+  background: linear-gradient(90deg, #f2f6fc 0%, #e4e9f2 50%, #f2f6fc 100%);
+  background-position: -200% 0;
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: audit-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.audit-skeleton.is-dark {
+  background: linear-gradient(
+    90deg,
+    rgb(220 225 235) 0%,
+    rgb(200 208 220) 50%,
+    rgb(220 225 235) 100%
+  );
+  background-position: -200% 0;
+  background-size: 200% 100%;
+}
+
+.audit-skeleton.is-circle {
+  border-radius: 50%;
+}
+
+.audit-skeleton.is-round {
+  border-radius: 9999px;
+}
+
+.audit-skeleton-container {
+  animation: audit-skeleton-fade-in 0.3s ease-in-out;
+}
+
+.audit-skeleton-container > * {
+  background: linear-gradient(90deg, #f2f6fc 0%, #e4e9f2 50%, #f2f6fc 100%);
+  background-position: -200% 0;
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: audit-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.audit-skeleton-container.is-dark > * {
+  background: linear-gradient(
+    90deg,
+    rgb(220 225 235) 0%,
+    rgb(200 208 220) 50%,
+    rgb(220 225 235) 100%
+  );
+  background-position: -200% 0;
+  background-size: 200% 100%;
+}

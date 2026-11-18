@@ -22,6 +22,7 @@ import {
 } from 'vue-router';
 
 import IamManageService from '@service/iam-manage';
+import RootManageService from '@service/root-manage';
 import SceneManageService from '@service/scene-manage';
 
 import type ConfigModel from '@model/root/config';
@@ -29,6 +30,7 @@ import type ConfigModel from '@model/root/config';
 import NotFound from '@views/404.vue';
 import AnalysisManage from '@views/analysis-manage/routes'; // 检索
 import AttentionManage from '@views/attention-manege/routes'; // 我的关注
+import ConfirmManage from '@views/confirm-manage/routes'; // 待我确认
 import EventManage from '@views/event-manage/routes'; // 审计风险
 import HandleManage from '@views/handle-manage/routes'; // 待我处理
 import LinkDataManage from '@views/link-data-manage/routes'; // 联表管理
@@ -41,6 +43,7 @@ import RiskManage from '@views/risk-manage/routes'; // 所有风险
 import RuleManage from '@views/rule-manage/routes'; // 处理规则
 import SceneResources from '@views/scene-config/routes'; // 场景配置
 import SceneRiskManage from '@views/scene-risk-manage/routes'; // 场景风险
+import SecChat from '@views/sec-chat/routes'; // SecChat
 import StatementManage from '@views/statement-manage/routes'; // 报表
 import StorageManage from '@views/storage-manage/routes'; // 数据存储
 import StrategyManage from '@views/strategy-manage/routes'; // 审计策略
@@ -49,7 +52,7 @@ import Tools from '@views/tools/routes'; // 工具广场
 
 import { changeConfirm } from '@utils/assist';
 
-import { setActiveSceneSelection } from '@/utils/assist/scene-system-params';
+import { isSystemScopedContextQuery, setActiveSceneSelection } from '@/utils/assist/scene-system-params';
 
 
 let lastRouterHrefCache = '/';
@@ -87,6 +90,44 @@ const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
     { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
     { paths: ['/statement-manage', '/tools', '/platform'], redirect: '404' },
   ],
+};
+
+/**
+ * 选择器里没有可使用场景、也没有系统权限时，
+ * 工具广场、日志检索、报表带具体场景才去申请页。
+ */
+const SCENE_APPLY_PATHS = ['/tools', '/analysis-manage', '/statement-manage'];
+
+const firstQueryValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value[0] ? String(value[0]) : '';
+  }
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+  return String(value);
+};
+
+const isIntegerSceneId = (value: string) => /^[1-9]\d*$/.test(value);
+
+/**
+ * 申请页只接受整数场景 ID。
+ * scope_type=system 时 scene_id / scope_id 都是系统 ID，不能拿去申请场景。
+ */
+const getConcreteSceneId = (to: RouteLocationNormalized) => {
+  const scopeType = firstQueryValue(to.query.scope_type);
+  if (scopeType === 'system' || scopeType === 'cross_system' || scopeType === 'cross_scene') {
+    return '';
+  }
+  const sceneId = firstQueryValue(to.query.scene_id);
+  if (isIntegerSceneId(sceneId)) {
+    return sceneId;
+  }
+  const scopeId = firstQueryValue(to.query.scope_id);
+  if ((scopeType === 'scene' || scopeType === '') && isIntegerSceneId(scopeId)) {
+    return scopeId;
+  }
+  return '';
 };
 
 /**
@@ -145,6 +186,11 @@ async function resolveSceneConfigSceneAccess(
   from: RouteLocationNormalized,
 ) {
   if (!isSceneConfigBusinessRoute(to)) {
+    return null;
+  }
+
+  // 系统范围的 scene_id 是系统 id。不在这里鉴权，也不改写全局选中，交给选择器按原兜底处理。
+  if (isSystemScopedContextQuery(to.query)) {
     return null;
   }
 
@@ -243,6 +289,8 @@ export default (config: ConfigModel) => {
         PlatformManage,
         SceneResources,
         SceneRiskManage,
+        SecChat,
+        ConfirmManage,
       ],
     },
     {
@@ -283,6 +331,7 @@ export default (config: ConfigModel) => {
       // 从 systemLanding页 发起的子路由跳转应放行（如接入新系统、选择已有系统）
       const fromSystemLanding = (from.name as string) === 'systemLandingPage';
       const toChildOfNewSystem = to.path.startsWith('/nwe-system-manage');
+      const concreteSceneId = getConcreteSceneId(to);
 
       if (
         (hasSceneRole && ['/statement-manage', '/tools'].some(p => to.path.startsWith(p)))
@@ -290,6 +339,21 @@ export default (config: ConfigModel) => {
         || (fromSystemLanding && toChildOfNewSystem)
       ) {
         // 放行，继续后续检查
+      } else if (
+        userRole.includes('risk_handler')
+        && !hasSceneRole
+        && !hasSystemOrSaasAdmin
+        && concreteSceneId
+        && SCENE_APPLY_PATHS.some(path => to.path.startsWith(path))
+      ) {
+        next({
+          name: 'permissionsPage',
+          query: {
+            role: 'user',
+            scene_id: concreteSceneId,
+          },
+        });
+        return;
       } else {
         // 基于角色策略表进行访问控制
         // saas_admin / scene_admin 角色不受 userLandingPage 重定向限制
@@ -310,11 +374,18 @@ export default (config: ConfigModel) => {
       }
 
       // 检查权限：如果路由需要权限且用户没有权限，则重定向到首页
+      // 平台管理（manage_platform）走 my_role_permissions，其余仍走 IAM check
       if (to.meta?.permission) {
         const permission = to.meta.permission as string;
-        const hasPermission = await IamManageService.checkAny({ action_ids: permission });
-
-        if (!hasPermission[permission]) {
+        let allowed = false;
+        if (permission === 'manage_platform') {
+          const rolePermission = await RootManageService.getUserPermission();
+          allowed = Boolean(rolePermission.manage_platform);
+        } else {
+          const hasPermission = await IamManageService.checkAny({ action_ids: permission });
+          allowed = Boolean(hasPermission[permission]);
+        }
+        if (!allowed) {
           next({ name: 'handleManage' });
           return;
         }

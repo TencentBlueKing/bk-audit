@@ -38,10 +38,11 @@ from core.exceptions import ValidationError
 from core.models import get_request_username
 from core.serializers import OrderBaseSerializer
 from core.sql.constants import FieldType
-from core.utils.time import format_date_string, parse_datetime
+from core.utils.time import format_date_string
 from services.web.common.serializers import ScopeQuerySerializer
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
+from services.web.query.ai_assistant.constants import AI_ASSISTANT_EXPORT_SOURCE
 from services.web.query.constants import (
     COLLECT_SEARCH_CONFIG,
     DATE_FORMAT,
@@ -64,7 +65,9 @@ from services.web.query.constants import (
 )
 from services.web.query.models import LogExportTask
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
+from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
+from services.web.query.utils.time_range import parse_log_time
 from services.web.risk.constants import (
     ES_SEARCH_ORIGIN_FIELDS,
     IGNORE_SEARCH_ALL_FILTER_FIELDS,
@@ -259,7 +262,11 @@ class QuerySearchFieldSerializer(serializers.Serializer):
         label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None, allow_null=True
     )
     keys = serializers.ListField(
-        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+        label=gettext_lazy("嵌套字段 key"),
+        child=serializers.CharField(trim_whitespace=False),
+        default=list,
+        allow_empty=True,
+        help_text=gettext_lazy("对象子键按原文逐段传入；不支持空白、控制字符、双引号、反斜杠和星号。"),
     )
 
 
@@ -288,10 +295,17 @@ class QuerySearchConditionSerializer(serializers.Serializer):
         # 判断字段是否支持嵌套 keys
         if not field_config.field.is_json:
             attrs["field"]["keys"] = []
+        else:
+            try:
+                validate_log_json_keys(attrs["field"]["keys"])
+            except ValueError as err:
+                raise ValidationError(message=gettext("字段子键不支持空白、控制字符、双引号、反斜杠或星号")) from err
         # 判断操作是否允许
         allow = COLLECT_SEARCH_CONFIG.judge_operator(field_name, attrs["field"]["keys"], attrs["operator"])
         if not allow:
             raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field"], attrs["operator"]))
+        if attrs["operator"] == QueryConditionOperator.BETWEEN.value and len(attrs["filters"]) != 2:
+            raise ValidationError(message=gettext("BETWEEN 操作符必须提供两个筛选值"))
         return attrs
 
 
@@ -344,14 +358,16 @@ class CollectorSearchAllReqSerializer(CollectorSearchReqBaseSerializer):
     日志查询(All)请求序列化器
     """
 
+    query_timeout = serializers.FloatField(required=False, min_value=0.001, max_value=300, write_only=True)
+
     @classmethod
     def _build_time_conditions(cls, validated_request_data: dict) -> List[dict]:
         """
         时间分区条件
         """
 
-        start_time = parse_datetime(validated_request_data["start_time"])
-        end_time = parse_datetime(validated_request_data["end_time"])
+        start_time = parse_log_time(str(validated_request_data["start_time"]))
+        end_time = parse_log_time(str(validated_request_data["end_time"]))
         start_ms = int(start_time.timestamp() * 1000)
         end_ms = int(end_time.timestamp() * 1000)
         return [
@@ -533,12 +549,35 @@ class LogExportField(serializers.Serializer):
 class LogExportConfigSerializer(serializers.Serializer):
     """
     日志导出配置序列化器
+
+    flatten_extension / extension_keys / source 为 AI 助手导出的可选扩展键（required=False
+    且无 default：原检索页不传时 validated_data 不含这些键，落库形态与历史完全一致，
+    行为零变化）。
     """
 
     field_scope = serializers.ChoiceField(
         label=gettext_lazy("字段范围"), choices=LogExportFieldScope.choices, help_text=gettext_lazy("指定字段时，字段列表不能为空")
     )
     fields = serializers.ListField(label=gettext_lazy("字段列表"), child=LogExportField(), default=list)
+    # 扩展字段平铺开关：true 时把 extend_data 内子键平铺为单独列（AI 助手导出）
+    flatten_extension = serializers.BooleanField(
+        label=gettext_lazy("扩展字段平铺"), required=False, help_text=gettext_lazy("true 时把 extend_data 子键平铺为单独列")
+    )
+    # 平铺子键清单（AI 助手全量导出场景由调用方传入，原检索页不传）
+    extension_keys = serializers.ListField(
+        label=gettext_lazy("扩展字段子键"),
+        child=serializers.CharField(),
+        required=False,
+        help_text=gettext_lazy("扩展字段平铺的子键清单，仅单层"),
+    )
+    # AI 导出来源标记（后端强制注入，前端无需传递）：运行时导出器据此启用 AI 专属
+    # 样式——单行表头 + 字段保序 + 列宽自适应；非 AI 值一律按非 AI 处理
+    source = serializers.ChoiceField(
+        label=gettext_lazy("导出来源"),
+        choices=[(AI_ASSISTANT_EXPORT_SOURCE, AI_ASSISTANT_EXPORT_SOURCE)],
+        required=False,
+        help_text=gettext_lazy("AI 助手导出来源标记，仅 ai_assistant"),
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -550,6 +589,16 @@ class LogExportConfigSerializer(serializers.Serializer):
         return attrs
 
 
+class LogExportQueryReqSerializer(
+    CollectorSearchReqPermissionCheckMixIn,
+    CollectorSearchReqBaseSerializer,
+    QueryScopeQuerySerializer,
+):
+    """创建导出时注入授权系统；内部时间条件仍由后台取数入口添加。"""
+
+    pass
+
+
 class LogExportReqSerializer(serializers.Serializer):
     """
     日志导出请求序列化器
@@ -557,7 +606,7 @@ class LogExportReqSerializer(serializers.Serializer):
 
     namespace = serializers.CharField()
     name = serializers.CharField(label=gettext_lazy("任务名称"), max_length=64, default="", allow_blank=True)
-    query_params = CollectorSearchReqBaseSerializer(label=gettext_lazy("检索参数"))
+    query_params = LogExportQueryReqSerializer(label=gettext_lazy("检索参数"))
     export_config = LogExportConfigSerializer(label=gettext_lazy("导出参数"))
     search_params_url = serializers.CharField(label=gettext_lazy("查询参数URL"), default="", allow_blank=True)
 
@@ -565,6 +614,12 @@ class LogExportReqSerializer(serializers.Serializer):
         if isinstance(data, dict) and data.get("query_params"):
             data["query_params"]["namespace"] = data.get("namespace")
         return super().run_validation(data)
+
+
+class AILogExportReqSerializer(LogExportReqSerializer):
+    """供已复检目标系统权限的 AI 内部入口使用，不作为 HTTP 创建协议。"""
+
+    query_params = CollectorSearchReqBaseSerializer(label=gettext_lazy("检索参数"))
 
 
 class LogExportRespSerializer(serializers.ModelSerializer):

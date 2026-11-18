@@ -36,12 +36,13 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
       required>
       <node-select
+        :key="tableFieldsSign"
         :aggregate-list="aggregateList"
         :condition="condition"
-        :conditions="conditions"
         :config-data="localTableFields"
         :config-type="configType"
-        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
+        :loading="tableFieldsLoading"
+        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition, index)" />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -77,11 +78,11 @@
       :rules="[
         { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: any) => handleValidate(value) },
       ]">
-      <!-- 日志表特有，dict字典下拉 -->
+      <!-- 日志表特有，dict字典下拉（action_id / resource_type_id 使用普通输入框） -->
       <bk-cascader
         v-if="dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id' &&
+          !isPlainTextValueField(condition.condition.field.raw_name) &&
           props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         class="consition-value"
@@ -98,7 +99,7 @@
 
       <!-- 日志表特有，人员选择器 -->
       <audit-user-selector-tenant
-        v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
+        v-else-if="condition.condition.field?.raw_name?.includes('username') && props.configType === 'EventLog'"
         allow-create
         :auto-focus="false"
         class="consition-value user-selector-value"
@@ -117,7 +118,8 @@
         :content-width="350"
         has-delete-icon
         :input-search="false"
-        :list="(condition.condition.field.raw_name !== 'action_id' && props.configType === 'EventLog') ?
+        :list="(!isPlainTextValueField(condition.condition.field.raw_name)
+          && props.configType === 'EventLog') ?
           dicts[condition.condition.field && condition.condition.field.raw_name] :
           []"
         :loading="fieldLoading"
@@ -134,18 +136,12 @@
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
-        v-if="condition.condition.field.display_name"
-        v-bk-tooltips="t('预览当前字段格式与最新值')"
-        class="view-icon"
-        type="view"
-        @click="dataStructurePreview(condition.condition.field)" />
-      <audit-icon
-        style="margin-right: 10px; cursor: pointer;"
+        class="expr-action-icon"
         type="add-fill"
         @click="handleAdd" />
       <audit-icon
         v-if="localConditions.conditions.length > 1"
-        style="cursor: pointer;"
+        class="expr-action-icon"
         type="reduce-fill"
         @click="() => handleDelete(index)" />
     </div>
@@ -176,6 +172,12 @@
 
   import { normalizeConditionValueForDisplay } from '@utils/assist/normalize-condition-filter';
   import { splitAndMerge } from '@utils/assist/split-and-merge';
+  import {
+    enrichFieldDisplayNames,
+    formatFieldDisplayLabel,
+    formatHitConditionFieldBase,
+    useRawNameAsFieldAlias,
+  } from '../../../../../../../utils/strategy-protocol';
 
   import nodeSelect from './tree.vue';
 
@@ -184,6 +186,7 @@
 
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
+    tableFieldsLoading?: boolean,
     expectedResult: Array<DatabaseTableFieldModel>,
     aggregateList: Array<Record<string, any>>,
     conditions: {
@@ -205,7 +208,6 @@
     (e: 'updateFieldItemList', conditionsIndex: number, value: Props['conditions']): void;
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
-    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
     (e: 'handleUpdateLocalConditions', conditionsIndex: number, value: any): void;
   }
   interface DataType{
@@ -214,7 +216,9 @@
     children?: Array<DataType>;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    tableFieldsLoading: false,
+  });
 
   const emits = defineEmits<Emits>();
 
@@ -233,6 +237,11 @@
   const localTableFields = ref<Array<DatabaseTableFieldModel>>([]);
 
   const tagInput = ['include', 'exclude'];
+  const PLAIN_TEXT_VALUE_FIELDS = ['action_id', 'resource_type_id'];
+
+  const isPlainTextValueField = (rawName?: string) => (
+    !!rawName && PLAIN_TEXT_VALUE_FIELDS.includes(rawName)
+  );
 
   type ConditionItem = Props['conditions']['conditions'][0];
 
@@ -323,10 +332,6 @@
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
 
-  const dataStructurePreview = (value: DatabaseTableFieldModel) => {
-    emits('show-structure-preview', value.table, value.display_name);
-  };
-
   useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
     manual: true,
@@ -350,7 +355,10 @@
     return value !== '' && value !== undefined && value !== null;
   };
 
-  const pasteFn = (value: string) => ([{ id: value, name: value }]);
+  const pasteFn = (value: string) => splitAndMerge([value]).map(item => ({
+    id: item,
+    name: item,
+  }));
 
   const handleAdd = () => {
     localConditions.value.conditions.push({
@@ -462,7 +470,7 @@
       dicts.value[item.condition.field.raw_name] = [];
     });
     Object.keys(dicts.value).forEach((key) => {
-      if (key) {
+      if (key && !isPlainTextValueField(key)) {
         fetchStrategyFieldValue({
           field_name: key,
         }).then((data) => {
@@ -484,30 +492,51 @@
     });
   };
 
-  // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
-    // 检查是否已经选择了预期结果中的字段
-    const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
-
-    // 根据是否选择了预期结果字段来更新字段列表
-    localTableFields.value = hasSelectedExpectedResultField
-      ? [...filteredExpectedResult]
-      : [...tableFields, ...filteredExpectedResult];
-
-    localTableFields.value = localTableFields.value.map(item => ({ ...item }));
+  // 命中条件下拉：有预期结果时只用预期结果字段，否则回退数据源全部字段
+  const updateTableFields = (
+    _conditions: Props['conditions']['conditions'],
+    tableFields: Array<DatabaseTableFieldModel>,
+    expectedResult: Array<DatabaseTableFieldModel>,
+  ) => {
+    const expected = (expectedResult || []).filter(item => item?.raw_name || item?.display_name);
+    const source = expected.length ? expected : (tableFields || []);
+    const enriched = enrichFieldDisplayNames(
+      source.map(item => ({ ...item })),
+      tableFields || [],
+    );
+    // 未配置预期结果时不使用字段别名
+    localTableFields.value = expected.length ? enriched : useRawNameAsFieldAlias(enriched);
   };
+
+  const tableFieldsSign = computed(() => localTableFields.value
+    .map(item => `${item.raw_name || ''}:${item.aggregate || ''}`)
+    .join('|'));
   // 返回值
-  const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
+  const onHandleNodeSelectedValue = (
+    node: Record<string, any>,
+    val: string,
+    condition: Record<string, any>,
+    index: number,
+  ) => {
     // eslint-disable-next-line no-param-reassign
     condition.condition.field = { ...node };
-    // eslint-disable-next-line no-param-reassign
-    condition.condition.field.display_name = val;
+    // 表单校验用 display_name，不带 [计数] 前缀，避免被当成数组；聚合仍带 _COUNT
+    if (val && ('self_name' in node)) {
+      // eslint-disable-next-line no-param-reassign
+      condition.condition.field.display_name = val;
+    } else {
+      // eslint-disable-next-line no-param-reassign
+      condition.condition.field.display_name = formatHitConditionFieldBase(node)
+        || formatFieldDisplayLabel(node.display_name, node.raw_name);
+    }
     if ('fieldTypeValueAr' in node) {
       // eslint-disable-next-line no-param-reassign
       condition.condition.field.keys = node.fieldTypeValueAr;
     }
     emits('handleUpdateLocalConditions', props.conditionsIndex, localConditions.value);
+    nextTick(() => {
+      strategyStep1FormRef.value?.clearValidate?.(`configs.where.conditions[${props.conditionsIndex}].conditions[${index}].condition.field.display_name`);
+    });
   };
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
@@ -518,10 +547,19 @@
   });
 
   watch(() => props.conditions, (data) => {
-    localConditions.value = JSON.parse(JSON.stringify(data));
-    localConditions.value.conditions = localConditions.value.conditions.map((cond: any) => ({
+    if (!data) return;
+    try {
+      localConditions.value = JSON.parse(JSON.stringify(data));
+    } catch {
+      localConditions.value = {
+        connector: data.connector || 'and',
+        index: data.index ?? 0,
+        conditions: Array.isArray(data.conditions) ? data.conditions.map(item => ({ ...item })) : [],
+      };
+    }
+    localConditions.value.conditions = (localConditions.value.conditions || []).map((cond: any) => ({
       ...cond,
-      condition: normalizeConditionValueForDisplay(cond.condition),
+      condition: normalizeConditionValueForDisplay(cond?.condition),
     }));
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
@@ -544,6 +582,7 @@
   display: grid;
   grid-template-columns: 300px 180px 1fr minmax(65px, auto);
   gap: 8px;
+  align-items: center;
 
   :deep(.bk-form-error) {
     display: none;
@@ -592,13 +631,19 @@
   }
 
   .icon-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    height: 32px;
     font-size: 14px;
+    line-height: 1;
     color: #c4c6cc;
 
-    .view-icon {
-      margin-right: 10px;
-      color: #3a84ff;
-      cursor: pointer
+    .expr-action-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
     }
   }
 }

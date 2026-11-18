@@ -20,11 +20,13 @@
     class="nl-search-input">
     <div
       class="nl-input-wrapper"
+      :class="{ 'is-disabled': loading }"
       @click="handleWrapperClick">
       <input
         ref="inputRef"
         v-model="inputValue"
         class="nl-input-inner"
+        :disabled="loading"
         :placeholder="t('支持自然语言输入，如：张三最近一周的高风险单，或直接在下方添加搜索条件')"
         type="text"
         @compositionend="isComposing = false"
@@ -32,11 +34,16 @@
         @focus="handleFocus"
         @keydown.enter="handleSubmit">
       <div
-        v-if="inputValue"
+        v-if="inputValue && !loading"
         class="nl-input-clear"
         @click.stop="handleClear">
         <audit-icon type="close-circle-fill" />
       </div>
+      <span
+        v-if="loading"
+        class="nl-input-loading-text">
+        {{ t('AI 正在解析中，请稍候…') }}
+      </span>
       <div
         class="nl-input-send-btn"
         :class="{ 'is-loading': loading, 'is-active': !!inputValue.trim() }"
@@ -125,6 +132,7 @@
   interface Props {
     historyRefreshKey?: number;
     loading?: boolean;
+    riskViewType?: string;
   }
 
   interface Emits {
@@ -134,6 +142,7 @@
   const props = withDefaults(defineProps<Props>(), {
     historyRefreshKey: 0,
     loading: false,
+    riskViewType: 'all',
   });
   const emit = defineEmits<Emits>();
 
@@ -167,7 +176,14 @@
       num_pages: 1,
       total: 0,
     },
+    // 本项目 useRequest：manual=true 会在 onMounted 用 defaultParams 自动请求
     manual: true,
+    defaultParams: {
+      page: 1,
+      page_size: 6,
+      status: 'success',
+      risk_view_type: props.riskViewType || 'all',
+    },
     onSuccess(data) {
       historyList.value = (data?.results || []).slice(0, 6);
       hasLoadedHistory.value = true;
@@ -178,6 +194,7 @@
     page: 1,
     page_size: 6,
     status: 'success',
+    risk_view_type: props.riskViewType || 'all',
   });
 
   const getPanelItemKey = (type: 'recommendation' | 'history', index: number) => `${type}-${index}`;
@@ -201,6 +218,9 @@
   };
 
   const openPanel = () => {
+    if (props.loading) {
+      return;
+    }
     isPanelVisible.value = true;
     if (!hasLoadedHistory.value) {
       loadHistory();
@@ -216,6 +236,7 @@
   };
 
   const handleWrapperClick = () => {
+    if (props.loading) return;
     inputRef.value?.focus();
     openPanel();
   };
@@ -248,6 +269,20 @@
 
   watch(() => props.historyRefreshKey, () => {
     loadHistory();
+  });
+
+  watch(() => props.riskViewType, () => {
+    hasLoadedHistory.value = false;
+    if (isPanelVisible.value) {
+      loadHistory();
+    }
+  });
+
+  // 列表/智能搜索 loading 时关闭示例框，避免被表格 loading 遮罩盖住
+  watch(() => props.loading, (loading) => {
+    if (loading) {
+      closePanel();
+    }
   });
 
   watch(historyList, () => {
@@ -306,9 +341,13 @@
     100% { transform: rotate(360deg); }
   }
 
+  @keyframes nl-border-flow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
   .nl-search-input {
     position: relative;
-    z-index: 110;
+    z-index: 510;
     padding: 16px 24px 10px;
 
     .nl-input-wrapper {
@@ -345,6 +384,23 @@
         background: #fff;
         box-shadow: 0 8px 20px 0 rgb(61 72 93 / 10%);
       }
+
+      &.is-disabled {
+        cursor: default;
+        background: #fcfdff;
+        box-shadow: 0 6px 18px 0 rgb(72 139 255 / 14%);
+
+        &::before {
+          background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
+          background-size: 200% 100%;
+          animation: nl-border-flow 2s linear infinite;
+        }
+
+        .nl-input-inner {
+          color: #979ba5;
+          cursor: default;
+        }
+      }
     }
 
     .nl-input-inner {
@@ -373,6 +429,18 @@
       &:hover {
         color: #979ba5;
       }
+    }
+
+    .nl-input-loading-text {
+      margin-right: 10px;
+      font-size: 12px;
+      color: transparent;
+      white-space: nowrap;
+      background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
+      background-clip: text;
+      background-size: 200% 100%;
+      flex-shrink: 0;
+      animation: nl-border-flow 2s linear infinite;
     }
 
     .nl-input-send-btn {
@@ -408,7 +476,7 @@
       position: absolute;
       top: 68px;
       left: 24px;
-      z-index: 120;
+      z-index: 520;
       width: min(790px, calc(100% - 48px));
       overflow: hidden;
       background: #fff;

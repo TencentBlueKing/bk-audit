@@ -51,12 +51,15 @@ export default {
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskTags,
-    defaultParams: {
-      risk_view_type: 'all',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
-      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
-      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    get defaultParams() {
+      const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();
+      return {
+        risk_view_type: 'all',
+        scope_id: scopeId,
+        scope_type: scopeType,
+        start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      };
     },
   },
   datetime: {
@@ -76,6 +79,21 @@ export default {
     service: RiskManageService.fetchRiskStatusCommon,
     filterList: ['new'],
   },
+  risk_label: {
+    label: '风险标记',
+    type: 'select',
+    required: false,
+    service: () => Promise.resolve([
+      {
+        id: 'normal',
+        name: '正常',
+      },
+      {
+        id: 'misreport',
+        name: '误报',
+      },
+    ]),
+  },
   current_operator: {
     label: '当前处理人',
     type: 'user-selector',
@@ -85,6 +103,27 @@ export default {
     label: '风险描述',
     type: 'string',
     required: false,
+  },
+  scene_id: {
+    label: '所属场景',
+    type: 'select',
+    required: false,
+    service: RiskManageService.fetchRiskScenes,
+    get defaultParams() {
+      const params: Record<string, string> = {
+        risk_view_type: 'all',
+        start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      };
+      const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();
+      // 顶部选中单个场景时，下拉只查该场景；所有场景不附加范围
+      if (scopeType === 'scene' && scopeId) {
+        params.scope_id = scopeId;
+        params.scope_type = scopeType;
+      }
+      return params;
+    },
+    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
   },
   risk_level: {
     label: '风险等级',
@@ -117,6 +156,26 @@ export default {
       {
         id: 'false',
         name: '未生成',
+      },
+    ]),
+  },
+  bksec_push_status: {
+    label: 'BKSEC工单',
+    type: 'select',
+    required: false,
+    multiple: false,
+    service: () => Promise.resolve([
+      {
+        id: 'not_pushed',
+        name: '未推送',
+      },
+      {
+        id: 'success',
+        name: '推送成功',
+      },
+      {
+        id: 'failed',
+        name: '推送失败',
       },
     ]),
   },

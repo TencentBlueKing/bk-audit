@@ -1,0 +1,2673 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+    10|  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <div
+    class="retrieval-result-wrap"
+    :class="{ 'is-embedded': embedded }">
+    <div
+      class="retrieval-result-card"
+      :class="{ 'is-embedded': embedded }">
+      <!-- 已识别筛选条件：自然语言检索气泡展示，条件筛选内嵌结果不展示 -->
+      <div
+        v-if="!embedded"
+        class="condition-section">
+        <selected-systems-panel
+          v-if="systems.length"
+          action-text="重新选择"
+          class="result-systems-section"
+          :systems="systems"
+          @action="$emit('reselectSystem')" />
+
+        <div class="condition-header">
+          <div class="condition-header-main">
+            <span>{{ conditionHeaderText }}</span>
+          </div>
+        </div>
+
+        <!-- 可编辑：复用条件检索组件；PROCESSING / 提交中禁用交互，避免并发编辑 -->
+        <div
+          v-if="conditionEditable"
+          class="condition-editor"
+          :class="{ 'is-editing-locked': !canMutateCondition }">
+          <condition-tags
+            ref="conditionTagsRef"
+            compact-select-popover
+            :condition-list="[]"
+            :event-field-items="[]"
+            :field-config="fieldConfig"
+            :search-model="searchModel"
+            @clear-all="handleClearConditions"
+            @remove="handleRemoveCondition"
+            @update="handleUpdateCondition">
+            <add-condition
+              accent
+              :event-fields="[]"
+              :field-config="fieldConfig"
+              :primary-field-names="commonFieldKeys"
+              primary-tab-label="通用字段"
+              :secondary-field-names="extendFieldKeys"
+              secondary-source="config"
+              secondary-tab-label="拓展字段"
+              :selected-event-field-ids="[]"
+              :selected-fields="selectedFieldNames"
+              @add-field="handleAddField" />
+          </condition-tags>
+
+          <div class="condition-actions">
+            <bk-button
+              class="resubmit-btn"
+              :disabled="!canMutateCondition"
+              :loading="bodyLoading"
+              theme="primary"
+              @click="handleResubmit">
+              重新检索
+            </bk-button>
+          </div>
+        </div>
+
+        <!-- 兜底只读展示（无 rawCondition 或字段上下文缺失） -->
+        <div
+          v-else
+          class="condition-tags">
+          <span
+            v-for="(item, index) in visibleConditions"
+            :key="`${item.field}-${index}`"
+            class="condition-tag">
+            <span class="tag-label">{{ item.field }}：</span>
+            <span class="tag-value">{{ item.value }}</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- 二次检索等待：覆盖过程信息 / 空态 / 表格，条件区保持可见 -->
+      <bk-loading
+        class="result-body-loading"
+        :loading="bodyLoading">
+        <div class="result-body">
+          <!-- 检索失败：对齐条件检索失败态，条件区保持可改后重新检索 -->
+          <div
+            v-if="isFailed"
+            class="status-panel is-failed">
+            <img
+              alt=""
+              class="failed-icon"
+              :src="errorSearchIcon">
+            <div class="status-title">
+              检索失败
+            </div>
+            <div class="status-desc">
+              {{ errorMessage || '请检查网络是否通畅或联系管理员' }}
+            </div>
+          </div>
+
+          <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
+          <div
+            v-else-if="isEmpty"
+            class="status-panel is-empty">
+            <img
+              alt=""
+              class="empty-icon"
+              :src="emptySearchIcon">
+            <div class="status-title">
+              检索结果为空
+            </div>
+            <div class="status-desc">
+              可以尝试修改或减少检索条件
+            </div>
+          </div>
+
+          <template v-else>
+            <!-- 结果摘要 -->
+            <div class="summary-section">
+              <div class="summary-main">
+                <h3 class="summary-title">
+                  {{ displayResult.title }}
+                </h3>
+                <p class="summary-desc">
+                  <template v-if="displayResult.showPreviewHint">
+                    共命中
+                    <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
+                    条日志，数据量较大，已展示前
+                    <span class="summary-num">{{ displayResult.previewCount }}</span>
+                    条预览
+                  </template>
+                  <template v-else>
+                    共命中
+                    <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
+                    条日志
+                  </template>
+                </p>
+              </div>
+              <div class="summary-actions">
+                <bk-button
+                  v-if="isDirectExport"
+                  class="export-btn"
+                  :disabled="!canExport || resubmitLoading"
+                  :loading="exporting"
+                  @click="handleExport('preview')">
+                  <audit-icon
+                    class="export-icon"
+                    type="download" />
+                  {{ exporting ? '导出中…' : '导出' }}
+                </bk-button>
+                <bk-dropdown
+                  v-else
+                  class="export-dropdown"
+                  :disabled="!canExport || exporting || resubmitLoading"
+                  placement="bottom-start"
+                  trigger="click">
+                  <bk-button
+                    class="export-btn"
+                    :disabled="!canExport"
+                    :loading="exporting">
+                    <audit-icon
+                      class="export-icon"
+                      type="download" />
+                    {{ exporting ? '导出中…' : '导出' }}
+                  </bk-button>
+                  <template #content>
+                    <bk-dropdown-menu>
+                      <bk-dropdown-item
+                        :disabled="exporting"
+                        @click="handleExport('preview')">
+                        导出前 {{ displayResult.previewCount }} 条数据
+                      </bk-dropdown-item>
+                      <bk-dropdown-item
+                        :disabled="exporting"
+                        @click="handleExport('all')">
+                        导出全量数据
+                      </bk-dropdown-item>
+                    </bk-dropdown-menu>
+                  </template>
+                </bk-dropdown>
+              </div>
+            </div>
+
+            <!-- 数据预览表 -->
+            <div class="table-section">
+              <div class="table-scroll">
+                <table
+                  class="result-table"
+                  :style="{ minWidth: tableMinWidth }">
+                  <thead>
+                    <tr>
+                      <th
+                        v-for="col in displayResult.columns"
+                        :key="col.rawName"
+                        :style="getColumnStyle(col)">
+                        <span
+                          v-if="isJsonPreviewTipColumn(col)"
+                          v-bk-tooltips="{
+                            content: '点击单元格可查看或复制完整数据',
+                            placement: 'top',
+                          }"
+                          class="json-col-header">
+                          {{ col.displayName }}
+                        </span>
+                        <show-tooltips-text
+                          v-else
+                          class="cell-tip"
+                          :data="col.displayName"
+                          :max-width="360" />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(row, index) in pageRows"
+                      :key="`row-${index}`">
+                      <td
+                        v-for="col in displayResult.columns"
+                        :key="`${col.rawName}-${index}`"
+                        :class="{ 'result-code-cell': isResultCodeColumn(col) }"
+                        :style="getColumnStyle(col)">
+                        <render-result
+                          v-if="isResultCodeColumn(col) && hasResultCodeValue(row)"
+                          :data="row" />
+                        <json-field-preview
+                          v-else
+                          class="cell-tip"
+                          :text="formatCell(row[col.rawName])"
+                          :tooltip-max-width="480"
+                          :value="row[col.rawName]" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-pagination">
+                <bk-pagination
+                  v-model="currentPage"
+                  align="right"
+                  :count="displayResult.rows.length"
+                  :layout="['total', 'limit', 'list']"
+                  :limit="pageSize"
+                  :limit-list="[10, 20, 50]"
+                  location="right"
+                  size="small"
+                  @change="handlePageChange"
+                  @limit-change="handleLimitChange" />
+              </div>
+            </div>
+
+            <!-- 后续操作 -->
+            <div class="action-section">
+              <span
+                v-bk-tooltips="{
+                  content: t('正在分析中...'),
+                  disabled: !analyzeActionDisabled,
+                }"
+                class="action-btn-wrap">
+                <bk-button
+                  class="analyze-btn"
+                  :disabled="analyzeActionDisabled"
+                  outline
+                  @click="handleAnalyze">
+                  <img
+                    alt=""
+                    class="ai-agent-ai"
+                    height="14"
+                    :src="aiSvg"
+                    width="24">
+                  {{ t('智能分析') }}
+                </bk-button>
+              </span>
+              <span
+                v-bk-tooltips="{
+                  content: t('正在统计中...'),
+                  disabled: !statisticsActionDisabled,
+                }"
+                class="action-btn-wrap">
+                <bk-button
+                  class="statistics-btn"
+                  :disabled="statisticsActionDisabled"
+                  outline
+                  @click="handleStatistics">
+                  <audit-icon
+                    class="action-icon"
+                    type="shujutongji" />
+                  {{ t('数据统计') }}
+                </bk-button>
+              </span>
+            </div>
+
+            <!-- 报告生成状态：生成中无灰底；成功/失败各自一条灰底 -->
+            <div
+              v-if="reportItems.length"
+              class="report-status-section">
+              <div
+                v-for="item in visibleReportItems"
+                :key="item.id"
+                class="report-status-row"
+                :class="`is-${item.status}`">
+                <audit-icon
+                  v-if="item.status === 'loading'"
+                  class="status-icon is-loading"
+                  type="loading" />
+                <audit-icon
+                  v-else-if="item.status === 'failed'"
+                  class="status-icon is-failed"
+                  type="delete-fill" />
+                <audit-icon
+                  v-else
+                  class="status-icon is-success"
+                  type="completed" />
+                <span class="status-main">
+                  <span
+                    v-bk-tooltips="{
+                      content: item.errorMessage || '',
+                      disabled: item.status !== 'failed' || !item.errorMessage,
+                    }"
+                    class="status-text"
+                    :class="{ 'is-error-tip': item.status === 'failed' && Boolean(item.errorMessage) }">
+                    {{ reportStatusText(item) }}
+                  </span>
+                  <bk-popover
+                    v-if="item.status !== 'loading' && reportModeKind(item)"
+                    ext-cls="report-mode-tip-popover"
+                    :is-show="isReportModeTipOpen(item)"
+                    :max-width="320"
+                    placement="top"
+                    theme="dark"
+                    trigger="manual">
+                    <span
+                      class="report-mode-tag-wrap"
+                      @mouseenter="showReportModeTip(item)"
+                      @mouseleave="scheduleHideReportModeTip(item)">
+                      <bk-tag
+                        class="report-mode-tag"
+                        :class="isReportModeYellow(item) ? 'is-field' : 'is-nl'"
+                        size="small"
+                        :theme="isReportModeYellow(item) ? 'warning' : 'info'">
+                        {{ reportModeLabel(item) }}
+                      </bk-tag>
+                    </span>
+                    <template #content>
+                      <div
+                        class="report-mode-tip"
+                        @mouseenter="keepReportModeTip(item)"
+                        @mouseleave="scheduleHideReportModeTip(item)">
+                        <div class="report-mode-tip-text">{{ item.modeTip }}</div>
+                        <button
+                          class="report-mode-tip-copy"
+                          title="复制"
+                          type="button"
+                          @click="copyReportModeTip(item)">
+                          <audit-icon type="copy" />
+                        </button>
+                      </div>
+                    </template>
+                  </bk-popover>
+                </span>
+                <button
+                  v-if="item.status === 'failed'"
+                  class="view-report-btn"
+                  :disabled="item.retrying"
+                  type="button"
+                  @click="handleRetryReport(item)">
+                  <audit-icon
+                    class="view-icon"
+                    :class="{ 'is-loading': item.retrying }"
+                    type="refresh" />
+                  {{ item.type === 'statistics' ? t('重新统计') : t('重新分析') }}
+                </button>
+                <template v-else-if="item.status === 'done'">
+                  <span class="status-time">{{ item.createdAt }}</span>
+                  <button
+                    class="view-report-btn"
+                    type="button"
+                    @click="openReport(item)">
+                    <audit-icon
+                      class="view-icon"
+                      type="report" />
+                    {{ t('查看报告') }}
+                  </button>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </bk-loading>
+
+      <!-- 反馈操作：本期先不做，后续再开放 -->
+      <div
+        v-if="showFeedbackActions"
+        class="feedback-row">
+        <button
+          class="feedback-btn"
+          title="复制"
+          type="button"
+          @click="handleCopy">
+          <audit-icon type="copy" />
+        </button>
+        <button
+          class="feedback-btn"
+          :class="{ 'is-active': feedback === 'up' }"
+          title="有用"
+          type="button"
+          @click="feedback = feedback === 'up' ? '' : 'up'">
+          <svg
+            class="feedback-svg"
+            fill="none"
+            height="16"
+            viewBox="0 0 16 16"
+            width="16">
+            <path
+              :d="thumbUpPath"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.2" />
+          </svg>
+        </button>
+        <button
+          class="feedback-btn"
+          :class="{ 'is-active': feedback === 'down' }"
+          title="无用"
+          type="button"
+          @click="feedback = feedback === 'down' ? '' : 'down'">
+          <svg
+            class="feedback-svg"
+            fill="none"
+            height="16"
+            viewBox="0 0 16 16"
+            width="16">
+            <path
+              :d="thumbDownPath"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.2" />
+          </svg>
+        </button>
+        <button
+          v-if="showRegenerate"
+          class="feedback-btn"
+          title="重新生成"
+          type="button"
+          @click="$emit('regenerate')">
+          <audit-icon type="refresh" />
+        </button>
+      </div>
+    </div>
+
+    <log-analyze-dialog
+      v-if="analyzeDialogShow"
+      v-model="analyzeDialogShow"
+      :conditions="displayResult.conditions"
+      :custom-prompt-preset="analyzeCustomPreset"
+      :focus-custom="analyzeFocusCustom"
+      :submitting="analyzeSubmitting"
+      :total-hit="displayResult.totalHit"
+      @select="handleAnalyzeSelect" />
+
+    <log-statistics-dialog
+      v-if="statisticsDialogShow"
+      v-model="statisticsDialogShow"
+      :condition="displayResult.rawCondition || null"
+      :custom-prompt-preset="statisticsCustomPreset"
+      :focus-custom="statisticsFocusCustom"
+      :submit-error="statisticsSubmitError"
+      :submitting="statisticsSubmitting"
+      @select="handleStatisticsSelect" />
+
+    <log-report-drawer
+      v-if="reportDrawerShow"
+      v-model:is-show="reportDrawerShow"
+      :conditions="displayResult.conditions"
+      entry="session"
+      :report="activeReport"
+      :systems="systemNames"
+      :total-hit="displayResult.totalHit"
+      @updated="handleReportUpdated" />
+
+    <log-statistics-drawer
+      v-if="statisticsDrawerShow"
+      v-model:is-show="statisticsDrawerShow"
+      :attachment-type="statisticsAttachmentType"
+      :created-at="statisticsCreatedAt"
+      :error-message="statisticsErrorMessage"
+      :output-data="statisticsOutputData"
+      :regenerating="statisticsRegenerating"
+      :status="statisticsStatus"
+      @regenerate="handleStatisticsRegenerate" />
+  </div>
+</template>
+
+<script lang="ts" setup>
+  import dayjs from 'dayjs';
+  import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import AiAssistantManageService from '@service/ai-assistant-manage';
+
+  import { attachmentMarkdown } from '@model/ai-assistant/attachment';
+  import type {
+    AiAttachment,
+    AiAttachmentListItem,
+    AiAttachmentOutputData,
+    AiAttachmentStatus,
+    AiAttachmentType,
+    AiCreateAttachmentParams,
+  } from '@model/ai-assistant/types';
+
+  import useMessage from '@hooks/use-message';
+
+  import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
+
+  import AddCondition from '@views/risk-manage/list/components/nl-search-box/components/add-condition.vue';
+  import ConditionTags from '@views/risk-manage/list/components/nl-search-box/components/condition-tags.vue';
+  import RenderResult from '@views/analysis-manage/list/components/search-result-table/components/render-field/result.vue';
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
+  import aiSvg from '@images/ai.svg';
+  import emptySearchIcon from '@images/empty-search.svg?inline';
+  import errorSearchIcon from '@images/error-search.svg';
+
+  import { useSecChatStore } from '../../composables/use-sec-chat-store';
+  import type { AiUiMessageStatus, RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
+  import { followAttachment, type FollowAttachmentHandle } from '../../utils/follow-attachment';
+  import { messageAttachmentListParams } from '../../utils/report-session-count';
+  import {
+    buildAiSearchCondition,
+    appendSearchModelField,
+    createConditionFieldConfigFromSystemFields,
+    createDefaultDatetime,
+    createDefaultDatetimeOrigin,
+    ensureConditionFieldsFromAiSearch,
+    getConditionDefaultValue,
+    getPrimaryFieldNames,
+    getSecondaryFieldNames,
+    parseAiSearchConditionToSearchModel,
+  } from '../config/condition-fields';
+  import {
+    exportLogSearchFull,
+    exportLogSearchPreview,
+    PREVIEW_EXPORT_LIMIT,
+  } from '../utils/export-log-search';
+  import { resolveAnalyzeSubmit } from '../utils/build-analyze-retry-input';
+  import { resolveStatisticsSubmit } from '../utils/build-statistics-retry-input';
+  import { isFieldStatisticsType, isStatisticsAttachmentType } from '../utils/map-statistics-output';
+  import { formatStatisticsInputError } from '../utils/statistics-input-error';
+  import JsonFieldPreview from './json-field-preview.vue';
+  import LogAnalyzeDialog from './log-analyze-dialog.vue';
+  import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
+  import LogStatisticsDialog, { type StatisticsSelectPayload } from './log-statistics-dialog.vue';
+  import LogStatisticsDrawer from './log-statistics-drawer.vue';
+  import SelectedSystemsPanel from './selected-systems-panel.vue';
+
+  import { isRelativeDatetimeOrigin, syncDatetimeFromOrigin } from '@/utils/sync-datetime-from-url';
+
+  const props = withDefaults(defineProps<{
+    result: RetrievalResultPayload;
+    /** LOG_SEARCH 成功消息 uid，导出接口必填 */
+    messageUid?: string;
+    /** 消息后端状态；二次检索 PROCESSING 时由卡内 loading 承接 */
+    apiStatus?: AiUiMessageStatus;
+    /** 任务失败文案（apiStatus=FAILED） */
+    errorMessage?: string;
+    embedded?: boolean;
+    /** 是否展示「重新生成」；已有派生消息的意图应隐藏 */
+    showRegenerate?: boolean;
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
+    systems?: SelectedSystem[];
+  }>(), {
+    messageUid: '',
+    apiStatus: undefined,
+    errorMessage: '',
+    embedded: false,
+    showRegenerate: true,
+    standardFields: () => [],
+    extensionFields: () => [],
+    systems: () => [],
+  });
+
+  const emit = defineEmits<{
+    export: [mode: 'preview' | 'all'];
+    analyze: [];
+    statistics: [];
+    regenerate: [];
+    reselectSystem: [];
+  }>();
+
+  const { t } = useI18n();
+  const { rerunLogSearch } = useSecChatStore();
+
+  /** 当前卡片展示的结果；二次检索 PATCH 同 uid 覆盖，不追加新卡 */
+  const displayResult = ref<RetrievalResultPayload>({ ...props.result });
+  const displayMessageUid = ref(props.messageUid || '');
+
+  /** 本期先隐藏底部反馈操作行 */
+  const showFeedbackActions = false;
+
+  interface ReportStatusItem extends LogReportInfo {
+    status: 'loading' | 'done' | 'failed';
+    errorMessage?: string;
+    retrying?: boolean;
+    markdown?: string;
+    exportFormats?: string[];
+    isStream?: boolean;
+    executionId?: string | null;
+    attachmentType?: AiAttachmentType;
+    outputData?: AiAttachmentOutputData;
+    /** 统计字段路径，或自然语言要求；列表接口没有时先留空 */
+    modeTip?: string;
+    modeTipReady?: boolean;
+  }
+
+  /** 多列时保证列宽可读，超出横向滚动 */
+  const COLUMN_MIN_WIDTH = 140;
+  const TIME_COLUMN_MIN_WIDTH = 220;
+
+  const isTimeColumn = (col: { rawName: string; displayName: string }) => {
+    const text = `${col.rawName} ${col.displayName}`;
+    return /时间|time|date|datetime/i.test(text);
+  };
+
+  const getColumnWidth = (col: { rawName: string; displayName: string }) => (
+    isTimeColumn(col) ? TIME_COLUMN_MIN_WIDTH : COLUMN_MIN_WIDTH
+  );
+
+  const getColumnStyle = (col: { rawName: string; displayName: string }) => {
+    const width = getColumnWidth(col);
+    return {
+      width: `${width}px`,
+      minWidth: `${width}px`,
+      maxWidth: isTimeColumn(col) ? '260px' : '280px',
+    };
+  };
+
+  const { messageSuccess, messageError, messageWarn } = useMessage();
+  const exporting = ref(false);
+  const resubmitLoading = ref(false);
+  /** 本地提交中或后端 PROCESSING：卡内遮罩；tablePending 仅用于首次尚无表格的条件壳 */
+  const bodyLoading = computed(() => (
+    resubmitLoading.value
+    || props.apiStatus === 'PROCESSING'
+    || Boolean(displayResult.value?.tablePending)
+  ));
+  /** 仅 SUCCESS / FAILED 可改条件；PROCESSING 与本地提交中锁定 */
+  const canMutateCondition = computed(() => (
+    (props.apiStatus === 'SUCCESS' || props.apiStatus === 'FAILED')
+    && !resubmitLoading.value
+  ));
+  const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
+  const searchModel = ref<Record<string, any>>({
+    datetime: createDefaultDatetime(),
+    datetime_origin: createDefaultDatetimeOrigin(),
+  });
+
+  const fieldCatalog = computed(() => (
+    [...(props.standardFields || []), ...(props.extensionFields || [])]
+  ));
+
+  const fieldConfig = computed(() => {
+    const nextConfig = createConditionFieldConfigFromSystemFields(
+      props.standardFields,
+      props.extensionFields,
+    );
+    delete nextConfig.system_id;
+    ensureConditionFieldsFromAiSearch(
+      nextConfig,
+      displayResult.value.rawCondition,
+      fieldCatalog.value,
+    );
+    return nextConfig;
+  });
+  const commonFieldKeys = computed(() => (
+    getPrimaryFieldNames(props.standardFields).filter(key => key !== 'system_id')
+  ));
+  const extendFieldKeys = computed(() => getSecondaryFieldNames(props.extensionFields));
+  const selectedFieldNames = computed(() => Object.keys(searchModel.value)
+    .filter(key => key !== 'datetime_origin' && key !== 'system_id' && fieldConfig.value[key]));
+
+  const conditionEditable = computed(() => (
+    // tablePending 也走可编辑标签（含快捷文案），避免检索中先闪绝对时间再变回快捷值
+    Boolean(displayResult.value.rawCondition)
+    && Boolean(fieldConfig.value.datetime)
+  ));
+
+  const visibleConditions = computed(() => (
+    displayResult.value.conditions.filter(item => item.field !== '来源系统')
+  ));
+
+  const activeConditionCount = computed(() => (
+    Object.keys(searchModel.value).filter(key => (
+      key !== 'datetime_origin' && key !== 'sort' && key !== 'system_id' && fieldConfig.value[key]
+    )).length
+  ));
+
+  const conditionHeaderText = computed(() => {
+    if (conditionEditable.value) {
+      return `已识别到 ${activeConditionCount.value} 个筛选条件，可修改后重新检索`;
+    }
+    return `已识别到 ${visibleConditions.value.length} 个筛选条件进行检索`;
+  });
+
+  const syncSearchModelFromResult = () => {
+    const { rawCondition, datetimeOrigin } = displayResult.value;
+    if (!rawCondition) return;
+    const nextSearchModel = parseAiSearchConditionToSearchModel(
+      rawCondition,
+      fieldConfig.value,
+      fieldCatalog.value,
+      { datetimeOrigin },
+    );
+    if ('system_id' in nextSearchModel) {
+      delete nextSearchModel.system_id;
+    }
+    searchModel.value = nextSearchModel;
+  };
+
+  /** 首次检索 tablePending 壳需要回填条件；二次检索 PROCESSING 保留用户刚提交的条件 */
+  const shouldSyncSearchModelFromResult = () => {
+    if (props.apiStatus === 'PROCESSING' && !displayResult.value?.tablePending) {
+      return false;
+    }
+    return true;
+  };
+
+  watch(
+    () => [props.messageUid, props.result, props.apiStatus] as const,
+    () => {
+      displayResult.value = props.result;
+      displayMessageUid.value = props.messageUid || '';
+      if (shouldSyncSearchModelFromResult()) {
+        syncSearchModelFromResult();
+      }
+    },
+    { immediate: true, deep: true },
+  );
+
+  watch(
+    () => [props.standardFields, props.extensionFields] as const,
+    () => {
+      if (shouldSyncSearchModelFromResult()) {
+        syncSearchModelFromResult();
+      }
+    },
+    { deep: true },
+  );
+
+  const getDefaultValue = (config: IFieldConfig) => getConditionDefaultValue(config);
+
+  const appendField = (fieldName: string, value: any) => {
+    searchModel.value = appendSearchModelField(
+      searchModel.value,
+      fieldName,
+      value,
+      {
+        datetime: createDefaultDatetime(),
+        datetimeOrigin: createDefaultDatetimeOrigin(),
+      },
+    );
+  };
+
+  const handleAddField = async (fieldName: string, config: IFieldConfig, initialValue?: any) => {
+    if (!canMutateCondition.value) return;
+    if (fieldName !== 'datetime' && searchModel.value[fieldName] !== undefined) {
+      conditionTagsRef.value?.startEditField?.(fieldName);
+      return;
+    }
+    const value = initialValue !== undefined ? initialValue : getDefaultValue(config);
+    appendField(fieldName, value);
+    conditionTagsRef.value?.startEditField?.(fieldName);
+    await nextTick();
+  };
+
+  const handleRemoveCondition = (fieldName: string) => {
+    if (!canMutateCondition.value) return;
+    if (fieldName === 'datetime' || fieldName === 'system_id') return;
+    const next = { ...searchModel.value };
+    delete next[fieldName];
+    searchModel.value = next;
+  };
+
+  const handleUpdateCondition = (fieldName: string, value: any) => {
+    if (!canMutateCondition.value) return;
+    if (fieldName === 'datetime') {
+      if (Array.isArray(value) && value.length >= 2) {
+        const formatted = value.map((item: any) => (
+          typeof item === 'number' || item instanceof Date
+            ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
+            : item
+        ));
+        // 只更新绝对时间；快捷态由 datetime_origin 单独维护
+        searchModel.value.datetime = formatted;
+      }
+      return;
+    }
+    if (fieldName === 'datetime_origin') {
+      searchModel.value.datetime_origin = value;
+      if (isRelativeDatetimeOrigin(value)) {
+        displayResult.value = {
+          ...displayResult.value,
+          datetimeOrigin: [...value],
+        };
+      } else if (displayResult.value.datetimeOrigin) {
+        const next = { ...displayResult.value };
+        delete next.datetimeOrigin;
+        displayResult.value = next;
+      }
+      return;
+    }
+    searchModel.value[fieldName] = value;
+  };
+
+  const handleClearConditions = () => {
+    if (!canMutateCondition.value) return;
+    searchModel.value = {
+      datetime: createDefaultDatetime(),
+      datetime_origin: createDefaultDatetimeOrigin(),
+    };
+  };
+
+  const handleResubmit = async () => {
+    if (!canMutateCondition.value || bodyLoading.value) return;
+
+    const messageUid = displayMessageUid.value || props.messageUid;
+    if (!messageUid) {
+      messageWarn('缺少结果消息，请重新发起检索');
+      return;
+    }
+
+    if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
+      searchModel.value.datetime = syncDatetimeFromOrigin(searchModel.value.datetime_origin);
+    }
+
+    const scopeId = displayResult.value.rawCondition?.scope_id || props.systems[0]?.id || '';
+    const condition = buildAiSearchCondition({
+      scopeId,
+      searchModel: searchModel.value,
+      fieldConfig: fieldConfig.value,
+    });
+    if (!condition) {
+      messageWarn(scopeId ? '请至少选择时间范围' : '请先选择系统');
+      return;
+    }
+
+    resubmitLoading.value = true;
+    try {
+      const chatMessage = await rerunLogSearch(messageUid, condition, {
+        datetimeOrigin: searchModel.value.datetime_origin,
+      });
+      // PROCESSING：保留当前表格高度，仅靠卡内 loading 遮罩；终态再刷新结果
+      if (chatMessage.result && chatMessage.apiStatus !== 'PROCESSING') {
+        displayResult.value = chatMessage.result;
+        displayMessageUid.value = chatMessage.id;
+        if (chatMessage.apiStatus !== 'FAILED') {
+          syncSearchModelFromResult();
+        }
+      }
+      if (chatMessage.apiStatus === 'FAILED' && !chatMessage.result) {
+        messageError(chatMessage.errorMessage || '检索失败');
+      }
+    } catch (error: any) {
+      messageError(error?.message || '检索失败，请稍后重试');
+    } finally {
+      resubmitLoading.value = false;
+    }
+  };
+
+  const isFailed = computed(() => props.apiStatus === 'FAILED');
+  const isEmpty = computed(() => (
+    !isFailed.value
+    && !displayResult.value.tablePending
+    && !bodyLoading.value
+    && displayResult.value.totalHit <= 0
+  ));
+  const canExport = computed(() => (
+    Boolean(displayMessageUid.value)
+    && !isFailed.value
+    && displayResult.value.totalHit > 0
+  ));
+  /** 命中数不超过预览导出上限时，预览导出即全量，点击直接导出不再弹下拉 */
+  const isDirectExport = computed(() => displayResult.value.totalHit <= PREVIEW_EXPORT_LIMIT);
+
+  const thumbUpPath = 'M5.2 14.5H3.4c-.5 0-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9h1.8v7.6z'
+    + 'M13.4 6.9H9.7l.5-2.4c.1-.6-.1-1.2-.5-1.6L9 2.2c-.2-.2-.5-.2-.7 0l-.2.2'
+    + 'c-.2.2-.3.5-.2.8l.6 2.4H6.1v7.6h5.8c.7 0 1.3-.5 1.4-1.2l.7-4.2'
+    + 'c.1-.7-.4-1.4-1.2-1.4h-.4z';
+  const thumbDownPath = 'M10.8 1.5h1.8c.5 0 .9.4.9.9v5.8c0 .5-.4.9-.9.9h-1.8V1.5z'
+    + 'M2.6 9.1h3.7l-.5 2.4c-.1.6.1 1.2.5 1.6l.7.7c.2.2.5.2.7 0l.2-.2'
+    + 'c.2-.2.3-.5.2-.8l-.6-2.4h2.4V1.5H4.1c-.7 0-1.3.5-1.4 1.2L2 6.9'
+    + 'c-.1.7.4 1.4 1.2 1.4h-.6z';
+
+  const currentPage = ref(1);
+  const pageSize = ref(10);
+  const feedback = ref<'up' | 'down' | ''>('');
+  const analyzeDialogShow = ref(false);
+  const analyzeSubmitting = ref(false);
+  const analyzeCustomPreset = ref('');
+  const analyzeFocusCustom = ref(false);
+  /** 从失败行打开的重新分析；确认后 retry 原 uid。新建分析时清空 */
+  const analyzeRetryTarget = ref<{
+    uid: string;
+    inputData: Record<string, any>;
+  } | null>(null);
+  const statisticsDialogShow = ref(false);
+  const statisticsCustomPreset = ref('');
+  const statisticsFocusCustom = ref(false);
+  const statisticsSubmitting = ref(false);
+  /** 从已有自定义统计打开的重新统计；确认后 retry 原 uid。新建统计时清空 */
+  const statisticsRetryTarget = ref<{
+    uid: string;
+    inputData: Record<string, any>;
+  } | null>(null);
+  const statisticsSubmitError = ref('');
+  const reportItems = ref<ReportStatusItem[]>([]);
+  const reportDrawerShow = ref(false);
+  const activeReport = ref<LogReportInfo | null>(null);
+  const statisticsDrawerShow = ref(false);
+  const statisticsCreatedAt = ref('');
+  const statisticsOutputData = ref<AiAttachmentOutputData>(null);
+  const statisticsAttachmentType = ref('');
+  const statisticsStatus = ref('');
+  const statisticsErrorMessage = ref('');
+  const statisticsRegenerating = ref(false);
+  const activeStatisticsId = ref('');
+  const followHandles = new Map<string, FollowAttachmentHandle>();
+  /** 本次会话新建/重试成功后按稿自动打开抽屉 */
+  const pendingAutoOpenIds = new Set<string>();
+  const hiddenUntilDrawerCloseIds = ref<Set<string>>(new Set());
+
+  const pageRows = computed(() => {
+    const start = (currentPage.value - 1) * pageSize.value;
+    return displayResult.value.rows.slice(start, start + pageSize.value);
+  });
+
+  const tableMinWidth = computed(() => {
+    const total = displayResult.value.columns.reduce((sum, col) => sum + getColumnWidth(col), 0);
+    return `${Math.max(total, 760)}px`;
+  });
+
+  const hasLoadingReport = (type: ReportStatusItem['type']) => (
+    reportItems.value.some(item => item.type === type && item.status === 'loading')
+  );
+
+  const analyzeActionDisabled = computed(() => hasLoadingReport('analyze'));
+  const statisticsActionDisabled = computed(() => hasLoadingReport('statistics'));
+  const visibleReportItems = computed(() => (
+    reportItems.value.filter(item => !(
+      item.status === 'done' && hiddenUntilDrawerCloseIds.value.has(item.id)
+    ))
+  ));
+
+  const reportStatusText = (item: ReportStatusItem) => {
+    if (item.type === 'statistics') {
+      if (item.status === 'loading') return t('数据统计中...');
+      if (item.status === 'failed') return t('数据统计失败');
+      return t('数据统计已完成');
+    }
+    if (item.status === 'loading') return t('智能分析中...');
+    if (item.status === 'failed') return t('智能分析失败');
+    return t('智能分析已生成');
+  };
+
+  /** 字段统计、智能分析报告是黄标签；自定义统计和自定义分析是蓝标签 */
+  const reportModeKind = (item: ReportStatusItem): 'field' | 'nl' | '' => {
+    if (isFieldStatisticsType(item.attachmentType)) return 'field';
+    if (item.attachmentType === 'AI_STATISTICS' || item.attachmentType === 'AI_ANALYSIS') return 'nl';
+    return '';
+  };
+
+  const isReportModeYellow = (item: ReportStatusItem) => (
+    reportModeKind(item) === 'field'
+    || (item.attachmentType === 'AI_ANALYSIS' && item.analysisMode !== 'CUSTOM')
+  );
+
+  const reportModeLabel = (item: ReportStatusItem) => {
+    if (reportModeKind(item) === 'field') return t('统计字段');
+    if (item.attachmentType === 'AI_STATISTICS') return t('自定义统计');
+    if (item.analysisMode === 'CUSTOM') return t('自定义分析');
+    return t('智能分析报告');
+  };
+
+  const formatFieldModeTip = (field?: {
+    raw_name?: string;
+    keys?: string[];
+    display_name?: string;
+  } | null) => {
+    if (!field) return '';
+    const keys = Array.isArray(field.keys) ? field.keys.map(key => String(key)).filter(Boolean) : [];
+    const path = [field.raw_name, ...keys].filter(Boolean).join('.');
+    const displayName = String(field.display_name || '');
+    if (displayName && path && displayName !== path) return `${displayName}（${path}）`;
+    return displayName || path;
+  };
+
+  const buildReportModeTip = (attachment: AiAttachment) => {
+    if (isFieldStatisticsType(attachment.attachment_type)) {
+      const output = attachment.output_data;
+      const outputField = output && typeof output === 'object' && !Array.isArray(output)
+        ? (output as { field?: { raw_name?: string; keys?: string[]; display_name?: string } }).field
+        : null;
+      const inputField = attachment.input_data?.field as {
+        raw_name?: string;
+        keys?: string[];
+        display_name?: string;
+      } | undefined;
+      return formatFieldModeTip({
+        raw_name: outputField?.raw_name || inputField?.raw_name,
+        keys: outputField?.keys || inputField?.keys,
+        display_name: outputField?.display_name || inputField?.display_name,
+      });
+    }
+    if (attachment.attachment_type === 'AI_STATISTICS' || attachment.attachment_type === 'AI_ANALYSIS') {
+      return String(attachment.input_data?.instruction || '');
+    }
+    return '';
+  };
+
+  const modeTipHoverId = ref('');
+  const modeTipInflight = new Set<string>();
+  /** 离开标签后稍等再关，方便鼠标移进提示里复制 */
+  const MODE_TIP_HIDE_DELAY = 400;
+  let modeTipHideTimer = 0;
+
+  const clearModeTipHideTimer = () => {
+    if (!modeTipHideTimer) return;
+    window.clearTimeout(modeTipHideTimer);
+    modeTipHideTimer = 0;
+  };
+
+  const showReportModeTip = (item: ReportStatusItem) => {
+    clearModeTipHideTimer();
+    modeTipHoverId.value = item.id;
+    void ensureReportModeTip(item);
+  };
+
+  const keepReportModeTip = (item: ReportStatusItem) => {
+    if (modeTipHoverId.value !== item.id) return;
+    clearModeTipHideTimer();
+  };
+
+  const scheduleHideReportModeTip = (item: ReportStatusItem) => {
+    clearModeTipHideTimer();
+    modeTipHideTimer = window.setTimeout(() => {
+      modeTipHideTimer = 0;
+      if (modeTipHoverId.value === item.id) modeTipHoverId.value = '';
+    }, MODE_TIP_HIDE_DELAY);
+  };
+
+  const copyReportModeTip = async (item: ReportStatusItem) => {
+    const text = item.modeTip || '';
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      messageSuccess('已复制');
+    } catch {
+      messageError('复制失败');
+    }
+  };
+
+  const isReportModeTipOpen = (item: ReportStatusItem) => (
+    modeTipHoverId.value === item.id && Boolean(item.modeTip)
+  );
+
+  /** 列表没有字段和 prompt，悬停时再读详情；读不到就只留标签 */
+  const ensureReportModeTip = async (item: ReportStatusItem) => {
+    if (!reportModeKind(item) || item.modeTipReady || modeTipInflight.has(item.id)) return;
+    if (item.id.startsWith('pending-')) return;
+    modeTipInflight.add(item.id);
+    try {
+      const detail = await AiAssistantManageService.fetchAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      const current = reportItems.value.find(row => row.id === item.id);
+      if (!current) return;
+      upsertReport({
+        ...current,
+        modeTip: buildReportModeTip(detail),
+        modeTipReady: true,
+        ...(detail.input_data?.analysis_mode
+          ? { analysisMode: String(detail.input_data.analysis_mode) }
+          : {}),
+      });
+    } catch {
+      // 详情暂时拿不到时保留标签，下次悬停再试
+    } finally {
+      modeTipInflight.delete(item.id);
+    }
+  };
+
+  const systemNames = computed(() => {
+    const names = props.systems
+      .map(item => item.name || item.id)
+      .filter(Boolean);
+    if (names.length) return names.join('、');
+    const systemCond = displayResult.value.conditions.find(item => (
+      item.field === '来源系统' || item.field === '系统'
+    ));
+    return systemCond?.value || '';
+  });
+
+  watch(
+    () => [displayMessageUid.value, props.apiStatus] as const,
+    ([messageUid, apiStatus], previous) => {
+      const previousUid = previous?.[0];
+      if (messageUid !== previousUid) {
+        currentPage.value = 1;
+        feedback.value = '';
+        reportDrawerShow.value = false;
+        activeReport.value = null;
+        statisticsDrawerShow.value = false;
+        statisticsOutputData.value = null;
+        statisticsAttachmentType.value = '';
+        statisticsStatus.value = '';
+        statisticsErrorMessage.value = '';
+        statisticsRegenerating.value = false;
+        activeStatisticsId.value = '';
+        pendingAutoOpenIds.clear();
+        hiddenUntilDrawerCloseIds.value = new Set();
+        stopAllFollows();
+        reportItems.value = [];
+      }
+      if (messageUid && apiStatus === 'SUCCESS' && (messageUid !== previousUid || previous?.[1] !== 'SUCCESS')) {
+        void hydrateAttachments(messageUid);
+      }
+    },
+  );
+
+  onBeforeUnmount(() => {
+    clearModeTipHideTimer();
+    stopAllFollows();
+  });
+
+  // keep-alive 失活时卸载弹层，避免消息多时大量 teleport/sideslider 残留导致切回白屏
+  onDeactivated(() => {
+    analyzeDialogShow.value = false;
+    statisticsDialogShow.value = false;
+    reportDrawerShow.value = false;
+    statisticsDrawerShow.value = false;
+    stopAllFollows();
+  });
+
+  onActivated(() => {
+    if (displayMessageUid.value && props.apiStatus === 'SUCCESS') {
+      void hydrateAttachments(displayMessageUid.value);
+    }
+  });
+
+  const formatNumber = (num: number) => num.toLocaleString('en-US');
+
+  const isResultCodeColumn = (col: { rawName: string }) => col.rawName === 'result_code';
+
+  /** 拓展数据 / 完整日志：表头 tip，单元格不再逐格提示 */
+  const isJsonPreviewTipColumn = (col: { displayName: string }) => {
+    const name = col.displayName || '';
+    return name.includes('拓展') || name.includes('完整日志');
+  };
+
+  const hasResultCodeValue = (row: Record<string, any>) => {
+    const value = row.result_code;
+    return value !== undefined && value !== null && value !== '';
+  };
+
+  const formatCell = (value: any) => {
+    if (value === undefined || value === null || value === '') return '—';
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
+  const formatAttachmentTime = (value?: string) => {
+    if (!value) return '';
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value;
+  };
+
+  /** 会话内报告时间展示创建时间，没有该字段才退回内容更新时间 */
+  const attachmentDisplayTime = (attachment: {
+    content_updated_at?: string | null;
+    created_at?: string | null;
+  }) => formatAttachmentTime(attachment.created_at || attachment.content_updated_at || '');
+
+  const REPORT_STATUS_TO_ATTACHMENT: Record<ReportStatusItem['status'], AiAttachmentStatus> = {
+    loading: 'PROCESSING',
+    failed: 'FAILED',
+    done: 'SUCCESS',
+  };
+
+  const resolveReportStatus = (status: AiAttachment['status']): ReportStatusItem['status'] => {
+    if (status === 'SUCCESS') return 'done';
+    if (status === 'FAILED') return 'failed';
+    return 'loading';
+  };
+
+  const mapAttachmentToReport = (attachment: AiAttachment | AiAttachmentListItem): ReportStatusItem => {
+    const status = resolveReportStatus(attachment.status);
+    const detail = attachment as AiAttachment;
+    const isStats = isStatisticsAttachmentType(attachment.attachment_type);
+    const hasModeSource = Object.prototype.hasOwnProperty.call(attachment, 'input_data')
+      || Object.prototype.hasOwnProperty.call(attachment, 'output_data');
+    return {
+      id: attachment.uid,
+      type: isStats ? 'statistics' : 'analyze',
+      title: status === 'loading'
+        ? (isStats ? t('数据统计中') : t('智能分析中'))
+        : (attachment.title || (isStats ? t('数据统计报告') : t('智能分析报告'))),
+      createdAt: attachmentDisplayTime(attachment),
+      status,
+      errorMessage: detail.error_message || '',
+      markdown: attachmentMarkdown(detail.output_data),
+      exportFormats: detail.export_formats || attachment.export_formats || [],
+      isStream: detail.is_stream,
+      retrying: false,
+      attachmentType: attachment.attachment_type,
+      outputData: detail.output_data || null,
+      modeTip: hasModeSource ? buildReportModeTip(detail) : '',
+      modeTipReady: hasModeSource,
+      ...(detail.input_data?.analysis_mode
+        ? { analysisMode: String(detail.input_data.analysis_mode) }
+        : {}),
+    };
+  };
+
+  const upsertReport = (item: ReportStatusItem, prepend = false) => {
+    const index = reportItems.value.findIndex(current => current.id === item.id);
+    if (index === -1) {
+      reportItems.value = prepend ? [item, ...reportItems.value] : [...reportItems.value, item];
+      return;
+    }
+    const next = [...reportItems.value];
+    next.splice(index, 1, {
+      ...next[index],
+      ...item,
+    });
+    reportItems.value = next;
+  };
+
+  const stopFollow = (attachmentUid: string) => {
+    const handle = followHandles.get(attachmentUid);
+    handle?.stop();
+    followHandles.delete(attachmentUid);
+  };
+
+  const stopAllFollows = () => {
+    followHandles.forEach(handle => handle.stop());
+    followHandles.clear();
+  };
+
+  const hideReportRowUntilDrawerClose = (reportId: string) => {
+    const next = new Set(hiddenUntilDrawerCloseIds.value);
+    next.add(reportId);
+    hiddenUntilDrawerCloseIds.value = next;
+  };
+
+  const revealReportRow = (reportId: string) => {
+    if (!hiddenUntilDrawerCloseIds.value.has(reportId)) return;
+    const next = new Set(hiddenUntilDrawerCloseIds.value);
+    next.delete(reportId);
+    hiddenUntilDrawerCloseIds.value = next;
+  };
+
+  const markPendingAutoOpen = (reportId: string) => {
+    pendingAutoOpenIds.add(reportId);
+  };
+
+  const applyAttachmentDetail = (attachment: AiAttachment) => {
+    upsertReport(mapAttachmentToReport(attachment));
+    if (activeReport.value?.id === attachment.uid) {
+      activeReport.value = {
+        ...activeReport.value,
+        title: attachment.title || activeReport.value.title,
+        createdAt: attachmentDisplayTime(attachment),
+        markdown: attachmentMarkdown(attachment.output_data) || activeReport.value.markdown,
+        exportFormats: attachment.export_formats || activeReport.value.exportFormats,
+        analysisMode: String(attachment.input_data?.analysis_mode || activeReport.value.analysisMode || ''),
+        outputData: attachment.output_data || activeReport.value.outputData,
+        attachmentType: attachment.attachment_type || activeReport.value.attachmentType,
+      };
+    }
+    // 抽屉开着时跟随详情刷新；非当前附件的迟到回包不改抽屉
+    if (activeStatisticsId.value === attachment.uid) {
+      statisticsCreatedAt.value = attachmentDisplayTime(attachment) || statisticsCreatedAt.value;
+      statisticsOutputData.value = attachment.output_data ?? null;
+      statisticsAttachmentType.value = attachment.attachment_type || statisticsAttachmentType.value;
+      statisticsStatus.value = attachment.status || statisticsStatus.value;
+      statisticsErrorMessage.value = attachment.error_message || '';
+      if (attachment.status !== 'PROCESSING') {
+        statisticsRegenerating.value = false;
+      }
+    }
+    maybeAutoOpenReport(attachment.uid);
+  };
+
+  const maybeAutoOpenReport = (reportId: string) => {
+    if (!pendingAutoOpenIds.has(reportId)) return;
+    const item = reportItems.value.find(current => current.id === reportId);
+    if (!item || item.status !== 'done') return;
+    pendingAutoOpenIds.delete(reportId);
+    hideReportRowUntilDrawerClose(reportId);
+    queueMicrotask(() => {
+      void openReport(item);
+    });
+  };
+
+  watch(reportDrawerShow, (show, wasShow) => {
+    if (wasShow && !show && activeReport.value?.id) {
+      revealReportRow(activeReport.value.id);
+    }
+  });
+
+  watch(statisticsDrawerShow, (show, wasShow) => {
+    if (wasShow && !show && activeStatisticsId.value) {
+      revealReportRow(activeStatisticsId.value);
+      activeStatisticsId.value = '';
+      statisticsRegenerating.value = false;
+    }
+  });
+
+  /**
+   * 统计附件虽然 is_stream 为 true，但过程流对结果面板没有意义，
+   * 强制走轮询，避免多开一条 SSE 连接。
+   */
+  const startFollow = (
+    attachmentUid: string,
+    previousExecutionId?: string | null,
+    pollOnly = false,
+  ) => {
+    stopFollow(attachmentUid);
+    const handle = followAttachment({
+      attachmentUid,
+      previousExecutionId,
+      pollOnly,
+      onDetail: applyAttachmentDetail,
+      onArchiveIncomplete: () => {
+        messageWarn(t('部分生成过程不可恢复'));
+      },
+      onExecutionId: (executionId) => {
+        const current = reportItems.value.find(item => item.id === attachmentUid);
+        if (current) {
+          upsertReport({ ...current, executionId });
+        }
+      },
+      onProcessParseError: () => {
+        messageWarn(t('部分生成过程不可恢复'));
+      },
+    });
+    followHandles.set(attachmentUid, handle);
+  };
+
+  const hydrateAttachments = async (messageUid: string) => {
+    try {
+      // 消息块按生成时间倒序：附件列表默认排 content_updated_at，编辑或重试会让报告前移
+      const list = await AiAssistantManageService.fetchAttachments(
+        messageAttachmentListParams(messageUid),
+        { catchError: true },
+      );
+      const mapped = list.map(item => mapAttachmentToReport(item));
+      reportItems.value = mapped;
+      mapped
+        .filter(item => item.status === 'loading')
+        .forEach(item => startFollow(item.id, null, item.type === 'statistics'));
+    } catch {
+      // 历史附件加载失败不影响检索卡
+    }
+  };
+
+  if (displayMessageUid.value && props.apiStatus === 'SUCCESS') {
+    void hydrateAttachments(displayMessageUid.value);
+  }
+
+  const resolveCreateErrorMessage = (error: any, fallback?: string) => (
+    error?.message || fallback || t('创建分析失败')
+  );
+
+  const handlePageChange = (page: number) => {
+    currentPage.value = page;
+  };
+
+  const handleLimitChange = (limit: number) => {
+    pageSize.value = limit;
+    currentPage.value = 1;
+  };
+
+  const handleExport = async (mode: 'preview' | 'all') => {
+    if (!canExport.value || exporting.value) return;
+    if (!displayMessageUid.value) {
+      messageWarn('缺少消息标识，无法导出');
+      return;
+    }
+
+    exporting.value = true;
+    emit('export', mode);
+    try {
+      if (mode === 'preview') {
+        await exportLogSearchPreview(displayMessageUid.value);
+        messageSuccess(isDirectExport.value
+          ? `已导出全部 ${displayResult.value.totalHit} 条数据`
+          : `已导出前 ${displayResult.value.previewCount} 条数据`);
+      } else {
+        const outcome = await exportLogSearchFull(displayMessageUid.value);
+        if (outcome.isSyncFile) {
+          messageSuccess(`已导出全部 ${displayResult.value.totalHit} 条数据`);
+        } else if (outcome.isFallback) {
+          messageSuccess('数据量较大，已转后台导出，完成后将邮件通知，您可在导出任务页查看进度');
+        } else {
+          messageSuccess('导出任务已创建，结果将发送至邮箱，请注意查收');
+        }
+      }
+    } catch (error: any) {
+      messageError(error?.message || '导出失败，请稍后重试');
+    } finally {
+      exporting.value = false;
+    }
+  };
+
+  const removeReport = (reportId: string) => {
+    reportItems.value = reportItems.value.filter(item => item.id !== reportId);
+  };
+
+  const handleAnalyzeSelect = async (payload: { type: 'recommend' | 'custom'; title: string; prompt?: string }) => {
+    if (analyzeSubmitting.value) return;
+    const retryTarget = analyzeRetryTarget.value;
+    if (resolveAnalyzeSubmit(retryTarget, payload).action === 'retry' && retryTarget) {
+      await submitAnalyzeRetry(retryTarget, payload);
+      return;
+    }
+    analyzeRetryTarget.value = null;
+    const messageUid = displayMessageUid.value || props.messageUid;
+    if (!messageUid) {
+      messageWarn(t('缺少结果消息无法分析'));
+      return;
+    }
+    const isCustom = payload.type === 'custom';
+    const params: AiCreateAttachmentParams = isCustom
+      ? {
+        message_uid: messageUid,
+        attachment_type: 'AI_ANALYSIS',
+        input_data: {
+          analysis_mode: 'CUSTOM',
+          instruction: payload.prompt || '',
+        },
+      }
+      : {
+        message_uid: messageUid,
+        attachment_type: 'AI_ANALYSIS',
+        input_data: {
+          analysis_mode: 'DEFAULT',
+        },
+      };
+
+    const placeholderId = `pending-analyze-${Date.now()}`;
+    const placeholder: ReportStatusItem = {
+      id: placeholderId,
+      type: 'analyze',
+      title: t('智能分析中'),
+      createdAt: '',
+      status: 'loading',
+      attachmentType: 'AI_ANALYSIS',
+      modeTip: isCustom ? (payload.prompt || '') : '',
+      modeTipReady: true,
+    };
+
+    analyzeSubmitting.value = true;
+    emit('analyze');
+    upsertReport(placeholder, true);
+    analyzeDialogShow.value = false;
+    try {
+      const attachment = await AiAssistantManageService.createAttachment(params, { catchError: true });
+      removeReport(placeholderId);
+      upsertReport(mapAttachmentToReport(attachment), true);
+      markPendingAutoOpen(attachment.uid);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      try {
+        await hydrateAttachments(messageUid);
+        if (reportItems.value.some(item => item.status === 'loading' && item.id !== placeholderId)) {
+          removeReport(placeholderId);
+          analyzeDialogShow.value = false;
+          messageWarn(t('分析请求未确认'));
+          return;
+        }
+      } catch {
+        // 刷新失败时仍提示创建失败
+      }
+      removeReport(placeholderId);
+      messageError(resolveCreateErrorMessage(error));
+    } finally {
+      analyzeSubmitting.value = false;
+    }
+  };
+
+  /**
+   * 重新分析确认：POST 原附件 retry，带上完整 input_data，原地更新同一行。
+   * 校验失败保留原结果并重新打开草稿。
+   */
+  const submitAnalyzeRetry = async (
+    target: { uid: string; inputData: Record<string, any> },
+    payload: { type: 'recommend' | 'custom'; prompt?: string },
+  ) => {
+    const item = reportItems.value.find(current => current.id === target.uid);
+    if (!item || item.retrying || item.status === 'loading') return;
+    const decision = resolveAnalyzeSubmit(target, payload);
+    if (decision.action !== 'retry') return;
+    const previousStatus = item.status;
+    const isCustom = payload.type === 'custom';
+    const { inputData } = decision;
+    analyzeSubmitting.value = true;
+    upsertReport({
+      ...item,
+      retrying: true,
+      status: 'loading',
+      title: t('智能分析中'),
+      errorMessage: '',
+      modeTip: isCustom ? (payload.prompt || '') : '',
+      modeTipReady: true,
+    });
+    stopFollow(item.id);
+    markPendingAutoOpen(item.id);
+    analyzeDialogShow.value = false;
+    const previousExecutionId = await resolvePreviousExecutionId(item.id, item.executionId);
+    try {
+      const attachment = await AiAssistantManageService.retryAttachment({
+        attachment_uid: target.uid,
+        input_data: inputData,
+      }, { catchError: true });
+      analyzeRetryTarget.value = null;
+      applyAttachmentDetail(attachment);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, previousExecutionId);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      pendingAutoOpenIds.delete(item.id);
+      upsertReport({
+        ...item,
+        retrying: false,
+        status: previousStatus,
+        errorMessage: error?.message || item.errorMessage,
+      });
+      analyzeCustomPreset.value = isCustom
+        ? (payload.prompt || '')
+        : String(target.inputData?.instruction || '');
+      analyzeFocusCustom.value = isCustom;
+      analyzeDialogShow.value = true;
+      messageError(error?.message || t('创建分析失败'));
+    } finally {
+      analyzeSubmitting.value = false;
+    }
+  };
+
+  const handleAnalyze = () => {
+    if (analyzeActionDisabled.value) return;
+    analyzeRetryTarget.value = null;
+    analyzeCustomPreset.value = '';
+    analyzeFocusCustom.value = false;
+    analyzeDialogShow.value = true;
+  };
+
+  const handleStatistics = () => {
+    if (statisticsActionDisabled.value) return;
+    statisticsRetryTarget.value = null;
+    statisticsSubmitError.value = '';
+    statisticsCustomPreset.value = '';
+    statisticsFocusCustom.value = false;
+    statisticsDialogShow.value = true;
+  };
+
+  const openCustomAnalyzeDialog = (prompt: string) => {
+    analyzeCustomPreset.value = prompt;
+    analyzeFocusCustom.value = true;
+    analyzeDialogShow.value = true;
+  };
+
+  const openCustomStatisticsDialog = (prompt: string) => {
+    statisticsSubmitError.value = '';
+    statisticsCustomPreset.value = prompt;
+    statisticsFocusCustom.value = true;
+    statisticsDialogShow.value = true;
+  };
+
+  /**
+   * 列表只有 attachment_type。字段统计可直接重试；
+   * 自定义统计是 AI_STATISTICS，自定义分析要读详情里的 analysis_mode。
+   */
+  const resolveCustomPrompt = async (item: ReportStatusItem) => {
+    if (item.type === 'statistics' && isFieldStatisticsType(item.attachmentType)) return null;
+    try {
+      const detail = await AiAssistantManageService.fetchAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      if (isFieldStatisticsType(detail.attachment_type)) return null;
+      if (detail.attachment_type === 'AI_STATISTICS') {
+        return {
+          kind: 'statistics' as const,
+          prompt: String(detail.input_data?.instruction || ''),
+          inputData: detail.input_data,
+        };
+      }
+      if (item.type === 'analyze' && detail.input_data?.analysis_mode === 'CUSTOM') {
+        return {
+          kind: 'analyze' as const,
+          prompt: String(detail.input_data?.instruction || ''),
+          inputData: detail.input_data,
+        };
+      }
+    } catch {
+      if (item.attachmentType === 'AI_STATISTICS') {
+        return { kind: 'statistics' as const, prompt: '', inputData: undefined };
+      }
+    }
+    return null;
+  };
+
+  /**
+   * 重新统计确认：POST 原附件 retry，带上完整 input_data，原地更新同一行。
+   * 校验失败保留原结果并重新打开草稿。
+   */
+  const submitStatisticsRetry = async (
+    target: { uid: string; inputData: Record<string, any> },
+    payload: StatisticsSelectPayload,
+  ) => {
+    const item = reportItems.value.find(current => current.id === target.uid);
+    if (!item || item.retrying || item.status === 'loading') return;
+    const decision = resolveStatisticsSubmit(target, payload);
+    if (decision.action !== 'retry') return;
+    const previousStatus = item.status;
+    const { inputData } = decision;
+    statisticsSubmitting.value = true;
+    statisticsSubmitError.value = '';
+    upsertReport({
+      ...item,
+      retrying: true,
+      status: 'loading',
+      title: t('数据统计中'),
+      errorMessage: '',
+      modeTip: payload.prompt || '',
+      modeTipReady: true,
+    });
+    stopFollow(item.id);
+    markPendingAutoOpen(item.id);
+    statisticsDialogShow.value = false;
+    try {
+      const attachment = await AiAssistantManageService.retryAttachment({
+        attachment_uid: target.uid,
+        input_data: inputData,
+      }, { catchError: true });
+      statisticsRetryTarget.value = null;
+      applyAttachmentDetail(attachment);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, null, true);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      pendingAutoOpenIds.delete(item.id);
+      upsertReport({
+        ...item,
+        retrying: false,
+        status: previousStatus,
+        errorMessage: error?.message || item.errorMessage,
+      });
+      const inputError = formatStatisticsInputError(error, '');
+      statisticsCustomPreset.value = payload.prompt || '';
+      statisticsFocusCustom.value = true;
+      statisticsSubmitError.value = inputError || resolveCreateErrorMessage(error, t('创建统计失败'));
+      statisticsDialogShow.value = true;
+      if (!inputError) {
+        messageError(error?.message || t('创建统计失败'));
+      }
+    } finally {
+      statisticsSubmitting.value = false;
+    }
+  };
+
+  const handleStatisticsSelect = async (payload: StatisticsSelectPayload) => {
+    if (statisticsSubmitting.value) return;
+    const retryTarget = statisticsRetryTarget.value;
+    if (resolveStatisticsSubmit(retryTarget, payload).action === 'retry' && retryTarget) {
+      await submitStatisticsRetry(retryTarget, payload);
+      return;
+    }
+    statisticsRetryTarget.value = null;
+    const messageUid = displayMessageUid.value || props.messageUid;
+    if (!messageUid) {
+      messageWarn(t('缺少结果消息无法统计'));
+      return;
+    }
+    const isCustom = payload.type === 'custom';
+    if (!isCustom && !payload.field) {
+      messageWarn(t('请选择需要统计的字段'));
+      return;
+    }
+
+    const params: AiCreateAttachmentParams = isCustom
+      ? {
+        message_uid: messageUid,
+        attachment_type: 'AI_STATISTICS',
+        input_data: {
+          instruction: payload.prompt || '',
+        },
+      }
+      : {
+        message_uid: messageUid,
+        attachment_type: 'FIELD_STATISTICS',
+        input_data: {
+          // 字段统计按 raw_name + keys 定位，JSON 子字段不能压成点号字符串
+          field: {
+            raw_name: payload.field?.raw_name || '',
+            keys: payload.field?.keys || [],
+          },
+        },
+      };
+
+    const placeholderId = `pending-statistics-${Date.now()}`;
+    const placeholder: ReportStatusItem = {
+      id: placeholderId,
+      type: 'statistics',
+      title: t('数据统计中'),
+      createdAt: '',
+      status: 'loading',
+      attachmentType: isCustom ? 'AI_STATISTICS' : 'FIELD_STATISTICS',
+      modeTip: isCustom ? (payload.prompt || '') : formatFieldModeTip(payload.field),
+      modeTipReady: true,
+    };
+
+    statisticsSubmitting.value = true;
+    statisticsSubmitError.value = '';
+    emit('statistics');
+    upsertReport(placeholder, true);
+    try {
+      const attachment = await AiAssistantManageService.createAttachment(params, { catchError: true });
+      removeReport(placeholderId);
+      upsertReport(mapAttachmentToReport(attachment), true);
+      statisticsDialogShow.value = false;
+      markPendingAutoOpen(attachment.uid);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, null, true);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      const inputError = formatStatisticsInputError(error, '');
+      if (inputError) {
+        removeReport(placeholderId);
+        statisticsSubmitError.value = inputError;
+        statisticsDialogShow.value = true;
+        return;
+      }
+      try {
+        await hydrateAttachments(messageUid);
+        if (reportItems.value.some(item => item.status === 'loading' && item.id !== placeholderId)) {
+          removeReport(placeholderId);
+          statisticsDialogShow.value = false;
+          messageWarn(t('统计请求未确认'));
+          return;
+        }
+      } catch {
+        // 刷新失败时仍提示创建失败
+      }
+      removeReport(placeholderId);
+      statisticsSubmitError.value = resolveCreateErrorMessage(error, t('创建统计失败'));
+      statisticsDialogShow.value = true;
+    } finally {
+      statisticsSubmitting.value = false;
+    }
+  };
+
+  const resolvePreviousExecutionId = async (attachmentUid: string, fallback?: string | null) => {
+    try {
+      const snapshot = await AiAssistantManageService.fetchAttachmentStreamSnapshot({
+        attachment_uid: attachmentUid,
+      }, { catchError: true });
+      return snapshot.execution_id || fallback || null;
+    } catch {
+      return fallback || null;
+    }
+  };
+
+  /** 后端 SUCCESS 与 FAILED 都可重试，统计在抽屉里走同一条重新生成链路 */
+  const handleRetryReport = async (item: ReportStatusItem) => {
+    if (item.retrying || item.status === 'loading') return;
+    const custom = await resolveCustomPrompt(item);
+    if (custom?.kind === 'statistics') {
+      statisticsDrawerShow.value = false;
+      statisticsRetryTarget.value = {
+        uid: item.id,
+        inputData: custom.inputData && typeof custom.inputData === 'object'
+          ? { ...custom.inputData }
+          : {},
+      };
+      openCustomStatisticsDialog(custom.prompt);
+      return;
+    }
+    if (custom?.kind === 'analyze') {
+      reportDrawerShow.value = false;
+      analyzeRetryTarget.value = {
+        uid: item.id,
+        inputData: custom.inputData && typeof custom.inputData === 'object'
+          ? { ...custom.inputData }
+          : {},
+      };
+      openCustomAnalyzeDialog(custom.prompt);
+      return;
+    }
+    const isStats = item.type === 'statistics';
+    const previousStatus = item.status;
+    upsertReport({
+      ...item,
+      retrying: true,
+      status: 'loading',
+      title: isStats ? t('数据统计中') : t('智能分析中'),
+      errorMessage: '',
+    });
+    stopFollow(item.id);
+    if (isStats && activeStatisticsId.value === item.id) {
+      // 抽屉里发起的重新生成，结果直接刷在当前抽屉上，不重复自动打开
+      statisticsRegenerating.value = true;
+      statisticsStatus.value = 'PROCESSING';
+      statisticsErrorMessage.value = '';
+    } else {
+      markPendingAutoOpen(item.id);
+    }
+    // 统计不消费过程流，不必回溯上一次执行
+    const previousExecutionId = isStats
+      ? null
+      : await resolvePreviousExecutionId(item.id, item.executionId);
+    try {
+      const attachment = await AiAssistantManageService.retryAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      applyAttachmentDetail(attachment);
+      const messageUid = displayMessageUid.value || props.messageUid;
+      if (messageUid) {
+        await hydrateAttachments(messageUid);
+      }
+      const refreshed = mapAttachmentToReport(attachment);
+      if (reportItems.value.some(current => current.id === attachment.uid)) {
+        upsertReport(refreshed);
+      } else {
+        upsertReport(refreshed, true);
+      }
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, previousExecutionId, isStats);
+      }
+    } catch (error: any) {
+      pendingAutoOpenIds.delete(item.id);
+      upsertReport({
+        ...item,
+        retrying: false,
+        status: previousStatus,
+        errorMessage: error?.message || item.errorMessage,
+      });
+      if (activeStatisticsId.value === item.id) {
+        statisticsRegenerating.value = false;
+        statisticsStatus.value = REPORT_STATUS_TO_ATTACHMENT[previousStatus];
+      }
+      messageError(error?.message || (isStats ? t('创建统计失败') : t('创建分析失败')));
+    }
+  };
+
+  const handleStatisticsRegenerate = () => {
+    const item = reportItems.value.find(current => current.id === activeStatisticsId.value);
+    if (!item) return;
+    void handleRetryReport(item);
+  };
+
+  const openReport = async (item: ReportStatusItem | LogReportInfo) => {
+    if (item.type === 'statistics') {
+      const current = 'status' in item ? item : undefined;
+      // 先认领 activeStatisticsId，后续详情与轮询回包才会同步到抽屉
+      activeStatisticsId.value = item.id;
+      statisticsCreatedAt.value = item.createdAt || '';
+      statisticsOutputData.value = ('outputData' in item ? item.outputData : null) ?? null;
+      statisticsAttachmentType.value = ('attachmentType' in item ? item.attachmentType : '') || '';
+      statisticsErrorMessage.value = current?.errorMessage || '';
+      statisticsRegenerating.value = false;
+      if (current) {
+        statisticsStatus.value = REPORT_STATUS_TO_ATTACHMENT[current.status];
+      }
+      statisticsDrawerShow.value = true;
+      try {
+        // 列表接口不带 output_data，打开时必须读详情
+        const detail = await AiAssistantManageService.fetchAttachment({
+          attachment_uid: item.id,
+        }, { catchError: true });
+        applyAttachmentDetail(detail);
+      } catch {
+        // 使用卡片上已有摘要打开
+      }
+      return;
+    }
+    if ('status' in item && item.status === 'loading') return;
+    let {
+      markdown = '',
+      exportFormats = [],
+      title,
+      createdAt = '',
+      analysisMode = '',
+    } = item;
+    try {
+      const detail = await AiAssistantManageService.fetchAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      applyAttachmentDetail(detail);
+      markdown = attachmentMarkdown(detail.output_data) || markdown;
+      exportFormats = detail.export_formats || exportFormats;
+      title = detail.title || title;
+      createdAt = attachmentDisplayTime(detail) || createdAt;
+      analysisMode = String(detail.input_data?.analysis_mode || analysisMode);
+    } catch {
+      // 使用卡片上已有摘要打开
+    }
+    activeReport.value = {
+      id: item.id,
+      type: 'analyze',
+      title,
+      createdAt,
+      markdown,
+      exportFormats,
+      analysisMode,
+    };
+    reportDrawerShow.value = true;
+  };
+
+  const handleReportUpdated = (attachment: AiAttachment) => {
+    applyAttachmentDetail(attachment);
+  };
+
+  const handleCopy = async () => {
+    const text = [
+      displayResult.value.title,
+      `共命中 ${displayResult.value.totalHit} 条`,
+      ...displayResult.value.conditions.map(item => `${item.field}：${item.value}`),
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      messageSuccess('已复制');
+    } catch {
+      // ignore
+    }
+  };
+</script>
+
+<style lang="postcss" scoped>
+  .retrieval-result-wrap {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    box-sizing: border-box;
+
+    &.is-embedded {
+      width: 100%;
+    }
+  }
+
+  .retrieval-result-card {
+    width: 100%;
+    padding: 20px 24px 24px;
+    font-size: 14px;
+    line-height: 22px;
+    color: #63656e;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
+    box-sizing: border-box;
+
+    &.is-embedded {
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
+
+  .condition-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
+  }
+
+  .result-systems-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
+  }
+
+  .result-body-loading {
+    min-height: 160px;
+  }
+
+  .result-body {
+    min-height: 160px;
+  }
+
+  .condition-header {
+    display: flex;
+    margin-bottom: 12px;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .condition-header-main {
+    display: flex;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 22px;
+    color: #313238;
+    align-items: center;
+  }
+
+  .condition-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .condition-editor {
+    min-height: 32px;
+  }
+
+  .condition-actions {
+    display: flex;
+    margin-top: 12px;
+    justify-content: flex-start;
+
+    .resubmit-btn {
+      min-width: 88px;
+      height: 32px;
+    }
+  }
+
+  .condition-tag {
+    display: inline-flex;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+    line-height: 30px;
+    color: #63656e;
+    background: #f0f1f5;
+    border: 1px solid #dcdee5;
+    border-radius: 2px;
+    align-items: center;
+    box-sizing: border-box;
+
+    .tag-value {
+      font-weight: 700;
+      color: #313238;
+    }
+
+    &.is-fixed {
+      background: #f0f5ff;
+      border-color: #c5d8ff;
+    }
+  }
+
+  .status-panel {
+    display: flex;
+    margin-top: 12px;
+    margin-bottom: 8px;
+    min-height: 200px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .status-panel.is-empty,
+  .status-panel.is-failed {
+    .empty-icon,
+    .failed-icon {
+      display: block;
+    }
+
+    .empty-icon {
+      width: 98px;
+      height: 88px;
+    }
+
+    .failed-icon {
+      width: 48px;
+      height: 48px;
+    }
+
+    .status-title {
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 22px;
+      color: #313238;
+    }
+
+    .status-desc {
+      font-size: 12px;
+      line-height: 18px;
+      color: #4d4f56;
+      text-align: center;
+    }
+  }
+
+  .summary-section {
+    display: flex;
+    margin-bottom: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .summary-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .summary-title {
+    margin: 0 0 19px;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 24px;
+    color: #313238;
+  }
+
+  .summary-desc {
+    margin: 0;
+    font-size: 12px;
+    line-height: 22px;
+    color: #63656e;
+
+    .summary-num {
+      font-weight: 700;
+      color: #313238;
+    }
+  }
+
+  .summary-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .export-dropdown {
+    flex-shrink: 0;
+  }
+
+  .export-btn {
+    height: 32px;
+    padding: 0 12px;
+    color: #63656e;
+    background: #fff;
+    border-color: #dcdee5;
+
+    &:hover {
+      color: #3a84ff;
+      border-color: #3a84ff;
+    }
+
+    .export-icon {
+      margin-right: 4px;
+      font-size: 14px;
+    }
+  }
+
+  .table-section {
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .table-scroll {
+    width: 100%;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #dcdee5 transparent;
+
+    &::-webkit-scrollbar {
+      height: 4px;
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #dcdee5;
+      border-radius: 2px;
+    }
+  }
+
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+
+    th,
+    td {
+      width: 140px;
+      min-width: 140px;
+      max-width: 280px;
+      height: 42px;
+      padding: 0 12px;
+      overflow: hidden;
+      font-size: 12px;
+      /* 勿用 line-height:42px 撑行高，会与 popover inline-block 基线空隙叠加 */
+      line-height: 20px;
+      color: #63656e;
+      text-align: left;
+      vertical-align: middle;
+      border: none;
+      box-sizing: border-box;
+    }
+
+    .cell-tip {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      line-height: 20px;
+      box-sizing: border-box;
+    }
+
+    .json-col-header {
+      display: inline;
+      max-width: 100%;
+      overflow: hidden;
+      line-height: 20px;
+      color: inherit;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: help;
+      border-bottom: 1px dashed #979ba5;
+      box-sizing: border-box;
+    }
+
+    .result-code-cell {
+      overflow: visible;
+    }
+
+    .empty-cell {
+      color: #979ba5;
+      text-align: center;
+    }
+
+    th {
+      font-weight: 400;
+      color: #313238;
+      background: #fafbfd;
+      border-bottom: 1px solid #dcdee5;
+    }
+
+    td {
+      background: #fff;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fafbfd;
+    }
+  }
+
+  .table-pagination {
+    display: flex;
+    padding: 8px 12px;
+    background: #fff;
+    border-top: 1px solid #dcdee5;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .action-section {
+    display: flex;
+    margin-bottom: 0;
+    gap: 12px;
+  }
+
+  .action-btn-wrap {
+    display: inline-flex;
+  }
+
+  .analyze-btn {
+    color: #7b29ff;
+    border-color: #7b29ff;
+
+    &:not(.is-disabled, [disabled]):hover {
+      color: #9b5cff;
+      border-color: #9b5cff;
+    }
+
+    &.is-disabled,
+    &[disabled] {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      border-color: #dcdee5;
+      opacity: 1;
+
+      .ai-agent-ai {
+        opacity: 40%;
+      }
+    }
+
+    .ai-agent-ai {
+      margin-right: 4px;
+    }
+  }
+
+  .statistics-btn {
+    color: #63656e;
+    border-color: #dcdee5;
+
+    .action-icon {
+      margin-right: 4px;
+      font-size: 16px;
+    }
+
+    &:not(.is-disabled, [disabled]):hover {
+      color: #3a84ff;
+      border-color: #3a84ff;
+    }
+
+    &.is-disabled,
+    &[disabled] {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      border-color: #dcdee5;
+      opacity: 1;
+    }
+  }
+
+  .report-status-section {
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--audit-space-16);
+    gap: var(--audit-space-8);
+  }
+
+  .report-status-row {
+    display: flex;
+    min-width: 0;
+    min-height: 32px;
+    overflow: hidden;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--audit-space-8);
+
+    &.is-loading {
+      cursor: not-allowed;
+    }
+
+    &.is-done,
+    &.is-failed {
+      padding: 5px var(--audit-space-16) 5px var(--audit-space-12);
+      background: var(--audit-neutral-bg-03);
+      border-radius: var(--audit-radius-container);
+    }
+
+    .status-loading-wrap,
+    .status-failed-wrap,
+    .status-main {
+      display: inline-flex;
+      min-width: 0;
+      cursor: default;
+      flex: 1;
+      align-items: center;
+      gap: var(--audit-space-8);
+    }
+
+    .status-icon {
+      font-size: var(--audit-font-size-lg);
+      flex-shrink: 0;
+
+      &.is-loading {
+        color: var(--audit-brand-02);
+        animation: log-report-spin 1s linear infinite;
+      }
+
+      &.is-success {
+        color: #2dcb56;
+      }
+
+      &.is-failed {
+        color: var(--audit-danger-02);
+      }
+    }
+
+    .status-text {
+      /* 按最长文案「智能分析已生成」占位，失败等短文案也把标签留在同一列 */
+      min-width: 7em;
+      overflow: hidden;
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 0 1 auto;
+    }
+
+    &.is-done .status-text,
+    &.is-failed .status-text {
+      color: var(--audit-neutral-text-01);
+    }
+
+    .status-text.is-error-tip {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dashed;
+      text-underline-offset: 5px;
+    }
+
+    .report-mode-tag-wrap {
+      display: inline-flex;
+      flex-shrink: 0;
+    }
+
+    :deep(.report-mode-tag.bk-tag) {
+      height: 20px;
+      padding: 0 var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      line-height: 18px;
+      border-radius: var(--audit-radius-control);
+      cursor: default;
+
+      &.is-field {
+        color: var(--audit-warn-01);
+        background: var(--audit-warn-07);
+        border-color: var(--audit-warn-05);
+      }
+    }
+
+    .report-mode-tag-wrap :deep(.bk-tag.bk-tag-info) {
+      color: var(--audit-brand-01);
+      background-color: var(--audit-brand-06);
+      border-color: var(--audit-brand-05);
+    }
+
+    .report-mode-tag-wrap :deep(.bk-tag.bk-tag-info:hover) {
+      background-color: var(--audit-brand-05);
+    }
+
+    .status-time {
+      margin-left: var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      color: var(--audit-neutral-text-03);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .view-report-btn {
+      display: inline-flex;
+      margin-left: auto;
+      padding: 0;
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-brand-02);
+      cursor: pointer;
+      background: none;
+      border: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+      align-items: center;
+      gap: var(--audit-space-4);
+
+      .view-icon {
+        font-size: 16px;
+
+        &.is-loading {
+          animation: log-report-spin 1s linear infinite;
+        }
+      }
+
+      &:hover {
+        color: var(--audit-brand-03);
+      }
+
+      &:disabled {
+        color: var(--audit-neutral-text-04);
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  @keyframes log-report-spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .feedback-row {
+    display: flex;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #dcdee5;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .feedback-btn {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    color: #c4c6cc;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    align-items: center;
+    justify-content: center;
+
+    .feedback-svg {
+      display: block;
+    }
+
+    &:hover,
+    &.is-active {
+      color: #3a84ff;
+      background: #f0f5ff;
+    }
+  }
+</style>
+<style lang="postcss">
+  /* 结果卡内可编辑条件：与条件筛选卡视觉对齐 */
+  .retrieval-result-card .condition-editor {
+    &.is-editing-locked {
+      pointer-events: none;
+      opacity: 0.72;
+    }
+
+    .nl-condition-tags {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .nl-condition-tags-first-row,
+    .nl-condition-tags-content {
+      align-items: center;
+    }
+
+    .nl-condition-tags-first-row {
+      .nl-add-condition-trigger {
+        order: 999;
+      }
+
+      .condition-clear-btn {
+        order: 1000;
+        margin-left: 8px;
+      }
+    }
+
+    .condition-tag-item {
+      height: 32px;
+      padding: 0 8px 0 12px;
+      background: #f0f1f5;
+      border: 1px solid #dcdee5;
+      box-sizing: border-box;
+
+      &:hover {
+        .tag-value-wrapper {
+          background: transparent;
+        }
+      }
+    }
+
+    .nl-tag-input-item.is-editing {
+      height: auto;
+      min-height: 32px;
+    }
+
+    .nl-add-condition-trigger {
+      height: 32px;
+      padding: 0 12px;
+      box-sizing: border-box;
+
+      &.is-accent {
+        background: #f0f5ff;
+      }
+    }
+
+    .condition-clear-btn {
+      height: 32px;
+    }
+
+    .nl-tag-user-selector-item.is-editing.condition-tag-item:not(.has-users),
+    .nl-tag-user-selector-item.is-editing.condition-tag-item.has-users {
+      height: 32px !important;
+      max-height: 32px !important;
+      min-height: 32px !important;
+    }
+  }
+</style>
+<style lang="postcss">
+  .report-mode-tip-popover {
+    pointer-events: auto;
+  }
+
+  .report-mode-tip-popover .report-mode-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    max-width: 320px;
+    pointer-events: auto;
+  }
+
+  .report-mode-tip-popover .report-mode-tip-text {
+    min-width: 0;
+    max-height: 180px;
+    overflow: auto;
+    flex: 1;
+    line-height: 20px;
+    word-break: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  .report-mode-tip-popover .report-mode-tip-copy {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 2px 0 0;
+    color: #fff;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+  }
+
+  .report-mode-tip-popover .report-mode-tip-copy:hover {
+    color: var(--audit-brand-04, #a3c5fd);
+  }
+
+  /* 默认用原悬停色 #E1ECFF；悬停再深一档，避免和默认色相同 */
+  .retrieval-result-card .report-mode-tag-wrap .bk-tag.bk-tag-info {
+    color: var(--audit-brand-01);
+    background-color: var(--audit-brand-06);
+    border-color: var(--audit-brand-05);
+  }
+
+  .retrieval-result-card .report-mode-tag-wrap .bk-tag.bk-tag-info:hover {
+    background-color: var(--audit-brand-05);
+  }
+</style>

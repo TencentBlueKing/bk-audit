@@ -51,24 +51,16 @@ class AuthorizationScopeResolver:
         return [resource for resource in resources if batch_result.get(str(resource.id), {}).get(action.id, False)]
 
     def get_risk_filter(self) -> Q:
-        """Build risk queryset scope from authorized scenes because V4 cannot reverse-query risks."""
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.models import ResourceBindingScene
-
+        """Build risk queryset scope from authorized scenes; 风险场景归属已固化到 Risk.scene_id。"""
         scene_ids = self.service.v4.get_authorized_resource_ids(ActionEnum.VIEW_SCENE, "scene")
         if not scene_ids:
             return Q(pk__in=[])
-        raw_strategy_ids = ResourceBindingScene.objects.filter(
-            scene_id__in=scene_ids,
-            scene__is_deleted=False,
-            binding__resource_type=ResourceVisibilityType.STRATEGY,
-        ).values_list("binding__resource_id", flat=True)
-        strategy_ids = []
-        for strategy_id in raw_strategy_ids:
+        int_scene_ids = []
+        for scene_id in scene_ids:
             try:
-                strategy_ids.append(int(strategy_id))
+                int_scene_ids.append(int(scene_id))
             except (TypeError, ValueError):
-                logger.warning("[PermissionService] skip invalid strategy id from scene binding: %s", strategy_id)
-        if not strategy_ids:
+                logger.warning("[PermissionService] skip invalid scene id: %s", scene_id)
+        if not int_scene_ids:
             return Q(pk__in=[])
-        return Q(strategy_id__in=strategy_ids)
+        return Q(scene_id__in=int_scene_ids)

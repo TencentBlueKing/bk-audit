@@ -265,6 +265,23 @@ class PanelManage extends ModuleBase {
       },
     });
   }
+  /**
+   * 获取报表元数据（与 BKVision SDK 同一接口，走审计侧报表权限）
+   * GET /bkvision/api/v1/meta/query/
+   * params 需平铺为 constants[xxx] 形式，序列化器会把嵌套对象 JSON 化
+   */
+  fetchPanelMeta(params: {
+    share_uid: string,
+    type: string,
+    [key: `constants[${string}]`]: string,
+  }) {
+    return Request.get<Record<string, any>>(`bkvision${this.module}/meta/query/`, {
+      params,
+      payload: {
+        catchError: true,
+      },
+    });
+  }
 }
 export default new PanelManage();
 

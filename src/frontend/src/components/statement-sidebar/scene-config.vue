@@ -28,7 +28,7 @@
         scene-permission="manage_scene,view_scene"
         system-permission="edit_system"
         view-scene-block
-        width="250px"
+        width="100%"
         @change="handleSceneChange" />
     </div>
 
@@ -243,8 +243,10 @@
   }
 
   .scene-selector-wrapper {
-    width: 90%;
-    margin: 10px auto 16px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 12px;
+    margin: 10px 0 16px;
   }
 
   .menu-item-icon {

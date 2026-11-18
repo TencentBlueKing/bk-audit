@@ -30,6 +30,7 @@ class ApiError(BlueException):
 class ValidationError(BlueException):
     MESSAGE = gettext_lazy("参数验证失败")
     ERROR_CODE = "001"
+    STATUS_CODE = 400
 
     def __init__(self, *args, data=None, **kwargs):
         if args:

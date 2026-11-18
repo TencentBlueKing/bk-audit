@@ -14,6 +14,11 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type {
+  AiLogFieldRef,
+  AiSearchCondition,
+} from '@model/ai-assistant/types';
+
 import EsQuerySource from '../source/es-query';
 
 
@@ -82,10 +87,54 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc AI 助手字段目录（数据统计选字段）
+   * @param { Object } params condition 用来源检索条件；parent_field + include_descendants 一次取回该根字段的对象后代
+   */
+  fetchLogFieldMetadata(
+    params: {
+      condition: AiSearchCondition,
+      parent_field?: AiLogFieldRef,
+      include_descendants?: boolean,
+    },
+    options?: { catchError?: boolean },
+  ) {
+    return EsQuerySource.getLogFieldMetadata(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 创建日志检索导出任务
    */
   createQueryTask(params: Record<string, any>) {
     return EsQuerySource.createQueryTask(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 导出任务详情
+   */
+  fetchQueryTask(params: { id: number | string }, options?: { catchError?: boolean }) {
+    return EsQuerySource.getQueryTask(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 导出任务列表
+   */
+  fetchQueryTaskList(params: Record<string, any> = {}, options?: { catchError?: boolean }) {
+    return EsQuerySource.listQueryTask(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 下载导出任务文件
+   */
+  downloadQueryTask(params: { id: number | string }, options?: { catchError?: boolean }) {
+    return EsQuerySource.downloadQueryTask(params, {
+      catchError: options?.catchError,
+    })
       .then(({ data }) => data);
   },
 };

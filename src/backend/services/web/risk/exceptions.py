@@ -51,3 +51,37 @@ class AnalyseReportTitleGenerationError(RiskException):
     MESSAGE = gettext_lazy("AI 分析报告标题生成失败")
     STATUS_CODE = 500
     ERROR_CODE = "004"
+
+
+class AnalyseReportExportFailed(RiskException):
+    """报告渲染失败，不能将 HTML 当作成功的 PDF 下载。"""
+
+    MESSAGE = gettext_lazy("分析报告导出失败，请稍后重试")
+    STATUS_CODE = 500
+    ERROR_CODE = "006"
+
+
+class AutoProcessParamsError(RiskException):
+    MESSAGE = gettext_lazy("处理套餐参数不完整，缺少模板变量: {keys}")
+    STATUS_CODE = 400
+    ERROR_CODE = "005"
+
+    def __init__(self, keys: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(keys=keys)
+        super().__init__(*args, **kwargs)
+
+
+class BulkSelectionOverLimit(RiskException):
+    """确认、关单、转单、误报超过 500 条，或处理套餐超过 100 条。"""
+
+    MESSAGE = gettext_lazy("所选风险数量超过上限，请缩小范围")
+    STATUS_CODE = 400
+    ERROR_CODE = "006"
+
+
+class RiskConfirmPermissionDenied(RiskException):
+    """确认风险只允许确认人或平台管理员，不引导申请平台管理权限。"""
+
+    MESSAGE = gettext_lazy("当前用户不是确认人或平台管理员")
+    STATUS_CODE = 403
+    ERROR_CODE = "007"

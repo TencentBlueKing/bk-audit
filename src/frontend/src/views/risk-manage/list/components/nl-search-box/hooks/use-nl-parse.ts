@@ -71,6 +71,8 @@ const fetchScopedTags = async (options: INLParseOptions) => {
     start_time: options.start_time,
     end_time: options.end_time,
     noNeedSceneParams: true,
+    ...(options.scope_type ? { scope_type: options.scope_type } : {}),
+    ...(options.scope_id ? { scope_id: options.scope_id } : {}),
     page: 1,
     page_size: 200,
   });
@@ -130,6 +132,9 @@ export default function useNLParse() {
       }
       if (options.scope_id) {
         params.scope_id = options.scope_id;
+      }
+      if (options.risk_view_type) {
+        params.risk_view_type = options.risk_view_type;
       }
       const result = await runNl2RiskFilter(params);
 

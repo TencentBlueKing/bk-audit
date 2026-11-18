@@ -1,0 +1,63 @@
+# 拓展字段类型与操作符：字段样例仅作推断线索，最终输出受查询 Schema 约束。
+
+- description: '拓展字段-已采样字符串值-用户明确数值比较'
+  vars:
+    query: '查询当前系统中拓展数据 metrics.duration_ms 大于 100 的日志'
+    current_system_id: 'eval_monitor_system'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems:
+      - system_id: 'eval_monitor_system'
+        name: '示例监控系统'
+        description: '合成监控日志'
+        standard_fields: []
+        extension_fields:
+          - raw_name: 'extend_data'
+            keys: ['metrics', 'duration_ms']
+            field_type: 'string'
+            display_name: '请求耗时'
+            nl_name: 'extend.metrics.duration_ms'
+            description: '样例来自文本采集，用户可明确要求数值比较'
+            allow_operators: ['eq', 'include']
+            sample_value: '125'
+            system_id: 'eval_monitor_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); const c = d.condition?.conditions?.find(x => x.field.raw_name === "extend_data" && JSON.stringify(x.field.keys) === JSON.stringify(["metrics","duration_ms"])); d.status === "success" && d.outcome === "dispatch" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["LOG_SEARCH"]) && c && ["int","long","float","double"].includes(c.field.field_type) && c.operator === "gt" && c.filters.some(v => Number(v) === 100)'
+
+- description: '拓展字段-用户明确未知路径-数值比较'
+  vars:
+    query: '查询当前系统拓展数据 request.scope_id 大于 49 的日志'
+    current_system_id: 'eval_audit_system'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems:
+      - system_id: 'eval_audit_system'
+        name: '示例审计系统'
+        description: '合成审计日志'
+        standard_fields: []
+        extension_fields: []
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); const c = d.condition?.conditions?.find(x => x.field.raw_name === "extend_data" && JSON.stringify(x.field.keys) === JSON.stringify(["request","scope_id"])); d.status === "success" && d.outcome === "dispatch" && c && ["int","long","float","double"].includes(c.field.field_type) && c.operator === "gt" && c.filters.some(v => Number(v) === 49)'
+
+- description: '拓展字段-字符串相等使用缺省查询类型'
+  vars:
+    query: '查询当前系统拓展数据 ticket_id 等于 Story-9000 的日志'
+    current_system_id: 'eval_audit_system'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems:
+      - system_id: 'eval_audit_system'
+        name: '示例审计系统'
+        description: '合成审计日志'
+        standard_fields: []
+        extension_fields:
+          - raw_name: 'extend_data'
+            keys: ['ticket_id']
+            field_type: 'string'
+            display_name: '工单号'
+            nl_name: 'extend.ticket_id'
+            allow_operators: ['eq']
+            sample_value: 'Story-3000'
+            system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); const c = d.condition?.conditions?.find(x => x.field.raw_name === "extend_data" && JSON.stringify(x.field.keys) === JSON.stringify(["ticket_id"])); d.status === "success" && d.outcome === "dispatch" && c && c.field.field_type === "string" && c.operator === "eq" && c.filters.includes("Story-9000")'

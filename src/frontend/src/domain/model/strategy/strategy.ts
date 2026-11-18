@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import type { BksecFieldMeta } from '@model/bksec/config';
+import { readBksecFormState } from '@model/bksec/config';
 import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
 import StrategyFieldEvent from '../strategy/strategy-field-event';
@@ -95,6 +97,10 @@ export default class Strategy {
   risk_guidance: string;
   risk_title: string;
   risk_count: number;
+  scene_risk_counts?: Array<{
+    scene_id: string | number;
+    risk_count: number;
+  }>;
   strategy_type: string;
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
@@ -106,6 +112,19 @@ export default class Strategy {
   report_enabled: boolean;
   report_config: any;
   report_auto_render: boolean;
+  rules?: Array<Record<string, any>>;
+  assign_rules?: Array<Record<string, any>>;
+  default_assign_rule?: Record<string, any>;
+  dispatch_rules?: Array<Record<string, any>>;
+  binding_type?: string;
+  visibility?: Record<string, any>;
+  scene_id?: string | number;
+  bksecEnabled: boolean;
+  bksecProjectId: string | null;
+  bksecRiskTypeId: string | null;
+  bksecRiskTypeName: string;
+  bksecFieldValues: Record<string, string>;
+  bksecFieldMeta: BksecFieldMeta[];
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -129,6 +148,9 @@ export default class Strategy {
     this.risk_guidance = payload.risk_guidance;
     this.risk_title = payload.risk_title;
     this.risk_count = payload.risk_count; // 风险数量
+    this.scene_risk_counts = Array.isArray(payload.scene_risk_counts)
+      ? payload.scene_risk_counts
+      : [];
     this.strategy_type = payload.strategy_type;
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
@@ -141,6 +163,23 @@ export default class Strategy {
     this.report_config = payload.report_config;
     this.report_auto_render = payload.report_auto_render;
     this.report_status = payload.report_status;
+    this.rules = payload.rules;
+    this.assign_rules = payload.assign_rules;
+    this.default_assign_rule = payload.default_assign_rule;
+    this.dispatch_rules = payload.dispatch_rules;
+    this.binding_type = payload.binding_type;
+    this.visibility = payload.visibility;
+    this.scene_id = payload.scene_id;
+    const bksec = readBksecFormState(payload as Record<string, any>);
+    this.bksecEnabled = bksec.bksecEnabled;
+    this.bksecProjectId = bksec.bksecProjectId;
+    this.bksecRiskTypeId = bksec.bksecRiskTypeId;
+    this.bksecRiskTypeName = bksec.bksecRiskTypeName;
+    this.bksecFieldValues = bksec.bksecFieldValues;
+    this.bksecFieldMeta = bksec.bksecFieldMeta;
+  }
+  get isDraft() {
+    return this.status === 'draft';
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {
@@ -167,6 +206,7 @@ export default class Strategy {
     const statusTagMap: Record<string, string> = {
       disabled: 'unknown',
       running: 'normal',
+      draft: 'warning',
       // 处理中
       pending: 'warning',
       starting: 'warning',

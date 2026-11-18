@@ -480,16 +480,31 @@ class TestScopePermissionCheckScopeEntry(TestCase):
 
     @patch("services.web.common.scope_permission.Permission")
     def test_scene_uses_is_allowed(self, mock_perm_cls):
-        """scene 使用 is_allowed 实例级"""
+        """启用场景使用 is_allowed 实例级权限。"""
         mock_instance = MagicMock()
         mock_instance.is_allowed.return_value = True
         mock_perm_cls.return_value = mock_instance
 
+        scene = Scene.objects.create(name="可访问单场景", status=SceneStatus.ENABLED)
         sp = ScopePermission("admin")
-        scope = ScopeContext(ScopeType.SCENE, "1")
+        scope = ScopeContext(ScopeType.SCENE, str(scene.scene_id))
         result = sp.check_scope_entry(scope, ActionEnum.VIEW_SCENE)
         assert result is True
         mock_instance.is_allowed.assert_called_once()
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_disabled_scene_rejects_entry_even_with_iam_permission(self, mock_perm_cls):
+        """停用场景在列表中不可见，已知 ID 的直接入口也应拒绝。"""
+
+        scene = Scene.objects.create(name="已停用入口场景", status=SceneStatus.DISABLED)
+        permission = mock_perm_cls.return_value
+        permission.is_allowed.return_value = True
+        permission.get_apply_data.return_value = ({}, "")
+
+        with pytest.raises(PermissionException):
+            ScopePermission("admin").check_scope_entry(
+                ScopeContext(ScopeType.SCENE, str(scene.scene_id)), ActionEnum.VIEW_SCENE
+            )
 
     @patch("services.web.common.scope_permission.System.get_managed_system_ids", return_value=["bk_monitor"])
     @patch("services.web.common.scope_permission.Permission")

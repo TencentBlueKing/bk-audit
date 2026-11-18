@@ -97,8 +97,28 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene.scene_id,
         )
+        # 下钻工具：创建并绑定到风险归属场景（展示过滤按场景可见性，与执行鉴权同口径）
+        from services.web.scene.constants import PanelStatus
+        from services.web.tool.models import Tool
 
-        # 创建风险
+        for tool_uid in ("test-tool", "user-tool"):
+            Tool.objects.create(
+                namespace=settings.DEFAULT_NAMESPACE,
+                uid=tool_uid,
+                version=1,
+                name=f"tool-{tool_uid}",
+                tool_type="data_search",
+                config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+                permission_owner="admin",
+                status=PanelStatus.PUBLISHED,
+            )
+            BindingMetadataHelper.create_resource_binding(
+                resource_id=tool_uid,
+                resource_type=ResourceVisibilityType.TOOL,
+                scene_id=self.scene.scene_id,
+            )
+
+        # 创建风险（固化归属场景，工具在该场景可见 → drill 保留展示）
         self.risk = Risk.objects.create(
             risk_id="test-risk-strategy-info-apigw",
             raw_event_id="raw_event_123",
@@ -106,6 +126,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
             status=RiskStatus.NEW,
             title="测试风险",
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            scene_id=self.scene.scene_id,
         )
 
     def tearDown(self):

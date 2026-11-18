@@ -23,17 +23,17 @@
         <div class="field-header-row">
           <div
             class="field-value is-required"
-            style="flex: 0 0 150px;">
+            style="flex: 0 1 150px; min-width: 110px;">
             {{ t('参数名') }}
           </div>
           <div
             class="field-value"
-            style="flex: 0 0 100px;">
+            style="flex: 0 1 100px; min-width: 80px;">
             {{ t('显示名') }}
           </div>
           <div
             class="field-value"
-            style="flex: 0 0 150px;">
+            style="flex: 0 1 150px; min-width: 110px;">
             <span
               v-bk-tooltips="{ content: positionContentText}"
               class="underline-dashed">
@@ -42,7 +42,7 @@
           </div>
           <div
             class="field-value"
-            style="flex: 0 1 930px; min-width: 200px;">
+            style="flex: 0 1 930px; min-width: 120px;">
             <span
               v-bk-tooltips="{ content: t('在接口调试页，鼠标移入label，即可显示参数说明') }"
               class="underline-dashed">
@@ -51,7 +51,7 @@
           </div>
           <div
             class="field-value"
-            style="flex: 0 0 200px;">
+            style="flex: 0 1 200px; min-width: 90px;">
             {{ t('是否必填') }}
             <bk-popover
               ref="requiredListRef"
@@ -80,17 +80,17 @@
           </div>
           <div
             class="field-value is-required"
-            style="flex: 0 0 120px;">
+            style="flex: 0 1 120px; min-width: 110px;">
             {{ t('前端类型') }}
           </div>
           <div
             class="field-value"
-            style="flex: 0 0 350px;">
+            style="flex: 0 1 350px; min-width: 200px;">
             {{ t('默认值') }}
           </div>
           <div
             class="field-value"
-            style="flex: 0 0 120px;">
+            style="flex: 0 1 120px; min-width: 110px;">
             <span
               v-bk-tooltips="{ content: t(`可见：用户打开工具后，可以查看和输入该参数值
               不可见：参数将作为后台参数传递给接口，建议设置默认值`) }"
@@ -136,7 +136,7 @@
           <div class="field-row">
             <div
               class="field-value"
-              style="flex: 0 0 150px;">
+              style="flex: 0 1 150px; min-width: 110px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -179,7 +179,7 @@
             <!-- 显示名 -->
             <div
               class="field-value"
-              style="flex: 0 0 100px;">
+              style="flex: 0 1 100px; min-width: 80px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -191,7 +191,7 @@
             <!-- 传参方式 -->
             <div
               class="field-value"
-              style="flex: 0 0 150px;">
+              style="flex: 0 1 150px; min-width: 110px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -212,7 +212,7 @@
             <!-- 参数说明 -->
             <div
               class="field-value"
-              style="flex: 0 1 930px; min-width: 200px;">
+              style="flex: 0 1 930px; min-width: 120px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -224,7 +224,7 @@
             <!-- 是否必填 -->
             <div
               class="field-value"
-              style="flex: 0 0 200px;">
+              style="flex: 0 1 200px; min-width: 90px;">
               <bk-form-item
                 :clearable="false"
                 error-display-type="tooltips"
@@ -247,7 +247,7 @@
             <!-- 前端类型 -->
             <div
               class="field-value"
-              style="flex: 0 0 120px;">
+              style="flex: 0 1 120px; min-width: 110px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -258,7 +258,7 @@
                   class="bk-select"
                   :clearable="false"
                   size="small"
-                  @change="handleFrontendTypeChange(item)">
+                  @change="handleFrontendTypeChange(index)">
                   <bk-option
                     v-for="(frontendTypeItem, frontendTypeItemIndex) in frontendTypeList"
                     :id="frontendTypeItem.value"
@@ -270,7 +270,7 @@
             <!-- 默认值 -->
             <div
               class="field-value"
-              style="flex: 0 0 350px;">
+              style="flex: 0 1 350px; min-width: 200px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -322,7 +322,7 @@
             <!-- 是否可见 -->
             <div
               class="field-value"
-              style="flex: 0 0 120px;">
+              style="flex: 0 1 120px; min-width: 110px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -542,49 +542,18 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     haveSameName.value = false;
     isVarNameNOPass.value = false;
   };
-  // 前端类型改变时，重置默认值
-  const handleFrontendTypeChange = (item: Record<string, any>) => {
-    if (item.field_category === 'person_select') {
-      paramList.value = paramList.value.map((listItem: any) => {
-        if (listItem.raw_name === item.raw_name) {
-          return {
-            ...listItem,
-            default_value: [],
-          };
-        }
-        return listItem;
-      });
-    } else if (item.field_category === 'input') {
-      paramList.value = paramList.value.map((listItem: any) => {
-        if (listItem.raw_name === item.raw_name) {
-          return {
-            ...listItem,
-            default_value: '',
-          };
-        }
-        return listItem;
-      });
-    } else if (item.field_category === 'time_range_select') {
-      paramList.value = paramList.value.map((listItem: any) => {
-        if (listItem.raw_name === item.raw_name) {
-          return {
-            ...listItem,
-            default_value: [],
-            time_range: Array.isArray(listItem.time_range) ? listItem.time_range : [],
-          };
-        }
-        return listItem;
-      });
+  // 前端类型改变时，仅重置当前行的默认值
+  // 不能按 raw_name 匹配：新增行的 raw_name 均为空，直到 getData 才生成
+  const handleFrontendTypeChange = (index: number) => {
+    const target: Record<string, any> = paramList.value[index];
+    if (!target) return;
+    if (target.field_category === 'person_select') {
+      target.default_value = [];
+    } else if (target.field_category === 'time_range_select') {
+      target.default_value = [];
+      target.time_range = Array.isArray(target.time_range) ? target.time_range : [];
     } else {
-      paramList.value = paramList.value.map((listItem: any) => {
-        if (listItem.raw_name === item.raw_name) {
-          return {
-            ...listItem,
-            default_value: '',
-          };
-        }
-        return listItem;
-      });
+      target.default_value = '';
     }
   };
   // 校验 - 纯函数，不修改响应式状态，避免在模板渲染时触发递归更新
@@ -803,7 +772,6 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 .render-field {
   display: flex;
   min-width: 640px;
-  overflow: hidden;
   border-top: 1px solid #dcdee5;
   border-right: 1px solid #dcdee5;
   border-bottom: 1px solid #dcdee5;

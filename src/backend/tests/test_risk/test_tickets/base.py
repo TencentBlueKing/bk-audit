@@ -16,26 +16,41 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from unittest import TestCase
 from uuid import uuid4
 
-import pytest
 from bk_resource import resource
+from django.test import TestCase
 
+from apps.meta.models import GlobalMetaConfig
+from services.web.risk.constants import SECURITY_PERSON_KEY
 from services.web.risk.models import ProcessApplication, Risk, RiskRule
 from services.web.scene.models import Scene
 from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
 
 
-@pytest.mark.django_db
 class TicketTest(TestCase):
-    ...
+    """为风险工单用例提供 Django 事务隔离，避免测试数据在用例间相互污染。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        """提供工单兜底负责人配置，随测试事务回滚，不依赖本地业务配置。"""
+        super().setUpTestData()
+        GlobalMetaConfig.set(config_key=SECURITY_PERSON_KEY, config_value=["ticket-test-security"])
 
 
 class RiskContext:
     def __init__(self, risk_info: dict = None):
         Risk.objects.all().delete()
         risk_info = risk_info or {}
+        # 确保策略存在
+        strategy_id = risk_info.get("strategy_id", RISK_INFO.get("strategy_id"))
+        if strategy_id:
+            from services.web.strategy_v2.models import Strategy
+
+            Strategy.objects.get_or_create(
+                strategy_id=strategy_id,
+                defaults={"strategy_name": f"test_strategy_{strategy_id}"},
+            )
         self.risk = Risk.objects.create(**{**RISK_INFO, **risk_info})
 
     def __enter__(self) -> Risk:

@@ -53,22 +53,17 @@
                   <bk-loading
                     :loading="tagLoading"
                     style="width: 100%;">
-                    <bk-select
+                    <bk-tag-input
                       v-model="formData.tags"
                       allow-create
-                      class="bk-select"
-                      filterable
-                      :input-search="false"
-                      multiple
-                      multiple-mode="tag"
-                      :placeholder="t('请选择')"
-                      :search-placeholder="t('请输入关键字')">
-                      <bk-option
-                        v-for="(item, index) in tagData"
-                        :key="index"
-                        :label="item.name"
-                        :value="item.id" />
-                    </bk-select>
+                      collapse-tags
+                      display-key="name"
+                      has-delete-icon
+                      :list="tagData"
+                      :placeholder="t('请输入并Enter结束')"
+                      save-key="id"
+                      search-key="name"
+                      trigger="focus" />
                   </bk-loading>
                 </bk-form-item>
               </div>
@@ -124,7 +119,7 @@
                   <bk-input
                     v-model.trim="formData.risk_hazard"
                     autosize
-                    :maxlength="1000"
+                    :maxlength="2000"
                     :placeholder="t('请输入描述')"
                     show-word-limit
                     style="width: 100%;"
@@ -138,7 +133,7 @@
                   <bk-input
                     v-model.trim="formData.risk_guidance"
                     autosize
-                    :maxlength="1000"
+                    :maxlength="2000"
                     :placeholder="t('请输入描述')"
                     show-word-limit
                     style="width: 100%;"
@@ -152,7 +147,7 @@
                 <bk-input
                   v-model.trim="formData.description"
                   autosize
-                  :maxlength="1000"
+                  :maxlength="2000"
                   :placeholder="t('请输入描述')"
                   show-word-limit
                   style="width: 100%;"
@@ -267,6 +262,15 @@
   import Customize from './components/customize/index.vue';
   import ReferenceModel from './components/reference-model/index.vue';
 
+  import {
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyListRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../utils/strategy-routes';
+  import { applyScheduleConfigForSubmit, parseScheduleCountFreq } from '../../utils/strategy-protocol';
+
   type ItemType = {
     label: string,
     value: string
@@ -303,12 +307,13 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
 
   const { removePageParams } = useRecordPage;
   const { t } = useI18n();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -361,14 +366,6 @@
     ],
     tags: [
       // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
-      {
-        validator: (value: Array<string>) => {
-          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
-          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
-        },
-        message: t('标签只允许中文、字母、数字、中划线或下划线组成'),
-        trigger: 'change',
-      },
       {
         validator: (value: Array<string>) => {
           const reg = /\D+/;
@@ -470,9 +467,26 @@
     ],
     'configs.schedule_config.count_freq': [
       {
-        validator: (value: number) => !!value,
-        message: t('调度周期不能为空'),
+        validator: (value: string | number) => {
+          if (formData.value.configs?.data_source?.source_type !== 'batch_join_source') {
+            return true;
+          }
+          return parseScheduleCountFreq(value) !== null;
+        },
+        message: t('请输入大于等于1的整数'),
         trigger: ['change', 'blur'],
+      },
+    ],
+    'configs.schedule_config.schedule_period': [
+      {
+        validator: (value: string) => {
+          if (formData.value.configs?.data_source?.source_type !== 'batch_join_source') {
+            return true;
+          }
+          return value === 'hour' || value === 'day';
+        },
+        message: t('不能为空'),
+        trigger: 'change',
       },
     ],
     'configs.aiops_config.schedule_period': [
@@ -553,7 +567,7 @@
     },
   });
 
-  // 获取标签列表
+  // 获取标签列表（过滤系统内置特殊标签，保留 allow-create 自定义创建）
   const {
     loading: tagLoading,
   } = useRequest(MetaManageService.fetchTags, {
@@ -561,7 +575,8 @@
     manual: true,
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {
-        if (item.tag_id !== '-1') {
+        // 负数字符串 id（如 -1/-2…）为系统内置分类，不放入下拉
+        if (!String(item.tag_id).startsWith('-')) {
           res.push({
             id: item.tag_id,
             name: item.tag_name,
@@ -678,10 +693,12 @@
     if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
       fields.configs.data_source.link_table = null;
     }
-    // 非周期不需要schedule_config
-    if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
-      fields.configs.schedule_config = undefined;
+    // 实时调度不传 schedule_config；固定调度必传整数周期
+    if (fields.configs.data_source?.source_type === 'batch_join_source'
+      && !fields.configs.schedule_config) {
+      fields.configs.schedule_config = formData.value.configs.schedule_config;
     }
+    fields.configs = applyScheduleConfigForSubmit(fields.configs) ?? fields.configs;
     return {
       ...baseParams,
       ...fields,
@@ -716,7 +733,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
   const handleBeforeUnload = (evt: any) => {
@@ -728,7 +745,7 @@
 
   useRouterBack(() => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   });
   onMounted(() => {
@@ -738,7 +755,7 @@
     window.removeEventListener('beforeunload', handleBeforeUnload);
   });
   onBeforeRouteLeave((to) => {
-    if (to.name !== 'strategyList' && to.name !== 'strategyUpgrade') {
+    if (!isStrategyListRoute(to.name) && !isStrategyUpgradeRoute(to.name)) {
       removePageParams();
     }
   });

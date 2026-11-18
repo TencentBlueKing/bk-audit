@@ -15,27 +15,31 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="strategyList">
+  <div class="application-list-anchor">
     <div
       ref="rootRef"
       class="application-list-wrap">
       <div class="action-header">
-        <auth-button
-          action-id="create_pa_v2"
-          class="mr8"
-          :loading="checkLoading"
-          :permission="permissionCheckData.create_pa_v2"
-          resource-is-scene
-          theme="primary"
-          @click="handleCreate">
-          <audit-icon
-            style="margin-right: 8px;font-size: 14px;"
-            type="add" />
-          {{ t('处理套餐', 2) }}
-        </auth-button>
+        <div class="action-header-left">
+          <auth-button
+            action-id="create_pa_v2"
+            class="mr8"
+            :loading="checkLoading"
+            :permission="permissionCheckData.create_pa_v2"
+            resource-is-scene
+            theme="primary"
+            @click="handleCreate">
+            <audit-icon
+              style="margin-right: 8px;font-size: 14px;"
+              type="add" />
+            {{ t('处理套餐', 2) }}
+          </auth-button>
+          <bk-button
+            data-testid="execution-records-open"
+            @click="openExecutionRecords()">
+            {{ t('查看执行记录') }}
+          </bk-button>
+        </div>
         <bk-search-select
           v-model="searchKey"
           class="search-input"
@@ -51,21 +55,21 @@
           value-split-code=","
           @update:model-value="handleSearch" />
       </div>
-      <bk-loading :loading="checkLoading">
-        <render-list
-          ref="listRef"
-          class="audit-highlight-table mt16"
-          :columns="tableColumn"
-          :data-source="dataSource"
-          is-need-scene-id
-          scene-id-key="scene_id"
-          :settings="settings"
-          @clear-search="handleClearSearch"
-          @on-setting-change="handleSettingChange"
-          @request-success="handleRequestSuccess" />
-      </bk-loading>
+      <render-list
+        ref="listRef"
+        class="audit-highlight-table"
+        :columns="tableColumn"
+        :data-source="dataSource"
+        is-need-scene-id
+        scene-id-key="scene_id"
+        :settings="settings"
+        :skeleton-min-duration="300"
+        use-skeleton
+        @clear-search="handleClearSearch"
+        @on-setting-change="handleSettingChange"
+        @request-success="handleRequestSuccess" />
     </div>
-  </skeleton-loading>
+  </div>
   <!-- 套餐详情页 -->
   <audit-sideslider
     ref="sidesliderRef"
@@ -170,6 +174,12 @@
     </template>
     <scope-risk-detail :data="detailItem" />
   </audit-sideslider>
+  <execution-records
+    v-model:is-show="showExecutionRecords"
+    :application-id="recordPreset.applicationId"
+    :application-name="recordPreset.applicationName"
+    :risk-id="recordPreset.riskId"
+    :scene-id="recordPreset.sceneId" />
 </template>
 
 <script setup lang='tsx'>
@@ -179,6 +189,7 @@
     onMounted,
     onUnmounted,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -202,6 +213,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import ProcessDetail from './components/detail.vue';
+  import ExecutionRecords from './components/execution-records.vue';
   import ScopeRiskDetail from './components/scope-risk-detail.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
@@ -243,9 +255,15 @@
   const { on: onEvent, off } = useEventBus();
   const router = useRouter();
   const dataSource = ProcessApplicationManageService.fetchList;
-  const isLoading = ref(false);
   const showDetail = ref(false);
   const showScopeRiskDetail = ref(false);
+  const showExecutionRecords = ref(false);
+  const recordPreset = ref({
+    applicationId: '',
+    applicationName: '',
+    riskId: '',
+    sceneId: '',
+  });
   const isNeedShowDetail = ref(false);
 
   const detailItem = ref(new ProcessApplicationManageModel());
@@ -423,7 +441,7 @@
 
     {
       label: () => t('操作'),
-      width: 170,
+      width: 240,
       render: ({ data }: { data: ProcessApplicationManageModel }) => <p style='display: flex;align-items: center;height: 100%;'>
       <auth-button
         theme='primary'
@@ -445,6 +463,13 @@
       >
         {t('克隆')}
       </auth-button>
+      <bk-button
+        class="ml16"
+        text
+        theme="primary"
+        onClick={() => openExecutionRecords(data)}>
+        {t('执行记录')}
+      </bk-button>
     </p>,
     },
   ] as any[];
@@ -578,11 +603,35 @@
   };
 
 
-  // 查看命中风险
+  // 关联规则表格和套餐列表共用地址栏，打开前记下查询串，关闭时还原
+  let rulePanelSearch: string | null = null;
   const showRisks = (item: ProcessApplicationManageModel) => {
+    rulePanelSearch = window.location.search;
     detailItem.value = item;
     showScopeRiskDetail.value = true;
   };
+  const replacePageSearch = (search: string) => {
+    const nextUrl = `${window.location.pathname}${search}${window.location.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl === currentUrl) return;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  };
+  watch(showScopeRiskDetail, (visible) => {
+    if (visible) return;
+    if (rulePanelSearch !== null) {
+      const search = rulePanelSearch;
+      rulePanelSearch = null;
+      replacePageSearch(search);
+      return;
+    }
+    // 侧滑打开前没有记下查询串时，套餐列表本身也没按套餐 ID 筛选，就清掉残留的 id
+    if (searchKey.value.some(item => item.id === 'id')) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('id')) return;
+    params.delete('id');
+    const search = params.toString();
+    replacePageSearch(search ? `?${search}` : '');
+  });
   const handleToggle = (item: ProcessApplicationManageModel) => {
     detailItem.value = item;
     return toggleApplication({
@@ -647,6 +696,16 @@
     listRef.value.fetchData();
   };
 
+  const openExecutionRecords = (data?: ProcessApplicationManageModel) => {
+    recordPreset.value = {
+      applicationId: data?.id ? String(data.id) : '',
+      applicationName: data?.name || '',
+      riskId: '',
+      sceneId: '',
+    };
+    showExecutionRecords.value = true;
+  };
+
   onMounted(() => {
     const params = getSearchParams();
     const hasKey = setSearchKey();
@@ -654,6 +713,15 @@
     removePageParams(LIST_PAGE_KEY);
     if (hasKey) {
       handleSearch(searchKey.value);
+    } else if (params.openRecords === '1') {
+      recordPreset.value = {
+        applicationId: '',
+        applicationName: '',
+        riskId: params.riskId ? String(params.riskId) : '',
+        sceneId: params.sceneId ? String(params.sceneId) : '',
+      };
+      showExecutionRecords.value = true;
+      fetchList();
     } else if (params.id) {
       // 深链打开详情（非编辑返回）
       isNeedShowDetail.value = true;
@@ -686,23 +754,51 @@
   }
 }
 
-.process-table :deep(thead th) {
-  background-color: #f5f7fa;
-}
-
-.process-table :deep(.bk-table-body) {
-  max-height: calc(100vh - 277px);
+.application-list-anchor {
+  /* 铺满导航内容区，不再用 100vh 硬算，避免高出滚动容器 */
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 .application-list-wrap {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px;
+  overflow: hidden;
   background: #fff;
+  box-sizing: border-box;
+
+  :deep(.audit-render-list) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :deep(.audit-table-skeleton) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  :deep(.audit-table-skeleton__body) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 
   .action-header {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 16px;
+  }
 
+  .action-header-left {
+    display: flex;
+    align-items: center;
   }
 }
 </style>

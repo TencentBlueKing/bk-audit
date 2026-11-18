@@ -85,7 +85,7 @@
                 <span
                   v-for="(tag, tagIndex) in getUserTagValues(item.key)"
                   :key="`${tag}-${tagIndex}`"
-                  class="pa-param-user-tag">
+                  class="pa-param-user-tag audit-ellipsis-tag">
                   {{ tag }}
                 </span>
                 <span
@@ -94,7 +94,7 @@
               </div>
               <span
                 v-else-if="getFieldRefText(item.key)"
-                class="pa-param-user-tag">
+                class="pa-param-user-tag audit-ellipsis-tag">
                 {{ getFieldRefText(item.key) }}
               </span>
               <template v-else>
@@ -424,7 +424,7 @@
   }
 
   .pa-param-user-tag {
-    display: inline-flex;
+    display: inline-block;
     padding: 2px 8px;
     font-size: 12px;
     line-height: 20px;

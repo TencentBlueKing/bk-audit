@@ -450,6 +450,43 @@ class TestRiskEventSubscriptionResource(RiskEventSubscriptionTestMixin, TestCase
         self.assertEqual(data["query_sql"], self._expected_query_sql(where=where))
         self.assertEqual(data["count_sql"], self._expected_count_sql(where=where))
 
+    def test_raw_query_preserves_subscription_json_key_compatibility(self):
+        """日志入口的字段限制不应导致已合法保存的订阅条件在生成 SQL 时失败。"""
+        for key, path in (
+            ("space key", '$."space key"'),
+            ('quoted"key', r'$."quoted\\"key"'),
+            (r"path\key", r'$."path\\\\key"'),
+        ):
+            with self.subTest(key=key):
+                condition = WhereCondition(
+                    condition=Condition(
+                        field=Field(
+                            table="t",
+                            raw_name="event_data",
+                            display_name="event_data",
+                            field_type=FieldType.STRING,
+                            keys=[key],
+                        ),
+                        operator=Operator.EQ,
+                        filter="x",
+                    )
+                )
+                self.subscription.set_where_condition(condition)
+                self.subscription.save()
+
+                data = self.resource.risk.query_risk_event_subscription.request(
+                    {
+                        "token": self.subscription.token,
+                        "start_time": self.TIME_RANGE[0],
+                        "end_time": self.TIME_RANGE[1],
+                        "raw": True,
+                    }
+                )
+
+                where = f"JSON_EXTRACT_STRING(`t`.`event_data`,'{path}')='x'"
+                self.assertEqual(data["query_sql"], self._expected_query_sql(limit=data["page_size"], where=where))
+                self.assertEqual(data["count_sql"], self._expected_count_sql(where=where))
+
     def test_query_subscription_not_found(self):
         """不存在或关闭的 token 需抛出 RiskEventSubscriptionNotFound。"""
         payload = {

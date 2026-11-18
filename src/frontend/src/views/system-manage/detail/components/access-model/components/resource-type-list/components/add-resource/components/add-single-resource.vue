@@ -76,7 +76,7 @@
           style="flex: 1;">
           <bk-input
             v-model.trim="formData.name"
-            :placeholder="t('请输入，仅可由汉字、小写英文字母、数字、“-”组成')"
+            :placeholder="t('请输入')"
             style="width: 100%;" />
         </bk-form-item>
       </div>
@@ -250,12 +250,6 @@
     ],
     name: [
       { message: t('不能为空'), trigger: 'change', validator: (value: string) => !!value },
-      { message: t('仅可由汉字、小写英文字母、数字、“-”组成'), trigger: 'change', validator: (value: string) => {
-        if (/^[\u4e00-\u9fa5a-z0-9-]+$/.test(value)) {
-          return true;
-        }
-        return false;
-      } },
     ],
   };
 

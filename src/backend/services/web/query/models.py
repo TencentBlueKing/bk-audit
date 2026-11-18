@@ -24,7 +24,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.notice.constants import MsgType, RelateType
 from core.models import OperateRecordModel, SoftDeleteModel
-from services.web.query.constants import TaskEnum
+from services.web.query.constants import LogExportSourceType, TaskEnum
 
 
 class ExportFieldLog(OperateRecordModel):
@@ -61,11 +61,20 @@ class LogExportTask(SoftDeleteModel):
     total = models.IntegerField(gettext_lazy("总条数"), default=0)
     search_params_url = models.TextField(gettext_lazy("查询参数URL"), blank=True, null=True)
     alert_sented = models.BooleanField(gettext_lazy("是否已发送告警"), default=False)
+    # AI 助手导出时关联日志检索 Message 的内部 ID；旧入口保持为空。
+    source_type = models.CharField(
+        gettext_lazy("来源类型"),
+        max_length=32,
+        choices=LogExportSourceType.choices,
+        default=LogExportSourceType.WEB_LOG_SEARCH,
+    )
+    source_id = models.PositiveBigIntegerField(gettext_lazy("来源 ID"), null=True, blank=True, default=None)
 
     class Meta:
         verbose_name = gettext_lazy("日志导出任务")
         verbose_name_plural = verbose_name
         ordering = ["-created_at"]
+        indexes = [models.Index(fields=["source_type", "source_id"], name="query_export_source_idx")]
 
     def update_current_records(self, current_records: int):
         """

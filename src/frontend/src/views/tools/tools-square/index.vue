@@ -96,6 +96,7 @@
             class="content-card-wrapper">
             <content-card
               ref="ContentCardRef"
+              :accessible-scene-ids="accessibleSceneIds"
               :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
               :is-cross-system="scopeParams.scope_type === 'cross_system'"
               :my-created="tagId === '-4'"
@@ -111,6 +112,7 @@
           <tool-info-panel
             v-show="hasOpenedTools"
             ref="toolInfoPanelRef"
+            :accessible-scene-ids="accessibleSceneIds"
             :active-uid="activeToolUid"
             :scene-name-map="sceneNameMap"
             :scope-params="scopeParams"
@@ -180,16 +182,25 @@
 
   // 场景ID → 场景名称映射
   const sceneNameMap = ref<Record<number, string>>({});
+  const accessibleSceneIds = ref<number[] | null>(null);
   const {
     run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
-    onSuccess: (data: Array<{ scene_id: number; name: string }>) => {
+    onSuccess: (data: Array<{
+      scene_id: number;
+      name: string;
+      status: 'enabled' | 'disabled';
+      permission: Record<string, boolean>;
+    }>) => {
       const map: Record<number, string> = {};
       data.forEach((item) => {
         map[item.scene_id] = item.name;
       });
       sceneNameMap.value = map;
+      accessibleSceneIds.value = data
+        .filter(item => item.status === 'enabled' && item.permission?.view_scene === true)
+        .map(item => item.scene_id);
     },
   });
   // 系统ID → 系统名称映射
@@ -339,9 +350,7 @@
     }, { resolving: true });
   };
 
-  // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
-  // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
-  // URL 同步在 onMounted 中执行（需等待 tool-info-panel 挂载）
+  // 打开广场地址时停在列表。已打开的工具不自动进入工作台，留在「正在使用」提示里。
 
   // 场景切换
   const getSceneKey = (item: SceneItem | null) => (item ? `${item.type}:${item.id}` : '');
@@ -526,13 +535,20 @@
     fetchToolsTagsList({ ...scopeParams.value, status: 'published' });
   };
 
+  /** 当前是否在工具广场相关路由（keep-alive 失活时 route 已是其他页） */
+  const isToolsRouteActive = () => route.name === 'toolsSquare' || route.name === 'toolDetail';
+
   const syncToolRouteToUrl = (uid: string) => {
+    // 失活实例仍可能因全局 scene query 变更触发场景同步，禁止抢导航
+    if (!isToolsRouteActive()) return;
     nextTick(() => {
       toolInfoPanelRef.value?.syncRouteForTool(uid);
     });
   };
 
   function syncRouteToUrl(uid?: string, options?: { scopeOnly?: boolean }) {
+    // 仅在工具广场/详情页同步路由；否则会把 AI 助手等页面强行 replace 回工具广场
+    if (!isToolsRouteActive()) return;
     const scopeQuery = getRouteScopeQuery(route.query as Record<string, unknown>);
     if (uid) {
       if (uid.startsWith('game_detail_')) {
@@ -546,7 +562,7 @@
       syncToolRouteToUrl(uid);
       return;
     }
-    if (!uid && route.name !== 'toolsSquare') {
+    if (route.name !== 'toolsSquare') {
       router.replace({ name: 'toolsSquare', query: scopeQuery });
     }
   }
@@ -658,15 +674,19 @@
     ContentCardRef.value?.getToolsList(tagId.value);
   };
 
+  const handleTopNavGoHome = () => {
+    if (!hasOpenedTools.value) return;
+    void handleGoHomePage();
+  };
+
   onMounted(() => {
     // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();
     });
-    if (activeToolUid.value && hasOpenedTools.value) {
-      if (!routeUid || (!isDrillDownRoute && !isRefreshRestore)) {
-        syncToolRouteToUrl(activeToolUid.value);
-      }
+    onEvent('tools-square:go-home', handleTopNavGoHome);
+    if (!routeUid && hasOpenedTools.value) {
+      goHome();
     }
   });
 
@@ -690,6 +710,7 @@
 
   onUnmounted(() => {
     off('scene:change');
+    off('tools-square:go-home', handleTopNavGoHome);
     if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
     if (restoreListScrollTimer) clearTimeout(restoreListScrollTimer);
   });

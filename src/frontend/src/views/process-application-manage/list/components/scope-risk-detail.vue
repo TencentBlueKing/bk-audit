@@ -15,19 +15,29 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div style="padding: 24px 32px;">
+  <div
+    ref="panelRef"
+    class="rule-panel">
     <render-list
       ref="scopeListRef"
       :border="['row']"
-      class="audit-highlight-table mt16 rule-table"
+      class="audit-highlight-table rule-table"
       :columns="scopeTableColumn"
-      :data-source="scopeRiskDataSource" />
+      :data-source="scopeRiskDataSource"
+      is-need-scene-id
+      :layout-height="layoutHeight"
+      scene-id-key="scene_id"
+      :sync-url="false"
+      use-skeleton />
   </div>
 </template>
 
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
     onMounted,
     ref,
   } from 'vue';
@@ -48,6 +58,28 @@
   const scopeRiskDataSource = ProcessApplicationManageService.fetchRuleList;
   const { t } = useI18n();
   const scopeListRef = ref();
+  const panelRef = ref<HTMLElement>();
+  const SIDESLIDER_HEADER = 52;
+  const PANEL_PADDING_TOP = 16;
+  const BOTTOM_RESERVE = 20;
+  // 最大高度 = 100vh - 侧栏头部 - 面板上内边距 - 底部 20
+  const layoutHeight = ref(Math.max(160, window.innerHeight - SIDESLIDER_HEADER - PANEL_PADDING_TOP - BOTTOM_RESERVE));
+  const TABLE_HEAD = 42;
+  const TABLE_FOOT = 60;
+  // 最大高度给整张表，表体再扣掉表头和分页，超出后只滚表体
+  const bodyMaxHeight = computed(() => Math.max(120, layoutHeight.value - TABLE_HEAD - TABLE_FOOT));
+  let panelObserver: ResizeObserver | undefined;
+
+  const syncLayoutHeight = () => {
+    const panel = panelRef.value;
+    if (!panel) return;
+    const style = getComputedStyle(panel);
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const rect = panel.getBoundingClientRect();
+    const available = Math.floor(window.innerHeight - rect.top - paddingTop - BOTTOM_RESERVE);
+    if (available < 160 || available === layoutHeight.value) return;
+    layoutHeight.value = available;
+  };
   const scopeTableColumn = [
     {
       label: () => t('规则ID'),
@@ -80,15 +112,46 @@
     },
   ] as Column[];
 
-  onMounted(() => {
+  onMounted(async () => {
+    await nextTick();
+    syncLayoutHeight();
+    if (panelRef.value) {
+      panelObserver = new ResizeObserver(() => {
+        syncLayoutHeight();
+      });
+      panelObserver.observe(panelRef.value);
+    }
+    window.addEventListener('resize', syncLayoutHeight);
     if (!props.data) return;
     scopeListRef.value.fetchData({
       id: props.data.id,
       page: 1,
     });
   });
+
+  onBeforeUnmount(() => {
+    panelObserver?.disconnect();
+    window.removeEventListener('resize', syncLayoutHeight);
+  });
 </script>
 <style scoped lang="postcss">
+.rule-panel {
+  box-sizing: border-box;
+  height: calc(100vh - 52px);
+  padding: 16px 24px 20px;
+  overflow: hidden;
+}
+
+.rule-table :deep(.bk-table) {
+  height: auto;
+  max-height: none;
+}
+
+.rule-table :deep(.bk-table-body) {
+  max-height: calc(v-bind(bodyMaxHeight) * 1px);
+  overflow: auto;
+}
+
 .rule-table :deep(thead th) {
   background-color: #f5f7fa;
 }

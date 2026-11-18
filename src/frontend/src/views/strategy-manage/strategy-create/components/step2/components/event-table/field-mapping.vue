@@ -72,7 +72,7 @@
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
-    eventItemKey: keyof StrategyFieldEvent;
+    eventItemKey: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs' | 'risk_meta_field_config';
     selectOptions: Array<DatabaseTableFieldModel>;
     requiredFields: string[];
     optionalFields: string[];
@@ -120,10 +120,63 @@
 
 <style lang="postcss" scoped>
 .field-mapping {
+  display: flex;
   width: 100%;
+  min-width: 0;
+  height: 100%;
+  align-items: stretch;
+
+  :deep(.select-field-value-verify),
+  :deep(.bk-select),
+  :deep(.bk-select-trigger) {
+    display: flex;
+    flex: 1 1 auto;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+  }
+
+  :deep(.bk-select .bk-input),
+  :deep(.bk-select .bk-input.is-readonly),
+  :deep(.bk-select .bk-input.is-simplicity) {
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+
+  :deep(.bk-select .bk-input--text),
+  :deep(.bk-select .bk-input--suffix-icon) {
+    background-color: transparent;
+  }
+
+  :deep(.bk-select:hover .bk-input),
+  :deep(.bk-select.is-focus .bk-input),
+  :deep(.bk-select .bk-input.is-focused),
+  :deep(.bk-select:hover .bk-input.is-simplicity),
+  :deep(.bk-select.is-focus .bk-input.is-simplicity) {
+    background-color: #fff;
+    border-color: #c4c6cc;
+    box-shadow: none;
+  }
+
+  :deep(.bk-select.is-focus .bk-input),
+  :deep(.bk-select .bk-input.is-focused) {
+    border-color: #3a84ff;
+  }
 }
 
 .no-config {
-  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 0 12px;
+  box-sizing: border-box;
 }
 </style>

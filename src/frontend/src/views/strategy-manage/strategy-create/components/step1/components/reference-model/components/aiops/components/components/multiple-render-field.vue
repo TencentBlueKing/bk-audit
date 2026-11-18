@@ -56,7 +56,7 @@
         <div class="field-key">
           <img
             class="field-type-icon"
-            :src="getAssetsFile(`field-type/${fieldItem.field_type}.png`)">
+            :src="getFieldTypeIcon(fieldItem.field_type)">
           <span style="line-height: 20px;">
             {{ fieldItem.field_name }}（{{ fieldItem.field_alias }}）
           </span>
@@ -150,10 +150,17 @@
 
   import useRequest from '@hooks/use-request';
 
-  import getAssetsFile from '@utils/getAssetsFile';
+  import getFieldTypeIcon from '@utils/getFieldTypeIcon';
 
   import FieldCascader from './field-cascader.vue';
   import FieldSelect from './field-select.vue';
+
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../../../../../../../utils/strategy-routes';
+
 
   interface Props {
     data: Record<string, any>[];
@@ -180,9 +187,9 @@
   const route = useRoute();
   const fieldItemRef = ref();
   const actionIdSourceField = ref<Array<FieldType>>([]);
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyEdit';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
 
   const selectActionIdMap = computed(() => {
     if (actionIdSourceField.value) {

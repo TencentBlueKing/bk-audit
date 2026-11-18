@@ -31,17 +31,22 @@
         v-if="isDetailReady"
         :key="dialogContentKey"
         class="edit-visibility-scroll">
-        <div class="edit-visibility-form">
-          <div class="form-item">
-            <label class="form-label">{{ t('可见范围') }}</label>
-            <div class="form-content">
-              <visible-range-field
-                :form-data="formData"
-                match-selector-width
-                popover-class="is-compact"
-                @update:form-data="handleVisibleRangeChange" />
-            </div>
-          </div>
+        <bk-form
+          ref="visibleRangeFormRef"
+          class="edit-visibility-form"
+          form-type="vertical"
+          :model="formData"
+          :rules="visibleRangeRules">
+          <bk-form-item
+            :label="t('可见范围')"
+            property="visibility_type"
+            required>
+            <visible-range-field
+              :form-data="formData"
+              match-selector-width
+              popover-class="is-compact"
+              @update:form-data="handleVisibleRangeChange" />
+          </bk-form-item>
 
           <scene-param-config
             v-if="showParamOverrideConfig"
@@ -52,8 +57,9 @@
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
             :tool-uid="props.target?.uid || ''"
-            @update:param-overrides="handleParamOverridesChange" />
-        </div>
+            @update:param-overrides="handleParamOverridesChange"
+            @update:usage-restrictions="handleUsageRestrictionsChange" />
+        </bk-form>
       </div>
     </bk-loading>
     <template #footer>
@@ -86,6 +92,16 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import {
+    pruneUsageRestrictions,
+    usageLimitsToRestrictions,
+    usageRestrictionsChanged,
+    usageRestrictionsToLimits,
+    type UsageRestrictions,
+    type UsageScopeCard,
+    validateUsageRestrictions,
+  } from '@utils/tool/portrait-account-restriction';
 
   import type { FormData, SceneParamOverride } from '../create-tool/types';
   import {
@@ -148,11 +164,12 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageWarn } = useMessage();
 
   const isShow = defineModel<boolean>('isShow', { default: false });
   // eslint-disable-next-line func-call-spacing
   const sceneParamConfigRef = ref<{ validate: () => boolean } | null>(null);
+  const visibleRangeFormRef = ref();
 
   const tagNameMap = computed(() => {
     const map: Record<string, string> = {};
@@ -196,7 +213,17 @@
   });
 
   const formData = reactive(createDefaultFormData());
+  const visibleRangeRules = {
+    visibility_type: [
+      {
+        validator: () => shouldSubmitVisibilityPayload(formData),
+        message: t('可见范围不能为空'),
+        trigger: 'change',
+      },
+    ],
+  };
   const toolConfigSnapshot = ref<Record<string, any> | null>(null);
+  const usageRestrictionBaseline = ref<UsageRestrictions>({});
   const isDetailReady = ref(false);
   const dialogContentKey = ref('');
   const pendingDetailUid = ref('');
@@ -217,6 +244,8 @@
     toolConfigSnapshot.value = _.cloneDeep(detail.config || {});
     formData.tool_type = detail.tool_type || '';
     formData.config.input_variable = detail.config?.input_variable || [];
+    formData.config.usage_restrictions = usageLimitsToRestrictions(detail.config?.usage_limits);
+    usageRestrictionBaseline.value = _.cloneDeep(formData.config.usage_restrictions);
     formData.scene_param_overrides = parseDefaultValueOverrides(
       detail.config?.default_value_overrides,
       allSceneList.value,
@@ -316,11 +345,23 @@
     formData.scene_ids = val.scene_ids;
     formData.system_ids = val.system_ids;
     reconcileParamOverrides();
+    if (shouldSubmitVisibilityPayload(formData)) {
+      visibleRangeFormRef.value?.clearValidate('visibility_type');
+    }
   };
 
   const handleParamOverridesChange = (value: Record<string, SceneParamOverride>) => {
     formData.scene_param_overrides = value;
   };
+
+  const handleUsageRestrictionsChange = (value: UsageRestrictions) => {
+    formData.config.usage_restrictions = value;
+  };
+
+  const usageScopeCards = (): UsageScopeCard[] => [
+    ...selectedSceneItems.value.map(item => ({ type: 'scene' as const, id: item.id, name: item.name })),
+    ...selectedSystemItems.value.map(item => ({ type: 'system' as const, id: item.id, name: item.name })),
+  ];
 
   const {
     loading: submitLoading,
@@ -337,27 +378,44 @@
   /** 列表返回 tag_id，更新接口要求传 tag_name */
   const resolveTagNames = () => (props.target?.tags || []).map(tag => tagNameMap.value[tag] || tag);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!props.target?.uid || !isDetailReady.value) return;
+
+    try {
+      await visibleRangeFormRef.value?.validate('visibility_type');
+    } catch {
+      return;
+    }
 
     if (showParamOverrideConfig.value && sceneParamConfigRef.value
       && !sceneParamConfigRef.value.validate()) {
       return;
     }
 
-    const hasVisibilitySelection = shouldSubmitVisibilityPayload(formData);
-    const visibility = hasVisibilitySelection
-      ? buildVisibilityPayload(formData)
-      : {
-        visibility_type: 'all_visible' as const,
-        scene_ids: [],
-        system_ids: [],
-      };
-    const defaultValueOverrides = hasVisibilitySelection
-      ? buildDefaultValueOverrides(formData.scene_param_overrides)
-      : { scenes: {}, systems: {} };
+    const visibility = buildVisibilityPayload(formData);
+    const defaultValueOverrides = buildDefaultValueOverrides(formData.scene_param_overrides);
     const originalOverrides = toolConfigSnapshot.value?.default_value_overrides || { scenes: {}, systems: {} };
     const overridesChanged = !_.isEqual(defaultValueOverrides, originalOverrides);
+
+    const isSmartPage = formData.tool_type === 'smart_page';
+    const nextRestrictions = pruneUsageRestrictions(
+      formData.config.usage_restrictions,
+      (formData.scene_ids || []).map(id => Number(id)),
+      (formData.system_ids || []).map(id => String(id)),
+      formData.visibility_type,
+    );
+    const restrictionsChanged = isSmartPage
+      && usageRestrictionsChanged(usageRestrictionBaseline.value, nextRestrictions);
+    if (restrictionsChanged) {
+      const result = validateUsageRestrictions(nextRestrictions, usageScopeCards());
+      if (!result.ok) {
+        messageWarn(result.message);
+        return;
+      }
+      if (result.equivalentToUnrestricted) {
+        messageWarn(t('当前配置等同于不限制'));
+      }
+    }
 
     const payload: Record<string, any> = {
       uid: props.target.uid,
@@ -366,7 +424,7 @@
     };
 
     // 后端校验要求完整 config，不能只传 default_value_overrides
-    if (overridesChanged) {
+    if (overridesChanged || restrictionsChanged) {
       if (!toolConfigSnapshot.value) {
         return;
       }
@@ -374,6 +432,9 @@
         ..._.cloneDeep(toolConfigSnapshot.value),
         default_value_overrides: defaultValueOverrides,
       };
+      if (isSmartPage) {
+        payload.config.usage_limits = usageRestrictionsToLimits(nextRestrictions);
+      }
     }
 
     updatePlatformTool(payload);
@@ -500,25 +561,10 @@
 
 <style lang="postcss" scoped>
   .edit-visibility-form {
-    padding: 16px 24px 24px;
+    padding: 16px 24px;
 
-    .form-item {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .form-label {
-      margin-bottom: 8px;
-      font-size: 14px;
-      line-height: 22px;
-      color: #63656e;
-      text-align: left;
-    }
-
-    .form-content {
-      width: 100%;
-      min-width: 0;
+    :deep(.bk-form-item) {
+      margin-bottom: 0;
     }
   }
 

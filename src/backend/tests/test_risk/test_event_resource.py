@@ -18,6 +18,12 @@ import core.lock as lock_module
 from services.web.risk.constants import RiskStatus
 from services.web.risk.models import ManualEvent, Risk
 from services.web.risk.tasks import manual_add_event
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    SceneStatus,
+)
+from services.web.scene.models import ResourceBinding, Scene
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
@@ -28,6 +34,12 @@ class CreateEventResourceTest(TestCase):
         self.strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE, strategy_name="manual", strategy_type=StrategyType.RULE
         )
+        self.scene = Scene.objects.create(name="test-scene", status=SceneStatus.ENABLED)
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(self.strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=self.scene.scene_id)
         now = timezone.now()
         self.risk = Risk.objects.create(
             risk_id="risk-manual",
@@ -190,6 +202,11 @@ class CreateEventResourceTest(TestCase):
                 {"field_name": "operator", "display_name": "operator", "map_config": {"source_field": "责任人"}},
             ],
         )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=self.scene.scene_id)
         event_payload = {
             "strategy_id": strategy.strategy_id,
             "event_data": {

@@ -5,6 +5,8 @@ import _ from 'lodash';
 
 import type { PlatformToolSubmitPayload } from '@model/tool/tool-manage-types';
 
+import { pruneUsageRestrictions, usageRestrictionsToLimits } from '@utils/tool/portrait-account-restriction';
+
 import type { DefaultValueOverrides, FormData, SceneParamOverride, VisibilityScopePayload } from './types';
 
 /** 将表单中的场景/系统参数覆盖配置转为后端 config.default_value_overrides 结构 */
@@ -212,10 +214,7 @@ export function reconcileSceneParamOverrides(
   return result;
 }
 
-/**
- * 是否需要在提交时传递 visibility。
- * 未选择任何可见范围时不传，由后端默认 all_visible。
- */
+/** 是否已选择可见范围（可见范围为必填，未选择时不允许提交） */
 export function shouldSubmitVisibilityPayload(formData: Pick<FormData, 'visibility_type' | 'scene_ids' | 'system_ids'>): boolean {
   const visibilityType = formData.visibility_type;
   if (visibilityType === 'all_visible'
@@ -227,12 +226,6 @@ export function shouldSubmitVisibilityPayload(formData: Pick<FormData, 'visibili
 }
 
 const EMPTY_DEFAULT_VALUE_OVERRIDES: DefaultValueOverrides = { scenes: {}, systems: {} };
-
-const ALL_VISIBLE_VISIBILITY: VisibilityScopePayload = {
-  visibility_type: 'all_visible',
-  scene_ids: [],
-  system_ids: [],
-};
 
 /** 组装 visibility 对象（scene_ids / system_ids 数组，符合后端协议） */
 export function buildVisibilityPayload(formData: Pick<FormData, 'visibility_type' | 'scene_ids' | 'system_ids'>): VisibilityScopePayload {
@@ -399,12 +392,18 @@ export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: b
     ...data.config,
     default_value_overrides: defaultValueOverrides,
   };
+  if (data.tool_type === 'smart_page') {
+    data.config.usage_limits = usageRestrictionsToLimits(pruneUsageRestrictions(
+      data.config.usage_restrictions,
+      data.scene_ids || [],
+      (data.system_ids || []).map((id: string | number) => String(id)),
+      data.visibility_type,
+    ));
+  }
+  delete data.config.usage_restrictions;
 
   if (hasVisibilitySelection) {
     data.visibility = buildVisibilityPayload(data as FormData);
-  } else if (isEditMode) {
-    // 编辑时清空可见范围：后端仅在收到 visibility 时更新绑定，需显式重置为全部可见
-    data.visibility = ALL_VISIBLE_VISIBILITY;
   }
   data.namespace = data.namespace || data.source || 'default';
 

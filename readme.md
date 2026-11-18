@@ -1,7 +1,7 @@
 ![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
-[![Release Version](https://img.shields.io/badge/release-1.19.14-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Release Version](https://img.shields.io/badge/release-1.19.18-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
 [![Coverage](https://codecov.io/gh/TencentBlueKing/bk-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/TencentBlueKing/bk-audit)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
@@ -46,6 +46,25 @@
 
 后端开发请先阅读 [pre-commit 开发规范](./src/backend/docs/pre-commit.md)，安装本地提交
 hook，并在提交前完成暂存区检查和单元测试。
+
+### Agent 协作
+
+项目启动指引见根 [AGENTS.md](AGENTS.md)，其中链接前后端入口。
+
+开发者和 Agent 可从 [Agent 协作入口](agent/README.md) 查找工程规范、工具与任务技能。协作材料集中在 `agent/`：shared 提供跨端的上手与能力选配、提交与版本准备，backend 提供后端领域技能与工具，frontend 指向前端工程来源；实际构建、测试和检查配置由对应工程维护。
+
+Agent 可使用 [bk-audit-onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md) 按场景诊断环境、选配并验收所需能力；没有源码时也可先形成准备计划，实际工程操作前再确认 checkout。新增或维护协作能力时，参考[架构与维护说明](agent/architecture.md)；具体操作按当前任务和所属技能执行。
+
+### Celery Worker 与 RabbitMQ 连接规划
+
+增加或拆分 Worker 进程前，先按 **进程数 × 4** 估算 RabbitMQ 连接占用；连接数不随 gevent
+协程数或单次处理的风险/日志数量线性增长。Web 进程空闲时不建立 Celery 投递连接，首次投递后
+连接会保持，容量评估不能按空闲时的瞬时连接数计算。
+
+部署通常包含 2 个副本，Worker 命令中的 `-c` 只调整单进程并发，不减少进程对应的连接基数。
+新增进程前应把现有和计划连接数合并计算，并以 RabbitMQ 连接上限的 70% 作为规划水位；超过
+该水位时优先复用 `default` 等现有队列，或先扩容 Broker。只有下游限流、长任务隔离或独立容量
+治理确有需要时再新增专属 Worker。
 
 ## License
 

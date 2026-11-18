@@ -1,0 +1,58 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <chat-welcome
+    :entering="isEntering"
+    @select-prompt="handleSelectPrompt" />
+</template>
+
+<script lang="ts" setup>
+  import { ref } from 'vue';
+  import { useRoute, useRouter } from 'vue-router';
+
+  import ChatWelcome from '../components/chat-welcome.vue';
+  import { useSecChatStore } from '../composables/use-sec-chat-store';
+  import type { SelectPromptPayload } from '../types';
+  import { preserveSecChatQuery } from '../utils/last-route';
+
+  const route = useRoute();
+  const router = useRouter();
+  const { createLogConversation, sendLogQuery } = useSecChatStore();
+  const LOG_SHORTCUT_PROMPT = '请帮我检索审计日志';
+  const isEntering = ref(false);
+
+  const handleSelectPrompt = async (payload: SelectPromptPayload) => {
+    if (payload.sceneType !== 'log' || isEntering.value) return;
+    isEntering.value = true;
+    try {
+      const isLogShortcutEntry = payload.prompt.trim() === LOG_SHORTCUT_PROMPT;
+      const conversation = await createLogConversation({
+        showInitialSelectSystem: isLogShortcutEntry,
+      });
+      await router.push({
+        name: 'secChatAuditLog',
+        params: { conversationId: conversation.id },
+        query: preserveSecChatQuery(route.query as Record<string, unknown>),
+      });
+      if (payload.prompt.trim() && !isLogShortcutEntry) {
+        await sendLogQuery(payload.prompt);
+      }
+    } finally {
+      isEntering.value = false;
+    }
+  };
+</script>

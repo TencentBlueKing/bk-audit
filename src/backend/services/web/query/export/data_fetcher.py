@@ -22,6 +22,7 @@ from bk_resource import resource
 from django.conf import settings
 
 from core.utils.retry import FuncRunner
+from services.web.query.exceptions import LogExportMaxCountError
 from services.web.query.export.model import ExportConfig
 
 
@@ -35,7 +36,7 @@ class DataFetcher:
         self.page_size = page_size
 
     @classmethod
-    def _fetch_data(cls, query_params: dict, page: int, page_size: int):
+    def _fetch_data(cls, query_params: dict, page: int, page_size: int, *, query_timeout: float | None = None):
         """
         分页获取日志数据
         """
@@ -43,6 +44,10 @@ class DataFetcher:
         query_params = query_params.copy()
         query_params["page"] = page
         query_params["page_size"] = page_size
+        if query_timeout is not None:
+            # 同步请求不重试，避免退避和重复查询耗尽预算；普通异步导出保留原重试。
+            query_params["query_timeout"] = query_timeout
+            return resource.query.collector_search_all(**query_params)
         resp = FuncRunner(
             func=resource.query.collector_search_all,
             kwargs=query_params,
@@ -50,21 +55,21 @@ class DataFetcher:
         return resp
 
     @classmethod
-    def get_total(cls, query_params: dict) -> int:
+    def get_total(cls, query_params: dict, *, query_timeout: float | None = None) -> int:
         """
         获取总条数
         """
 
-        resp = cls._fetch_data(query_params, 1, 1)
+        resp = cls._fetch_data(query_params, 1, 1, query_timeout=query_timeout)
         return resp["total"]
 
     @classmethod
-    def fetch_patch_logs(cls, query_params: dict, page: int, page_size: int):
+    def fetch_patch_logs(cls, query_params: dict, page: int, page_size: int, *, query_timeout: float | None = None):
         """
         分页检索日志
         """
 
-        resp = cls._fetch_data(query_params, page, page_size)
+        resp = cls._fetch_data(query_params, page, page_size, query_timeout=query_timeout)
         return resp["results"]
 
     def fetch_logs(self) -> Generator[List[dict], None, None]:
@@ -77,5 +82,7 @@ class DataFetcher:
         if total != self.config.task.total:
             self.config.task.total = total
             self.config.task.save(update_fields=["total"])
+        if total > settings.LOG_EXPORT_MAX_COUNT:
+            raise LogExportMaxCountError(current_count=total, max_count=settings.LOG_EXPORT_MAX_COUNT)
         for i in range(0, math.ceil(total / self.page_size)):
             yield self.fetch_patch_logs(self.config.task.query_params, i + 1, self.page_size)

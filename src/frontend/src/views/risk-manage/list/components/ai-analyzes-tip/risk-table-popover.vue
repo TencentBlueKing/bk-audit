@@ -60,7 +60,6 @@
   import { useRouter } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
 
@@ -134,16 +133,10 @@
       width: 100,
       render: ({ data }: { data?: RiskItem }) => {
         if (!data) return '--';
-        return <RiskLevel levelData={levelData.value} data={data}></RiskLevel>;
+        return <RiskLevel data={data}></RiskLevel>;
       },
     },
   ];
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
   // 报告关联风险列表
   const {
     run: getReportRiskList,
@@ -153,12 +146,6 @@
       loading.value = false;
       // 空值保护，确保 riskList 始终为数组
       riskList.value = data?.results ?? [];
-      // 获取对应风险等级（仅在有数据时请求）
-      if (riskList.value.length > 0) {
-        fetchRiskLevel({
-          strategy_ids: riskList.value.map((item: RiskItem) => item.strategy_id).join(','),
-        });
-      }
     },
   });
   const handleAfterShow = () => {

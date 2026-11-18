@@ -5,6 +5,7 @@ from django.utils.translation import gettext
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    ActionPermission,
     AnyOfPermissions,
     IAMPermission,
     InstanceActionPermission,
@@ -23,6 +24,13 @@ class ToolViewSet(ResourceViewSet):
     lookup_field = "uid"
 
     def get_permissions(self):
+        if self.action == "tool_execute_debug":
+            return [
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    ActionPermission(actions=[ActionEnum.MANAGE_SCENE]),
+                )
+            ]
         if self.action in ["sql_analyse_with_tool"]:
             return [UseToolPermission(get_instance_id=self.get_tool_uid)]
         if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:

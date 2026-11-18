@@ -161,7 +161,7 @@
         required>
         <bk-input
           v-model="formData.description"
-          :maxlength="255"
+          :maxlength="2000"
           :placeholder="t('请输入集群说明')"
           type="textarea" />
       </bk-form-item>

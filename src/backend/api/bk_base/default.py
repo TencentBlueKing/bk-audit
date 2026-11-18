@@ -18,12 +18,15 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import traceback
+from collections.abc import Mapping
+from typing import Any
 
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils.translation import gettext_lazy
+from urllib3.util import Timeout
 
 from api.bk_base.constants import UNSUPPORTED_CODE
 from api.bk_base.serializers import (
@@ -43,6 +46,7 @@ from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
 from api.utils import get_endpoint
 from core.bk_api_base import AuditBkApiResource
+from core.utils.retry import FuncRunner
 
 
 class BkBaseResource(AuditBkApiResource, abc.ABC):
@@ -188,6 +192,19 @@ class AiopsBaseResource(BkBaseResource, abc.ABC):
         return data
 
 
+class StrategyBkBaseResource(AiopsBaseResource, abc.ABC):
+    """策略相关 bkbase 接口，统一加 3 次重试。"""
+
+    RETRY_TIMES = 3
+
+    def perform_request(self, validated_request_data: dict) -> dict:
+        return FuncRunner(
+            func=super().perform_request,
+            args=(validated_request_data,),
+            max_retry=self.RETRY_TIMES,
+        ).run()
+
+
 class GetScenePlans(AiopsBaseResource):
     name = gettext_lazy("获取方案列表")
     action = "/v3/aiops/scene_service/plans/"
@@ -222,27 +239,27 @@ class AuthTickets(AiopsBaseResource):
     use_admin_username = False
 
 
-class CreateFlow(AiopsBaseResource):
+class CreateFlow(StrategyBkBaseResource):
     name = gettext_lazy("创建Flow")
     action = "/v3/dataflow/flow/flows/"
     method = "POST"
 
 
-class StartFlow(AiopsBaseResource):
+class StartFlow(StrategyBkBaseResource):
     name = gettext_lazy("启动Flow")
     action = "/v3/dataflow/flow/flows/{flow_id}/start/"
     url_keys = ["flow_id"]
     method = "POST"
 
 
-class RestartFlow(AiopsBaseResource):
+class RestartFlow(StrategyBkBaseResource):
     name = gettext_lazy("重启Flow")
     action = "/v3/dataflow/flow/flows/{flow_id}/restart/"
     url_keys = ["flow_id"]
     method = "POST"
 
 
-class StopFlow(AiopsBaseResource):
+class StopFlow(StrategyBkBaseResource):
     name = gettext_lazy("停止Flow")
     action = "/v3/dataflow/flow/flows/{flow_id}/stop/"
     url_keys = ["flow_id"]
@@ -263,7 +280,7 @@ class GetFlowGraph(AiopsBaseResource):
     method = "GET"
 
 
-class CreateFlowNode(AiopsBaseResource):
+class CreateFlowNode(StrategyBkBaseResource):
     name = gettext_lazy("创建Flow节点")
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/"
     url_keys = ["flow_id"]
@@ -271,7 +288,7 @@ class CreateFlowNode(AiopsBaseResource):
     TIMEOUT = 5 * 60
 
 
-class UpdateFlowNode(AiopsBaseResource):
+class UpdateFlowNode(StrategyBkBaseResource):
     name = gettext_lazy("更新Flow节点")
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/"
     url_keys = ["flow_id", "node_id"]
@@ -279,7 +296,7 @@ class UpdateFlowNode(AiopsBaseResource):
     TIMEOUT = 5 * 60
 
 
-class DeleteFlowNode(AiopsBaseResource):
+class DeleteFlowNode(StrategyBkBaseResource):
     name = gettext_lazy("删除Flow节点")
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/"
     url_keys = ["flow_id", "node_id"]
@@ -433,10 +450,34 @@ class QuerySyncResource(BkBaseResource):
     查询数据
     """
 
-    action = "/v3/queryengine/query_sync/"
+    action = settings.BKBASE_QUERY_SYNC_ACTION
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
+
+    def before_request(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """应用本次HTTP连接/读取预算，内部参数不发给BKBase，也不修改共享TIMEOUT。"""
+        payload = kwargs.get("json") or {}
+        request_timeout = payload.pop("request_timeout", None)
+        if request_timeout is not None:
+            kwargs["timeout"] = Timeout(total=request_timeout)
+        return super().before_request(kwargs)
+
+
+class SafeQuerySyncResource(QuerySyncResource):
+    """日志工具使用的 QuerySync 变体，额外记录最终 SQL。
+
+    保留 Resource 默认的请求/响应采集与标准错误解析，确保远端异常正文
+    可用于生产排障；本类只补充结构化 SQL 日志，不改写 QuerySync 的响应契约。
+    """
+
+    def before_request(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """记录最终提交的 SQL，响应继续使用 QuerySync 标准解析。"""
+
+        request_data = kwargs.get("json") or kwargs.get("data") or {}
+        if isinstance(request_data, Mapping):
+            logger.info("[SafeQuerySyncResource] SQL => %s", request_data.get("sql", ""))
+        return super().before_request(kwargs)
 
 
 class DebugQuerySyncResource(DebugBkBaseResource):
@@ -444,7 +485,7 @@ class DebugQuerySyncResource(DebugBkBaseResource):
     调试环境查询数据
     """
 
-    action = "/v3/queryengine/query_sync/"
+    action = settings.BKBASE_QUERY_SYNC_ACTION
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer

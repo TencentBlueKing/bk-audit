@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.exceptions import InitSystemDisabled
 from services.web.entry.init.base import SystemInitHandler
@@ -25,7 +25,10 @@ from services.web.entry.init.base import SystemInitHandler
 class Command(BaseCommand):
     def handle(self, **kwargs):
         try:
-            SystemInitHandler().init()
+            if not SystemInitHandler().init():
+                # 初始化未完成时返回非零退出码（CommandError 默认 return code=1）
+                # 中断 pre_release_hook 的 && 链，避免把未完成的迁移当作发布成功
+                raise CommandError("[InitSystem] Unfinished: 系统初始化未完成，禁止发布")
         # 只处理未开启系统初始化的异常情况，其他异常情况直接终止初始化
         except InitSystemDisabled as err:
             print(str(err))

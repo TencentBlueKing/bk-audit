@@ -50,6 +50,12 @@
     <insert-table-dialog
       ref="insertTableDialogRef"
       @confirm="handleInsertTableConfirm" />
+    <variable-inset
+      v-if="supportVariable"
+      v-model:visible="showVariableInset"
+      :event-fields="eventFields"
+      :risk-fields="riskFields"
+      @confirm="handleInsertVariable" />
   </div>
 </template>
 
@@ -63,6 +69,8 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import VariableInset from '@components/editor/variable-inset.vue';
 
   import InsertTableDialog from '@views/risk-manage/detail/components/event-report/insert-table-dialog.vue';
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -95,6 +103,10 @@
     fullscreenScope?: 'viewport' | 'main' | 'parent';
     /** parent 模式下放大后的编辑区高度 */
     expandHeight?: number;
+    /** 工具栏「引用变量」，批量处理使用，默认关闭以免影响单条表单 */
+    supportVariable?: boolean;
+    riskFields?: Array<{ id: string; name: string }>;
+    eventFields?: Array<{ id: string; name: string }>;
   }
   interface ResponseData {
     result: boolean;
@@ -120,6 +132,9 @@
     showImagePreview: true,
     fullscreenScope: 'main',
     expandHeight: 360,
+    supportVariable: false,
+    riskFields: () => [],
+    eventFields: () => [],
   });
 
   const emits = defineEmits<Emits>();
@@ -147,6 +162,9 @@
   mediaTools.push('video', 'table');
   if (props.supportFullscreen) {
     mediaTools.push('fullscreen');
+  }
+  if (props.supportVariable) {
+    mediaTools.push('variable');
   }
 
   const container = [
@@ -385,6 +403,13 @@
             imageInputRef.value?.click();
           },
           table: openInsertTableDialog,
+          ...(props.supportVariable
+            ? {
+              variable() {
+                openVariableInset();
+              },
+            }
+            : {}),
           ...(props.supportFullscreen
             ? {
               fullscreen() {
@@ -403,6 +428,48 @@
   });
 
   const getQuill = () => editorRef.value?.getQuill?.();
+
+  const showVariableInset = ref(false);
+  const savedSelection = ref<{ index: number; length: number } | null>(null);
+
+  const openVariableInset = () => {
+    const quill = getQuill();
+    if (!quill || props.disabled) {
+      return;
+    }
+    const range = quill.getSelection(true);
+    savedSelection.value = range || { index: quill.getLength(), length: 0 };
+    showVariableInset.value = true;
+  };
+
+  const handleInsertVariable = (variableText: string) => {
+    const quill = getQuill();
+    if (!quill || !variableText) {
+      return;
+    }
+    const range = savedSelection.value || quill.getSelection() || { index: quill.getLength(), length: 0 };
+    quill.insertText(range.index, variableText, 'user', true);
+    quill.setSelection(range.index + variableText.length, 0);
+    savedSelection.value = { index: range.index + variableText.length, length: 0 };
+    TiLength.value = quill.getLength() - 1;
+  };
+
+  const setupVariableToolbarButton = () => {
+    if (!props.supportVariable) {
+      return;
+    }
+    const quill = getQuill();
+    if (!quill) {
+      return;
+    }
+    const toolbar = quill.getModule('toolbar') as { container?: HTMLElement } | undefined;
+    const variableButton = toolbar?.container?.querySelector('.ql-variable') as HTMLElement | null;
+    if (variableButton) {
+      variableButton.innerHTML = t('引用变量');
+      variableButton.setAttribute('title', t('引用变量'));
+      variableButton.classList.add('editor-variable-btn');
+    }
+  };
 
   const setupTableToolbarButton = () => {
     const quill = getQuill();
@@ -507,6 +574,7 @@
     }
     nextTick(() => {
       setupTableToolbarButton();
+      setupVariableToolbarButton();
       if (props.default) {
         content.value = props.default;
         // 提取默认内容中的图片
@@ -1265,6 +1333,7 @@
   background: #f5f7fa;
 }
 
+.editor-wrap--report .ql-toolbar .editor-variable-btn,
 .editor-wrap--report .ql-toolbar .editor-table-btn {
   width: auto !important;
   padding: 0 8px !important;
@@ -1279,6 +1348,7 @@
   box-shadow: none !important;
 }
 
+.editor-wrap--report .ql-toolbar .editor-variable-btn:hover,
 .editor-wrap--report .ql-toolbar .editor-table-btn:hover {
   opacity: 80%;
 }

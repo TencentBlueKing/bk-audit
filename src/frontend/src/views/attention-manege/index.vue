@@ -62,7 +62,6 @@
 
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import type RiskManageModel from '@model/risk/risk';
 
@@ -75,7 +74,9 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import FieldConfig from './components/config';
 
@@ -99,19 +100,23 @@
   ];
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
-  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      const baseColumns = useRiskColumns({
-        t,
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'attentionManageDetail',
-      });
-      const columnMap = new Map(baseColumns.map((col: any) => [col.colKey || col.type, col]));
-      initTableColumns = columnOrder
-        .map(key => columnMap.get(key))
-        .filter(Boolean) as any[];
-    }
+    touchRiskColumnDeps({
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
+    const baseColumns = useRiskColumns({
+      t,
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      detailRouteName: 'attentionManageDetail',
+    });
+    const columnMap = new Map(baseColumns.map((col: any) => [col.colKey || col.type, col]));
+    const initTableColumns = columnOrder
+      .map(key => columnMap.get(key))
+      .filter(Boolean) as any[];
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -160,7 +165,7 @@
   });
 
   // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
@@ -179,8 +184,7 @@
     } else {
       result = defaultSettings;
     }
-    // 默认不展示所属场景(scene_id)列
-    return result.filter((key: string) => key !== 'scene_id');
+    return result;
   });
 
 
@@ -203,12 +207,7 @@
     manual: true,
     defaultValue: [],
   });
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('watch');
 
   // const {
   //   run: fetchRiskList,
@@ -243,22 +242,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
-
-  // 记录轮训的数据
-  // const pollingDataMap = ref<Record<string, RiskManageModel>>({});
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
-    if (!results.length) return;
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
-  };
+  const handleRequestSuccess = () => {};
   // 开始轮训
   // const startPolling = (results: Array<RiskManageModel>) => {
   //   clearTimeout(timeout);
@@ -370,6 +354,8 @@
   onUnmounted(() => {
     // clearTimeout(timeout);
   });
+
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'attentionManageDetail') {

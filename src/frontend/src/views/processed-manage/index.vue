@@ -32,7 +32,6 @@
         :columns="tableColumns"
         :data-source="dataSource"
         enable-cross-page-select
-        :height="tableHeight"
         need-empty-search-tip
         row-key="risk_id"
         :search-params="searchModel"
@@ -64,7 +63,6 @@
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
@@ -79,7 +77,9 @@
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import FieldConfig from './components/config';
 
@@ -100,32 +100,35 @@
     width: 180,
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
-      <auth-button
-        text
-        theme='primary'
-        class='mr16'
-        permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
-        action-id='process_risk'
-        resource={row.risk_id}
-        onClick={() => handleToDetail(row)}>
-        {t('处理')}
-      </auth-button>
       {
-        row.status === 'auto_process'
-          ? <bk-button text theme='primary'
-            class="is-disabled"
-            v-bk-tooltips={{
-              content: row.risk_label === 'normal'
-                ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-            }}>
-            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-          </bk-button>
-          : <MarkRiskLabel
-            onUpdate={() => fetchList()}
-            userInfo={userInfo.value}
-            data={row} />
+        ['for_approve', 'auto_process'].includes(row.status)
+          ? (
+            <bk-button
+              v-bk-tooltips={t('当前状态不支持人工处理')}
+              text
+              theme='primary'
+              class='mr16 is-disabled'>
+              {t('处理')}
+            </bk-button>
+          )
+          : (
+            <auth-button
+              text
+              theme='primary'
+              class='mr16'
+              permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
+              action-id='process_risk'
+              resource={row.risk_id}
+              onClick={() => handleToDetail(row)}>
+              {t('处理')}
+            </auth-button>
+          )
       }
+      <MarkRiskLabel
+        onUpdate={() => fetchList()}
+        userInfo={userInfo.value}
+        data={row}
+        disabled={row.status === 'auto_process'} />
       <bk-dropdown
         style="margin-left: 8px">
         {{
@@ -153,16 +156,20 @@
   };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
-  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      initTableColumns = useRiskColumns({
-        t,
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'processedManageDetail',
-        appendColumns: [actionColumn],
-      });
-    }
+    touchRiskColumnDeps({
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
+    const initTableColumns = useRiskColumns({
+      t,
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      detailRouteName: 'processedManageDetail',
+      appendColumns: [actionColumn],
+    });
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -185,7 +192,7 @@
   });
 
   // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
@@ -205,8 +212,7 @@
     } else {
       result = defaultSettings;
     }
-    // 默认不展示所属场景(scene_id)列
-    return result.filter((key: string) => key !== 'scene_id');
+    return result;
   });
   const listRef = ref();
   const searchBoxRef = ref();
@@ -218,8 +224,6 @@
     total: 0,
     isSelectAll: false,
   });
-  // TDesign 默认行高约 42px，这里固定 10 行高度
-  const tableHeight = 42 * 10;
 
   const handleSelectionChange = (meta: typeof selectionMeta.value) => {
     selectionMeta.value = meta;
@@ -346,12 +350,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('processed');
 
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
@@ -375,20 +374,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
-
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
-    if (!results.length) return;
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
-  };
+  const handleRequestSuccess = () => {};
 
   const handleModelValueWatch = (val: any) => {
     if (val?.strategy_id?.length) {
@@ -404,6 +390,7 @@
     getEventFields();
   });
 
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'processedManageDetail') {

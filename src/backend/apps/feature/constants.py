@@ -43,3 +43,4 @@ class FeatureTypeChoices(TextChoices):
     ENABLE_DORIS = "enable_doris", gettext_lazy("启用 Doris")
     CHECK_BKVISION_SHARE_PERMISSION = "check_bkvision_share_permission", gettext_lazy("校验BKVision分享权限")
     AI_CAPABILITY = "ai_capability", gettext_lazy("AI能力")
+    BKSEC = "bksec", gettext_lazy("BKSEC安全工单")

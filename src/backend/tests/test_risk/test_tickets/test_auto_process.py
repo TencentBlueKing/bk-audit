@@ -21,12 +21,14 @@ from unittest import mock
 
 from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
+from django.test.utils import override_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.constants import RiskDisplayStatus, RiskStatus
-from services.web.risk.handlers.ticket import AutoProcess, ForApprove
-from services.web.risk.models import Risk
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus, TicketNodeStatus
+from services.web.risk.exceptions import AutoProcessParamsError
+from services.web.risk.handlers.ticket import AutoProcess, CustomProcess, ForApprove
+from services.web.risk.models import Risk, TicketNode
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
     APPROVE_SERVICE_INFO,
@@ -39,6 +41,7 @@ from tests.test_risk.test_tickets.constants import (
 )
 
 
+@override_settings(BKAPP_ENABLE_ITSM_V4=True)
 class AutoProcessTest(TicketTest):
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
@@ -129,6 +132,285 @@ class AutoProcessTest(TicketTest):
                 self.assertEquals(risk.current_operator, AutoProcess.load_security_person())
 
     @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
+    )
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_auto_process_skips_non_input_constants(self):
+        """展示中的自定义变量和节点输入变量传给 create_task，隐藏变量和节点输出不传。"""
+        template_info = {
+            "pipeline_tree": {
+                "constants": {
+                    "${webhook_urls}": {"key": "${webhook_urls}", "source_type": "custom", "show_type": "show"},
+                    "${risk_id}": {"key": "${risk_id}", "source_type": "component_inputs", "show_type": "show"},
+                    "${hidden_input}": {
+                        "key": "${hidden_input}",
+                        "source_type": "component_inputs",
+                        "show_type": "hide",
+                    },
+                    "${_loop}": {"key": "${_loop}", "source_type": "component_outputs", "show_type": "hide"},
+                    "${hidden_default}": {"key": "${hidden_default}", "source_type": "custom", "show_type": "hide"},
+                }
+            }
+        }
+        create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
+        pa_params = {
+            "${webhook_urls}": {"field": "", "value": "mock-webhook-value"},
+            "${risk_id}": {"field": "risk_id", "value": ""},
+            "${hidden_input}": {"field": "", "value": "should-not-pass"},
+            "${_loop}": {"field": "", "value": ""},
+        }
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": pa_params}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+            risk_id = risk.risk_id
+        constants = create_task.call_args.kwargs["constants"]
+        self.assertEqual(
+            constants,
+            {"${webhook_urls}": "mock-webhook-value", "${risk_id}": risk_id},
+        )
+        self.assertNotIn("${_loop}", constants)
+        self.assertNotIn("${hidden_input}", constants)
+        self.assertNotIn("${hidden_default}", constants)
+
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_missing_user_input_raises_params_error(self):
+        """可见入参缺失时抛出带 key 的参数异常，不创建标准运维任务。"""
+        template_info = {
+            "pipeline_tree": {
+                "constants": {
+                    "${webhook_urls}": {"key": "${webhook_urls}", "source_type": "custom", "show_type": "show"},
+                }
+            }
+        }
+        create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": {}}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            with self.assertRaises(AutoProcessParamsError) as ctx:
+                AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+            self.assertIn("${webhook_urls}", str(ctx.exception))
+        create_task.assert_not_called()
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
+    )
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_condition_hide_uses_key_presence(self):
+        """条件字段缺少 key 时不传，前端提交了 key 时即使值为空也照常传递。"""
+        template_info = {
+            "pipeline_tree": {
+                "constants": {
+                    "${notify_type}": {"key": "${notify_type}", "source_type": "custom", "show_type": "show"},
+                    "${extra}": {
+                        "key": "${extra}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "is_condition_hide": "true",
+                    },
+                }
+            }
+        }
+        create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
+        pa_params = {
+            "${notify_type}": {"field": "", "value": "custom"},
+        }
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": pa_params}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+        constants = create_task.call_args.kwargs["constants"]
+        self.assertEqual(constants, {"${notify_type}": "custom"})
+        self.assertNotIn("${extra}", constants)
+
+        pa_params["${extra}"] = {"field": "", "value": ""}
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": pa_params}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+        constants = create_task.call_args.kwargs["constants"]
+        self.assertEqual(constants["${extra}"], "")
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
+    )
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_auto_process_preserves_falsy_custom_values(self):
+        """用户显式提交的 0 和 False 是合法值，创建任务时不能改写为空字符串。"""
+        template_info = {
+            "pipeline_tree": {
+                "constants": {
+                    "${zero}": {"key": "${zero}", "source_type": "custom", "show_type": "show"},
+                    "${false}": {"key": "${false}", "source_type": "custom", "show_type": "show"},
+                }
+            }
+        }
+        create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
+        pa_params = {
+            "${zero}": {"field": "", "value": 0},
+            "${false}": {"field": "", "value": False},
+        }
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": pa_params}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+
+        self.assertEqual(
+            create_task.call_args.kwargs["constants"],
+            {"${zero}": 0, "${false}": False},
+        )
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
+    )
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_auto_process_formats_structured_values_by_sops_custom_type(self):
+        """人员选择器按 SOPS 协议使用逗号字符串，其他结构化值保持历史 JSON 格式。"""
+        template_info = {
+            "pipeline_tree": {
+                "constants": {
+                    "${users}": {
+                        "key": "${users}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "bk_user_selector",
+                    },
+                    "${empty_users}": {
+                        "key": "${empty_users}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "bk_user_selector",
+                    },
+                    "${user_string}": {
+                        "key": "${user_string}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "bk_user_selector",
+                    },
+                    "${json_list}": {
+                        "key": "${json_list}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "input",
+                    },
+                    "${json_object}": {
+                        "key": "${json_object}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "textarea",
+                    },
+                }
+            }
+        }
+        pa_params = {
+            "${users}": {"field": "", "value": ["user1", "user2"]},
+            "${empty_users}": {"field": "", "value": []},
+            "${user_string}": {"field": "", "value": "user1,user2"},
+            "${json_list}": {"field": "", "value": ["item1", "item2"]},
+            "${json_object}": {"field": "", "value": {"key": "value"}},
+        }
+        create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": pa_params}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+
+        self.assertEqual(
+            create_task.call_args.kwargs["constants"],
+            {
+                "${users}": "user1,user2",
+                "${empty_users}": "",
+                "${user_string}": "user1,user2",
+                "${json_list}": '["item1", "item2"]',
+                "${json_object}": '{"key": "value"}',
+            },
+        )
+
+    @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
         mock.Mock(return_value={"state": SOPSTaskStatus.FAILED.value}),
     )
@@ -166,14 +448,14 @@ class AutoProcessTest(TicketTest):
                 self.assertEquals(risk.current_operator, AutoProcess.load_security_person())
 
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[{**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FINISHED.value}]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value={**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FINISHED.value}),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -216,3 +498,190 @@ class AutoProcessTest(TicketTest):
                 risk = Risk.objects.get(risk_id=risk.risk_id)
                 self.assertEquals(risk.last_history.action, AutoProcess.__name__)
                 self.assertEquals(risk.last_history.extra["pa_config"], pa_config)
+
+    def _create_node(self, risk, action, timestamp, process_result, status=TicketNodeStatus.RUNNING):
+        return TicketNode.objects.create(
+            risk_id=risk.risk_id,
+            operator="admin",
+            action=action,
+            timestamp=timestamp,
+            time="2020-01-01 00:00:00",
+            process_result=process_result,
+            status=status,
+        )
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_manual_pa_does_not_reuse_failed_running_task(self):
+        """失败任务的节点还没被定时任务刷完时，人工选新套餐要建新任务，不能查旧任务。"""
+        with RuleContext(pa_info={"need_approve": False}) as (pa, _):
+            with RiskContext() as risk:
+                risk.status = RiskStatus.AWAIT_PROCESS
+                risk.save()
+                old = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.FAILED.value}},
+                )
+                create_task = mock.Mock(return_value={"task_id": "new-task"})
+                get_task_status = mock.Mock(return_value={"state": SOPSTaskStatus.RUNNING.value})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
+                    return_value=SOPS_TEMPLATE_INFO,
+                ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.start_task", return_value=None
+                ), mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", get_task_status
+                ):
+                    pa_config = {**CUSTOM_AUTO_PROCESS_PARAMS, "pa_id": pa.id}
+                    resource.risk.custom_auto_process(risk_id=risk.risk_id, **pa_config)
+                create_task.assert_called_once()
+                queried = [call.kwargs.get("task_id") for call in get_task_status.call_args_list]
+                self.assertNotIn("old-task", queried)
+                self.assertIn("new-task", queried)
+                old.refresh_from_db()
+                self.assertEqual(old.status, TicketNodeStatus.RUNNING)
+                self.assertEqual(old.process_result["task"]["task_id"], "old-task")
+                created = TicketNode.objects.filter(risk_id=risk.risk_id, action=AutoProcess.__name__).exclude(
+                    id=old.id
+                )
+                self.assertEqual(created.count(), 1)
+                self.assertEqual(created.get().process_result["task"]["task_id"], "new-task")
+                custom = TicketNode.objects.get(risk_id=risk.risk_id, action=CustomProcess.__name__)
+                self.assertNotIn("status", custom.process_result or {})
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_approved_pa_does_not_reuse_failed_running_task(self):
+        """审批通过后的后台调用不带 pa_config，旧节点仍为执行中时也要按审批套餐新建任务。"""
+        with RuleContext(pa_info={"need_approve": True}) as (pa, _):
+            with RiskContext() as risk:
+                risk.status = RiskStatus.AUTO_PROCESS
+                risk.save()
+                old = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.FAILED.value}},
+                )
+                pa_config = {**CUSTOM_AUTO_PROCESS_PARAMS, "pa_id": pa.id}
+                self._create_node(
+                    risk,
+                    ForApprove.__name__,
+                    2,
+                    {"ticket": {"sn": "sn-1"}, "status": {"current_status": "FINISHED", "approve_result": True}},
+                )
+                approve = TicketNode.objects.get(risk_id=risk.risk_id, action=ForApprove.__name__)
+                approve.extra = {"pa_config": pa_config}
+                approve.save(update_fields=["extra"])
+                create_task = mock.Mock(return_value={"task_id": "new-task"})
+                get_task_status = mock.Mock(return_value={"state": SOPSTaskStatus.RUNNING.value})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
+                    return_value=SOPS_TEMPLATE_INFO,
+                ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.start_task", return_value=None
+                ), mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", get_task_status
+                ):
+                    AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+                create_task.assert_called_once()
+                queried = [call.kwargs.get("task_id") for call in get_task_status.call_args_list]
+                self.assertNotIn("old-task", queried)
+                self.assertIn("new-task", queried)
+                old.refresh_from_db()
+                self.assertEqual(old.status, TicketNodeStatus.RUNNING)
+                created = TicketNode.objects.filter(risk_id=risk.risk_id, action=AutoProcess.__name__).exclude(
+                    id=old.id
+                )
+                self.assertEqual(created.count(), 1)
+                self.assertEqual(created.get().process_result["task"]["task_id"], "new-task")
+                self.assertEqual(created.get().extra["pa_config"], pa_config)
+                self.assertEqual(created.get().process_result["trigger"], "approve")
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_refresh_writes_terminal_state_to_owning_node(self):
+        """自动轮询发现任务已结束时，终态写回持有任务的节点，不写到后来的人工节点，也不另建任务。"""
+        with RuleContext(pa_info={"need_approve": False}) as (_, rule):
+            with RiskContext() as risk:
+                risk.rule_id = rule.rule_id
+                risk.rule_version = rule.version
+                risk.status = RiskStatus.AUTO_PROCESS
+                risk.save()
+                owning = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.RUNNING.value}},
+                )
+                custom = self._create_node(risk, CustomProcess.__name__, 2, {})
+                create_task = mock.Mock(return_value={"task_id": "should-not-create"})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
+                    return_value={"state": SOPSTaskStatus.FAILED.value},
+                ) as get_task_status, mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task
+                ):
+                    AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+                create_task.assert_not_called()
+                get_task_status.assert_called_once()
+                self.assertEqual(get_task_status.call_args.kwargs["task_id"], "old-task")
+                owning.refresh_from_db()
+                custom.refresh_from_db()
+                self.assertEqual(owning.status, TicketNodeStatus.FINISHED)
+                self.assertEqual(owning.process_result["status"]["state"], SOPSTaskStatus.FAILED.value)
+                self.assertEqual(custom.process_result, {})
+                risk.refresh_from_db()
+                self.assertEqual(risk.status, RiskStatus.AWAIT_PROCESS)
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_refresh_reuses_task_still_running_remotely(self):
+        """标准运维里仍在执行的任务继续复用，状态写回所属节点，不另建任务。"""
+        with RuleContext(pa_info={"need_approve": False}) as (_, rule):
+            with RiskContext() as risk:
+                risk.rule_id = rule.rule_id
+                risk.rule_version = rule.version
+                risk.status = RiskStatus.AUTO_PROCESS
+                risk.save()
+                owning = self._create_node(
+                    risk,
+                    AutoProcess.__name__,
+                    1,
+                    {"task": {"task_id": "old-task"}, "status": {"state": SOPSTaskStatus.CREATED.value}},
+                )
+                custom = self._create_node(risk, CustomProcess.__name__, 2, {})
+                create_task = mock.Mock(return_value={"task_id": "should-not-create"})
+                with mock.patch(
+                    "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
+                    return_value={"state": SOPSTaskStatus.RUNNING.value},
+                ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task):
+                    AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+                create_task.assert_not_called()
+                owning.refresh_from_db()
+                custom.refresh_from_db()
+                self.assertEqual(owning.status, TicketNodeStatus.RUNNING)
+                self.assertEqual(owning.process_result["status"]["state"], SOPSTaskStatus.RUNNING.value)
+                self.assertEqual(custom.process_result, {})

@@ -391,10 +391,10 @@ class SmartPageAPITestCase(TestCase):
         )
 
     def test_update_smart_page_tool_drops_forbidden_fields(self):
-        """伪造 smart_page 完整 config + 基础属性字段：序列化层应仅保留 overrides
+        """伪造 smart_page 完整 config + 基础属性字段：序列化层应丢弃敏感配置
 
-        smart_page 仅允许更新 visibility + default_value_overrides，
-        即使客户端伪造完整 config（含 data_sources/SQL）或基础属性，也必须被丢弃。
+        smart_page 允许更新 visibility + default_value_overrides + usage_limits + 基础信息，
+        但必须丢弃 data_sources 等敏感配置。
         """
         from services.web.scene.constants import PanelStatus
         from services.web.tool.serializers import ToolUpdateRequestSerializer
@@ -428,11 +428,11 @@ class SmartPageAPITestCase(TestCase):
 
         # config 及伪造的 data_sources 被丢弃，不进入下游更新逻辑
         self.assertNotIn("config", validated)
-        # 基础属性字段被丢弃，不允许越权改写工具名称/描述/命名空间/状态
-        self.assertNotIn("name", validated)
-        self.assertNotIn("description", validated)
-        self.assertNotIn("namespace", validated)
-        self.assertNotIn("status", validated)
+        # 基础属性字段允许编辑
+        self.assertIn("name", validated)
+        self.assertIn("description", validated)
+        self.assertIn("namespace", validated)
+        self.assertIn("status", validated)
         # 仅提取 default_value_overrides，供 perform_request 合并
         self.assertIn("_smart_page_overrides", validated)
         self.assertEqual(

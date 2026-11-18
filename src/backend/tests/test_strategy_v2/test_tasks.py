@@ -546,3 +546,73 @@ class TestCheckStrategyStatusAnomaliesTask(TestCase):
         call_args = self.mock_bk_monitor_report_event.call_args
         event_data = call_args[1]  # kwargs
         assert len(event_data["data"]) == 2
+
+
+class TestStrategyStatusReportPayload(TestCase):
+    """测试策略状态上报 payload 的 JSON 序列化"""
+
+    def setUp(self):
+        """设置测试数据"""
+        self.mock_strategy_objects = mock.patch("services.web.strategy_v2.tasks.Strategy.objects.all").start()
+        self.strategies = [
+            Strategy(
+                strategy_id=1,
+                strategy_name="测试策略",
+                strategy_type=StrategyType.RULE,
+                status=StrategyStatusChoices.RUNNING.value,
+                configs={"data_source": {"source_type": RuleAuditSourceType.REALTIME}},
+                backend_data={"flow_id": 10001},
+            )
+        ]
+        self.mock_strategy_objects.return_value = self.strategies
+
+        self.mock_bk_base_get_flow_deploy_data = mock.Mock(return_value={"flow_status": "no-start"})
+        self.get_flow_deploy_data_patch = mock.patch.object(
+            GetFlowDeployData, 'perform_request', self.mock_bk_base_get_flow_deploy_data
+        ).start()
+        self.report_event_patch = mock.patch(
+            "services.web.strategy_v2.tasks.api.bk_monitor.report_event",
+            return_value={"result": True, "message": "success"},
+        ).start()
+        self.mock_bk_monitor_report_event = self.report_event_patch
+
+    def tearDown(self):
+        """清理Mock"""
+        mock.patch.stopall()
+
+    def test_report_event_payload_is_json_serializable(self):
+        """测试 report_event payload 可以正确 JSON 序列化（P0-1 修复验证）"""
+        import json
+
+        from django.utils.encoding import force_str
+
+        # Mock异常的flow状态，触发策略状态不匹配
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "no-start"}
+
+        # 执行任务
+        check_strategy_status_anomalies()
+
+        # 验证上报被调用
+        assert self.mock_bk_monitor_report_event.call_count == 1
+
+        # 获取上报的数据
+        call_args = self.mock_bk_monitor_report_event.call_args
+        event_data = call_args.kwargs
+
+        # 关键验证：payload 必须能 JSON 序列化（修复前会因 __proxy__ 对象失败）
+        try:
+            json_str = json.dumps(event_data, ensure_ascii=False)
+            assert json_str  # 确保序列化成功且非空
+        except (TypeError, ValueError) as e:
+            self.fail(f"report_event payload JSON 序列化失败: {e}")
+
+        # 验证 content 字段是字符串（不是 lazy proxy）
+        for event in event_data["data"]:
+            content = event["event"]["content"]
+            assert isinstance(content, str), f"content 应该是 str 类型，实际是 {type(content)}"
+            # 验证可以被 force_str 处理（与修复逻辑一致）
+            assert force_str(content) == content
+
+            # 验证 dimension 中的 abnormal_reason 也是字符串
+            abnormal_reason = event["dimension"]["abnormal_reason"]
+            assert isinstance(abnormal_reason, str), f"abnormal_reason 应该是 str 类型，实际是 {type(abnormal_reason)}"

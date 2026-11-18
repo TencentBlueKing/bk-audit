@@ -24,6 +24,7 @@ from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
+from django.utils.encoding import force_str
 
 from core.lock import lock
 from services.web.analyze.constants import FlowNodeStatusChoices
@@ -77,6 +78,7 @@ class StrategyStatusChecker:
             return StrategyStatusAnomalyReason.FLOW_STATUS_MISMATCH.label.format(expected=expected, actual=flow_status)
         # strategy 暂无 flow_id 却处于需要运行的状态
         if not (strategy.backend_data or {}).get("flow_id") and strategy.status not in (
+            StrategyStatusChoices.DRAFT.value,
             StrategyStatusChoices.DISABLED.value,
             StrategyStatusChoices.DELETE_FAILED.value,
         ):
@@ -228,7 +230,7 @@ def check_strategy_status_anomalies():
                         "target": strategy.strategy_id,
                         "event_name": "strategy_exception",
                         "event": {
-                            "content": reason,
+                            "content": force_str(reason),
                         },
                         "dimension": {
                             "strategy_id": str(strategy.strategy_id),

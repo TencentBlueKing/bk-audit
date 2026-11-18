@@ -61,7 +61,7 @@
       <template #content="{tag}">
         <!-- {{ getIndexByTag(tag).action }} -->
         <component
-          :is="comMap[getIndexByTag(tag).action as keyof typeof comMap]"
+          :is="getTimelineComponent(getIndexByTag(tag).action)"
           :data="getIndexByTag(tag)"
           :detail-data="data"
           :event-data-list="eventDataList"
@@ -116,6 +116,7 @@
   import CloseRisk from './components/closerisk.vue';
   import CustomProcess  from './components/custom-process.vue';
   import ForApprove from './components/for-approve.vue';
+  import ConfirmDescription from './components/confirm-description.vue';
   import MisReport from './components/misreport.vue';
   import RiskExperience from './components/risk-experience.vue';
   import ReOpenMisReport from './components/reopen-misreport.vue';
@@ -214,6 +215,26 @@
       name: t('风险总结'),
       icon: 'dialogue',
     },
+    ConfirmRisk: {
+      name: t('风险确认'),
+      icon: 'user',
+    },
+    ConfirmAsMisreport: {
+      name: t('标记误报'),
+      icon: 'biaojiwubao',
+    },
+    ConfirmAsMisReport: {
+      name: t('标记误报'),
+      icon: 'biaojiwubao',
+    },
+    TransOperator: {
+      name: t('转单'),
+      icon: 'user',
+    },
+  };
+  const getActionMeta = (action: string) => historyActionMap[action] || {
+    name: action,
+    icon: 'user',
   };
   const comMap = {
     ReOpenMisReport,
@@ -225,11 +246,17 @@
     ReOpen: ReOpenMisReport,
     AutoProcess: ForApprove,
     NewRisk: 'div',
+    ConfirmRisk: ConfirmDescription,
+    ConfirmAsMisreport: MisReport,
+    ConfirmAsMisReport: MisReport,
+    TransOperator: CustomProcess,
     await_deal: AwaitDeal,
     RiskExperience,
   };
   const processPackageIdToDetailMap = ref<Record<string, any>>({});
   let isInit = false;
+  let renderedTimelineKey = '';
+  let timelineBuildSeq = 0;
   const list = ref<Record<string, any>[]>([]);
   const riskFieldMap = ref<Record<string, string>>({});
 
@@ -358,7 +385,7 @@
           class="risk-handle-timeline-dialogue-icon"
           src={dialogueIconUrl} />
       ) : (
-        <audit-icon type={ historyActionMap[action].icon } />
+        <audit-icon type={ getActionMeta(action).icon } />
       )}
     </span>
   );
@@ -370,10 +397,16 @@
     </p>`
   );
 
-  const getTimelineTitle = (item: Record<string, any>) => (
-    ['MisReport', 'ReOpenMisReport'].includes(item.action)
-      ? `${item.operator} ${historyActionMap[item.action].name}`
-      : historyActionMap[item.action].name || item.action
+  const getTimelineTitle = (item: Record<string, any>) => {
+    const meta = getActionMeta(item.action);
+    if (['MisReport', 'ReOpenMisReport', 'ConfirmAsMisreport', 'ConfirmAsMisReport'].includes(item.action)) {
+      return item.operator ? `${item.operator} ${meta.name}` : meta.name;
+    }
+    return meta.name || item.action;
+  };
+
+  const getTimelineComponent = (action: string) => (
+    comMap[action as keyof typeof comMap] || 'div'
   );
 
   const getIndexByTag = (tag: string) => {
@@ -411,8 +444,16 @@
     }
   });
 
+  // 详情轮询会整体替换 data，签名不变时不重建，避免清空人工处理表单中的输入
+  const getTimelineKey = (data: RiskManageModel) => `${data.status}|${JSON.stringify(data.ticket_history)}`;
+
   watch(() => props.data, (data) => {
-    if (data && data.ticket_history && !isInit) {
+    const timelineKey = data?.ticket_history ? getTimelineKey(data) : '';
+    if (data && data.ticket_history && (!isInit || timelineKey !== renderedTimelineKey)) {
+      isInit = false;
+      renderedTimelineKey = timelineKey;
+      timelineBuildSeq += 1;
+      const buildSeq = timelineBuildSeq;
       list.value = [];
       ticketHistory.value = [];
       data.ticket_history.forEach((item, index) => {
@@ -434,10 +475,11 @@
             // 合并
             const lastForApproveItem = data.ticket_history[index - 1];
             if (lastForApproveItem) {
-              const tmpItem = item;
-              tmpItem.forApproveItem = lastForApproveItem;
               list.value.push(listParam);
-              ticketHistory.value.push(item);
+              ticketHistory.value.push({
+                ...item,
+                forApproveItem: lastForApproveItem,
+              });
             }
           }
         }
@@ -450,7 +492,7 @@
           tag: renderTimelineTag(
             item.action,
             data.ticket_history.length,
-            historyActionMap[item.action].name || item.action,
+            historyActionMap[item.action]?.name || getActionMeta(item.action).name || item.action,
             item.time,
           ),
           content: '<template/>',
@@ -465,6 +507,7 @@
       fetchExperience({
         risk_id: data.risk_id,
       }).then(() => {
+        if (buildSeq !== timelineBuildSeq) return;
         appendRiskExperienceTimeline();
         isInit = true;
 
@@ -685,21 +728,35 @@
   :deep(.bk-timeline-content .approve-wrap > .mis-content),
   :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-content),
   :deep(.bk-timeline-content .risk-experience-wrap > .mis-content) {
+    display: grid;
+    grid-template-columns: max-content auto minmax(0, 1fr);
+    row-gap: 8px;
+    align-items: start;
     padding: 12px 8px 12px 12px;
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 2px;
 
+    .render-info-item {
+      display: contents;
+    }
+
     .render-info-item .info-label {
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
-      text-align: left;
-      flex: 0 0 auto !important;
+      line-height: 20px;
+      text-align: right;
+      flex: none !important;
+    }
+
+    .render-info-item .info-colon {
+      line-height: 20px;
     }
 
     .render-info-item .info-value {
       padding-left: 4px;
+      line-height: 20px;
     }
   }
 

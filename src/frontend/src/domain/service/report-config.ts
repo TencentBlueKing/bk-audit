@@ -255,4 +255,15 @@ export default  {
     return PanelModelSource.fetchPanelDetail(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 获取报表元数据（panels / variables / filters / constants）
+   */
+  fetchPanelMeta(params: {
+    share_uid: string,
+    type: string,
+    [key: `constants[${string}]`]: string,
+  }) {
+    return PanelModelSource.fetchPanelMeta(params)
+      .then(({ data }) => data);
+  },
 };

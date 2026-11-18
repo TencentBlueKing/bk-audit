@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from django.db import DatabaseError
+
+from services.web.ai_assistant.constants import ExecutionObjectType, ExecutionStatus
+from services.web.ai_assistant.exceptions import StaleAttachmentTask
+from services.web.ai_assistant.models import Attachment
+from services.web.ai_assistant.schemas import SnapshotInput
+from services.web.ai_assistant.tasks.base import BaseExecutionTask
+
+if TYPE_CHECKING:
+    from services.web.ai_assistant.services.attachment_execution import (
+        AttachmentExecution,
+    )
+
+
+class AttachmentExecutionTask(BaseExecutionTask["AttachmentExecution"]):
+    """为业务附件 Task 注入 AttachmentExecution，并由平台收敛执行终态。"""
+
+    abstract = True
+    id_argument = "attachment_id"
+    object_label = "附件"
+    object_type = ExecutionObjectType.ATTACHMENT
+    stale_exception = StaleAttachmentTask
+
+    def _load_execution(
+        self,
+        *,
+        instance_id: int,
+        task_id: str,
+        celery_task_id: str,
+    ) -> AttachmentExecution:
+        """将平台通用对象参数适配为附件领域加载函数。"""
+
+        # 延迟导入打断 Celery 冷启动 tasks → services → handlers → tasks 回环。
+        from services.web.ai_assistant.services.attachment_execution import (
+            load_attachment_execution,
+        )
+
+        return load_attachment_execution(
+            attachment_id=instance_id,
+            task_id=task_id,
+            celery_task_id=celery_task_id,
+        )
+
+    def _finish_success(
+        self,
+        *,
+        execution: AttachmentExecution,
+        task_id: str,
+        output_data: SnapshotInput,
+    ) -> dict[str, Any]:
+        """校验并持久化附件输出，只向 Celery 返回状态，避免成功事件携带业务正文。"""
+
+        from services.web.ai_assistant.services.attachment_execution import (
+            finish_attachment_success,
+        )
+
+        try:
+            finish_attachment_success(execution=execution, task_id=task_id, output_data=output_data)
+            return {"status": ExecutionStatus.SUCCESS}
+        except DatabaseError as error:
+            # 流式最终事务失败属于基础设施故障；重试才能重新生成流并保留业务产物。
+            if execution.has_stream:
+                raise self.retry(exc=error) from error
+            raise
+
+    def _finish_failure(
+        self,
+        *,
+        execution: AttachmentExecution | None,
+        instance_id: int,
+        task_id: str,
+        exception: Exception,
+    ) -> bool:
+        """将 Worker 异常交给附件领域函数映射为公开失败快照。"""
+
+        from services.web.ai_assistant.services.attachment_execution import (
+            finish_attachment_failure,
+        )
+
+        try:
+            return finish_attachment_failure(
+                attachment_id=instance_id,
+                task_id=task_id,
+                exception=exception,
+                execution=execution,
+            )
+        except DatabaseError as error:
+            if execution is not None and execution.has_stream:
+                raise self.retry(exc=error) from error
+            raise
+
+    def _handle_retry(self, *, execution: AttachmentExecution | None) -> None:
+        """Retry 退出前尽力归档并关闭流，再刷新任务活动时间。"""
+
+        if execution is not None and execution.has_stream:
+            execution.stream.close_for_retry()
+        if execution is not None:
+            Attachment.touch_processing(
+                instance_id=execution.attachment.id,
+                task_id=execution.attachment.task_id,
+            )

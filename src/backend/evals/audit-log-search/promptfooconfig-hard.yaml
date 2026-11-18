@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# 易错子集回归配置：只跑海量多值与业务场景组合（历史失败集中地），用于 prompt 调优快速验证。
+# 全量回归用 promptfooconfig.yaml（81 用例）。
+
+description: '审计 AI 日志检索-易错子集回归（多值完整性/场景组合/稳定性边界）'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'AIDev-audit-log-search'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+
+defaultTest:
+  assert:
+    - type: latency
+      threshold: 30000
+
+evaluateOptions:
+  maxConcurrency: 2
+  repeat: 1
+
+tests:
+  - file://tests/multi_values.yaml
+  - file://tests/scenario_combinations.yaml

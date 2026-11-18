@@ -133,27 +133,27 @@ class HitsFormatter:
         return data
 
     def _format_sensitive_data(self):
-        # 默认拥有所有权限
-        _all_permission = True
-        for so in self.sensitive_objs:
-            # IAM 权限
-            has_permission = getattr(so, "_has_permission", False)
-            # 该条日志是否匹配
-            match_condition = self._check_sensitive_condition(so)
-            # 有权限或不匹配则跳过
-            if has_permission or not match_condition:
-                continue
-            # 没有权限 且 匹配 且 不是移除的内容
-            if not has_permission and match_condition and not so.is_private:
-                _all_permission = False
+        """先确定命中规则，再遮罩或删除字段，避免改写后续规则的匹配条件。"""
+        matched_sensitive_objs = [
+            so
+            for so in self.sensitive_objs
+            if not getattr(so, "_has_permission", False) and self._check_sensitive_condition(so)
+        ]
+        for so in matched_sensitive_objs:
             # 逐个字段进行替换或移除
             for field in so.fields:
                 field_path = field["field_name"].split(".")
                 default_value = field.get("default_value", SENSITIVE_REPLACE_VALUE)
                 args = (self.hit, field_path, default_value)
                 self.hit = drop_dict_item_by_path(*args) if so.is_private else modify_dict_by_path(*args)
-        # 没有所有权限时，需要隐藏原始日志
-        if not _all_permission:
+        # 用户快照由关联数据生成，其私密规则只删除快照字段，不连带遮罩上游原文。
+        # 混合规则及其他无权规则继续保留原有的整段遮罩行为。
+        if any(
+            not so.is_private
+            or not so.fields
+            or any(field["field_name"].split(".")[0] != SNAPSHOT_USER_INFO.field_name for field in so.fields)
+            for so in matched_sensitive_objs
+        ):
             self.hit["log"] = SENSITIVE_REPLACE_VALUE
 
     def _check_sensitive_condition(self, sensitive_obj: SensitiveObject) -> bool:

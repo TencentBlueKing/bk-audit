@@ -109,6 +109,20 @@ export default {
       }));
   },
   /**
+   * @desc 获取待我确认风险列表
+   */
+  fetchConfirmRiskList(params: {
+    page: number,
+    page_size: number,
+    scene_id?: string,
+  }) {
+    return RiskManageSource.getConfirmRiskList(params)
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map(item => new RiskManageModel(item)),
+      }));
+  },
+  /**
    * @desc 获取风险可用字段
    */
   fetchFields() {
@@ -238,10 +252,110 @@ export default {
    */
   batchTransRisk(params: {
     risk_ids: string[],
-    new_operators: string[],
+    new_operators: Array<string | { type: 'user' | 'field', value: string }>,
     description: string
   }) {
     return RiskManageSource.batchTransRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量处理能力检查
+   */
+  previewBatchActions(params: {
+    risk_ids: string[],
+  }) {
+    return RiskManageSource.previewBatchActions(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量人工关单
+   */
+  bulkCloseRisk(params: {
+    risk_ids: string[],
+    description: string,
+  }) {
+    return RiskManageSource.bulkCloseRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量处理套餐
+   */
+  bulkAutoProcessRisk(params: {
+    risk_ids: string[],
+    pa_id: number,
+    pa_params: Record<string, any>,
+    auto_close_risk: boolean,
+  }) {
+    return RiskManageSource.bulkAutoProcessRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量标记误报
+   */
+  bulkMisreportRisk(params: {
+    risk_ids: string[],
+    description: string,
+  }) {
+    return RiskManageSource.bulkMisreportRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量解除误报
+   */
+  bulkUnmisreportRisk(params: {
+    risk_ids: string[],
+    new_operators: Array<{ type: 'user', value: string }>,
+  }) {
+    return RiskManageSource.bulkUnmisreportRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 确认风险
+   */
+  confirmRisk(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return RiskManageSource.confirmRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 确认为误报
+   */
+  confirmAsMisreport(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return RiskManageSource.confirmAsMisreport(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量确认风险单
+   */
+  batchConfirmRisk(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return RiskManageSource.batchConfirmRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量标记误报
+   */
+  batchConfirmAsMisreport(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return RiskManageSource.batchConfirmAsMisreport(params)
       .then(({ data }) => data);
   },
 
@@ -355,6 +469,7 @@ export default {
     end_time?: string,
     page: number,
     page_size: number,
+    risk_view_type?: string,
     start_time?: string,
     status?: string,
   }) {

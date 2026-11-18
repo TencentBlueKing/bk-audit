@@ -59,6 +59,21 @@
           <span class="side-child-dot" />
           {{ t('全局工具') }}
         </audit-menu-item>
+        <audit-menu-item
+          :class="{
+            active: [
+              'platformStrategyList',
+              'platformStrategyCreate',
+              'platformStrategyEdit',
+              'platformStrategyClone',
+              'platformStrategyUpgrade',
+            ].includes(currentRoute),
+          }"
+          index="platformStrategyList"
+          @click="handleMenuClick('platformStrategyList')">
+          <span class="side-child-dot" />
+          {{ t('全局策略') }}
+        </audit-menu-item>
       </div>
     </div>
 
@@ -129,6 +144,11 @@
     platformToolConfig: 'resourceManage',
     platformToolCreate: 'resourceManage',
     platformToolEdit: 'resourceManage',
+    platformStrategyList: 'resourceManage',
+    platformStrategyCreate: 'resourceManage',
+    platformStrategyEdit: 'resourceManage',
+    platformStrategyClone: 'resourceManage',
+    platformStrategyUpgrade: 'resourceManage',
     storageManage: 'dataManage',
     storageList: 'dataManage',
   };

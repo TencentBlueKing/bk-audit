@@ -28,6 +28,7 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.models import Tag
+from core.exporter.report import ReportContentFormat, resolve_content_format
 from core.serializers import AnyValueField, FlexibleListField, TimestampIntegerField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
@@ -35,9 +36,9 @@ from services.web.common.constants import ScopeQueryField
 from services.web.common.serializers import OptionalScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
-    RISK_LEVEL_ORDER_FIELD,
     AnalyseReportStatus,
     AnalyseReportType,
+    BkSecPushStatus,
     EventBasicField,
     EventFilterOperator,
     EventMappingFields,
@@ -47,6 +48,7 @@ from services.web.risk.constants import (
     RiskStatus,
     RiskViewType,
 )
+from services.web.risk.exceptions import BulkSelectionOverLimit
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportScenario,
@@ -60,6 +62,7 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
 )
+from services.web.risk.placeholder import PersonnelRef
 from services.web.risk.report_config import AIVariableConfig
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene, Scene
@@ -97,6 +100,9 @@ class CreateEventSerializer(serializers.Serializer):
         label=EventMappingFields.RAW_EVENT_ID.description, default=lambda: uuid.uuid1().hex
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
+    strategy_rule_id = serializers.IntegerField(
+        label=EventMappingFields.STRATEGY_RULE_ID.description, required=False, allow_null=True, default=None
+    )
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
     event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int, allow_null=True)
     event_evidence = serializers.CharField(
@@ -313,7 +319,8 @@ class RiskInfoSerializer(serializers.ModelSerializer):
         return obj.get_tag_ids()
 
     def get_scene_id(self, obj: Risk) -> int | None:
-        return get_strategy_scene_id(obj.strategy_id)
+        # 风险场景归属已固化到 Risk.scene_id，直接读模型字段
+        return obj.scene_id
 
     class Meta:
         model = Risk
@@ -600,18 +607,24 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
         allow_null=True,
         help_text=gettext_lazy("是否已生成报告。有报告 → true，无报告 → false"),
     )
+    bksec_push_status = serializers.CharField(
+        label=gettext_lazy("BKSEC Push Status"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy(
+            "BKSEC 发单状态：not_pushed(未推送) / success(推送成功) / failed(推送失败)，" '多个逗号拼接如 "success,failed"。'
+        ),
+    )
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
-        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → strategy__risk_level）。"""
+        """将前端 sort 列表转换为 ORM 可用的 order_fields（risk_level 直接使用快照字段排序）。"""
         order_fields = []
         for item in sort_list:
             bare = item.lstrip("-")
             if not bare:
                 continue
             prefix = "-" if item.startswith("-") else ""
-            if bare == Strategy.risk_level.field.name:
-                bare = RISK_LEVEL_ORDER_FIELD
             order_fields.append(f"{prefix}{bare}")
         return order_fields
 
@@ -628,6 +641,15 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
             event_field_name = normalized[len("event_data.") :].strip()
             if event_field_name and event_field_name not in filter_fields:
                 raise serializers.ValidationError(gettext("关联事件字段排序需在筛选条件中包含字段：%s") % event_field_name)
+
+    def validate_bksec_push_status(self, value: str) -> str:
+        """校验 BKSEC 发单状态取值，支持逗号分隔的多值。"""
+        if not value:
+            return value
+        invalid_values = [i for i in (v.strip() for v in value.split(",")) if i and i not in BkSecPushStatus.values]
+        if invalid_values:
+            raise serializers.ValidationError(gettext("BKSEC 发单状态取值非法 => %s") % ",".join(invalid_values))
+        return value
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
@@ -746,6 +768,329 @@ class ListRiskScenesRespSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
+class PAExecutionRecordInfoSerializer(serializers.Serializer):
+    """
+    处理套餐执行记录条目（与 ListPAExecutionRecords 返回的 results 元素同形）
+    """
+
+    id = serializers.CharField(label=gettext_lazy("节点ID"), help_text=gettext_lazy("TicketNode.id（UUID）"))
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
+    risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
+    risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
+    pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
+    operator = serializers.CharField(
+        label=gettext_lazy("执行人"),
+        allow_blank=True,
+        help_text=gettext_lazy("最新操作人（重试后为最后一次重试的人）；各轮现场的执行人见 retry_history 对应快照"),
+    )
+    start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
+    finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
+    sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
+    sops_task_url = serializers.CharField(label=gettext_lazy("SOPS任务链接"), allow_blank=True)
+    sops_state = serializers.CharField(label=gettext_lazy("SOPS任务状态"), allow_blank=True)
+    result = serializers.ChoiceField(label=gettext_lazy("执行结果"), choices=["success", "failed", "running", "unknown"])
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), allow_blank=True)
+    trigger = serializers.ChoiceField(
+        label=gettext_lazy("触发方式"), choices=["", "auto", "manual", "approve", "test"], allow_blank=True
+    )
+    duration = serializers.IntegerField(label=gettext_lazy("耗时(秒)"), allow_null=True)
+    is_test = serializers.BooleanField(label=gettext_lazy("是否测试单"))
+    failure_hint = serializers.CharField(label=gettext_lazy("失败提示"), allow_blank=True)
+
+
+class PAExecutionRecordListResponseSerializer(serializers.Serializer):
+    """处理套餐执行记录列表响应（手工分页结构，与 ListPAExecutionRecords 返回同形）"""
+
+    count = serializers.IntegerField(label=gettext_lazy("总数"))
+    page = serializers.IntegerField(label=gettext_lazy("页码"))
+    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"))
+    num_pages = serializers.IntegerField(label=gettext_lazy("总页数"))
+    results = PAExecutionRecordInfoSerializer(many=True, label=gettext_lazy("执行记录"))
+
+
+class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
+    """处理套餐执行记录详情响应（与 GetPAExecutionRecordDetail 返回同形）"""
+
+    id = serializers.CharField(label=gettext_lazy("节点ID"))
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), allow_blank=True)
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
+    pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
+    trigger = serializers.CharField(label=gettext_lazy("触发方式"), allow_blank=True)
+    operator = serializers.CharField(
+        label=gettext_lazy("执行人"),
+        allow_blank=True,
+        help_text=gettext_lazy("最新操作人（重试后为最后一次重试的人）；各轮现场的执行人见 retry_history 对应快照"),
+    )
+    start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
+    finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
+    sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
+    sops_task_url = serializers.CharField(label=gettext_lazy("SOPS任务链接"), allow_blank=True)
+    sops_state = serializers.CharField(label=gettext_lazy("SOPS任务状态"), allow_blank=True)
+    result = serializers.ChoiceField(label=gettext_lazy("执行结果"), choices=["success", "failed", "running", "unknown"])
+    duration = serializers.IntegerField(label=gettext_lazy("耗时(秒)"), allow_null=True)
+    is_test = serializers.BooleanField(label=gettext_lazy("是否测试单"))
+    failure_hint = serializers.CharField(label=gettext_lazy("失败提示"), allow_blank=True)
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
+    risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
+    risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
+    params = serializers.JSONField(
+        label=gettext_lazy("套餐入参"),
+        help_text=gettext_lazy(
+            "派单时渲染出的套餐入参快照 [{key, name, value}]：key 为 SOPS 常量 key，name 为模板显示名，" "value 为实际发出的值。快照上线前产生的历史记录返回空数组"
+        ),
+    )
+    retry_count = serializers.IntegerField(label=gettext_lazy("重试次数"))
+    retry_history = serializers.JSONField(
+        label=gettext_lazy("重试记录"),
+        help_text=gettext_lazy(
+            "重试前全量快照[{state, operator, attempts}]：state 为该轮的任务级状态（与 sops_state 同口径，"
+            "在 state 被乐观改为执行中之前固化），attempts 中此前已被重试过的节点 retried=True；"
+            "operator 为该轮现场的实际执行人（首条为记录发起人，第 i 条为第 i 次重试的操作人）"
+        ),
+    )
+    attempts = serializers.JSONField(
+        label=gettext_lazy("尝试记录"),
+        help_text=gettext_lazy("当前全量节点状态（逐节点执行与错误），历史被重试过的节点 retried=True"),
+    )
+
+
+class ListBkSecProjectsReqSerializer(serializers.Serializer):
+    """查询 BKSEC 项目及风险类型（策略页下拉，一次返回两级）"""
+
+    name__icontains = serializers.CharField(
+        label=gettext_lazy("名称模糊搜索"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("项目名命中与风险类型名命中取并集：项目名命中返回该项目及全部风险类型；" "仅风险类型名命中返回所属项目（保留项目名）及命中的风险类型；都不命中则不返回该项目"),
+    )
+    is_formal = serializers.CharField(label=gettext_lazy("是否正式"), required=False, allow_blank=True)
+
+
+class PreviewTicketReqSerializer(serializers.Serializer):
+    """预览工单（按 BKSEC 配置 + 样例风险单渲染，不实际发送）"""
+
+    bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
+    risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
+
+
+class SendTestTicketReqSerializer(serializers.Serializer):
+    """发送测试工单（经 SOPS 真实通道，仅发给指定接收人）"""
+
+    test_receivers = serializers.ListField(
+        label=gettext_lazy("测试接收人"),
+        child=serializers.CharField(allow_blank=True),
+        required=True,
+        allow_empty=True,
+    )
+    # 测试发送必须指定样例风险单：不传则所有 {{ risk.xxx }} 渲染为空，测试单大量字段为空、失去验证意义
+    risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
+    bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
+
+    def validate_test_receivers(self, value):
+        # ListField(required=True) 仍接受 [] 和 ["  "]。空接收人不能进入测试发送。
+        receivers = [str(item or "").strip() for item in value or []]
+        receivers = [item for item in receivers if item]
+        if not receivers:
+            raise serializers.ValidationError(gettext_lazy("至少指定一个测试接收人"))
+        return receivers
+
+
+class GetTaskStatusReqSerializer(serializers.Serializer):
+    """查询测试任务状态（task_id 会话内轮询 / risk_id 刷新后恢复，二选一）"""
+
+    task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), required=False, allow_blank=True)
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("task_id") and not attrs.get("risk_id"):
+            raise serializers.ValidationError(gettext_lazy("task_id 与 risk_id 至少传一个"))
+        return attrs
+
+
+class ReportBkSecTicketSentReqSerializer(serializers.Serializer):
+    """BKSEC 推送成功上报（发单插件在 BKSEC 推单返回 2xx 那一刻调用）"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=True)
+    event_id = serializers.CharField(
+        label=gettext_lazy("BKSEC事件ID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("WeSec 侧生成的事件 ID（非工单号），用于排查"),
+    )
+    trace_id = serializers.CharField(
+        label=gettext_lazy("发单TraceID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("仅用于日志排查"),
+    )
+
+
+class ReportBkSecTicketSentResponseSerializer(serializers.Serializer):
+    """BKSEC 推送成功上报结果"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    push_status = serializers.CharField(label=gettext_lazy("推送状态"))
+    updated = serializers.BooleanField(label=gettext_lazy("是否实际更新"), help_text=gettext_lazy("False 表示状态未变化（已是推送成功）"))
+
+
+class _OptionalDateTimeField(serializers.DateTimeField):
+    """可选时间：空串视为未传，接受列表展示格式和 ISO 8601。"""
+
+    def to_internal_value(self, value):
+        if value in ("", None):
+            return None
+        return super().to_internal_value(value)
+
+
+def _execution_record_range_field(label, help_text):
+    return _OptionalDateTimeField(
+        label=label,
+        required=False,
+        allow_null=True,
+        default=None,
+        input_formats=["%Y-%m-%d %H:%M:%S", "iso-8601"],
+        help_text=help_text,
+    )
+
+
+class PAExecutionRecordListReqSerializer(serializers.Serializer):
+    """处理套餐执行记录列表筛选参数"""
+
+    id = serializers.CharField(
+        label=gettext_lazy("执行记录ID"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy(
+            "按执行记录唯一 ID（TicketNode.id，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
+        ),
+    )
+    keyword = serializers.CharField(
+        label=gettext_lazy("搜索关键词"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy(
+            "全量模糊搜索：逗号分隔多个关键词，词之间为「且」（记录须同时命中每个词），"
+            "单个词内部为「或」——命中下列任一字段即算命中：执行记录ID、任务ID、任务名称、套餐名称、"
+            "执行人、风险ID、风险标题/状态/等级、失败提示、触发方式、执行状态；"
+            "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
+        ),
+    )
+    pa_id = serializers.CharField(
+        label=gettext_lazy("套餐ID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 1,2），任一命中即返回"),
+    )
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
+    task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), required=False, allow_blank=True)
+    pa_name = serializers.CharField(
+        label=gettext_lazy("套餐名称"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("精确匹配，支持多选，逗号分隔（如 套餐A,套餐B），任一命中即返回"),
+    )
+    trigger = serializers.CharField(
+        label=gettext_lazy("触发方式"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 auto,test），任一命中即返回"),
+    )
+    result = serializers.CharField(
+        label=gettext_lazy("状态"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 failed,running），任一命中即返回"),
+    )
+    operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
+    to = _execution_record_range_field(
+        gettext_lazy("开始时间范围终点"),
+        gettext_lazy("闭区间终点，格式 YYYY-MM-DD HH:MM:SS。筛选 start_time <= to"),
+    )
+    order_by = serializers.CharField(
+        label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
+    )
+    page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1, default=1)
+    page_size = serializers.IntegerField(
+        label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
+    )
+
+    def validate(self, attrs):
+        time_from = attrs.get("from")
+        time_to = attrs.get("to")
+        if time_from is not None and time_to is not None and time_from > time_to:
+            raise serializers.ValidationError(gettext("from 不能晚于 to"))
+        return attrs
+
+    def validate_pa_id(self, value):
+        for item in str(value or "").split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                int(item)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(gettext("套餐ID需为逗号分隔的整数"))
+        return value
+
+
+# from 是 Python 关键字，不能写成类属性，对外参数名仍然是 from。
+PAExecutionRecordListReqSerializer._declared_fields["from"] = _execution_record_range_field(
+    gettext_lazy("开始时间范围起点"),
+    gettext_lazy("闭区间起点，格式 YYYY-MM-DD HH:MM:SS。筛选 start_time >= from；与 to 都不传时套餐列表默认近 30 天"),
+)
+
+
+class PAExecutionRecordDetailReqSerializer(serializers.Serializer):
+    """处理套餐执行记录详情参数"""
+
+    id = serializers.CharField(label=gettext_lazy("执行记录ID"), required=True)
+
+
+class ListBkSecRiskTypesResponseSerializer(serializers.Serializer):
+    """BKSEC 风险类型条目（ListBkSecProjects.risk_types 的元素）"""
+
+    risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"))
+    risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
+    is_formal = serializers.BooleanField(label=gettext_lazy("是否正式"))
+    fields = serializers.JSONField(
+        label=gettext_lazy("工单字段Schema"), help_text=gettext_lazy("[{key,name,required,type}]")
+    )
+
+
+class ListBkSecProjectsResponseSerializer(serializers.Serializer):
+    """BKSEC 项目及其风险类型（ListBkSecProjects 返回元素）"""
+
+    id = serializers.CharField(label=gettext_lazy("项目ID"))
+    name = serializers.CharField(label=gettext_lazy("项目名称"), allow_blank=True)
+    risk_types = ListBkSecRiskTypesResponseSerializer(many=True, label=gettext_lazy("风险类型列表"))
+
+
+class PreviewTicketResponseSerializer(serializers.Serializer):
+    """工单预览响应（ticket 动态体以 JSONField 透传）"""
+
+    risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"), allow_blank=True)
+    risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
+    has_sample_risk = serializers.BooleanField(label=gettext_lazy("是否有样例风险单"))
+    ticket = serializers.JSONField(label=gettext_lazy("工单报文"))
+    warnings = serializers.JSONField(label=gettext_lazy("告警"))
+
+
+class SendTestTicketResponseSerializer(serializers.Serializer):
+    """发送测试工单响应（SOPS 任务信息与渲染后的插件入参）"""
+
+    task = serializers.JSONField(label=gettext_lazy("SOPS任务信息"))
+    constants = serializers.JSONField(label=gettext_lazy("插件入参常量"))
+
+
 class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
     List Risk
@@ -837,6 +1182,8 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "has_report",
             "report_enabled",
             "report_auto_render",
+            "risk_level",
+            "bksec_push_status",
         ]
 
 
@@ -939,7 +1286,7 @@ class RuleScopeValidator(serializers.Serializer):
             return
 
         if not ProcessApplication.objects.filter(id=pa_id).exists():
-            raise serializers.ValidationError(gettext("处理套餐不存在"))
+            raise serializers.ValidationError(gettext(PROCESS_APPLICATION_NOT_FOUND))
 
         is_bound = ResourceBindingScene.objects.filter(
             scene_id=scene_id,
@@ -1025,7 +1372,7 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        if data["risk_label"] == RiskLabel.MISREPORT and not attrs.get("description"):
+        if data["risk_label"] == RiskLabel.MISREPORT and not data.get("description"):
             raise serializers.ValidationError(gettext("Misreport Description Not Set"))
         return data
 
@@ -1076,25 +1423,109 @@ class ListRiskRuleReqSerializer(serializers.Serializer):
         return result
 
 
+BULK_ACTION_DESCRIPTION_MAX_LENGTH = 1000
+BULK_ACTION_MAX_RISK_IDS = 500
+BULK_AUTO_PROCESS_MAX_RISK_IDS = 100
+BULK_SELECTION_REQUIRED = "请选择至少一条风险"
+PROCESS_APPLICATION_NOT_FOUND = "处理套餐不存在"
+
+
+class PersonnelRefSerializer(serializers.Serializer):
+    """转单人员字段引用。
+
+    - type=user: value 为用户名，可以是 `$OPERATOR` / `$OPERATOR_LEADER` 人员槽
+    - type=field: value 为工单字段或 `event_data.xxx` 点路径
+    - 直接传字符串视同 `{type: user, value: <str>}`
+    - 校验后 user 引用输出用户名字符串；field 引用保留 `{type, value}`，由执行前解析成用户名
+    """
+
+    type = serializers.ChoiceField(
+        choices=[PersonnelRef.USER, PersonnelRef.FIELD], required=False, default=PersonnelRef.USER
+    )
+    value = serializers.CharField(allow_blank=False, allow_null=False)
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = {"type": PersonnelRef.USER, "value": data}
+        validated = super().to_internal_value(data)
+        if validated["type"] == PersonnelRef.USER:
+            return validated["value"]
+        return {"type": validated["type"], "value": validated["value"]}
+
+
 class CustomCloseRiskRequestSerializer(serializers.Serializer):
     risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
-    description = serializers.CharField(label=gettext_lazy("处理说明"))
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class CustomTransBaseReqSerializer(serializers.Serializer):
-    new_operators = serializers.ListField(label=gettext_lazy("新处理人"), child=serializers.CharField(), min_length=1)
-    description = serializers.CharField(label=gettext_lazy("处理说明"))
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        min_length=1,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class CustomTransRiskReqSerializer(CustomTransBaseReqSerializer):
     risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
 
 
-class BulkCustomTransRiskReqSerializer(CustomTransBaseReqSerializer):
-    risk_ids = serializers.ListField(label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1)
+class BulkRiskSelectionSerializer(serializers.Serializer):
+    """risk_ids 与列表筛选 filters 二选一，filters 与风险列表查询参数一致。"""
 
-    def validate_risk_ids(self, risk_ids: List[str]) -> List[str]:
-        return sorted(list(set(risk_ids)))
+    risk_id_limit = None
+
+    risk_ids = FlexibleListField(
+        label=gettext_lazy("Risk IDs"),
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=False,
+    )
+    filters = ListRiskRequestSerializer(label=gettext_lazy("风险列表筛选"), required=False)
+
+    def validate(self, attrs):
+        risk_ids = attrs.get("risk_ids")
+        filters = attrs.get("filters")
+        if risk_ids and filters:
+            raise serializers.ValidationError(gettext("risk_ids 与筛选条件不能同时传入"))
+        if not risk_ids and not filters:
+            raise serializers.ValidationError(gettext(BULK_SELECTION_REQUIRED))
+        if risk_ids:
+            deduped = sorted(set(risk_ids))
+            if self.risk_id_limit is not None and len(deduped) > self.risk_id_limit:
+                raise BulkSelectionOverLimit()
+            attrs["risk_ids"] = deduped
+        return attrs
+
+
+class BulkCustomTransRiskReqSerializer(BulkRiskSelectionSerializer):
+    """批量转单：处理说明必填"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        min_length=1,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class RiskExperienceInfoSerializer(serializers.ModelSerializer):
@@ -1173,10 +1604,31 @@ class ListProcessApplicationsReqSerializer(serializers.Serializer):
         return data
 
 
+class ListRuleByPAReqSerializer(serializers.Serializer):
+    """套餐关联规则列表。场景套餐可不传 scene_id；全局套餐必须传当前场景。"""
+
+    id = serializers.IntegerField(label=gettext_lazy("处理套餐ID"))
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("全局套餐必传，只返回该场景下挂在此套餐上的规则；场景套餐沿用自身场景绑定，可不传"),
+    )
+    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
+    order_type = serializers.ChoiceField(
+        label=gettext_lazy("排序方式"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=OrderTypeChoices.choices,
+    )
+
+
 class TicketNodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketNode
-        exclude = ["extra"]
+        # sops_start_time 为执行记录筛选/排序的内部物化字段，不属于流转历史接口返回契约
+        exclude = ["extra", "sops_start_time"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -1265,6 +1717,18 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
             # 兼容历史数据
             if config["field_name"] == EventMappingFields.RAW_EVENT_ID.field_name:
                 config["description"] = str(RAW_EVENT_ID_REMARK)
+        # 风险归属场景下不可见的下钻工具不展示
+        if "risk_scene_id" in self.context:
+            from services.web.scene.filters import filter_drill_tools_by_scene
+
+            risk_scene_id = self.context.get("risk_scene_id")
+            for field_key in (
+                "event_basic_field_configs",
+                "event_data_field_configs",
+                "event_evidence_field_configs",
+                "risk_meta_field_config",
+            ):
+                data[field_key] = filter_drill_tools_by_scene(data.get(field_key) or [], risk_scene_id)
         return data
 
 
@@ -1439,6 +1903,10 @@ class ListAllProcessApplicationsReqSerializer(serializers.Serializer):
     """处理套餐 all 接口请求参数（按场景过滤）"""
 
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+    # 不传表示不过滤；True 只返回有执行记录的套餐，False 只返回没有执行记录的套餐
+    has_execution_records = serializers.BooleanField(
+        label=gettext_lazy("是否有执行记录"), required=False, allow_null=True, default=None
+    )
 
 
 class ListRiskBriefResponseSerializer(serializers.ModelSerializer):
@@ -1598,6 +2066,14 @@ class NL2RiskFilterRequestSerializer(OptionalScopeQuerySerializer):
         default="",
         help_text=gettext_lazy("会话标识，用于多轮对话。不传则每次生成新的。"),
     )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"),
+        choices=RiskViewType.choices,
+        required=False,
+        allow_blank=True,
+        default=RiskViewType.ALL,
+        help_text=gettext_lazy("当前搜索所属的风险视图类型（如 all/scene/confirm），用于记录搜索历史。"),
+    )
 
 
 class NL2RiskFilterResponseSerializer(serializers.Serializer):
@@ -1613,6 +2089,14 @@ class ListNL2RiskFilterLogRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default="",
+    )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"),
+        choices=RiskViewType.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按风险视图类型过滤搜索历史，如 all/scene/confirm。"),
     )
     start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False, default=None)
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False, default=None)
@@ -1631,6 +2115,7 @@ class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
             "query",
             "response_data",
             "status",
+            "risk_view_type",
         ]
 
 
@@ -1828,6 +2313,11 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
     risk_ids = serializers.SerializerMethodField()
     scenario_name = serializers.CharField(source="scenario.name", default="", read_only=True)
     error_message = serializers.SerializerMethodField(help_text=gettext_lazy("报告生成失败时的错误信息"))
+    content_format = serializers.SerializerMethodField(help_text=gettext_lazy("报告正文格式：MARKDOWN或HTML；历史记录自动识别"))
+
+    def get_content_format(self, obj) -> str:
+        """优先读取格式标识；历史正文无标识时使用公共识别规则。"""
+        return resolve_content_format(obj.content, obj.extra_info.get("content_format"))
 
     def get_risk_ids(self, obj) -> List[str]:
         return list(obj.report_risks.values_list("risk_id", flat=True))
@@ -1842,6 +2332,7 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "title",
             "report_type",
             "content",
+            "content_format",
             "analysis_scope",
             "risk_count",
             "risk_ids",
@@ -1864,7 +2355,22 @@ class UpdateAnalyseReportRequestSerializer(serializers.Serializer):
 
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
     title = serializers.CharField(label=gettext_lazy("报告标题"), max_length=255, required=False)
-    content = serializers.CharField(label=gettext_lazy("报告内容(Markdown)"), required=False)
+    content = serializers.CharField(label=gettext_lazy("报告正文(Markdown或HTML)"), required=False, trim_whitespace=False)
+    content_format = serializers.ChoiceField(
+        choices=ReportContentFormat.choices, required=False, help_text=gettext_lazy("正文格式；省略时自动识别新正文，不沿用旧格式")
+    )
+
+    def validate_content(self, value):
+        """保留正文原有空格，同时继续拒绝纯空白报告。"""
+        if not value.strip():
+            raise serializers.ValidationError(gettext_lazy("报告正文不能为空"))
+        return value
+
+    def validate(self, attrs):
+        """格式标识只能与本次正文一同更新。"""
+        if "content_format" in attrs and "content" not in attrs:
+            raise serializers.ValidationError({"content_format": gettext_lazy("更新格式时须同时提交正文")})
+        return attrs
 
 
 class DeleteAnalyseReportRequestSerializer(serializers.Serializer):
@@ -1988,7 +2494,8 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not isinstance(instance, dict):
-            data["risk_level"] = getattr(instance.strategy, "risk_level", None)
+            # 风险等级已快照化，直接读 Risk 自身字段，不再关联策略
+            data["risk_level"] = getattr(instance, "risk_level", None)
         if self.context.get("with_detail"):
             data["detail"] = RiskInfoWithoutReportSerializer(instance).data
         else:
@@ -2009,3 +2516,150 @@ class ListAnalyseReportByRiskRequestSerializer(serializers.Serializer):
     """风险反查报告请求"""
 
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+
+
+class ConfirmRiskRequestSerializer(serializers.Serializer):
+    """确认风险请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("确认说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+
+class BatchConfirmRiskRequestSerializer(BulkRiskSelectionSerializer):
+    """批量确认风险请求"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    description = serializers.CharField(
+        label=gettext_lazy("确认说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
+
+
+class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
+    """确认为误报请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("描述"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+
+class BatchConfirmAsMisReportRequestSerializer(BulkRiskSelectionSerializer):
+    """批量确认为误报请求"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    description = serializers.CharField(
+        label=gettext_lazy("误报说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 批量处理 (Batch Actions) · 批量处理弹窗新增
+# ---------------------------------------------------------------------------
+
+
+class BulkCloseReqSerializer(BulkRiskSelectionSerializer):
+    """批量人工关单"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
+
+
+class BulkMisreportReqSerializer(BulkRiskSelectionSerializer):
+    """批量标记误报"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    description = serializers.CharField(
+        label=gettext_lazy("误报说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
+    revoke_process = serializers.BooleanField(required=False, default=True)
+
+
+class BulkUnmisreportReqSerializer(BulkRiskSelectionSerializer):
+    """批量解除误报：仅已关单且标签为误报的风险可执行"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        required=False,
+        default=list,
+    )
+
+
+class BulkAutoProcessReqSerializer(BulkRiskSelectionSerializer):
+    """批量执行处理套餐"""
+
+    risk_id_limit = BULK_AUTO_PROCESS_MAX_RISK_IDS
+    pa_id = serializers.IntegerField(label=gettext_lazy("处理套餐 ID"))
+    pa_params = serializers.JSONField(label=gettext_lazy("处理套餐参数"))
+    auto_close_risk = serializers.BooleanField(required=False, default=False)
+
+
+class BatchActionsPreviewReqSerializer(BulkRiskSelectionSerializer):
+    """批量处理按钮预览。确认、关单、转单、误报超过 500 条返回 400。"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+
+
+class BulkActionFailedItemSerializer(serializers.Serializer):
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
+    reason = serializers.CharField(label=gettext_lazy("失败原因"))
+
+
+class BulkActionRespSerializer(serializers.Serializer):
+    """批量操作统一返回：成功数 + 失败明细"""
+
+    success_count = serializers.IntegerField(label=gettext_lazy("成功数量"), default=0)
+    failed = BulkActionFailedItemSerializer(label=gettext_lazy("失败明细"), many=True, required=False, default=list)
+
+
+class BatchActionAvailabilitySerializer(serializers.Serializer):
+    enabled = serializers.BooleanField(label=gettext_lazy("是否可用"))
+    disabled_reason = serializers.CharField(label=gettext_lazy("不可用原因"), required=False, allow_blank=True, default="")
+
+
+class BatchActionsPreviewRespSerializer(serializers.Serializer):
+    """预览接口返回：整体是否可批量 + 每个动作的可用性"""
+
+    batch_enabled = serializers.BooleanField(label=gettext_lazy("是否可以批量执行"))
+    batch_disabled_reason = serializers.CharField(
+        label=gettext_lazy("整体不可批量原因"), required=False, allow_blank=True, default=""
+    )
+    actions = serializers.DictField(
+        label=gettext_lazy("按动作的可用性"),
+        child=BatchActionAvailabilitySerializer(),
+        default=dict,
+    )
+    unique_strategy_id = serializers.IntegerField(
+        label=gettext_lazy("选中风险唯一策略 ID"),
+        required=False,
+        allow_null=True,
+    )
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("选中风险唯一场景 ID"),
+        required=False,
+        allow_null=True,
+    )
+    selected_count = serializers.IntegerField(label=gettext_lazy("选中数量"), default=0)

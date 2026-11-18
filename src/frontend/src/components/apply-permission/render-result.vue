@@ -19,7 +19,7 @@
     <div class="no-permission-tips">
       <img
         class="lock"
-        src="@images/no-permission.svg">
+        :src="noPermissionSvg">
       <p class="tips-text">
         {{ t('该操作需要以下权限') }}
       </p>
@@ -66,6 +66,8 @@
   import { useI18n } from 'vue-i18n';
 
   import type ApplyDataModel from '@model/iam/apply-data';
+
+  import noPermissionSvg from '@images/no-permission.svg?inline';
 
   interface Props {
     data: ApplyDataModel

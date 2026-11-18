@@ -17,6 +17,7 @@
 <template>
   <template v-if="eventItemArr && eventItemArr.length">
     <vuedraggable
+      handle=".row-drag-handle"
       item-key="field_name"
       :list="eventItemArr">
       <template #item="{element}: { element: StrategyFieldEvent['event_basic_field_configs'][0] }">
@@ -28,7 +29,7 @@
             :class="getCellClass(valueKey)">
             <template v-if="valueKey === 'field_name'">
               <audit-icon
-                style=" margin: 0 10px;font-size: 13px;color: #c4c6cc;"
+                class="row-drag-handle"
                 type="move" />
             </template>
             <field-cell
@@ -75,9 +76,16 @@
 
   import FieldCell from './field-cell.vue';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+
+  type EventFieldKey = keyof StrategyFieldEvent['event_basic_field_configs'][0];
+
   interface Props {
     eventItemArr: StrategyFieldEvent['event_basic_field_configs'];
-    eventItemKey: keyof StrategyFieldEvent;
+    eventItemKey: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs' | 'risk_meta_field_config';
     select: Array<DatabaseTableFieldModel>;
     strategyType: string;
     strategyName: string;
@@ -106,14 +114,14 @@
   const route = useRoute();
 
   const fieldCellRef = ref();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
   // 固定列顺序，避免按对象 key 遍历导致「基本信息 / 事件结果」列错位
-  const columnKeys = computed(() => {
-    const keys = [
+  const columnKeys = computed((): EventFieldKey[] => {
+    const keys: EventFieldKey[] = [
       'field_name',
       'display_name',
       'is_show',
@@ -130,16 +138,17 @@
     return keys;
   });
 
-  const getCellClass = (valueKey: string) => ({
+  const getCellClass = (valueKey: EventFieldKey) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
     'is-priority': valueKey === 'is_priority' || valueKey === 'is_show' || valueKey === 'enum_mappings' || valueKey === 'duplicate_field',
     'map-config': valueKey === 'map_config',
+    'enum-mappings': valueKey === 'enum_mappings',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
   });
 
-  const updateFieldValue = (config: any, key: string, value: any) => {
+  const updateFieldValue = (config: any, key: EventFieldKey, value: any) => {
     // eslint-disable-next-line no-param-reassign
     config[key] = value;
   };
@@ -204,51 +213,55 @@
 
 <style lang="postcss" scoped>
 .table-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--event-row-cols);
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+
+  .row-drag-handle {
+    margin: 0 10px;
+    font-size: 13px;
+    color: #c4c6cc;
+    cursor: move;
+  }
+
+  &.is-even {
+    background: #fafbfd;
+  }
 
   .cell {
     display: flex;
+    box-sizing: border-box;
     height: 42px;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;
 
-    &.field-name {
-      width: 200px;
+    &.map-config {
+      align-items: stretch;
+      padding: 0;
+    }
+
+    &.drill-config,
+    &.enum-mappings,
+    &.description,
+    &.display-name {
+      padding: 0;
     }
 
     &.display-name {
-      width: 200px;
-      padding: 0 12px;
-      box-sizing: border-box;
-
-      /* 与只读文本对齐：输入框去掉左右内边距，统一由单元格控制 */
-      :deep(.bk-input) {
-        padding-left: 0;
-        padding-right: 0;
-      }
-
-      :deep(.bk-input--text),
-      :deep(input) {
-        padding-left: 0;
-        padding-right: 0;
+      :deep(.show-tooltips-text) {
+        padding: 0 12px;
       }
     }
 
-    &.is-priority {
-      width: 120px;
-    }
-
-    &.map-config {
-      width: 230px;
-    }
-
-    &.drill-config {
-      width: 230px;
-    }
-
-    &:last-child {
-      flex: 1;
+    :deep(.show-tooltips-text) {
+      width: 100%;
+      min-width: 0;
     }
   }
 }

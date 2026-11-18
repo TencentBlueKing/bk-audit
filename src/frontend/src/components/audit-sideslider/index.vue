@@ -17,7 +17,7 @@
 <template>
   <bk-sideslider
     v-bind="filteredAttrs"
-    :before-close="customBeforeClose || beforeCloseCallback"
+    :before-close="resolvedBeforeClose"
     :is-show="isShow"
     :title="t($attrs.title as string)"
     @update:is-show="handleUpdateShow">
@@ -27,7 +27,9 @@
       <slot name="header" />
     </template>
     <template #default>
-      <div v-if="isShow">
+      <div
+        v-if="isShow"
+        class="audit-sideslider-content">
         <slot />
       </div>
     </template>
@@ -116,8 +118,11 @@
   const getModelProvier = useModelProvider();
   const $attrs = useAttrs();
 
-  const customBeforeClose = props.beforeClose;
   const beforeCloseCallback = () => changeConfirm();
+  const resolvedBeforeClose = () => {
+    const fn = props.beforeClose ?? beforeCloseCallback;
+    return fn();
+  };
 
   // 从 $attrs 中排除 before-close，因为我们显式地设置了它
   const filteredAttrs = computed(() => {
@@ -129,8 +134,10 @@
     emit('update:isShow', false);
   };
 
-  const handleUpdateShow = () => {
-    close();
+  const handleUpdateShow = (value: boolean) => {
+    if (value === false) {
+      close();
+    }
   };
 
   // 确定
@@ -162,3 +169,11 @@
     },
   });
 </script>
+<style scoped lang="postcss">
+.audit-sideslider-content {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
+}
+</style>

@@ -282,6 +282,7 @@
         handleAutoResize(multiInputRef.value || undefined);
       } else {
         singleInputRef.value?.focus();
+        singleInputRef.value?.select();
         handleAutoResize(singleInputRef.value || undefined);
       }
     });

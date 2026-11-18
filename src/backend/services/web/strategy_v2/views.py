@@ -18,6 +18,8 @@ to the current version of the project delivered to anyone in the future.
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from django.http import Http404
+from django.shortcuts import get_object_or_404
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
@@ -29,8 +31,11 @@ from apps.permission.handlers.drf import (
 )
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.utils.data import get_value_by_request, get_value_by_request_or_path
-from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.models import ResourceBindingScene
+from services.web.risk.models import Risk
+from services.web.risk.permissions import RiskViewPermission
+from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.models import ResourceBinding, ResourceBindingScene
+from services.web.strategy_v2.models import Strategy
 from services.web.tool.permissions import CallerContextPermission
 
 
@@ -62,27 +67,39 @@ class StrategyViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list"]:
+            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（仅全局策略，无 scene_id）走平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
                 ),
             ]
         if self.action in ["strategy_running_status_list", "retrieve"]:
+            # 场景策略：场景实例权限（反查策略所属场景）；全局策略无场景关联，回退平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id_by_strategy,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id_by_strategy,
+                    ),
                 ),
             ]
         if self.action in ["create"]:
+            # 场景策略：请求携带 scene_id 走场景实例权限；全局策略（binding_type=platform_binding，无 scene_id）走平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.CREATE_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.CREATE_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
                 ),
             ]
         if self.action in ["update", "toggle", "retry"]:
@@ -151,11 +168,15 @@ class StrategyTagsViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list"]:
+            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（无 scene_id）走平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
                 )
             ]
         return []
@@ -232,6 +253,18 @@ class LinkTableViewSet(ResourceViewSet):
                     get_instance_id=self.get_scene_id,
                 ),
             ]
+        if self.action in ["all"]:
+            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（全局策略，无 scene_id）走平台管理权限
+            return [
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_LINK_TABLE],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
+                ),
+            ]
         if self.action in ["create"]:
             return [
                 InstanceActionPermission(
@@ -285,7 +318,51 @@ class ReportViewSet(ResourceViewSet):
     """
 
     def get_permissions(self):
-        return []
+        """预览需样本可见，且具备源策略编辑或其归属范围的创建权限。"""
+        # OpenAPI 只探查权限类型，没有可供鉴权的业务请求。
+        if self.action != "preview" or getattr(self, "swagger_fake_view", False):
+            return []
+
+        # POST Resource 只读取正文，权限校验必须使用同一个风险，不能被 query 覆盖。
+        risk = get_object_or_404(Risk, risk_id=self.request.data.get("risk_id"))
+        strategy = get_object_or_404(Strategy, strategy_id=risk.strategy_id, namespace=self.kwargs["namespace"])
+        binding = get_object_or_404(
+            ResourceBinding, resource_type=ResourceVisibilityType.STRATEGY, resource_id=str(strategy.strategy_id)
+        )
+        if binding.binding_type == BindingType.PLATFORM_BINDING:
+            # 全局策略分配的可见场景不是归属场景，沿用平台创建策略权限。
+            create_permission = IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])
+        elif binding.binding_type == BindingType.SCENE_BINDING:
+            scene_ids = list(
+                ResourceBindingScene.objects.filter(binding=binding, scene__is_deleted=False).values_list(
+                    "scene_id", flat=True
+                )[:2]
+            )
+            if len(scene_ids) != 1:
+                raise Http404
+            create_permission = InstanceActionPermission(
+                actions=[ActionEnum.CREATE_STRATEGY],
+                resource_meta=ResourceEnum.SCENE,
+                get_instance_id=lambda: scene_ids[0],
+            )
+        else:
+            raise Http404
+
+        return [
+            RiskViewPermission(
+                actions=[ActionEnum.LIST_RISK],
+                resource_meta=ResourceEnum.RISK,
+                get_instance_id=lambda: risk.risk_id,
+            ),
+            AnyOfPermissions(
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_STRATEGY],
+                    resource_meta=ResourceEnum.STRATEGY,
+                    get_instance_id=lambda: strategy.strategy_id,
+                ),
+                create_permission,
+            ),
+        ]
 
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_risk_variables, endpoint="risk_variables"),

@@ -57,8 +57,10 @@ from core.choices import TextChoices, register_choices
 from core.constants import OrderTypeChoices
 from core.sql.constants import FieldType
 from core.sql.model import BaseField
+from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.utils.field import (
     LOG_SEARCH_ALL_FIELDS,
+    LOG_SEARCH_ALL_FIELDS_MAP,
     LOG_SEARCH_SNAPSHOT_FIELDS,
     LOG_SEARCH_SNAPSHOT_FIELDS_MAP,
     LOG_SEARCH_STANDARD_FIELDS,
@@ -74,6 +76,9 @@ from services.web.query.utils.search_config import (
 DEFAULT_TIMEDELTA = 7
 DEFAULT_PAGE = 1
 DEFAULT_PAGE_SIZE = 10
+
+# XlsxWriter 已写入截断后的字符串，并以此返回码提示超出 Excel 单格长度。
+XLSX_STRING_TRUNCATED = -2
 
 # 单次检索最大条数
 SEARCH_MAX_LIMIT = 10000
@@ -134,6 +139,21 @@ OBJECT_FIELD_OPERATOR = [
     QueryConditionOperator.NOTNULL,
 ]
 
+# 数值字段按实际值比较，枚举仅作展示提示，不限制日志中可能出现的值。
+NUMERIC_FIELD_OPERATORS = [
+    QueryConditionOperator.EQ,
+    QueryConditionOperator.NEQ,
+    QueryConditionOperator.GT,
+    QueryConditionOperator.LT,
+    QueryConditionOperator.GTE,
+    QueryConditionOperator.LTE,
+    QueryConditionOperator.INCLUDE,
+    QueryConditionOperator.EXCLUDE,
+    QueryConditionOperator.BETWEEN,
+    QueryConditionOperator.ISNULL,
+    QueryConditionOperator.NOTNULL,
+]
+
 # 日志查询条件配置
 COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
     field_configs=[
@@ -142,11 +162,17 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(
             field=RESOURCE_TYPE_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
         ),
+        FieldSearchConfig(field=ACCESS_TYPE, allow_operators=NUMERIC_FIELD_OPERATORS),
         FieldSearchConfig(
-            field=ACCESS_TYPE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(
-            field=USER_IDENTIFY_TYPE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+            field=USER_IDENTIFY_TYPE,
+            allow_operators=[
+                QueryConditionOperator.INCLUDE,
+                QueryConditionOperator.EXCLUDE,
+                QueryConditionOperator.EQ,
+                QueryConditionOperator.NEQ,
+                QueryConditionOperator.ISNULL,
+                QueryConditionOperator.NOTNULL,
+            ],
         ),
         FieldSearchConfig(field=USERNAME, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]),
         FieldSearchConfig(field=EVENT_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]),
@@ -171,7 +197,7 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(field=SNAPSHOT_RESOURCE_TYPE_INFO, allow_operators=OBJECT_FIELD_OPERATOR),
         FieldSearchConfig(field=SNAPSHOT_ACTION_INFO, allow_operators=OBJECT_FIELD_OPERATOR),
         FieldSearchConfig(field=SNAPSHOT_INSTANCE_DATA, allow_operators=OBJECT_FIELD_OPERATOR),
-        FieldSearchConfig(field=RESULT_CODE, allow_operators=[QueryConditionOperator.INCLUDE]),
+        FieldSearchConfig(field=RESULT_CODE, allow_operators=NUMERIC_FIELD_OPERATORS),
         FieldSearchConfig(field=INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=EVENT_CONTENT, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=ACCESS_USER_AGENT, allow_operators=[QueryConditionOperator.LIKE]),
@@ -250,6 +276,13 @@ class TaskEnum(TextChoices):
         ]
 
 
+class LogExportSourceType(TextChoices):
+    """日志导出任务的发起入口。"""
+
+    WEB_LOG_SEARCH = "WEB_LOG_SEARCH", gettext_lazy("Web 日志检索")
+    AI_ASSISTANT_MESSAGE = "AI_ASSISTANT_MESSAGE", gettext_lazy("AI 助手日志检索消息")
+
+
 class LogExportFieldScope(TextChoices):
     """
     日志导出字段范围
@@ -259,6 +292,8 @@ class LogExportFieldScope(TextChoices):
     STANDARD = "standard", gettext_lazy("标准字段")
     SNAPSHOT = "snapshot", gettext_lazy("快照字段")
     SPECIFIED = "specified", gettext_lazy("指定字段")
+    # AI 助手日志检索专用：字段集合 = 快照默认展示列（与预览导出/前端列表一致）
+    AI_STANDARD = "ai_standard", gettext_lazy("AI助手标准字段")
 
     @classmethod
     def get_fields(cls, scope: str) -> List[Field]:
@@ -271,6 +306,8 @@ class LogExportFieldScope(TextChoices):
             cls.STANDARD.value: LOG_SEARCH_STANDARD_FIELDS,
             cls.SNAPSHOT.value: LOG_SEARCH_SNAPSHOT_FIELDS,
             cls.SPECIFIED.value: [],
+            # AI 助手标准字段 = 快照默认展示列（顺序与集合以 SNAPSHOT_DEFAULT_COLUMNS 为单一来源）
+            cls.AI_STANDARD.value: [LOG_SEARCH_ALL_FIELDS_MAP[raw_name] for raw_name, _ in SNAPSHOT_DEFAULT_COLUMNS],
         }.get(scope)
 
 

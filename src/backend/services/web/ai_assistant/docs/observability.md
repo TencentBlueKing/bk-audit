@@ -1,0 +1,179 @@
+# AI 助手平台可观测性架构
+
+本文面向 AI 助手平台开发者和 Handler 接入者，说明可观测性模块的架构、职责边界与
+生命周期约束。Metric/Event 字段、函数调用顺序和异常分支以代码及其注释为准，不在本文
+重复维护。BKM 策略、SLO、环境配置和故障处置见
+[`docs/ai_assistant_observability.md`](../../../../docs/ai_assistant_observability.md)。
+平台总体设计见 [`../README.md`](../README.md)，流式运行与降级语义见
+[`../streaming/README.md`](../streaming/README.md)。
+
+## 1. 架构
+
+```mermaid
+graph TB
+    subgraph "业务层"
+        ME[Message Execution Service]
+        AE[Attachment Execution Service]
+        SR[Stream Runtime]
+        RC[Reconciliation Service]
+    end
+
+    subgraph "可观测性层 observability.py"
+        SNAP[类型化快照 Dataclass]
+        METRIC[声明式 Metric 子类]
+        EVENT[声明式 Event 子类]
+        SPAN[Span 工厂函数]
+    end
+
+    subgraph "基础设施层"
+        CM[core.monitor - Metric/Event 异步投递]
+        CO[core.observability - OTel Span]
+        BKM[BKM 蓝鲸监控]
+        OTEL[OTel Collector]
+    end
+
+    ME --> SNAP
+    AE --> SNAP
+    SR --> SNAP
+    RC --> SNAP
+    SNAP --> METRIC
+    SNAP --> EVENT
+    ME --> SPAN
+    AE --> SPAN
+    SR --> SPAN
+    RC --> SPAN
+    METRIC --> CM
+    EVENT --> CM
+    SPAN --> CO
+    CM --> BKM
+    CO --> OTEL
+```
+
+架构分为三层：
+
+- **业务层**拥有 Message、Attachment、Stream 和巡检的生命周期事实，在状态提交后构造
+  类型化观测快照，不直接拼装 BKM payload。
+- **可观测性层**把快照转换为声明式 Metric、Event 或 Span。该层不读取业务正文，不参与
+  状态决策，也不反向修改领域对象。
+- **基础设施层**负责异步投递和链路采集。基础设施异常按最佳努力处理，不改变业务结果。
+
+## 2. 生命周期模型
+
+```mermaid
+stateDiagram-v2
+    [*] --> PROCESSING: 创建异步对象
+    PROCESSING --> PROCESSING: Worker 执行、Retry 或流式活动
+    PROCESSING --> SUCCESS: 正常收敛
+    PROCESSING --> FAILED: 执行失败
+    PROCESSING --> FAILED: 失活巡检兜底
+    FAILED --> PROCESSING: 用户手动重试
+    SUCCESS --> [*]
+    FAILED --> [*]
+```
+
+终态与 SLO 围绕一次平台对象执行而非一次 Celery attempt 建模：
+
+- 创建对象时建立排队和活动时间，Worker、Retry 和流式 checkpoint 只推进当前执行活动；
+- 成功或失败终态只由赢得 `status + task_id` 条件更新的执行上报，避免重投和并发 Worker
+  重复计数；
+- Celery Retry 保持 `PROCESSING`，手动重试则产生新的 `task_id` 并开始新一轮平台执行；
+- 巡检以 MySQL 生命周期字段发现失活对象，通过相同的条件更新收敛，不依赖 Celery
+  Result Backend、Worker inspect 或 RabbitMQ 状态；
+- 流式 Attachment 被巡检收敛时会同时写入 `stream_end` 并把归档提升为至少 `DEGRADED`，
+  Redis 通知仍是最佳努力；
+- 流式执行的 Redis 实时通道和 MySQL UI 快照都是展示能力，Attachment 最终状态与
+  `output_data` 仍是最终事实。
+
+Stream Metric 例外地按每次 Runtime execution 建模。Celery Retry 收敛当前流时会上报
+`status=RETRY`，下一 attempt 使用新的 `execution_id` 建立新流。因此 Stream 执行数用于
+观察实时通道及重试代价，不应与平台对象终态计数直接对账。
+
+## 3. 核心设计原则
+
+### 3.1 MySQL 是状态事实源
+
+Metric、Event、Trace、Redis 和 Celery 状态都不能决定 Message/Attachment 的业务终态。
+所有终态、超时兜底和旧任务隔离最终由 MySQL 条件更新确认。
+
+### 3.2 观测协议类型化
+
+业务模块向可观测性层传递冻结的快照 Dataclass。声明式 Metric/Event 子类集中约束名称、
+单位、维度和字段说明，避免调用点使用自由字典形成协议漂移。
+
+### 3.3 观测失败不影响业务
+
+Metric/Event 使用 `core.monitor` 的异步最佳努力投递；Span 使用 `core.observability` 的
+fail-open 边界。监控客户端、OTel SDK 或属性写入异常只能记录日志，不能覆盖业务返回值、
+Celery Retry 或已提交终态。
+
+### 3.4 控制基数与诊断信息
+
+Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID、execution ID、用户或异常正文。
+应用日志可以使用对象 UID、task ID、execution ID 等必要标识串联一次执行；Event 和 Trace 只在
+定位需要时携带受控标识，这些标识均不得作为无界 Metric 维度。
+
+外部调用失败时，内部异常日志记录排障所需的上游错误正文，但必须限制日志访问和保留周期，
+且不得进入前端错误、Metric 或 Event。Agent 及日志工具的 ResourceRequestLog 保留请求、响应和异常正文，
+并视为受限诊断日志。日志查询链路为便于还原实际请求，允许 `SafeQuerySyncResource` 额外把最终 SQL
+写入应用日志；SQL、查询结果和 Agent 输入/输出均可能含业务数据，相关日志 sink 必须按受限诊断日志
+控制访问和保留周期，且不得进入前端错误、Metric、Event 或普通 Trace 属性。
+
+流式 Agent 采用 `on_event` 回调时，Resource 响应值为 None，`ResponseData=null` 不代表上游正文为空。
+AI 统计/分析产物失败日志记录候选状态、正文大小、执行标识和重试次数，统计另记录实际标签数量；
+完整事件与正文按 execution 定位既有 Admin 流归档，不重复写入应用日志。程序统计在转换公开异常前
+记录一次内部原始异常链，对外错误码及文案保持不变。流结束日志的 `final_batch_event_count` 只计最后
+提交批次（含终态），不表示归档保留条数或整次执行事件总量。
+
+### 3.5 Event 必须可行动
+
+普通业务失败、正常 Retry、旧任务 fencing 和单次流降级通过 Metric/Trace 观察，不升级为
+Event。Event 只表达需要维护者处理的平台异常，例如长期失活收敛、巡检不可用或输出契约
+被破坏。
+
+旧 task ID、重复投递和已终态对象属于正常 fencing 控制流。平台在执行 Span 内将其转换为
+受控忽略，再向 Celery 抛出 `Ignore`，避免这些投递被 OTel 误标为业务错误。
+
+## 4. 模块职责
+
+| 模块 | 可观测性职责 |
+| --- | --- |
+| `services/message_execution.py` | Message 开始、终态和输出契约异常 |
+| `services/attachment_execution.py` | Attachment 开始、终态和输出契约异常 |
+| `streaming/runtime.py` | 一次流执行的容量、降级、截断和收敛汇总 |
+| `services/reconciliation.py` | PROCESSING 存量、硬失活收敛和巡检结果 |
+| `observability.py` | 类型化快照、声明式协议和 Span 工厂 |
+| `core/monitor.py` | Metric/Event 投递与异常隔离 |
+| `core/observability.py` | OTel Span 创建、上下文传播与 fail-open |
+
+## 5. 接入约束
+
+- Handler 不直接上报平台生命周期 Metric/Event，也不需要感知巡检实现；平台从既有执行
+  生命周期自动观测。
+- 新增业务类型应复用现有 `business_type` 维度，不为每个 Handler 创建独立指标。
+- 新增 Metric 前先确认现有指标无法表达，并评估维度基数、SLO 或告警用途。
+- 新增 Event 必须同时定义触发条件、维护动作和恢复条件，不能把普通业务异常提升为 Event。
+- 新的活动刷新点必须代表 Worker 的真实进展，浏览器连接、详情读取等用户行为不能续活任务。
+- 修改具体字段或埋点时同步更新代码声明、契约测试和运维文档；本文只在架构或生命周期原则
+  变化时更新。
+
+## 6. 日志分析报告观测
+
+日志分析生产 Task 使用 `business_type=AI_ANALYSIS` 和共享 `ai_default` workload。平台通用执行指标覆盖 `PROCESSING` 到 `SUCCESS/FAILED` 的排队耗时、
+执行耗时、状态和稳定错误码；流指标覆盖 execution 数、Redis 降级、归档降级、事件丢弃/截断与
+尾部收敛。业务超时应表现为 `LogAnalysisTimeout` 失败并在 29 分钟附近收敛，30 分钟 Celery
+hard limit 只作为最终保险。
+
+部署监控还应覆盖 `ai_default` RabbitMQ 队列的 ready/unacked 数、最老消息等待时间、`ai-default`
+Worker 在线数/重启数，以及按 `AUDIT_LOG_ANALYSIS` 统计的全局限流等待和拒绝量。以下异常需要联合排查：
+
+- 队列积压增长但 Worker 在线：检查限流、Agent 延迟和 gevent 并发占用；
+- `LogAnalysisTimeout` 比例上升：检查 Agent 和三个日志工具耗时，并在受限 ResourceRequestLog 中核对具体条件和返回正文；
+- hard kill/Worker 重启增长：检查 30 分钟硬时限、内存与外部连接，随后确认 late ack 重投；
+- 流降级增长但业务成功率正常：检查 Redis、归档 checkpoint 和事件容量，MySQL Markdown 仍是事实源；
+- 长期 `PROCESSING` 增长：检查 RabbitMQ 投递、Worker 注册/队列配置和巡检收敛结果。
+
+该链路不把分析指令、检索条件值、用户名、日志样例、查询结果、完整工具响应、AG-UI 事件正文或
+最终 Markdown 写入 Metric、Event 或普通 Trace 属性。这些内容可由 Agent 及日志工具的 ResourceRequestLog 保留供排障，
+并必须作为受限诊断日志管理；对外错误仍使用稳定码和脱敏文案。
+这些标识和正文不得作为 Metric 维度或 Event 载荷。接入与时序见
+[`log_analysis.md`](log_analysis.md)。

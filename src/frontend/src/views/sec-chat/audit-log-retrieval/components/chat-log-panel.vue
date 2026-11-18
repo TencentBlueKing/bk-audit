@@ -1,0 +1,1189 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <div class="chat-log-panel">
+    <div
+      ref="panelBodyRef"
+      class="panel-body"
+      @scroll="handlePanelScroll">
+      <bk-loading
+        v-if="showMessageLoading"
+        class="message-area-loading"
+        color="transparent"
+        loading
+        :opacity="0"
+        size="small"
+        title="加载消息…">
+        <div class="message-area-loading-box" />
+      </bk-loading>
+      <div
+        v-else-if="!messageLoading"
+        class="chat-surface">
+        <div
+          v-if="hasBeforeMessages || loadingOlderMessages"
+          class="history-loading-hint">
+          <template v-if="loadingOlderMessages">
+            <span class="loading-dot" />
+            <span class="loading-dot" />
+            <span class="loading-dot" />
+            <span class="history-loading-text">加载历史消息…</span>
+          </template>
+        </div>
+        <div class="message-list">
+          <template
+            v-for="msg in messages"
+            :key="msg.id">
+            <div
+              v-if="isMessageRowVisible(msg)"
+              class="message-row"
+              :class="`is-${msg.role}`">
+              <!-- 用户气泡 -->
+              <div
+                v-if="msg.role === 'user' && msg.type === 'text'"
+                class="user-bubble">
+                {{ msg.content }}
+              </div>
+
+              <!-- 内联选择系统卡片 -->
+              <select-system-card
+                v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.visible !== false"
+                :candidate-systems="msg.candidateSystems || []"
+                :confirming="confirmingSystemMessageId === msg.id"
+                :model-value="msg.systemIds || []"
+                :selection-reason="msg.selectionReason || 'initial'"
+                :tip-message="msg.aiMessage || ''"
+                @close="$emit('close-select-system', msg.id)"
+                @confirm="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)" />
+
+              <!-- 显式选系统后的检索引导卡片（含 PROCESSING：已选系统先出，建议/字段局部 loading） -->
+              <retrieval-guide-card
+                v-else-if="msg.type === 'retrieval-guide' && msg.visible !== false"
+                :common-operations="msg.commonOperations || []"
+                :confirming-system="confirmingSystemMessageId === msg.id"
+                :content-loading="msg.apiStatus === 'PROCESSING'"
+                :extension-fields="msg.extensionFields || []"
+                :historical-operations="msg.historicalOperations || []"
+                :standard-fields="msg.standardFields || []"
+                :systems="msg.systems || []"
+                @append-nl-field="handleAppendNlField"
+                @confirm-system="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)"
+                @open-condition-filter="handleOpenConditionFilter($event, msg)"
+                @select-suggestion="handleSelectSuggestion" />
+
+              <!-- 意图理解中且尚无条件：整条骨架；有条件后走结果卡局部 loading -->
+              <retrieval-card-skeleton
+                v-else-if="shouldShowRetrievalLoading(msg)"
+                :status-text="getRetrievalLoadingText(msg)" />
+
+              <!-- NL 识别失败（SUCCESS + output_data.error，不可 RetryMessage） -->
+              <div
+                v-else-if="msg.type === 'retrieval-result' && msg.recognitionError"
+                class="result-status-card is-recognition-failed">
+                <div class="recognition-error-header">
+                  <img
+                    alt=""
+                    class="failed-icon"
+                    :src="errorSearchIcon">
+                  <div class="status-title">
+                    {{ getRecognitionTitle(msg.recognitionError.code) }}
+                  </div>
+                  <div
+                    v-if="isPermissionTipError(msg.recognitionError.code)"
+                    class="status-desc permission-denied-desc">
+                    <span>暂无权限查询此数据，请联系场景管理员</span>
+                    <span
+                      v-if="sceneManagers.length"
+                      class="scene-admin-list">
+                      <span class="admin-name">
+                        {{ sceneManagers.slice(0, 3).join(' , ') }}
+                      </span>
+                      <span
+                        v-if="sceneManagers.length > 3"
+                        v-bk-tooltips="{
+                          content: sceneManagers.slice(3).join(' , '),
+                          placement: 'top',
+                        }"
+                        class="admin-more">
+                        +{{ sceneManagers.length - 3 }}
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    v-else
+                    class="status-desc">
+                    {{ getRecognitionDesc(msg) }}
+                  </div>
+                  <bk-button
+                    v-if="showRecognitionResend(msg.recognitionError.code, msg) && msg.content"
+                    class="recognition-resend-btn"
+                    size="small"
+                    theme="primary"
+                    @click="handleEditAndResend(msg.content || '')">
+                    编辑后重发
+                  </bk-button>
+                </div>
+                <div
+                  v-if="showRecognitionSuggestions(msg.recognitionError.code)
+                    && recognitionSuggestions.length"
+                  class="suggest-section">
+                  <div class="suggest-label">
+                    试试这样说：
+                  </div>
+                  <button
+                    v-for="(item, index) in recognitionSuggestions"
+                    :key="`nl-suggest-${index}`"
+                    class="suggest-item"
+                    type="button"
+                    @click="handleSelectSuggestion(item)">
+                    {{ item }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 查询后的结构化结果卡片（含条件壳 / LOG_SEARCH FAILED）；意图卡在子 LOG 出现后让位避免双卡 -->
+              <retrieval-result-card
+                v-else-if="shouldShowRetrievalResultCard(msg)"
+                :api-status="msg.apiStatus"
+                :error-message="msg.errorMessage || msg.aiMessage || ''"
+                :extension-fields="resolveResultContext(msg).extensionFields"
+                :message-uid="resolveResultMessageUid(msg)"
+                :result="getRetrievalResultPayload(msg)"
+                :show-regenerate="canShowIntentRegenerate(msg)"
+                :standard-fields="resolveResultContext(msg).standardFields"
+                :systems="resolveResultContext(msg).systems"
+                @regenerate="handleRegenerate(msg.content || '')"
+                @reselect-system="handleReselectSystem" />
+
+              <!-- NL / 无条件任务失败：对齐条件检索失败态（居中图标 + 文案） -->
+              <div
+                v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED'"
+                class="result-status-card is-failed">
+                <img
+                  alt=""
+                  class="failed-icon"
+                  :src="errorSearchIcon">
+                <div class="status-title">
+                  检索失败
+                </div>
+                <div class="status-desc">
+                  {{ msg.aiMessage || msg.errorMessage || '请检查网络是否通畅或联系管理员' }}
+                </div>
+                <bk-button
+                  v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH' || msg.messageType === 'USER_INTENT'"
+                  class="failed-retry-btn"
+                  size="small"
+                  theme="primary"
+                  @click="handleRetryMessage(msg.id)">
+                  重试
+                </bk-button>
+              </div>
+            </div>
+          </template>
+
+          <!-- 条件检索卡：未检索草稿；多字段追加到同一草稿；发 NL / 出现 NL 结果时收起；检索成功后收起，再点新建 -->
+          <div
+            v-for="card in conditionFilterCards"
+            :id="`condition-filter-${card.id}`"
+            :key="card.id"
+            class="message-row is-assistant condition-filter-row">
+            <condition-filter-card
+              :ref="(el: unknown) => setConditionFilterCardRef(card.id, el)"
+              :extension-fields="card.extensionFields"
+              :initial-field-name="card.fieldName"
+              :initial-sample="card.sample"
+              :selection-message-uid="card.selectionMessageUid"
+              :standard-fields="card.standardFields"
+              :systems="card.systems"
+              @reselect-system="handleReselectSystem"
+              @searched="(success) => handleConditionSearched(card.id, success)" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-footer">
+      <div class="chat-surface">
+        <chat-input
+          ref="chatInputRef"
+          hide-shortcuts
+          @attach="$emit('attach')"
+          @send="handleSend" />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script lang="ts" setup>
+  import {
+    computed,
+    nextTick,
+    onActivated,
+    onBeforeUnmount,
+    ref,
+    watch,
+  } from 'vue';
+
+  import ChatInput from '@views/sec-chat/components/chat-input.vue';
+
+  import SceneManageService from '@service/scene-manage';
+
+  import useRequest from '@hooks/use-request';
+
+  import errorSearchIcon from '@images/error-search.svg';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  import { type SelectionContext, useSecChatStore } from '../../composables/use-sec-chat-store';
+
+  import RetrievalGuideCard from './retrieval-guide-card.vue';
+  import RetrievalCardSkeleton from './retrieval-card-skeleton.vue';
+  import ConditionFilterCard from './condition-filter-card.vue';
+  import RetrievalResultCard from './retrieval-result-card.vue';
+  import SelectSystemCard from './select-system-card.vue';
+  import type {
+    ChatMessage,
+    RetrievalResultPayload,
+    SelectedSystem,
+    SystemFieldRow,
+  } from '../../types';
+
+  const props = withDefaults(defineProps<{
+    conversationId?: string;
+    messages: ChatMessage[];
+    hasBeforeMessages?: boolean;
+    loadingOlderMessages?: boolean;
+    messageLoading?: boolean;
+    commonOperations?: string[];
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
+    systems?: SelectedSystem[];
+    /** 正在确认系统选择的消息 ID，用于禁用确认按钮 */
+    confirmingSystemMessageId?: string | null;
+  }>(), {
+    conversationId: undefined,
+    hasBeforeMessages: false,
+    loadingOlderMessages: false,
+    messageLoading: false,
+    commonOperations: () => [],
+    standardFields: () => [],
+    extensionFields: () => [],
+    systems: () => [],
+    confirmingSystemMessageId: null,
+  });
+
+  const emit = defineEmits<{
+    'confirm-system': [messageId: string, systemIds: string[], systems: SelectedSystem[]];
+    'close-select-system': [messageId: string];
+    'reselect-system': [];
+    'retry-message': [messageUid: string];
+    'load-older': [];
+    send: [content: string];
+    attach: [];
+  }>();
+
+  const chatInputRef = ref<{
+    setInputValue:(text: string) => void
+    appendInputValue:(text: string, separator?: string) => void
+  } | null>(null);
+  const panelBodyRef = ref<HTMLElement | null>(null);
+
+  /** 草稿卡绑定来源引导卡的 SYSTEM_SELECTION，检索时作为父消息，切系统后不跟随当前系统 */
+  const conditionFilterCards = ref<Array<{
+    id: string
+    fieldName: string
+    sample?: string
+    selectionMessageUid: string
+    systems: SelectedSystem[]
+    standardFields: SystemFieldRow[]
+    extensionFields: SystemFieldRow[]
+  }>>([]);
+  type ConditionFilterCardExpose = {
+    addOrFocusField:(fieldName: string, sample?: string) => Promise<void>
+  };
+  const conditionFilterCardRefs = ref<Record<string, ConditionFilterCardExpose>>({});
+  const setConditionFilterCardRef = (cardId: string, el: unknown) => {
+    if (el) {
+      conditionFilterCardRefs.value[cardId] = el as ConditionFilterCardExpose;
+      return;
+    }
+    delete conditionFilterCardRefs.value[cardId];
+  };
+  /** prepend 历史消息后用于恢复滚动位置 */
+  const scrollAnchor = ref<{ height: number; top: number } | null>(null);
+  /** 避免 scroll 事件在 loading 状态生效前重复触发 */
+  const olderLoadTriggered = ref(false);
+  /** 首次滚到底完成前禁止触发上滑加载，避免 scrollTop=0 误触 BEFORE 请求 */
+  const allowLoadOlder = ref(false);
+  /** 延迟展示消息区 loading，避免接口很快返回时闪一下 */
+  const showMessageLoading = ref(false);
+  let messageLoadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const SCROLL_LOAD_THRESHOLD = 80;
+  const CONDITION_FILTER_SCROLL_MS = 400;
+  const MESSAGE_LOADING_DELAY_MS = 160;
+
+  const clearMessageLoadingDelay = () => {
+    if (!messageLoadingDelayTimer) return;
+    clearTimeout(messageLoadingDelayTimer);
+    messageLoadingDelayTimer = null;
+  };
+
+  const NL_RECOGNITION_TITLES: Record<string, string> = {
+    SYSTEM_REQUIRED: '需要补充系统信息',
+    SYSTEM_UNAVAILABLE: '暂无权限',
+    UNRECOGNIZED_INTENT: '未能理解当前意图',
+    QUERY_NOT_RECOGNIZED: '未能理解检索需求',
+    INVALID_CONDITION: '检索条件无法表达',
+    AT_OUTPUT_PARSE_FAILED: '检索条件解析失败',
+    AT_OUTPUT_INVALID: '检索条件无效',
+    AI_OUTPUT_PARSE_FAILED: '检索条件解析失败',
+    AI_OUTPUT_INVALID: '检索条件无效',
+    AI_SERVICE_ERROR: 'AI 服务暂不可用',
+    AI_TIMEOUT: 'AI 服务响应超时',
+    LOG_SEARCH_CHAIN_TIMEOUT: '日志检索启动超时',
+    PERMISSION_DENIED: '暂无权限',
+  };
+
+  const NL_RECOGNITION_FALLBACKS: Record<string, string> = {
+    SYSTEM_REQUIRED: '当前场景暂无可用系统，请切换场景或申请权限',
+    SYSTEM_UNAVAILABLE: '暂无权限查询此数据，请联系场景管理员',
+    UNRECOGNIZED_INTENT: '请换一种描述方式重新发送',
+    QUERY_NOT_RECOGNIZED: '请换一种描述或补充关键信息',
+    INVALID_CONDITION: '请修改条件后重新发送',
+    AT_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
+    AT_OUTPUT_INVALID: '请修改描述后重试',
+    AI_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
+    AI_OUTPUT_INVALID: '请修改描述后重试',
+    AI_SERVICE_ERROR: '请稍后重试',
+    AI_TIMEOUT: '请稍后重试',
+    LOG_SEARCH_CHAIN_TIMEOUT: '请稍后重试或换一种描述',
+    PERMISSION_DENIED: '暂无权限查询此数据，请联系场景管理员',
+  };
+
+  const SUGGESTION_LIMIT = 4;
+
+  /** 无权限类错误：展示联系场景管理员 */
+  const isPermissionTipError = (code: string) => (
+    code === 'SYSTEM_UNAVAILABLE' || code === 'PERMISSION_DENIED'
+  );
+
+  const sceneManagers = ref<string[]>([]);
+  const {
+    run: fetchSceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const loadSceneManagersForPermissionTip = () => {
+    const hasPermissionTip = props.messages.some(msg => (
+      msg.type === 'retrieval-result'
+      && isPermissionTipError(msg.recognitionError?.code || '')
+    ));
+    if (!hasPermissionTip) {
+      sceneManagers.value = [];
+      return;
+    }
+    fetchSceneList({ status: 'enabled' }).then((list) => {
+      const params = getSceneSystemParams();
+      if (params.scope_type !== 'scene' || !params.scope_id) {
+        sceneManagers.value = [];
+        return;
+      }
+      const scene = (list || []).find(item => String(item.scene_id) === String(params.scope_id));
+      sceneManagers.value = (scene?.managers || []).filter(Boolean);
+    });
+  };
+
+  watch(
+    () => props.messages.map(msg => `${msg.id}:${msg.recognitionError?.code || ''}`).join('|'),
+    () => {
+      loadSceneManagersForPermissionTip();
+    },
+    { immediate: true },
+  );
+
+  /** 「试试这样说」：复用会话里 SYSTEM_SELECTION 的常用操作 */
+  const recognitionSuggestions = computed(() => (
+    props.commonOperations.slice(0, SUGGESTION_LIMIT)
+  ));
+
+  const getRecognitionTitle = (code: string) => (
+    NL_RECOGNITION_TITLES[code] || '未能完成检索'
+  );
+
+  const getRecognitionFallback = (code: string) => (
+    NL_RECOGNITION_FALLBACKS[code] || '请修改描述后重新发送'
+  );
+
+  const getRecognitionDesc = (msg: ChatMessage) => (
+    msg.recognitionError?.message
+    || msg.aiMessage
+    || getRecognitionFallback(msg.recognitionError?.code || '')
+  );
+
+  /** 意图不明 / 条件未识别 / 条件无效：展示固定「试试这样说」 */
+  const showRecognitionSuggestions = (code: string) => (
+    code === 'UNRECOGNIZED_INTENT'
+    || code === 'QUERY_NOT_RECOGNIZED'
+    || code === 'INVALID_CONDITION'
+    || code === 'AT_OUTPUT_INVALID'
+    || code === 'AI_OUTPUT_INVALID'
+  );
+
+  /**
+   * 业务错误且无派生消息时可「编辑后重发」（产品约定：填回输入框后 POST 新意图，非 PATCH）。
+   * 已有 derived_messages 的意图不可编辑原文。
+   * SYSTEM_UNAVAILABLE / PERMISSION_DENIED 为权限提示，不提供重发。
+   * INVALID_CONDITION：保留原输入，引导用户修改条件后重发。
+   */
+  const showRecognitionResend = (code: string, msg: ChatMessage) => {
+    if (msg.hasDerivedMessages) return false;
+    if (isPermissionTipError(code)) return false;
+    return (
+      code === 'AI_TIMEOUT'
+      || code === 'AI_SERVICE_ERROR'
+      || code === 'AT_OUTPUT_PARSE_FAILED'
+      || code === 'AI_OUTPUT_PARSE_FAILED'
+      || code === 'LOG_SEARCH_CHAIN_TIMEOUT'
+      || code === 'UNRECOGNIZED_INTENT'
+      || code === 'QUERY_NOT_RECOGNIZED'
+      || code === 'INVALID_CONDITION'
+      || code === 'AT_OUTPUT_INVALID'
+      || code === 'AI_OUTPUT_INVALID'
+    );
+  };
+
+  const getProcessingText = (messageType?: string) => {
+    if (messageType === 'LOG_SEARCH') return '正在检索日志…';
+    return '正在理解检索意图…';
+  };
+
+  const hasChildRetrievalMessage = (messageId: string) => (
+    props.messages.some(item => item.parentMessageUid === messageId && item.type === 'retrieval-result')
+  );
+
+  /** 意图/NL 条件壳在子 LOG_SEARCH 出现后让位，避免双卡 */
+  const isIntentResultSuperseded = (msg: ChatMessage) => (
+    (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
+    && hasChildRetrievalMessage(msg.id)
+  );
+
+  /** 已有派生消息的意图不可「重新生成」原文；LOG_SEARCH 结果卡仍可 */
+  const canShowIntentRegenerate = (msg: ChatMessage) => {
+    if (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH') {
+      return !msg.hasDerivedMessages;
+    }
+    return true;
+  };
+
+  const shouldShowRetrievalResultCard = (msg: ChatMessage) => (
+    msg.type === 'retrieval-result'
+    && Boolean(msg.result)
+    && !isIntentResultSuperseded(msg)
+  );
+
+  /** 供模板绑定；已由 shouldShowRetrievalResultCard 保证非空 */
+  const getRetrievalResultPayload = (msg: ChatMessage): RetrievalResultPayload => (
+    msg.result as RetrievalResultPayload
+  );
+
+  const { getMessageSelectionContext, ensureMessageSelectionContext } = useSecChatStore();
+
+  /**
+   * 结果卡的系统上下文：按协议父链取所属 SYSTEM_SELECTION。
+   * 未就绪时，scope_id 与会话当前系统一致才借用当前上下文，否则仅展示 id、字段表留空（仅可改时间）。
+   */
+  const resolveResultContext = (msg: ChatMessage): SelectionContext => {
+    const scopeId = String(msg.result?.rawCondition?.scope_id || '').trim();
+    const context = getMessageSelectionContext(msg);
+    if (context && (!scopeId || context.systems.some(item => item.id === scopeId))) {
+      return {
+        ...context,
+        systems: context.systems.map(item => ({ id: item.id, name: item.name || item.id })),
+      };
+    }
+    if (!scopeId || props.systems.some(item => item.id === scopeId)) {
+      return {
+        systems: props.systems,
+        standardFields: props.standardFields,
+        extensionFields: props.extensionFields,
+      };
+    }
+    return {
+      systems: [{ id: scopeId, name: scopeId }],
+      standardFields: [],
+      extensionFields: [],
+    };
+  };
+
+  watch(
+    () => props.messages
+      .filter(msg => msg.type === 'retrieval-result' && msg.result)
+      .map(msg => `${msg.id}:${msg.parentMessageUid || ''}:${msg.selectionMessageUid || ''}`)
+      .join('|'),
+    () => {
+      props.messages.forEach((msg) => {
+        if (msg.type === 'retrieval-result' && msg.result) ensureMessageSelectionContext(msg);
+      });
+    },
+    { immediate: true },
+  );
+
+  /** 结果卡导出/二次检索需 LOG_SEARCH uid；意图条件壳阶段先空着 */
+  const resolveResultMessageUid = (msg: ChatMessage) => (
+    msg.messageType === 'LOG_SEARCH' ? msg.id : ''
+  );
+
+  /** 无条件壳时才展示全局骨架；已有 result（含 tablePending）走卡内 loading */
+  const shouldShowRetrievalLoading = (msg: ChatMessage) => {
+    if (msg.type !== 'retrieval-result' || msg.recognitionError || msg.result) return false;
+    if (isIntentResultSuperseded(msg)) return false;
+    if (msg.apiStatus === 'PROCESSING') return true;
+    if (msg.apiStatus !== 'SUCCESS') return false;
+    return (
+      (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
+      && !hasChildRetrievalMessage(msg.id)
+    );
+  };
+
+  const getRetrievalLoadingText = (msg: ChatMessage) => {
+    if (
+      msg.apiStatus === 'SUCCESS'
+      && (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
+    ) {
+      return '正在检索日志…';
+    }
+    return getProcessingText(msg.messageType);
+  };
+
+  /** 与模板渲染条件对齐；隐藏空行避免 flex gap 把上下间距撑成双倍 */
+  const isMessageRowVisible = (msg: ChatMessage) => {
+    if (msg.visible === false) return false;
+    if (msg.role === 'user' && msg.type === 'text') return true;
+    if (msg.type === 'select-system' && msg.status === 'pending') return true;
+    if (msg.type === 'retrieval-guide') return true;
+    if (shouldShowRetrievalLoading(msg)) return true;
+    if (msg.type === 'retrieval-result' && msg.recognitionError) return true;
+    if (shouldShowRetrievalResultCard(msg)) return true;
+    if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED' && !msg.result) return true;
+    return false;
+  };
+
+  const visibleMessageSignature = computed(() => props.messages.map((msg) => {
+    const visibleKind = (() => {
+      if (msg.visible === false) return 'hidden';
+      if (msg.role === 'user' && msg.type === 'text') return 'user-text';
+      if (msg.type === 'select-system' && msg.status === 'pending') return 'select-system-card';
+      if (msg.type === 'retrieval-guide') {
+        return msg.apiStatus === 'PROCESSING' ? 'retrieval-guide-loading' : 'retrieval-guide-card';
+      }
+      if (shouldShowRetrievalLoading(msg)) return 'retrieval-loading';
+      if (msg.type === 'retrieval-result' && msg.recognitionError) {
+        return `recognition-error:${msg.recognitionError.code || ''}`;
+      }
+      if (shouldShowRetrievalResultCard(msg)) {
+        if (msg.apiStatus === 'FAILED') return 'retrieval-result-failed';
+        return msg.result?.tablePending ? 'retrieval-result-pending' : 'retrieval-result-card';
+      }
+      if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') {
+        return `retrieval-failed:${msg.messageType || ''}`;
+      }
+      return 'hidden';
+    })();
+
+    return [
+      msg.id,
+      visibleKind,
+      msg.status || '',
+      msg.apiStatus || '',
+      msg.visible === false ? 'hidden-card' : 'visible-card',
+      msg.systems?.map(item => item.id).join(',') || '',
+    ].join(':');
+  }).join('|'));
+
+  const handleSelectSuggestion = (text: string) => {
+    chatInputRef.value?.setInputValue(text);
+  };
+
+  /** AI 瞬时失败：把原查询填回输入框，便于用户修改后重发 */
+  const handleEditAndResend = (text: string) => {
+    if (!text) return;
+    chatInputRef.value?.setInputValue(text);
+  };
+
+  /** 自然语言字段检索：多选向输入框末尾追加（同字段去重替换），逗号区隔 */
+  const handleAppendNlField = (text: string) => {
+    chatInputRef.value?.appendInputValue(text);
+  };
+
+  /** 切换到自然语言检索时，收起未检索的条件草稿 */
+  const dismissConditionFilterDraft = () => {
+    if (!conditionFilterCards.value.length) return;
+    conditionFilterCards.value = [];
+  };
+
+  const isNlRelatedMessage = (msg: ChatMessage) => (
+    (msg.role === 'user' && msg.type === 'text')
+    || msg.messageType === 'USER_INTENT'
+    || msg.messageType === 'NATURAL_LANGUAGE_SEARCH'
+  );
+
+  const handleSend = (content: string) => {
+    dismissConditionFilterDraft();
+    emit('send', content);
+  };
+
+  const handleRetryMessage = (messageUid: string) => {
+    dismissConditionFilterDraft();
+    emit('retry-message', messageUid);
+  };
+
+  const handleRegenerate = (text: string) => {
+    if (!text) return;
+    dismissConditionFilterDraft();
+    emit('send', text);
+  };
+
+  const createConditionFilterCardId = () => (
+    `cf-${Date.now()}-${Math.random().toString(36)
+      .slice(2, 8)}`
+  );
+
+  const handleOpenConditionFilter = async (
+    payload: { fieldName: string; sample?: string },
+    source: ChatMessage,
+  ) => {
+    // 已有同一引导卡的未检索草稿：追加字段（与自然语言「追加」一致）；来自其他系统的引导卡则新建
+    const existing = conditionFilterCards.value[0];
+    if (existing && existing.selectionMessageUid === source.id) {
+      await conditionFilterCardRefs.value[existing.id]?.addOrFocusField(
+        payload.fieldName,
+        payload.sample,
+      );
+      await scrollConditionFilterIntoView(existing.id, true);
+      return;
+    }
+    const cardId = createConditionFilterCardId();
+    const hasSourceFields = Boolean(source.standardFields?.length || source.extensionFields?.length);
+    conditionFilterCards.value = [{
+      id: cardId,
+      fieldName: payload.fieldName,
+      sample: payload.sample,
+      selectionMessageUid: source.id,
+      systems: source.systems?.length ? [...source.systems] : [...props.systems],
+      standardFields: hasSourceFields ? (source.standardFields || []) : props.standardFields,
+      extensionFields: hasSourceFields ? (source.extensionFields || []) : props.extensionFields,
+    }];
+    await scrollConditionFilterIntoView(cardId, true);
+  };
+
+  const handleConditionSearched = (cardId: string, success: boolean) => {
+    if (success) {
+      // 检索成功后收起该条件卡；二次检索改在结果卡上操作
+      conditionFilterCards.value = conditionFilterCards.value.filter(item => item.id !== cardId);
+    }
+    void scrollToBottom(true);
+  };
+
+  const handleReselectSystem = () => {
+    conditionFilterCards.value = [];
+    emit('reselect-system');
+  };
+
+  const resetConditionFilterPanel = () => {
+    conditionFilterCards.value = [];
+  };
+
+  /** 平滑滚动到指定条件检索卡，锚定卡片而非瞬间跳到底 */
+  const scrollConditionFilterIntoView = async (cardId: string, smooth = true): Promise<void> => {
+    allowLoadOlder.value = false;
+    await nextTick();
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        const row = document.getElementById(`condition-filter-${cardId}`);
+        if (!row) {
+          allowLoadOlder.value = true;
+          resolve();
+          return;
+        }
+        requestAnimationFrame(() => {
+          row.scrollIntoView({
+            behavior: smooth ? 'smooth' : 'auto',
+            block: 'end',
+          });
+          const enableLoadOlder = () => {
+            allowLoadOlder.value = true;
+            resolve();
+          };
+          if (smooth) {
+            window.setTimeout(enableLoadOlder, CONDITION_FILTER_SCROLL_MS);
+          } else {
+            enableLoadOlder();
+          }
+        });
+      });
+    });
+  };
+
+  const scrollToBottom = async (smooth = true): Promise<void> => {
+    allowLoadOlder.value = false;
+    await nextTick();
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        const el = panelBodyRef.value;
+        if (!el) {
+          allowLoadOlder.value = true;
+          resolve();
+          return;
+        }
+        // keep-alive 恢复后需等布局稳定，再滚到最新消息
+        requestAnimationFrame(() => {
+          el.scrollTo({
+            top: el.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto',
+          });
+          const enableLoadOlder = () => {
+            allowLoadOlder.value = true;
+            resolve();
+          };
+          if (smooth) {
+            window.setTimeout(enableLoadOlder, 350);
+          } else {
+            enableLoadOlder();
+          }
+        });
+      });
+    });
+  };
+
+  const restoreScrollAnchor = async () => {
+    const anchor = scrollAnchor.value;
+    if (!anchor) return;
+    scrollAnchor.value = null;
+    await nextTick();
+    requestAnimationFrame(() => {
+      const el = panelBodyRef.value;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight - anchor.height + anchor.top;
+    });
+  };
+
+  const handlePanelScroll = () => {
+    const el = panelBodyRef.value;
+    if (!el || !allowLoadOlder.value || props.messageLoading) return;
+    if (!props.hasBeforeMessages || props.loadingOlderMessages || olderLoadTriggered.value) return;
+    if (el.scrollTop > SCROLL_LOAD_THRESHOLD) return;
+
+    olderLoadTriggered.value = true;
+    scrollAnchor.value = { height: el.scrollHeight, top: el.scrollTop };
+    emit('load-older');
+  };
+
+  watch(() => props.loadingOlderMessages, async (loading, wasLoading) => {
+    if (wasLoading && !loading) {
+      olderLoadTriggered.value = false;
+      // 等 length watch 先完成 scroll 恢复；若仍留有 anchor 说明加载失败或无新消息
+      await nextTick();
+      if (scrollAnchor.value) {
+        scrollAnchor.value = null;
+      }
+    }
+  });
+
+  watch(() => props.messages.length, async (newLen, oldLen) => {
+    if (scrollAnchor.value) {
+      await restoreScrollAnchor();
+      return;
+    }
+    if (newLen > oldLen) {
+      await scrollToBottom(oldLen !== 0);
+    }
+  });
+
+  watch(() => props.messages, (msgs, prevMsgs) => {
+    if (!conditionFilterCards.value.length || !prevMsgs?.length) return;
+    if (scrollAnchor.value || props.loadingOlderMessages) return;
+    const prevIds = new Set(prevMsgs.map(item => item.id));
+    const added = msgs.filter(item => !prevIds.has(item.id));
+    if (!added.length) return;
+    const lastId = msgs[msgs.length - 1]?.id;
+    // 仅处理追加到尾部；历史 prepend 时新增 id 不在末尾
+    if (!lastId || !added.some(item => item.id === lastId)) return;
+    if (added.some(isNlRelatedMessage)) {
+      dismissConditionFilterDraft();
+    }
+  });
+
+  watch(visibleMessageSignature, async (next, prev) => {
+    if (!prev || next === prev || scrollAnchor.value) return;
+    await scrollToBottom(true);
+  });
+
+  watch(() => props.conversationId, () => {
+    scrollAnchor.value = null;
+    olderLoadTriggered.value = false;
+    allowLoadOlder.value = false;
+    resetConditionFilterPanel();
+    void scrollToBottom(false);
+  });
+
+  watch(() => props.messageLoading, (loading, wasLoading) => {
+    clearMessageLoadingDelay();
+    if (!loading) {
+      showMessageLoading.value = false;
+      if (wasLoading) {
+        void scrollToBottom(false);
+      }
+      return;
+    }
+    messageLoadingDelayTimer = setTimeout(() => {
+      messageLoadingDelayTimer = null;
+      if (props.messageLoading) {
+        showMessageLoading.value = true;
+      }
+    }, MESSAGE_LOADING_DELAY_MS);
+  }, { immediate: true });
+
+  onActivated(() => {
+    allowLoadOlder.value = false;
+    void scrollToBottom(false);
+  });
+
+  onBeforeUnmount(() => {
+    clearMessageLoadingDelay();
+  });
+</script>
+
+<style lang="postcss" scoped>
+  .chat-log-panel {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    background-color: #f5f7fa;
+    flex-direction: column;
+  }
+
+  /* 消息区与输入区共用内容面，卡片按设计稿 900 居中 */
+  .chat-surface {
+    width: 100%;
+    max-width: 900px;
+    min-width: 0;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+
+  .panel-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    padding: 24px 24px 24px;
+    overflow: auto;
+    flex-direction: column;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #dcdee5 transparent;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #dcdee5;
+      border-radius: 2px;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: #c4c6cc;
+    }
+
+    .chat-surface {
+      margin-bottom: 8px;
+      overflow: visible;
+    }
+  }
+
+  .message-list {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .message-area-loading {
+    flex: 1;
+    min-height: 160px;
+  }
+
+  .message-area-loading-box {
+    min-height: 160px;
+  }
+
+  .history-loading-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    margin-bottom: 16px;
+    gap: 6px;
+    color: #979ba5;
+  }
+
+  .history-loading-text {
+    margin-left: 4px;
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .message-row {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+
+    &.is-user {
+      justify-content: flex-end;
+    }
+
+    &.is-assistant {
+      justify-content: center;
+      overflow: hidden;
+
+      > * {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+    }
+
+    &.condition-filter-row {
+      overflow: visible;
+    }
+  }
+
+  .user-bubble {
+    max-width: 640px;
+    padding: 12px 24px;
+    font-size: 14px;
+    line-height: 22px;
+    color: #313238;
+    letter-spacing: 0;
+    word-break: break-word;
+    background: #CDDFFE;
+    border-radius: 16px 0px 16px 16px;
+    box-sizing: border-box;
+  }
+
+  .result-status-card {
+    display: flex;
+    width: 100%;
+    max-width: 900px;
+    padding: 20px 24px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+
+    &.is-recognition-failed {
+      align-items: stretch;
+      gap: 16px;
+
+      .recognition-error-header {
+        display: flex;
+        width: 100%;
+        padding: 16px 0 8px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-align: center;
+      }
+
+      .failed-icon {
+        display: block;
+        width: 48px;
+        height: 48px;
+      }
+
+      .status-title,
+      .status-desc {
+        text-align: center;
+      }
+
+      .system-required-desc,
+      .permission-denied-desc {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .scene-admin-list {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .admin-name {
+        font-size: 12px;
+        color: #979ba5;
+      }
+
+      .admin-more {
+        font-size: 12px;
+        line-height: 20px;
+        color: #979ba5;
+        text-decoration: underline;
+        text-decoration-style: dashed;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+
+      .recognition-resend-btn {
+        margin-top: 4px;
+      }
+    }
+
+    &.is-failed {
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      gap: 8px;
+      text-align: center;
+
+      .failed-icon {
+        display: block;
+        width: 48px;
+        height: 48px;
+      }
+
+      .status-title,
+      .status-desc {
+        text-align: center;
+      }
+
+      .failed-retry-btn {
+        margin-top: 4px;
+      }
+    }
+
+    .suggest-section {
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    .suggest-label {
+      margin-bottom: 8px;
+      font-size: 12px;
+      line-height: 18px;
+      color: #979ba5;
+    }
+
+    .suggest-item {
+      display: block;
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      overflow: hidden;
+      font-size: 14px;
+      line-height: 22px;
+      color: #63656e;
+      text-align: left;
+      cursor: pointer;
+      background: #f5f7fa;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      transition: background-color .15s, border-color .15s;
+      box-sizing: border-box;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      &:hover {
+        background: #f0f5ff;
+        border-color: #a3c5fd;
+      }
+    }
+
+    .status-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #313238;
+    }
+
+    .status-desc {
+      font-size: 12px;
+      line-height: 18px;
+      color: #4d4f56;
+    }
+  }
+
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    background: #3a84ff;
+    border-radius: 50%;
+    opacity: 40%;
+    animation: chat-loading-dot 1s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  .loading-dot:nth-child(2) {
+    animation-delay: .15s;
+  }
+
+  .loading-dot:nth-child(3) {
+    animation-delay: .3s;
+  }
+
+  @keyframes chat-loading-dot {
+    0%,
+    100% {
+      opacity: 40%;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 100%;
+      transform: scale(1.15);
+    }
+  }
+
+  .panel-footer {
+    flex-shrink: 0;
+    width: 100%;
+    padding: 0 24px 20px;
+    /* 与消息区同样预留滚动条槽，保证输入框与卡片左右对齐、同宽 */
+    scrollbar-gutter: stable;
+    box-sizing: border-box;
+  }
+</style>

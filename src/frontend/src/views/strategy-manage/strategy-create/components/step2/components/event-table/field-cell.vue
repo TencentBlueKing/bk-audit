@@ -70,35 +70,40 @@
       @select="handleFieldSelect" />
 
     <!-- 字段值映射 -->
-    <div
-      v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings"
-      class="field-cell-div"
-      style="width: 100%;cursor: pointer;"
-      @click="handleFiledDict"
-      @mouseleave="handleMouseLeave">
-      <span
-        :style="{
-          color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
-        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : t('请点击配置') }}</span>
-      <audit-popconfirm
-        v-if="localEventItem.enum_mappings.mappings.length"
-        ref="popconfirmRef"
-        :confirm-handler="() => handleRemoveMappings()"
-        :content="t('删除操作无法撤回，请谨慎操作！')"
-        :title="t('确认删除该配置？')"
-        @hide="handlePopconfirmHide">
-        <audit-icon
-          class="remove-btn"
-          :class="{ 'is-popconfirm-visible': isPopconfirmVisible }"
-          type="delete-fill"
-          @click="handlePopconfirmShow" />
-      </audit-popconfirm>
+    <template v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings">
+      <div
+        class="field-cell-div"
+        style="width: 100%;cursor: pointer;"
+        @click="handleFiledDict"
+        @mouseleave="handleMouseLeave">
+        <span
+          class="field-cell-text"
+          :style="{
+            color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
+          }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : t('请点击配置') }}</span>
+        <div
+          v-if="localEventItem.enum_mappings.mappings.length"
+          class="field-cell-actions">
+          <audit-popconfirm
+            ref="popconfirmRef"
+            :confirm-handler="() => handleRemoveMappings()"
+            :content="t('删除操作无法撤回，请谨慎操作！')"
+            :title="t('确认删除该配置？')"
+            @hide="handlePopconfirmHide">
+            <audit-icon
+              class="remove-btn"
+              :class="{ 'is-popconfirm-visible': isPopconfirmVisible }"
+              type="delete-fill"
+              @click="handlePopconfirmShow" />
+          </audit-popconfirm>
+        </div>
+      </div>
       <field-dict
         ref="fieldDictRef"
         v-model:showFieldDict="showFieldDict"
         :edit-data="localEventItem.enum_mappings.mappings"
         @submit="handleDictSubmit" />
-    </div>
+    </template>
 
     <!-- 字段下钻 -->
     <template v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config">
@@ -115,6 +120,8 @@
         @click="() => handleClick(localEventItem.field_name, localEventItem.drill_config)"
         @mouseleave="handleDrillMouseLeave">
         <bk-popover
+          boundary="body"
+          class="field-cell-text"
           placement="top"
           theme="black">
           <span style="cursor: pointer;">
@@ -127,55 +134,56 @@
               <div
                 v-for="config in localEventItem.drill_config"
                 :key="config.tool.uid">
-                {{ getToolNameAndType(config.tool.uid).name }}
+                {{ getDrillDisplayName(config) }}
               </div>
             </div>
           </template>
         </bk-popover>
-        <!-- 删除 -->
-        <audit-popconfirm
-          ref="drillPopconfirmRef"
-          class="ml8"
-          :confirm-handler="() => handleRemove()"
-          :content="t('移除操作无法撤回，请谨慎操作！')"
-          :title="t('确认移除以下工具？')"
-          @hide="handleDrillPopconfirmHide">
-          <audit-icon
-            class="remove-btn"
-            :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
-            type="delete-fill"
-            @click="handleDrillPopconfirmShow" />
-          <template #content>
-            <bk-table
-              ref="refTable"
-              :columns="columns"
-              :data="localEventItem.drill_config"
-              height="auto"
-              max-height="100%"
-              show-overflow-tooltip
-              stripe />
-          </template>
-        </audit-popconfirm>
-        <bk-popover
-          v-if="localEventItem.drill_config
-            .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
-          placement="top"
-          theme="black">
-          <audit-icon
-            class="renew-tips"
-            type="info-fill" />
-          <template #content>
-            <div>
-              <div>{{ t('以下工具已更新，请确认：') }}</div>
-              <div
-                v-for="drill in localEventItem.drill_config
-                  .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
-                :key="drill.tool.uid">
-                {{ getToolNameAndType(drill.tool.uid).name }}
+        <div class="field-cell-actions">
+          <audit-popconfirm
+            ref="drillPopconfirmRef"
+            :confirm-handler="() => handleRemove()"
+            :content="t('移除操作无法撤回，请谨慎操作！')"
+            :title="t('确认移除以下工具？')"
+            @hide="handleDrillPopconfirmHide">
+            <audit-icon
+              class="remove-btn"
+              :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
+              type="delete-fill"
+              @click="handleDrillPopconfirmShow" />
+            <template #content>
+              <bk-table
+                ref="refTable"
+                :columns="columns"
+                :data="localEventItem.drill_config"
+                height="auto"
+                max-height="100%"
+                show-overflow-tooltip
+                stripe />
+            </template>
+          </audit-popconfirm>
+          <bk-popover
+            v-if="localEventItem.drill_config
+              .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+            boundary="body"
+            placement="top"
+            theme="black">
+            <audit-icon
+              class="renew-tips"
+              type="info-fill" />
+            <template #content>
+              <div>
+                <div>{{ t('以下工具已更新，请确认：') }}</div>
+                <div
+                  v-for="drill in localEventItem.drill_config
+                    .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                  :key="drill.tool.uid">
+                  {{ getDrillDisplayName(drill) }}
+                </div>
               </div>
-            </div>
-          </template>
-        </bk-popover>
+            </template>
+          </bk-popover>
+        </div>
       </div>
       <!-- 字段下钻 -->
       <field-reference
@@ -225,7 +233,7 @@
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
-    eventItemKey: keyof StrategyFieldEvent;
+    eventItemKey: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs' | 'risk_meta_field_config';
     fieldKey: keyof StrategyFieldEvent['event_basic_field_configs'][0];
     selectOptions: Array<DatabaseTableFieldModel>;
     strategyName: string;
@@ -279,7 +287,7 @@
 
   const columns = [{
     label: () => t('工具列表'),
-    render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+    render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getDrillDisplayName(data)}</div>,
   }] as Column[];
 
   const toolMaxVersionMap = computed(() => props.allToolsData.reduce((res, item) => {
@@ -391,6 +399,14 @@
     };
   };
 
+  const getDrillDisplayName = (config: {
+    tool?: { uid?: string };
+    drill_name?: string;
+  }) => getToolNameAndType(config.tool?.uid || '').name
+    || config.tool?.uid
+    || config.drill_name
+    || '--';
+
   const getTooltipData = (value: any): string | number => {
     if (value === null || value === undefined) {
       return '';
@@ -424,16 +440,50 @@
 .field-cell {
   display: flex;
   width: 100%;
+  min-width: 0;
   height: 100%;
   align-items: center;
 
-  :deep(.bk-input) {
-    height: 40px;
-    border: none;
+  &:has(.description-input) {
+    align-items: stretch;
   }
 
-  .description-input {
-    border: none;
+  :deep(.bk-select),
+  :deep(.field-input) {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  :deep(.bk-input.description-input) {
+    display: flex;
+    flex: 1 1 auto;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+
+  :deep(.bk-input.description-input .bk-input--text) {
+    height: 100%;
+    background-color: transparent;
+  }
+
+  :deep(.bk-input.description-input:hover:not(.is-disabled)) {
+    background-color: #fff;
+    border-color: #c4c6cc;
+    box-shadow: none;
+  }
+
+  :deep(.bk-input.description-input.is-focused:not(.is-readonly)) {
+    background-color: #fff;
+    border-color: #3a84ff;
+    box-shadow: none;
   }
 
   .field-cell-div {
@@ -442,7 +492,7 @@
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 12px;
     line-height: 33px;
     cursor: pointer;
 
@@ -453,17 +503,32 @@
       }
     }
 
+    .field-cell-text {
+      min-width: 0;
+    }
+
+    .field-cell-actions {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      margin-left: auto;
+      gap: 8px;
+
+      :deep(.audit-popconfirm) {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+      }
+    }
+
     .remove-btn-confirm {
       display: none;
     }
 
     .remove-btn {
-      position: absolute;
-      top: 40%;
-      right: 8px;
-      z-index: 1;
       display: none;
       font-size: 12px;
+      line-height: 1;
       color: #c4c6cc;
       transition: all .15s;
 
@@ -477,9 +542,8 @@
     }
 
     .renew-tips {
-      position: absolute;
-      right: 8px;
       font-size: 14px;
+      line-height: 1;
       color: #3a84ff;
     }
   }

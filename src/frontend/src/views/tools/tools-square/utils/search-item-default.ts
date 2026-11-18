@@ -1,5 +1,15 @@
 import type { ToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
 
+export const isEmptySearchValue = (value: unknown): boolean => {
+  if (value === undefined || value === null || value === '') {
+    return true;
+  }
+  if (Array.isArray(value) && value.length === 0) {
+    return true;
+  }
+  return false;
+};
+
 /**
  * 从工具详情 input_variable 项读取查询输入默认值。
  * 后端已按 scene_id/system_id 合并 default_value_overrides，应使用 default_value 字段。
@@ -16,6 +26,20 @@ export const getSearchItemDefaultValue = (item: {
     return [];
   }
   return null;
+};
+
+/** 下钻映射值为空时回退到工具详情默认值，避免 execute 传 null */
+export const resolveSearchValueWithDefault = (
+  resolved: unknown,
+  item: {
+    default_value?: unknown;
+    field_category?: string;
+  },
+): unknown => {
+  if (!isEmptySearchValue(resolved)) {
+    return resolved;
+  }
+  return getSearchItemDefaultValue(item);
 };
 
 /** 按可见范围隔离 sessionStorage 中的用户输入缓存 */

@@ -72,6 +72,11 @@ const isRecentSceneSwitch = () => {
 /** 用户刚手动切换场景（10s 内优先选中项，避免 stale URL 覆盖） */
 export const isRecentManualSceneSwitch = isRecentSceneSwitch;
 
+/** 场景选择器占位 ID，不能作为列表查询的 scene_id */
+export const isSceneSelectorSentinelId = (id: unknown) => (
+  id === 'allSecen' || id === 'allSystem'
+);
+
 const getSelectionSceneKey = (params: SceneSystemParams) => {
   if (params.scope_type === 'cross_scene') return 'allSecen';
   if (params.scope_type === 'cross_system') return 'allSystem';
@@ -96,6 +101,23 @@ export const buildSceneContextQueryFromSelection = (item: {
     return { scene_id: 'allSystem', scope_id: '', scope_type: 'cross_system' };
   }
   return { scene_id: item.id, scope_id: item.id, scope_type: 'scene' };
+};
+
+const firstQueryValue = (value: unknown) => {
+  if (Array.isArray(value)) return String(value[0] ?? '');
+  if (value === undefined || value === null) return '';
+  return String(value);
+};
+
+/** 地址栏当前是系统范围。此时 scene_id 是系统 id，不能当作场景 id。 */
+export const isSystemScopedContextQuery = (query: {
+  scene_id?: unknown;
+  scope_id?: unknown;
+  scope_type?: unknown;
+} = {}) => {
+  const scopeType = firstQueryValue(query.scope_type);
+  const rawId = firstQueryValue(query.scene_id) || firstQueryValue(query.scope_id);
+  return scopeType === 'system' || scopeType === 'cross_system' || rawId === 'allSystem';
 };
 
 /** 根据当前生效的场景上下文生成 URL query */
@@ -366,6 +388,53 @@ export const getToolListScopeParams = (extra?: {
     ...(scopeId ? { scope_id: scopeId } : {}),
     ...extra,
   };
+};
+
+const AI_ASSISTANT_SCOPE_TYPES = new Set([
+  'cross_scene',
+  'cross_system',
+  'scene',
+  'system',
+]);
+
+export type AiAssistantScopeFields = {
+  scope_type?: 'cross_scene' | 'cross_system' | 'scene' | 'system';
+  scope_id?: string;
+};
+
+/**
+ * AI 助手列表查询的 scope 字段（与检索页 scope 协议一致）。
+ * - scene / system 必须带 scope_id，否则省略整组避免 400
+ * - cross_* 只传 scope_type，不带空 scope_id
+ */
+export const buildAiAssistantScopeFields = (): AiAssistantScopeFields => {
+  const { scope_type: scopeType, scope_id: scopeId } = getSceneSystemParams();
+  if (!scopeType || !AI_ASSISTANT_SCOPE_TYPES.has(scopeType)) {
+    return {};
+  }
+  if (scopeType === 'scene' || scopeType === 'system') {
+    if (!scopeId) return {};
+    return {
+      scope_type: scopeType as 'scene' | 'system',
+      scope_id: scopeId,
+    };
+  }
+  return { scope_type: scopeType as 'cross_scene' | 'cross_system' };
+};
+
+/** @deprecated 使用 buildAiAssistantScopeFields */
+export const buildAiUserIntentScopeFields = buildAiAssistantScopeFields;
+
+/**
+ * AI 助手会话/分组绑定的具体 scope（当前场景选择器）。
+ * 创建、移动、清空只接受 scene / system；cross_* 或 scope 未就绪时返回 null。
+ */
+export const getAiAssistantConcreteScope = (): { scope_type: 'scene' | 'system'; scope_id: string } | null => {
+  const { scope_type: scopeType, scope_id: scopeId } = buildAiAssistantScopeFields();
+  if ((scopeType === 'scene' || scopeType === 'system') && scopeId) {
+    return { scope_type: scopeType, scope_id: scopeId };
+  }
+  return null;
 };
 
 /** 场景/系统维度需等 scope_id 就绪后再请求工具详情，避免先发无参请求 */

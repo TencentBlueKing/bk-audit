@@ -38,6 +38,7 @@ from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 from rest_framework.settings import api_settings
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from api.constants import AIAgentCode
 from apps.exceptions import MetaConfigNotExistException
 from apps.itsm.constants import TicketStatus
@@ -54,6 +55,7 @@ from core.observability import (
     start_observation_span,
 )
 from core.utils.data import data_chunks
+from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 from services.web.common.monitor import (
     AnalyseReportGenerateFailedEvent,
     RiskExportFailedEvent,
@@ -64,6 +66,8 @@ from services.web.risk.constants import (
     RISK_ESQUERY_DELAY_TIME,
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
+    AnalyseReportStatus,
+    ItsmVersion,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -80,8 +84,10 @@ from services.web.risk.handlers.ticket import (
     ForApprove,
     NewRisk,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
+    AnalyseReport,
     AnalyseReportAgentRequestInfo,
     AnalyseReportErrorInfo,
     AnalyseReportExtraInfo,
@@ -91,8 +97,15 @@ from services.web.risk.models import (
 )
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
+from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
+from services.web.risk.utils import (
+    calc_task_duration,
+    calc_task_start_timestamp,
+    fill_failure_info,
+)
 from services.web.strategy_v2.constants import StrategyType
+from services.web.strategy_v2.models import Strategy, StrategyRule
 
 cache: DefaultClient = _cache
 
@@ -120,12 +133,23 @@ def _validate_analyse_report_content(content: str, report_id: int) -> str:
             _content_preview(content or ""),
         )
         raise ValueError(f"AI分析报告内容异常: {reason}")
-    return content or ""
+
+    extracted = extract_markdown_report_body(content)
+    if extracted is content or extracted == content:
+        return content
+    if not extracted.strip():
+        return content
+    logger_celery.info(
+        "[GenerateAnalyseReport] Extracted markdown report body: report_id=%s, before=%s, after=%s",
+        report_id,
+        len(content),
+        len(extracted),
+    )
+    return extracted
 
 
 @celery_app.task(
     bind=True,
-    queue="risk_report",
     time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
     max_retries=settings.RENDER_MAX_RETRY,
     acks_late=True,  # 任务级别的延迟确认
@@ -192,6 +216,20 @@ def manual_add_event(data: list):
             continue
         payload = serializer.validated_data
         payload["event_data"] = json.loads(payload["event_data"])
+
+        # 获取风险元信息（优先级：规则 > 策略）
+        strategy_rule_id = payload.get("strategy_rule_id")
+        rule = None
+        if strategy_rule_id:
+            rule = StrategyRule.objects.filter(rule_id=strategy_rule_id).first()
+
+        strategy = Strategy.objects.filter(strategy_id=payload["strategy_id"]).first()
+
+        # 优先级：规则 > 策略
+        risk_level = (rule.risk_level if rule else None) or (strategy.risk_level if strategy else None)
+        risk_hazard = (rule.risk_hazard if rule else None) or (strategy.risk_hazard if strategy else None)
+        risk_guidance = (rule.risk_guidance if rule else None) or (strategy.risk_guidance if strategy else None)
+
         event_time = datetime.datetime.fromtimestamp(payload["event_time"] / 1000, tz=timezone.get_default_timezone())
         manual_events.append(
             ManualEvent(
@@ -204,6 +242,11 @@ def manual_add_event(data: list):
                 event_time=event_time,
                 event_source=payload.get("event_source"),
                 operator=payload.get("operator"),
+                strategy_rule_id=strategy_rule_id,
+                # 保存风险元信息快照
+                risk_level=risk_level,
+                risk_hazard=risk_hazard,
+                risk_guidance=risk_guidance,
             )
         )
     if not manual_events:
@@ -609,6 +652,30 @@ def process_one_risk(*, risk_id: str):
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
+def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
+    """同步审批类节点（ForApprove）的 ITSM 工单状态到节点。"""
+    status = None
+    if node.itsm_version == ItsmVersion.V4:
+        ticket_id = str(ticket.get("id") or "")
+        if ticket_id:
+            status = get_itsm_ticket_status(ticket_id)
+    elif node.itsm_version == ItsmVersion.V3:
+        sn = ticket.get("sn")
+        if sn:
+            status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+
+    if status is None:
+        node.status = TicketNodeStatus.FINISHED
+        return
+
+    node.process_result["status"] = status
+    node.status = (
+        TicketNodeStatus.FINISHED
+        if status["current_status"] in TicketStatus.get_finished_status()
+        else TicketNodeStatus.RUNNING
+    )
+
+
 @periodic_task(
     run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
     queue="risk",
@@ -631,29 +698,25 @@ def sync_auto_result(node_id: str = None):
                 node = TicketNode.objects.select_for_update().get(id=node.id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
-                    sn = node.process_result.get("ticket", {}).get("sn")
-                    if sn:
-                        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
-                        node.process_result["status"] = status
-                        node.status = (
-                            TicketNodeStatus.FINISHED
-                            if node.process_result["status"]["current_status"]
-                            in [
-                                TicketStatus.TERMINATED,
-                                TicketStatus.FINISHED,
-                                TicketStatus.FAILED,
-                                TicketStatus.REVOKED,
-                            ]
-                            else TicketNodeStatus.RUNNING
-                        )
-                    else:
-                        node.status = TicketNodeStatus.FINISHED
+                    ticket = node.process_result.get("ticket") or {}
+                    _sync_approve_node_status(node, ticket)
                 # 自动处理套餐节点
                 elif node.action == AutoProcess.__name__:
                     task_id = node.process_result.get("task", {}).get("task_id", "")
                     if task_id:
                         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                        # 失败时补全错误信息error_message和failure_hint
+                        if status.get("state") in SOPSTaskStatus.get_failed_status():
+                            node.process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
                         node.process_result["status"] = status
+                        # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
+                        node.process_result["duration"] = calc_task_duration(status)
+                        node.duration = node.process_result["duration"]
+                        # 实际开始时间物化到独立字段，供执行记录筛选/排序；缺失时回退记录创建时间
+                        start_ts = calc_task_start_timestamp(status)
+                        node.sops_start_time = (
+                            start_ts if start_ts is not None else (node.sops_start_time or node.timestamp)
+                        )
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
@@ -670,13 +733,15 @@ def sync_auto_result(node_id: str = None):
                 # 其他节点只需要判断不为最后一个，则关闭
                 # 或 该风险单已关闭，则关闭
                 else:
-                    last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
+                    last_node = (
+                        TicketNode.objects.filter(risk_id=node.risk_id, is_test=False).order_by("-timestamp").first()
+                    )
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
                         risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
-                node.save(update_fields=["process_result", "status"])
+                node.save(update_fields=["process_result", "status", "duration", "sops_start_time"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 
@@ -732,7 +797,7 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     if prompt_params.get("risk_level"):
         levels = [i.strip() for i in str(prompt_params["risk_level"]).split(",") if i.strip()]
         if levels:
-            q &= Q(strategy__risk_level__in=levels)
+            q &= Q(risk_level__in=levels)
 
     return q
 
@@ -767,9 +832,41 @@ def _update_analyse_report_extra_info(report, extra_info: dict) -> None:
     report.__class__.objects.filter(report_id=report.report_id).update(extra_info=extra_info)
 
 
+class AnalyseReportAIAgentTask(AIAgentTask):
+    """批量分析限流预算耗尽时写入报告失败终态。"""
+
+    def on_agent_rate_limit_exhausted(self, *, error: AgentRateLimited, args: tuple, kwargs: dict) -> None:
+        report_id = kwargs.get("report_id") if "report_id" in kwargs else args[0]
+        report = AnalyseReport.objects.get(report_id=report_id)
+        now = timezone.now()
+        previous = AnalyseReportExtraInfo.model_validate(report.extra_info)
+        started_at = datetime.datetime.fromisoformat(previous.execution.started_at)
+        report.status = AnalyseReportStatus.FAILED
+        report.extra_info = _build_analyse_report_extra_info(
+            started_at=started_at,
+            ended_at=now,
+            agent_request=previous.agent_request,
+            error=_build_analyse_report_error_info(
+                error,
+                int(getattr(self.request, "retries", 0) or 0),
+                int(settings.AI_AGENT_TASK_MAX_RETRIES),
+            ),
+        )
+        report.save(update_fields=["status", "extra_info", "updated_at"])
+
+
+class AnalyseReportTitleAIAgentTask(AIAgentTask):
+    """标题限流预算耗尽时释放生成中标记。"""
+
+    def on_agent_rate_limit_exhausted(self, *, error: AgentRateLimited, args: tuple, kwargs: dict) -> None:
+        report_id = kwargs.get("report_id") if "report_id" in kwargs else args[0]
+        AnalyseReport.objects.filter(report_id=report_id).update(title_generating=False, updated_at=timezone.now())
+
+
 @celery_app.task(
     bind=True,
-    queue="risk_render",
+    base=AnalyseReportAIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
     time_limit=settings.ANALYSE_REPORT_TIME_LIMIT,
     max_retries=2,
     acks_late=True,
@@ -887,6 +984,8 @@ def generate_analyse_report(self, report_id: int):
             )
             return {"report_id": report.report_id}
 
+        except AgentRateLimited:
+            raise
         except Exception as exc:
             max_retries = self.max_retries
             current_retries = getattr(self.request, "retries", 0)
@@ -954,7 +1053,13 @@ def _normalize_analyse_report_ai_title(raw_title: Any, max_length: int) -> str:
     return title
 
 
-@celery_app.task(bind=True, queue="risk_render", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT, acks_late=True)
+@celery_app.task(
+    bind=True,
+    base=AnalyseReportTitleAIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    acks_late=True,
+)
 def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
     """异步生成 AI 分析报告标题"""
     from services.web.risk.models import AnalyseReport
@@ -991,6 +1096,8 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
             report.title = title
             report.title_generating = False
         return {"report_id": report_id, "title": report.title, "updated": updated}
+    except AgentRateLimited:
+        raise
     except Exception:
         AnalyseReport.objects.filter(
             report_id=report_id,
@@ -1000,7 +1107,12 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
         raise
 
 
-@celery_app.task(queue="risk_render")
+@celery_app.task(
+    base=AIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
+    acks_late=True,
+    time_limit=settings.RENDER_TASK_TIMEOUT,
+)
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量
 
@@ -1027,7 +1139,12 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
         _ = Risk.objects.get(risk_id=risk_id)
 
         # 构建 AI Provider
-        ai_provider = AIProvider(context={"risk_id": risk_id}, ai_variables_config=ai_variables, enable_cache=True)
+        ai_provider = AIProvider(
+            context={"risk_id": risk_id},
+            ai_variables_config=ai_variables,
+            enable_cache=True,
+            enable_agent_rate_limit=True,
+        )
 
         # 执行 AI 调用，收集结果
         ai_results = {}
@@ -1041,6 +1158,9 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
                 if result:
                     result = render_ai_markdown(result)
                 ai_results[field_name] = result
+            except AgentRateLimited:
+                # 交给 AIAgentTask 统一延迟重试，避免把限流响应伪装成变量渲染成功。
+                raise
             except Exception as e:
                 logger_celery.exception("[RenderAIVariable] Failed to get AI variable %s: %s", var_name, e)
                 ai_results[field_name] = f"[Error: {e}]"

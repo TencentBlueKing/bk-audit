@@ -1,0 +1,196 @@
+# 时间语义：固定 current_time，验证模型不会因运行时钟漂移导致结果不稳定。
+
+- description: 'T1-纯时间：最近七天日志'
+  vars:
+    query: '帮我查下最近七天的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T2-自然日：昨天的全部操作'
+  vars:
+    query: '看下昨天有什么操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-30T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T3-默认窗口：未指定时间的操作人检索'
+  vars:
+    query: '查一下张三的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T4-自然周：上周的操作'
+  vars:
+    query: '查一下上周的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T5-自然周：本周的操作（起点为周一零点，终点取当前时间）'
+  vars:
+    query: '看下本周有什么操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-31T00:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T6-自然月：上个月的操作'
+  vars:
+    query: '查一下上个月的操作记录'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-07-01T00:00:00+08:00'
+    expected_end_time: '2026-07-31T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T7-滚动小时窗口：最近一小时的日志'
+  vars:
+    query: '查一下最近一小时的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-31T17:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T8-绝对区间：8月1日到8月15日的记录'
+  vars:
+    query: '查一下2026年8月1日到8月15日的记录'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-01T00:00:00+08:00'
+    expected_end_time: '2026-08-15T23:59:59+08:00'
+    expected_end_time_alts: '["2026-08-16T00:00:00+08:00", "2026-08-15T00:00:00+08:00"]'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T9-模糊意图：帮我看看最近的情况（默认30天窗口）'
+  vars:
+    query: '帮我看看最近的情况'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'T10-时段：今天上午的操作（起止边界有合理弹性，用范围断言）'
+  vars:
+    query: '看下今天上午都干了什么'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    window_start_floor: '2026-08-31T00:00:00+08:00'
+    window_start_ceiling: '2026-08-31T08:00:00+08:00'
+    window_end_floor: '2026-08-31T11:00:00+08:00'
+    window_end_ceiling: '2026-08-31T12:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:time_window_within_bounds'
+
+- description: 'T11-跨月绝对区间：7月20日到8月5日'
+  vars:
+    query: '查一下2026年7月20日到8月5日的记录'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    expected_start_time: '2026-07-20T00:00:00+08:00'
+    expected_end_time: '2026-08-05T23:59:59+08:00'
+    expected_end_time_alts: '["2026-08-06T00:00:00+08:00", "2026-08-05T00:00:00+08:00"]'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'

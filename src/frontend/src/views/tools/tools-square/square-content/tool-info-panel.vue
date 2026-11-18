@@ -62,16 +62,17 @@
             src="@images/delete-circle.svg"
             @click.stop="handleTabClose(item.uid)">
         </div>
-        <!-- 新增工具按钮 -->
-        <add-tool-popover
+        <div
           v-if="toolList.length > 0"
-          :scene-name-map="props.sceneNameMap"
-          :scope-params="props.scopeParams"
-          :system-name-map="props.systemNameMap"
-          :tags-enums="tagsEnums"
-          :tool-list="toolList"
-          @add-tool="(tool, ctx) => emit('addTool', tool, ctx)"
-          @switch-tool="(tool) => emit('switchTab', tool.uid)" />
+          v-bk-tooltips="{ content: '返回工具广场', delay: [300, 0] }"
+          class="tab-add-btn"
+          role="button"
+          tabindex="0"
+          @click="handleGoHome"
+          @keydown.enter.prevent="handleGoHome"
+          @keydown.space.prevent="handleGoHome">
+          <audit-icon type="add" />
+        </div>
       </div>
     </div>
     <!-- 右键菜单 -->
@@ -128,6 +129,8 @@
           v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
           :key="`${tool.uid}:${props.scopeParams?.scope_type || ''}:${props.scopeParams?.scope_id || ''}`"
+          :allowed-account-types="toolDetailMap[tool.uid]?.allowed_account_types"
+          :query-cache-key="getSearchValuesCacheKey(tool.uid)"
           :tool-config="toolDetailMap[tool.uid]?.config"
           :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail"
@@ -178,8 +181,6 @@
   import GameDetail from '../components/game/game-detail.vue';
   import ToolContent from '../components/tool-content.vue';
 
-  import AddToolPopover from './add-tool-popover.vue';
-
   import {
     fetchGameDetailNameByOpenid,
     needsResolveGameDetailName,
@@ -206,6 +207,7 @@
     buildGameDetailUid,
     getFlatToolParamsFromRoute,
     getRouteQueryValue,
+    hasSearchListValueChange,
     mergeGameDetailRouteQuery,
     mergeToolRouteQuery,
     parseGameDetailFromRoute,
@@ -238,6 +240,7 @@
   interface Props {
     toolList: ToolInfo[];
     activeUid: string;
+    // eslint-disable-next-line vue/no-unused-properties
     tagsEnums: TagItem[];
     // eslint-disable-next-line vue/no-unused-properties
     scopeParams?: {
@@ -248,6 +251,8 @@
     sceneNameMap?: Record<number, string>;
     // eslint-disable-next-line vue/no-unused-properties
     systemNameMap?: Record<string, string>;
+    // eslint-disable-next-line vue/no-unused-properties
+    accessibleSceneIds?: number[] | null;
   }
 
   const props = defineProps<Props>();
@@ -720,7 +725,7 @@
     const detail = toolDetailMap.value[uid];
     if (!detail) return;
 
-    const smartPageParams = smartPageUrlParamsMap.value[uid];
+    const smartPageParams = smartPageUrlParamsMap.value[getSearchValuesCacheKey(uid)];
     const query = mergeToolRouteQuery(route.query as Record<string, unknown>, detail.tool_type, {
       searchList: searchListMap.value[uid],
       accountType: smartPageParams?.accountType,
@@ -746,10 +751,11 @@
     uid: string,
     params: { accountType: string; accountId: string },
   ) => {
+    const cacheKey = getSearchValuesCacheKey(uid);
     if (params.accountId) {
-      smartPageUrlParamsMap.value[uid] = params;
+      smartPageUrlParamsMap.value[cacheKey] = params;
     } else {
-      delete smartPageUrlParamsMap.value[uid];
+      delete smartPageUrlParamsMap.value[cacheKey];
     }
     if (props.activeUid === uid) {
       syncToolParamsToRoute(uid);
@@ -851,6 +857,12 @@
       return;
     }
 
+    // 场景补参、tool_id 回写等只改了 query、没改查询值时，不再自动执行
+    if (!hasSearchListValueChange(searchListMap.value[uid], urlApplied.list)) {
+      markRouteQueryApplied(uid);
+      return;
+    }
+
     searchListMap.value[uid] = urlApplied.list;
     syncSearchListToStorage();
     markUrlParamsOwner(uid);
@@ -888,7 +900,7 @@
     if (!detail) return;
 
     if (detail.tool_type === 'smart_page') {
-      if (smartPageUrlParamsMap.value[uid]?.accountId) {
+      if (smartPageUrlParamsMap.value[getSearchValuesCacheKey(uid)]?.accountId) {
         syncToolParamsToRoute(uid);
       }
       // 尚无账号参数时保留 URL 中的 openid 等深链参数
@@ -1340,12 +1352,15 @@
         }
       });
       // 清理已关闭的 smart_page 工具在 sessionStorage 中保存的查询输入
+      // key 格式为 前缀 + uid[:scene:xx | :system:xx]
       try {
         Object.keys(sessionStorage)
           .filter(key => key.startsWith(STORAGE_KEY_PROFILE_QUERY_PREFIX))
           .forEach((key) => {
-            const uid = key.slice(STORAGE_KEY_PROFILE_QUERY_PREFIX.length);
-            if (uid && !activeUids.has(uid)) {
+            const cacheKey = key.slice(STORAGE_KEY_PROFILE_QUERY_PREFIX.length);
+            if (!cacheKey) return;
+            const stillOpen = [...activeUids].some(uid => cacheKey === uid || cacheKey.startsWith(`${uid}:`));
+            if (!stillOpen) {
               sessionStorage.removeItem(key);
             }
           });
@@ -1414,6 +1429,31 @@
   width: 21px;
   height: 24px;
   cursor: pointer;
+}
+
+.tab-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  font-size: 16px;
+  color: #979ba5;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all .15s;
+  flex: 0 0 auto;
+
+  &:hover {
+    color: #63656e;
+    background: #f0f1f5;
+  }
+
+  &:active {
+    color: #3a84ff;
+    background: #e1ecff;
+  }
 }
 
 .panel-tab-item {

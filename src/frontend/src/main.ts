@@ -43,13 +43,16 @@ import RenderList from '@components/render-list/index.vue';
 import TdesignList from '@components/tdesign-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
 import ScrollFaker from '@components/scroll-faker/index.vue';
+import Skeleton from '@components/skeleton/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
+import TableSkeleton from '@components/table-skeleton/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
 import SelectVerify from '@components/select-verify/index.vue';
 import SearchBox from '@components/search-box/index.vue';
 
-import WaterMark from '@utils/assist/water-mark';
 import { warmAgents } from '@utils/assist/ping-agent';
+import { installTagOverflowTips } from '@utils/assist/tag-overflow-tips';
+import WaterMark from '@utils/assist/water-mark';
 
 import cursor from '@directives/cursor';
 
@@ -60,7 +63,7 @@ import i18n from '@language/index.js';
 import App from './app.vue';
 import Exception from './exception.vue';
 
-// import BkTrace from '@blueking/bk-trace-core';
+import BkTrace from '@blueking/bk-trace-core';
 
 import('tippy.js/dist/tippy.css');
 import('tippy.js/themes/light.css');
@@ -68,6 +71,7 @@ import('bkui-vue/dist/style.variable.css');
 import('@lib/bk-icon/style.css');
 import('@lib/bk-icon/iconcool.js');
 import('@/css/reset.css');
+import('@/css/tokens.css');
 import('@/css/common.css');
 import('@blueking/notice-component/dist/style.css');
 import('@blueking/date-picker/vue3/vue3.css');
@@ -101,7 +105,9 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
     BKApp.component('TdesignList', TdesignList);
     BKApp.component('RenderSensitivityLevel', RenderSensitivityLevel);
     BKApp.component('ScrollFaker', ScrollFaker);
+    BKApp.component('AuditSkeleton', Skeleton);
     BKApp.component('SkeletonLoading', SkeletonLoading);
+    BKApp.component('TableSkeleton', TableSkeleton);
     BKApp.component('SmartAction', SmartAction);
     BKApp.component('DatePicker', DatePicker);
     BKApp.component('SelectVerify', SelectVerify);
@@ -109,6 +115,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
 
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);
+    installTagOverflowTips();
 
     // TAM前端监控
     setTimeout(() => {
@@ -132,13 +139,13 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
     }
     if (config.metric) {
     // 数据上报SDK
-      /*  BKApp.use(BkTrace, {
+      BKApp.use(BkTrace, {
         url: config.metric.metric_report_trace_url,
         appCode: config.app_code,
         appVersion: config.static_version,
         spaceID: '',
         spaceType: '',
-      }); */
+      });
     }
 
     BKApp.mount('#app');

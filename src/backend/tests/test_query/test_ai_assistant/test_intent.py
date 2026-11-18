@@ -1,0 +1,603 @@
+# -*- coding: utf-8 -*-
+"""用户意图识别服务测试（一期 v6）：IntentPayload 契约 + schema 注入 + 候选白名单。"""
+
+import json
+from datetime import datetime
+from unittest import mock
+from zoneinfo import ZoneInfo
+
+from django.core.exceptions import ImproperlyConfigured
+from django.test import SimpleTestCase, override_settings
+from pydantic import ValidationError
+
+from api.constants import AIAgentCode
+from services.web.query.ai_assistant.exceptions import (
+    AIOutputInvalidError,
+    InvalidConditionError,
+)
+from services.web.query.ai_assistant.schemas import MessagePlan
+from services.web.query.ai_assistant.services.intent import (
+    MessagePlanningService,
+    PlanningRetryFeedback,
+    resolve_intent_agent_code,
+)
+from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
+
+INTENT_MODULE = "services.web.query.ai_assistant.services.intent"
+
+CANDIDATES = [
+    {"system_id": "bk-audit", "name": "审计中心", "description": ""},
+    {"system_id": "bcs", "name": "蓝盾", "description": ""},
+]
+
+
+class MessagePlanningSystemPromptTest(SimpleTestCase):
+    """验证生产系统提示词的收敛规则、结构示例及 Schema 注入。"""
+
+    def test_tool_completion_and_field_rules_are_rendered(self):
+        prompt = MessagePlanningService.system_prompt
+        tools = prompt.split("# 决策与工具\n", 1)[1].split("# 条件\n", 1)[0]
+        conditions = prompt.split("# 条件\n", 1)[1].split("# 时间\n", 1)[0]
+
+        self.assertIn("系统和本轮明确条件均已有合法表达时，立即输出MessagePlan", tools)
+        self.assertIn("已有成功且分页结束的相同查询不重复。", tools)
+        self.assertIn("标准字段的 field_type 取字段元数据的 field.field_type，operator 从 allow_operators 选择。", conditions)
+
+    def test_rendered_examples_are_valid_message_plans(self):
+        output_rules = MessagePlanningService.system_prompt.split("# 输出\n", 1)[1].split("<message_plan_schema>", 1)[0]
+        examples = [json.loads(line) for line in output_rules.splitlines() if line.startswith("{")]
+        self.assertEqual(len(examples), 2)
+
+        dispatch, error = [MessagePlan.model_validate(example) for example in examples]
+        self.assertEqual(dispatch.outcome, "dispatch")
+        self.assertEqual([message.message_type for message in dispatch.messages], ["SYSTEM_SELECTION", "LOG_SEARCH"])
+        self.assertEqual(dispatch.messages[0].message_input.system_ids, ["demo_change_portal"])
+        self.assertEqual(
+            examples[0]["messages"][1]["message_input"]["condition"]["conditions"],
+            [{"raw_name": "extend_data", "keys": ["approval", "stage"], "operator": "eq", "filters": ["archived"]}],
+        )
+        self.assertEqual(error.outcome, "error")
+        self.assertEqual(error.error_code, "SYSTEM_REQUIRED")
+        self.assertEqual(error.messages, [])
+
+    def test_rendered_schema_uses_metadata_for_standard_fields(self):
+        schema_json = MessagePlanningService.system_prompt.split("<message_plan_schema>\n", 1)[1].split(
+            "\n</message_plan_schema>", 1
+        )[0]
+        schema = json.loads(schema_json)
+        self.assertEqual(schema, MessagePlan.model_json_schema())
+        field_type = schema["$defs"]["AIConditionItem"]["properties"]["field_type"]
+        self.assertIn("标准字段的 field_type 取字段元数据的 field.field_type，operator 取 allow_operators", field_type["description"])
+        self.assertIn("仅拓展字段类型不明确时", field_type["description"])
+        self.assertEqual(field_type["default"], "string")
+
+
+class MessagePlanSchemaTest(AIAssistantTestCase):
+    """通用消息规划输出必须收敛为一期允许的三种有序序列。"""
+
+    def test_supported_dispatch_sequences(self):
+        cases = (
+            [{"message_type": "SYSTEM_SELECTION", "message_input": {"system_ids": ["bk-audit"]}}],
+            [{"message_type": "LOG_SEARCH", "message_input": {"condition": {"conditions": []}}}],
+            [
+                {"message_type": "SYSTEM_SELECTION", "message_input": {"system_ids": ["bk-audit"]}},
+                {"message_type": "LOG_SEARCH", "message_input": {"condition": {"conditions": []}}},
+            ],
+        )
+
+        for messages in cases:
+            with self.subTest(messages=messages):
+                plan = MessagePlan.model_validate({"outcome": "dispatch", "messages": messages})
+                self.assertEqual(len(plan.messages), len(messages))
+                self.assertIsNone(plan.error_code)
+
+    def test_reversed_or_duplicate_sequence_is_rejected(self):
+        invalid_cases = (
+            [
+                {"message_type": "LOG_SEARCH", "message_input": {"condition": {"conditions": []}}},
+                {"message_type": "SYSTEM_SELECTION", "message_input": {"system_ids": ["bk-audit"]}},
+            ],
+            [
+                {"message_type": "SYSTEM_SELECTION", "message_input": {"system_ids": ["bk-audit"]}},
+                {"message_type": "SYSTEM_SELECTION", "message_input": {"system_ids": ["bcs"]}},
+            ],
+        )
+
+        for messages in invalid_cases:
+            with self.subTest(messages=messages), self.assertRaises(ValidationError):
+                MessagePlan.model_validate({"outcome": "dispatch", "messages": messages})
+
+    def test_error_outcome_requires_code_and_empty_messages(self):
+        plan = MessagePlan.model_validate({"outcome": "error", "messages": [], "error_code": "UNRECOGNIZED_INTENT"})
+        self.assertEqual(plan.error_code, "UNRECOGNIZED_INTENT")
+
+        with self.assertRaises(ValidationError):
+            MessagePlan.model_validate({"outcome": "error", "messages": []})
+        with self.assertRaises(ValidationError):
+            MessagePlan.model_validate(
+                {
+                    "outcome": "error",
+                    "messages": [{"message_type": "SYSTEM_SELECTION", "message_input": {"system_ids": ["bk-audit"]}}],
+                    "error_code": "SYSTEM_REQUIRED",
+                }
+            )
+
+    def test_invalid_condition_is_a_supported_business_error(self):
+        """已识别检索意图但条件无法表达时，Schema 提供稳定业务分支。"""
+
+        plan = MessagePlan.model_validate({"outcome": "error", "messages": [], "error_code": "INVALID_CONDITION"})
+
+        self.assertEqual(plan.error_code, "INVALID_CONDITION")
+        schema = MessagePlan.model_json_schema()
+        error_description = schema["properties"]["error_code"]["description"]
+        self.assertIn("INVALID_CONDITION", error_description)
+        self.assertIn("字段、操作符或条件值", error_description)
+
+    def test_condition_schema_exposes_query_type_and_operator_enums(self):
+        """Agent 输出只使用查询执行层支持的稳定类型和操作符。"""
+
+        schema = MessagePlan.model_json_schema()
+
+        self.assertEqual(
+            schema["$defs"]["FieldType"]["enum"],
+            ["string", "double", "int", "long", "text", "timestamp", "float"],
+        )
+        self.assertIn("gt", schema["$defs"]["Operator"]["enum"])
+        field_type = schema["$defs"]["AIConditionItem"]["properties"]["field_type"]
+        self.assertEqual(field_type["default"], "string")
+
+
+class MessagePlanningJsonFeedbackTest(AIAssistantTestCase):
+    """语法诊断帮助纠错，但不能改变计划接受条件或截断下一轮原文。"""
+
+    def test_syntax_feedback_points_to_original_response(self):
+        cases = (
+            ('{\n  "messages": [}\n', "第 2 行，第 16 列", "字符位置 17", "messages"),
+            ('说明\n```json\n{"messages":[}\n```', "第 3 行，第 14 列", "字符位置 24", "messages"),
+            (
+                '{"outcome":"dispatch","messages":[{"message_type":"LOG_SEARCH",'
+                '"message_input":{"condition":{"conditions":[]}}]}',
+                "第 1 行，第 111 列",
+                "字符位置 110",
+                "conditions",
+            ),
+        )
+        for raw_output, line_column, position, nearby_key in cases:
+            with self.subTest(raw_output=raw_output):
+                with self.assertRaises(AIOutputInvalidError) as caught:
+                    MessagePlanningService._parse_and_validate(raw_output)
+
+                feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+                diagnostic = feedback.validation_errors[0]
+                self.assertEqual((diagnostic["path"], diagnostic["code"]), ("$", "invalid_json"))
+                self.assertIn(line_column, diagnostic["message"])
+                self.assertIn(position, diagnostic["message"])
+                self.assertIn("⟦错误位置⟧", diagnostic["message"])
+                self.assertIn(nearby_key, diagnostic["message"])
+                self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_syntax_excerpt_is_bounded_while_retry_keeps_full_output(self):
+        raw_output = '{"prefix_marker":"' + "x" * 3000 + '","messages":[]'
+        with self.assertRaises(AIOutputInvalidError) as caught:
+            MessagePlanningService._parse_and_validate(raw_output)
+
+        feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+        message = feedback.validation_errors[0]["message"]
+        self.assertLess(len(message), 512)
+        self.assertNotIn("prefix_marker", message)
+        self.assertIn("messages", message)
+        self.assertIn("⟦错误位置⟧", message)
+        self.assertEqual(len(caught.exception.extra["raw_output"]), 2048)
+        self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_non_object_json_stays_invalid(self):
+        for raw_output in ("[]", "null", '"plain text"'):
+            with self.subTest(raw_output=raw_output), self.assertRaises(AIOutputInvalidError) as caught:
+                MessagePlanningService._parse_and_validate(raw_output)
+
+            feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+            self.assertEqual(feedback.validation_errors[0]["code"], "invalid_json")
+            self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_valid_wrapped_plan_still_uses_existing_extraction(self):
+        raw_output = '说明\n```json\n{"outcome":"error","messages":[],"error_code":"SYSTEM_REQUIRED"}\n```\n结束'
+
+        plan = MessagePlanningService._parse_and_validate(raw_output)
+
+        self.assertEqual(plan.outcome, "error")
+        self.assertEqual(plan.messages, [])
+        self.assertEqual(plan.error_code, "SYSTEM_REQUIRED")
+
+
+@mock.patch(f"{INTENT_MODULE}.api.bk_plugins_ai_agent.chat_completion")
+class MessagePlanningContextTest(AIAssistantTestCase):
+    """通用规划请求只携带当前决策需要的动态上下文。"""
+
+    def _build_context(self):
+        """构造不依赖接口返回的最小规划上下文。"""
+
+        return MessagePlanningService.build_context(
+            query_text="查审计中心日志",
+            candidates=[{"system_id": "bk-audit", "name": "审计中心", "description": "合成系统"}],
+            current_system_id="bk-audit",
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+
+    def test_prompt_does_not_preload_field_metadata(self, mock_chat):
+        """工具可取的字段目录不能提前放入提示词，仍保留可信授权ID与会话信息。"""
+        user_message = MessagePlanningService.build_user_message(self._build_context())
+        self.assertNotIn('"raw_name"', user_message)
+        self.assertNotIn("合成系统", user_message)
+        self.assertIn("bk-audit", user_message)
+        self.assertIn('"current_system_id":"bk-audit"', user_message)
+
+    def test_retry_feedback_is_sent_after_original_exchange(self, mock_chat):
+        """纠错调用携带上一轮输出和归一化校验错误。"""
+
+        previous_output = '{"outcome":"dispatch","messages":[]}'
+        feedback = PlanningRetryFeedback(
+            previous_output=previous_output,
+            validation_errors=(
+                {
+                    "path": "messages",
+                    "code": "value_error",
+                    "message": "dispatch outcome requires messages",
+                },
+            ),
+        )
+        mock_chat.return_value = json.dumps({"outcome": "error", "messages": [], "error_code": "INVALID_CONDITION"})
+
+        MessagePlanningService.plan(context=self._build_context(), retry_feedback=feedback)
+
+        history = mock_chat.call_args.kwargs["chat_history"]
+        self.assertEqual([item["role"] for item in history], ["role", "user", "assistant", "user"])
+        self.assertEqual(history[2]["content"], previous_output)
+        self.assertIn("dispatch outcome requires messages", history[3]["content"])
+
+    def test_syntax_diagnostic_reaches_next_agent_request(self, mock_chat):
+        """从真实解析失败构造的定位信息必须进入下一次模型请求。"""
+
+        raw_output = '{\n  "messages": [}\n'
+        mock_chat.side_effect = (
+            raw_output,
+            '{"outcome":"dispatch","messages":[{"message_type":"LOG_SEARCH",'
+            '"message_input":{"condition":{"conditions":[]}}}]}',
+        )
+        context = self._build_context()
+        with self.assertRaises(AIOutputInvalidError) as caught:
+            MessagePlanningService.plan(context=context)
+
+        feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+        plan = MessagePlanningService.plan(context=context, retry_feedback=feedback)
+
+        self.assertEqual(plan.outcome, "dispatch")
+        self.assertEqual([message.message_type for message in plan.messages], ["LOG_SEARCH"])
+        history = mock_chat.call_args.kwargs["chat_history"]
+        self.assertEqual([item["role"] for item in history], ["role", "user", "assistant", "user"])
+        self.assertEqual(history[2]["content"], raw_output)
+        self.assertIn("第 2 行，第 16 列", history[3]["content"])
+        self.assertIn("⟦错误位置⟧", history[3]["content"])
+
+    def test_scope_validation_failure_keeps_full_agent_output_for_retry(self, mock_chat):
+        """plan 内部范围校验失败时也必须保留可纠正的上一轮完整输出。"""
+
+        raw_output = json.dumps(
+            {
+                "outcome": "dispatch",
+                "messages": [
+                    {
+                        "message_type": "SYSTEM_SELECTION",
+                        "message_input": {"system_ids": ["outside-system"]},
+                    }
+                ],
+            }
+        )
+        mock_chat.return_value = raw_output
+
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            MessagePlanningService.plan(context=self._build_context())
+
+        feedback = MessagePlanningService.build_retry_feedback(error=ctx.exception, plan=None)
+        self.assertEqual(feedback.previous_output, raw_output)
+        self.assertEqual(feedback.validation_errors[0]["code"], "system_id not in candidates")
+
+    def test_schema_validation_retry_uses_full_output_without_expanding_log_extra(self, mock_chat):
+        """纠错使用完整响应，异常日志仍只保留受控长度的摘要。"""
+
+        raw_output = json.dumps(
+            {
+                "outcome": "dispatch",
+                "messages": [
+                    {
+                        "message_type": "LOG_SEARCH",
+                        "message_input": {
+                            "condition": {
+                                "conditions": [
+                                    {
+                                        "raw_name": "username",
+                                        "field_type": "string",
+                                        "operator": "unsupported",
+                                        "filters": ["user_a"],
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ],
+                "ignored_padding": "x" * 3000,
+            }
+        )
+
+        with self.assertRaises(InvalidConditionError) as ctx:
+            MessagePlanningService._parse_and_validate(raw_output)
+
+        feedback = MessagePlanningService.build_retry_feedback(error=ctx.exception, plan=None)
+        self.assertEqual(len(ctx.exception.extra["raw_output"]), 2048)
+        self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_mixed_schema_errors_are_classified_as_output_invalid(self, mock_chat):
+        """顶层协议错误不能被同一响应中的条件错误掩盖。"""
+
+        raw_output = json.dumps(
+            {
+                "outcome": "unsupported",
+                "messages": [
+                    {
+                        "message_type": "LOG_SEARCH",
+                        "message_input": {
+                            "condition": {
+                                "conditions": [
+                                    {
+                                        "raw_name": "username",
+                                        "field_type": "string",
+                                        "operator": "unsupported",
+                                        "filters": ["user_a"],
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ],
+            }
+        )
+
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            MessagePlanningService._parse_and_validate(raw_output)
+
+        error_paths = {item["path"] for item in ctx.exception.extra["validation_errors"]}
+        self.assertIn("outcome", error_paths)
+        self.assertTrue(any("conditions" in path for path in error_paths))
+
+    def test_plan_separates_stable_rules_from_runtime_context(self, mock_chat):
+        mock_chat.return_value = json.dumps(
+            {
+                "outcome": "dispatch",
+                "messages": [
+                    {
+                        "message_type": "SYSTEM_SELECTION",
+                        "message_input": {"system_ids": ["bk-audit"]},
+                    },
+                    {
+                        "message_type": "LOG_SEARCH",
+                        "message_input": {
+                            "condition": {
+                                "conditions": [],
+                                "start_time": "2026-09-19T10:00:00+08:00",
+                                "end_time": "2026-09-20T10:00:00+08:00",
+                            }
+                        },
+                    },
+                ],
+            }
+        )
+        context = MessagePlanningService.build_context(
+            query_text="查审计中心昨天失败的操作",
+            candidates=[
+                {"system_id": "bk-audit", "name": "审计中心", "description": "审计日志检索"},
+                {"system_id": "bcs", "name": "蓝盾", "description": "研发流水线"},
+            ],
+            current_system_id="bk-audit",
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+
+        plan = MessagePlanningService.plan(context=context)
+
+        self.assertEqual([message.message_type for message in plan.messages], ["LOG_SEARCH"])
+        request = mock_chat.call_args.kwargs
+        self.assertNotIn("input", request)
+        system_prompt = request["chat_history"][0]["content"]
+        self.assertEqual(system_prompt, MessagePlanningService.system_prompt)
+        self.assertEqual(request["chat_history"][1]["role"], "user")
+        self.assertTrue(request["execute_kwargs"]["thread_id"].startswith("intent-planning-"))
+        user_message = request["chat_history"][1]["content"]
+        conversation = json.loads(user_message.split("<conversation>\n", 1)[1].split("\n</conversation>", 1)[0])
+        authorized_ids = json.loads(
+            user_message.split("<authorized_system_ids>\n", 1)[1].split("\n</authorized_system_ids>", 1)[0]
+        )
+        clock = json.loads(user_message.split("<clock>\n", 1)[1].split("\n</clock>", 1)[0])
+        self.assertEqual(
+            conversation,
+            {"username": self.username, "phase": "SYSTEM_SELECTED", "current_system_id": "bk-audit"},
+        )
+        self.assertEqual(authorized_ids, ["bk-audit", "bcs"])
+        self.assertEqual(clock["previous_week_start"], "2026-09-07T00:00:00+08:00")
+        self.assertEqual(clock["current_week_start"], "2026-09-14T00:00:00+08:00")
+        self.assertNotIn('"raw_name"', user_message)
+        self.assertNotIn("研发流水线", user_message)
+        self.assertNotIn('"PlannedLogSearchMessage"', user_message)
+
+    def test_current_system_must_be_an_authorized_candidate(self, mock_chat):
+        """当前系统详情不能绕过本轮授权候选集合进入 Agent 上下文。"""
+
+        with self.assertRaises(ValidationError):
+            MessagePlanningService.build_context(
+                query_text="查询当前系统日志",
+                candidates=[{"system_id": "bcs", "name": "蓝盾", "description": "研发流水线"}],
+                current_system_id="bk-audit",
+                username=self.username,
+                reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            )
+
+
+class LoadCandidatesTest(AIAssistantTestCase):
+    """候选组装：当前范围权限 ∩ 已接入审计系统。"""
+
+    def test_load_candidates_filters_by_permission(self):
+        all_systems = [
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bcs", "name": "蓝盾", "audit_status": "accessed"},
+            {"id": "other", "name": "无权限系统", "audit_status": "accessed"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["bk-audit", "bcs"]),
+        ):
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
+        self.assertEqual(candidates, CANDIDATES)
+
+    def test_load_candidates_excludes_authorized_but_not_accessed_system(self):
+        """有场景权限但尚未接入审计的系统不能暴露给 Agent。"""
+
+        all_systems = [
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "pending-system", "name": "待接入系统", "audit_status": "pending"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["bk-audit", "pending-system"]),
+        ):
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
+
+        self.assertEqual([candidate["system_id"] for candidate in candidates], ["bk-audit"])
+
+    def test_load_candidates_preserves_given_priority_order(self):
+        """候选顺序是同等匹配时的产品优先级，意图识别层不得重新排序。"""
+
+        all_systems = [
+            {"id": "iam_v4_bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bcs", "name": "蓝盾", "audit_status": "accessed"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["iam_v4_bk-audit", "bk-audit", "bcs"]),
+        ):
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
+
+        self.assertEqual(
+            [candidate["system_id"] for candidate in candidates],
+            ["iam_v4_bk-audit", "bk-audit", "bcs"],
+        )
+
+    def test_load_candidates_with_scope(self):
+        """传 scope：候选与检索页场景过滤同口径（get_scope_auth_systems），仅保留场景授权系统"""
+
+        all_systems = [
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bcs", "name": "蓝盾", "audit_status": "accessed"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
+            return_value=["bk-audit"],
+        ) as mock_scope, mock.patch(
+            f"{INTENT_MODULE}.resource.meta.system_list_all",
+            return_value=all_systems,
+        ) as mock_list:
+            candidates = MessagePlanningService.load_candidates(
+                "bkaudit", self.username, scope_type="scene", scope_id="1"
+            )
+        self.assertEqual(candidates, [{"system_id": "bk-audit", "name": "审计中心", "description": ""}])
+        mock_scope.assert_called_once_with("scene", "1", self.username)
+        mock_list.assert_called_once_with(namespace="bkaudit", audit_status__in="accessed")
+
+    def test_load_candidates_with_scope_no_permission(self):
+        """scope 无权限：get_scope_auth_systems 的 [""] 兜底（ES filter 语义）被剔除，候选为空"""
+
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
+            return_value=[""],
+        ), mock.patch(
+            f"{INTENT_MODULE}.resource.meta.system_list_all",
+            return_value=[{"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"}],
+        ):
+            candidates = MessagePlanningService.load_candidates(
+                "bkaudit", self.username, scope_type="scene", scope_id="1"
+            )
+        self.assertEqual(candidates, [])
+
+    def test_load_candidates_without_scope_keeps_legacy(self):
+        """不传 scope：保持既有并集口径（旧前端兼容），不走场景过滤分支"""
+
+        all_systems = [{"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"}]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["bk-audit"]),
+        ), mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
+        ) as mock_scope:
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
+        self.assertEqual(candidates, CANDIDATES[:1])
+        mock_scope.assert_not_called()
+
+
+class IntentAgentRoutingTest(AIAssistantTestCase):
+    """意图识别智能体环境路由开关（默认专属 / 应急切共享）。
+
+    定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
+    BK_API_URL_TMPL 独立域名模板默认链路直接跑通；bkop 统一域名模板下该网关未注册
+    （2026-09-14 线上 404 事故），经 BKAPP_AI_USER_INTENT_API_URL 直连独立域名解决
+    （第 1 层优先级）。
+    """
+
+    def test_default_routes_to_dedicated_agent(self):
+        """默认：路由到 USER_INTENT 专属智能体（生产默认链路零额外配置）"""
+
+        self.assertEqual(MessagePlanningService.agent_code, AIAgentCode.USER_INTENT)
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
+
+    @override_settings(AI_USER_INTENT_AGENT_CODE="RISK_SEARCH")
+    def test_switch_routes_to_other_agent(self):
+        """应急口：BKAPP_AI_USER_INTENT_AGENT_CODE 可覆盖路由到其他智能体（枚举名任意）"""
+
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.RISK_SEARCH)
+
+    @override_settings(AI_USER_INTENT_AGENT_CODE="NOT_EXIST")
+    def test_invalid_switch_fails_fast(self):
+        """非法枚举名：启动即快速失败（ImproperlyConfigured），防静默走错智能体"""
+
+        with self.assertRaises(ImproperlyConfigured):
+            resolve_intent_agent_code()
+
+
+class PromptSlimmingContractTest(AIAssistantTestCase):
+    """候选详情再大也不增加Agent首轮上下文，授权顺序保持稳定。"""
+
+    def test_metadata_does_not_increase_initial_prompt_size(self):
+        """名称/描述仅供后端及工具使用，不因元数据增长扩大首轮输入。"""
+        kwargs = dict(
+            query_text="查日志",
+            current_system_id="system_a",
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+        small = MessagePlanningService.build_context(candidates=[{"system_id": "system_a"}], **kwargs)
+        large = MessagePlanningService.build_context(
+            candidates=[{"system_id": "system_a", "name": "隐藏名称" * 1000, "description": "隐藏详情" * 1000}],
+            **kwargs,
+        )
+        self.assertEqual(
+            MessagePlanningService.build_user_message(small), MessagePlanningService.build_user_message(large)
+        )
+
+    def test_authorized_ids_keep_backend_priority(self):
+        """工具目录排序不能改变后端场景授权范围及同等匹配的选择优先级。"""
+        context = MessagePlanningService.build_context(
+            query_text="选系统",
+            candidates=[{"system_id": "b"}, {"system_id": "a"}, {"system_id": "b"}],
+            current_system_id="",
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+        self.assertEqual(context.authorized_system_ids, ["b", "a"])

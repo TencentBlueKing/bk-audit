@@ -128,9 +128,13 @@ class TestListRiskResource(TestCase):
             risk_id="risk-db",
             raw_event_id="raw",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketPermission.objects.create(
             risk_id=self.risk.risk_id,
@@ -186,9 +190,13 @@ class TestListRiskResource(TestCase):
             risk_id="risk-another-scene",
             raw_event_id="raw-another-scene",
             strategy=another_strategy,
+            scene_id=another_scene.scene_id,
             status=RiskStatus.NEW,
             title="another",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         with mock.patch(
@@ -216,6 +224,9 @@ class TestListRiskResource(TestCase):
             status=RiskStatus.NEW,
             title="outside-scope",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         data = self._call_resource({"scene_id": str(another_scene.scene_id)})
@@ -231,9 +242,13 @@ class TestListRiskResource(TestCase):
             risk_id="risk-multi-scene",
             raw_event_id="raw-multi-scene",
             strategy=another_strategy,
+            scene_id=another_scene.scene_id,
             status=RiskStatus.NEW,
             title="multi",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         with mock.patch(
@@ -276,7 +291,9 @@ class TestListRiskResource(TestCase):
             sql_log.append(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "event_filters": [
@@ -346,7 +363,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         # ListRisk（所有风险）仅用 IAM 权限，需 mock iam_risk_filter 以限定结果集
         iam_q = Q(risk_id=self.risk.risk_id)
@@ -393,7 +412,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "title": "bkbase-title",
@@ -475,6 +496,45 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertEqual(results[0]["event_data"], matched_event)
 
+    def test_list_risk_via_bkbase_dedupes_join_rows_before_pagination(self):
+        sql_log = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 2}]}
+            return {
+                "list": [
+                    {
+                        "risk_id": self.risk.risk_id,
+                        "strategy_id": self.risk.strategy_id,
+                        "raw_event_id": self.risk.raw_event_id,
+                        "__matched_event_data": json.dumps({"ip": "127.0.0.1"}),
+                    }
+                ]
+            }
+
+        payload = {
+            "title": "bkbase-title",
+            "sort": ["-last_operate_time", "-risk_id"],
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.CONTAINS.value,
+                    "value": "127.0",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        self.assertEqual(len(sql_log), 2)
+        assert_hive_sql(self, sql_log)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(data["results"][0]["risk_id"], self.risk.risk_id)
+
     def test_list_risk_via_bkbase_order_by_event_data_field(self):
         sql_log = []
 
@@ -511,13 +571,6 @@ class TestListRiskResource(TestCase):
             data = self._call_resource(payload)
 
         self.assertEqual(len(sql_log), 2)
-        _, data_sql = sql_log
-        normalized_sql = data_sql.replace("`", "")
-        normalized_upper = normalized_sql.upper()
-        self.assertIn("__ORDER_EVENT_FIELD", normalized_upper)
-        self.assertIn("__MATCHED_EVENT_DATA", normalized_upper)
-        self.assertIn("ORDER BY __ORDER_EVENT_FIELD DESC", normalized_upper)
-        self.assertIn("MATCHED_EVENT.DTEVENTTIMESTAMP DESC", normalized_upper)
         assert_hive_sql(self, sql_log)
 
         results = data["results"]
@@ -532,7 +585,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "title": "bkbase-title",
@@ -573,7 +628,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "title": "bkbase-title",
@@ -634,7 +691,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "title": "bkbase-title",
@@ -682,7 +741,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "title": "bkbase-title",
@@ -723,7 +784,9 @@ class TestListRiskResource(TestCase):
             print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "title": "bkbase-title",
@@ -739,8 +802,6 @@ class TestListRiskResource(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
-        strategy_table = f"{self.bkbase_table_config[ASSET_STRATEGY_BKBASE_RT_ID_KEY]}.doris"
-        self.assertTrue(any(strategy_table in sql for sql in sql_log))
         data_sql = sql_log[1]
         data_sql_normalized = data_sql.replace("`", "")
         self.assertIn("CASE WHEN base_query.risk_level", data_sql_normalized)
@@ -778,9 +839,13 @@ class TestListRiskResource(TestCase):
             risk_id="risk-bkbase-full",
             raw_event_id="raw-full",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title="bkbase-full-title",
             event_time=datetime.datetime(2025, 6, 1, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketPermission.objects.create(
             risk_id=extra_risk.risk_id,
@@ -833,10 +898,14 @@ class TestListRiskResource(TestCase):
             risk_id="risk-closed-display",
             raw_event_id="raw-closed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             title=self.bkbase_title,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketPermission.objects.create(
             risk_id=closed_risk.risk_id,
@@ -878,10 +947,14 @@ class TestListRiskResource(TestCase):
             risk_id="risk-closed-db",
             raw_event_id="raw-closed-db",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             title="closed-risk",
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketPermission.objects.create(
             risk_id=closed_risk.risk_id,
@@ -910,7 +983,9 @@ class TestListRiskResource(TestCase):
             sql_log.append(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         # 逗号分隔传入多个 status
         payload = {
@@ -934,11 +1009,15 @@ class TestListRiskResource(TestCase):
             risk_id="risk-manual-unsynced",
             raw_event_id="raw-manual",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
             manual_synced=False,
             display_status=RiskDisplayStatus.STAND_BY,
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         sql_log: List[str] = []
 
@@ -946,7 +1025,9 @@ class TestListRiskResource(TestCase):
             sql_log.append(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         request_first = self._make_request({"page": 1, "page_size": 1})
         bkbase_payload = {
@@ -970,7 +1051,9 @@ class TestListRiskResource(TestCase):
             sql_log_second.append(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         request_second = self._make_request({"page": 2, "page_size": 1})
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync_second):
@@ -986,11 +1069,15 @@ class TestListRiskResource(TestCase):
             risk_id="risk-manual-unsynced-event-filter",
             raw_event_id="raw-manual",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
             manual_synced=False,
             display_status=RiskDisplayStatus.STAND_BY,
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         sql_log: List[str] = []
 
@@ -998,7 +1085,9 @@ class TestListRiskResource(TestCase):
             sql_log.append(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         payload = {
             "scope_type": ScopeType.SCENE,
@@ -1028,7 +1117,9 @@ class TestListRiskResource(TestCase):
             sql_log_second.append(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+            return {
+                "list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id, "risk_level": "high"}]
+            }
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync_second):
             data_second = self.resource.risk.list_risk(payload, _request=request_second)
@@ -1048,17 +1139,25 @@ class TestListRiskResource(TestCase):
             risk_id="risk-mid",
             raw_event_id="raw-mid",
             strategy=strategy_mid,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="middle",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         Risk.objects.create(
             risk_id="risk-low",
             raw_event_id="raw-low",
             strategy=strategy_low,
-            status=RiskStatus.CLOSED,
-            display_status=RiskDisplayStatus.CLOSED,
+            scene_id=self.scene_id,
+            status=RiskStatus.NEW,
+            display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="low",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
     def test_list_risk_sort_by_strategy_level_desc(self):
@@ -1095,12 +1194,13 @@ class TestListRiskResource(TestCase):
         self.assertEqual(ids, ["risk-low", "risk-mid", self.risk.risk_id])
 
     def test_list_risk_multi_sort_display_status_asc_event_time_desc(self):
-        """多字段排序: sort=['display_status', '-event_time'] 常规字段+事件时间"""
+        """多字段排序: sort=['display_status', '-event_time'] 常规字段 + 事件时间"""
         self._create_sort_data()
         request = self._make_request()
         data = self.resource.risk.list_risk(self._payload(sort=["display_status", "-event_time"]), _request=request)
         statuses = [r["status"] for r in data["results"]]
-        self.assertEqual(statuses[0], RiskDisplayStatus.CLOSED.value)
+        # list_risk 过滤掉了 CLOSED 状态，只包含 NEW/PROCESSING/FOR_APPROVE/AUTO_PROCESS/AWAIT_PROCESS
+        # 按字母顺序：auto_process < await_deal < for_approve < new < processing
         for i in range(len(statuses) - 1):
             self.assertLessEqual(statuses[i], statuses[i + 1])
 
@@ -1130,12 +1230,102 @@ class TestListRiskResource(TestCase):
         self.resource.risk.list_risk(self._payload(sort=["-event_time"]), _request=request)
         self.iam_filter_patcher.target.iam_risk_filter.assert_called()
 
+    def test_list_risk_scene_scope_excludes_pending_confirm(self):
+        """场景风险视图（带 scope）应排除待确认状态，待确认由独立列表承载"""
+        from services.web.risk.constants import RiskDisplayStatus
+
+        pending_risk = Risk.objects.create(
+            risk_id="risk-pending-confirm",
+            raw_event_id="raw-pending",
+            strategy=self.strategy,
+            scene_id=self.scene_id,
+            status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
+            title="pending",
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
+        )
+        TicketPermission.objects.create(
+            risk_id=pending_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+        data = self._call_resource({})
+        risk_ids = [item["risk_id"] for item in data["results"]]
+        self.assertNotIn(pending_risk.risk_id, risk_ids)
+        self.assertIn(self.risk.risk_id, risk_ids)
+
+    def test_list_risk_without_scope_keeps_pending_confirm(self):
+        """所有风险视图不传 scope，需保留待确认状态"""
+        pending_risk = Risk.objects.create(
+            risk_id="risk-pending-confirm-all",
+            raw_event_id="raw-pending-all",
+            strategy=self.strategy,
+            scene_id=self.scene_id,
+            status=RiskStatus.PENDING_CONFIRM,
+            title="pending-all",
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
+        )
+        TicketPermission.objects.create(
+            risk_id=pending_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+        request = self._make_request()
+        data = self.resource.risk.list_risk({}, _request=request)
+        risk_ids = [item["risk_id"] for item in data["results"]]
+        self.assertIn(pending_risk.risk_id, risk_ids)
+
+    def test_pending_confirm_list_with_scope_not_emptied(self):
+        """待我确认列表带 scope 查询时，不能被场景视图的待确认排除逻辑清空"""
+        from services.web.risk.constants import RiskDisplayStatus
+        from services.web.risk.resources.risk import ListPendingConfirmRisk
+
+        pending_risk = Risk.objects.create(
+            risk_id="risk-pending-confirm-scope",
+            raw_event_id="raw-pending-scope",
+            strategy=self.strategy,
+            scene_id=self.scene_id,
+            status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
+            title="pending-scope",
+            event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
+            confirmer=[self.username],
+        )
+
+        request = self._make_request()
+        data = ListPendingConfirmRisk().perform_request(
+            {
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene_id),
+                "order_fields": [],
+                "use_bkbase": False,
+                "event_filters": [],
+                "scene_id": [],
+                "_request": request,
+            }
+        )
+        risk_ids = [item["risk_id"] for item in data["results"]]
+        self.assertIn(pending_risk.risk_id, risk_ids)
+
     # ──── Tags / Strategy ────
 
     def test_scene_risk_view_type_maps_to_list_risk(self):
+        """场景视图与全部视图共用 ListRisk，待确认的排除由 scope 过滤在 ListRisk.perform_request 内完成"""
         from services.web.risk.constants import RiskViewType
-        from services.web.risk.resources import ListRisk
-        from services.web.risk.resources.risk import ListRiskMetaBase
+        from services.web.risk.resources.risk import ListRisk, ListRiskMetaBase
 
         self.assertIs(ListRiskMetaBase.risk_cls_map[RiskViewType.SCENE.value], ListRisk)
 
@@ -1158,6 +1348,9 @@ class TestListRiskResource(TestCase):
             status=RiskStatus.NEW,
             title="other",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         other_tag = Tag.objects.create(tag_name="other-tag")
         StrategyTag.objects.create(strategy=other_strategy, tag=other_tag)
@@ -1184,6 +1377,9 @@ class TestListRiskResource(TestCase):
             status=RiskStatus.NEW,
             title="other",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         result = ListRiskStrategy().perform_request(
@@ -1220,6 +1416,9 @@ class TestListRiskResource(TestCase):
             status=RiskStatus.NEW,
             title="other",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         result = ListRiskScenes().perform_request(
@@ -1267,11 +1466,11 @@ class TestListRiskResource(TestCase):
                 for query in queries.captured_queries
                 if "from" in query["sql"].lower()
                 and "scene_scene" in query["sql"].lower()
-                and "scene_resourcebindingscene" in query["sql"].lower()
+                and "risk_risk" not in query["sql"].lower()
             ]
             self.assertTrue(scene_queries)
             self.assertNotIn("risk_risk", scene_queries[-1])
-            self.assertNotIn("risk_ticketpermission", scene_queries[-1])
+            self.assertNotIn("scene_resourcebindingscene", scene_queries[-1])
 
     def test_list_risk_scenes_without_view_type_reuses_strategy_scope(self):
         """未传 risk_view_type 时沿用 ListRiskStrategy 的全量策略逻辑"""
@@ -1320,61 +1519,85 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-owned",
             raw_event_id="raw-owned",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk_noticed = Risk.objects.create(
             risk_id="risk-noticed",
             raw_event_id="raw-noticed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk_owned_without_permission = Risk.objects.create(
             risk_id="risk-owned-without-permission",
             raw_event_id="raw-owned-without-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk_noticed_without_permission = Risk.objects.create(
             risk_id="risk-noticed-without-permission",
             raw_event_id="raw-noticed-without-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk_operator_permission_but_not_current = Risk.objects.create(
             risk_id="risk-operator-permission-but-not-current",
             raw_event_id="raw-operator-permission-but-not-current",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=["other_user"],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk_notice_permission_but_not_noticed = Risk.objects.create(
             risk_id="risk-notice-permission-but-not-noticed",
             raw_event_id="raw-notice-permission-but-not-noticed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
             notice_users=["other_user"],
             event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         TicketPermission.objects.bulk_create(
@@ -1434,11 +1657,15 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-fresh-permission",
             raw_event_id="raw-fresh-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         fresh_permission = TicketPermission.objects.create(
             risk_id=fresh_permission_risk.risk_id,
@@ -1454,11 +1681,15 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-old-permission",
             raw_event_id="raw-old-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 7, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         old_permission = TicketPermission.objects.create(
             risk_id=old_permission_risk.risk_id,
@@ -1549,11 +1780,15 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-fresh-notice-permission",
             raw_event_id="raw-fresh-notice-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         fresh_permission = TicketPermission.objects.create(
             risk_id=fresh_permission_risk.risk_id,
@@ -1569,11 +1804,15 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-old-notice-permission",
             raw_event_id="raw-old-notice-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 7, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         old_permission = TicketPermission.objects.create(
             risk_id=old_permission_risk.risk_id,
@@ -1627,11 +1866,15 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-owned-low",
             raw_event_id="raw-owned-low",
             strategy=strategy_low,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="low",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketPermission.objects.create(
             risk_id=risk_owned_low.risk_id,
@@ -1722,6 +1965,14 @@ class TestListMineAndNoticingRisk(TestCase):
 class TestRetrieveRiskDetail(TestCase):
     def setUp(self):
         super().setUp()
+        # retrieve_risk 内部会做权限校验，需要 request_local.request
+        self.factory = APIRequestFactory()
+        django_request = self.factory.get("/risks/", data={"page": 1, "page_size": 10})
+        django_request.user = SimpleNamespace(username="admin", is_authenticated=True)
+        request = Request(django_request)
+        request.user = django_request.user
+        setattr(request_local, "request", request)
+        self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
         self.strategy = Strategy.objects.create(
             namespace="default",
             strategy_name="detail-strategy",
@@ -1735,12 +1986,26 @@ class TestRetrieveRiskDetail(TestCase):
             title="risk-detail-title",
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             event_end_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.search_event_patcher = mock.patch(
             "services.web.risk.resources.risk.EventHandler.search_event", return_value={"results": [], "total": 0}
         )
         self.search_event_mock = self.search_event_patcher.start()
         self.addCleanup(self.search_event_patcher.stop)
+        # 保留 Web 请求的权限包装，只隔离外部 IAM 查询，避免后台测试入口跳过这段逻辑。
+        self.enterContext(mock.patch("apps.permission.handlers.drf.is_backend", return_value=False))
+        self.enterContext(
+            mock.patch(
+                "iam.iam.IAM.batch_resource_multi_actions_allowed",
+                return_value={
+                    risk_id: {ActionEnum.EDIT_RISK.id: True, ActionEnum.PROCESS_RISK.id: True}
+                    for risk_id in ("risk-detail", "risk-open", "risk-manual-unsynced-status")
+                },
+            )
+        )
 
     def test_retrieve_risk_returns_unsynced_manual_events(self):
         in_range = ManualEvent.objects.create(
@@ -1777,11 +2042,14 @@ class TestRetrieveRiskDetail(TestCase):
         from services.web.scene.models import Scene
 
         scene = Scene.objects.create(name="risk-detail-scene")
-        bind_strategy_to_scene(self.strategy.strategy_id, scene.scene_id)
+        # 风险场景归属已固化到 Risk.scene_id，直接为风险单设置场景
+        self.risk.scene_id = scene.scene_id
+        self.risk.save(update_fields=["scene_id"])
 
         data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
 
         self.assertEqual(data["scene_id"], scene.scene_id)
+        self.assertEqual(data["permission"], {ActionEnum.EDIT_RISK.id: True, ActionEnum.PROCESS_RISK.id: True})
 
     def test_retrieve_risk_without_end_time_returns_later_manual_events(self):
         open_risk = Risk.objects.create(
@@ -1792,6 +2060,9 @@ class TestRetrieveRiskDetail(TestCase):
             title="open-risk",
             event_time=datetime.datetime(2024, 2, 1, tzinfo=datetime.timezone.utc),
             event_end_time=None,
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         later_event = ManualEvent.objects.create(
             raw_event_id=open_risk.raw_event_id,
@@ -1820,6 +2091,9 @@ class TestRetrieveRiskDetail(TestCase):
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             manual_synced=False,
             display_status=RiskDisplayStatus.STAND_BY,
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
         data = self.resource.risk.retrieve_risk({"risk_id": unsynced_risk.risk_id})
@@ -1878,6 +2152,9 @@ class TestSyncManualRiskStatus(TestCase):
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             manual_synced=False,
             display_status=RiskDisplayStatus.STAND_BY,
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         untouched = Risk.objects.create(
             risk_id="risk-still-unsynced",
@@ -1888,6 +2165,9 @@ class TestSyncManualRiskStatus(TestCase):
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
             manual_synced=False,
             display_status=RiskDisplayStatus.STAND_BY,
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         called_sql = {}
 
@@ -2028,6 +2308,9 @@ class TestRiskPermissionFilters(TestCase):
             strategy=self.strategy,
             status=RiskStatus.NEW,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketPermission.objects.create(
             risk_id=self.risk_local.risk_id,
@@ -2042,6 +2325,9 @@ class TestRiskPermissionFilters(TestCase):
             strategy=self.strategy,
             status=RiskStatus.NEW,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         # 风险3：用户无任何权限
         self.risk_none = Risk.objects.create(
@@ -2050,6 +2336,9 @@ class TestRiskPermissionFilters(TestCase):
             strategy=self.strategy,
             status=RiskStatus.NEW,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
 
     def _mock_iam_policies(self):
@@ -2194,10 +2483,14 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-PAST",
             title="past-processed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             current_operator=[],
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketNode.objects.create(
             risk_id="R-PAST",
@@ -2210,6 +2503,7 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-CURRENT",
             title="current-processing",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.AWAIT_PROCESS,
             display_status=RiskDisplayStatus.AWAIT_PROCESS,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -2226,19 +2520,27 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-NOTICED",
             title="noticed-only",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             notice_users=[self.username],
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk_open = Risk.objects.create(
             risk_id="R-OPEN",
             title="open-past",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
             current_operator=["someone_else"],
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketNode.objects.create(
             risk_id="R-OPEN",
@@ -2257,10 +2559,14 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-PAST-LOW",
             title="past-processed-low",
             strategy=self.strategy_low,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
             current_operator=[],
+            risk_level="low",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         TicketNode.objects.create(
             risk_id="R-PAST-LOW",

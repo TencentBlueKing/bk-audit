@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.14"
+  version: "0.0.23"
   # 版本标题
-  title: "0.0.14"
+  title: "0.0.23"
   # 版本描述
-  comment: "新增 ITSM 工单回调接口，用于场景自动化审批回调"
+  comment: "统计专用 MCP 工具集；程序统计与聚合 AUTO 可读性阈值及 TopN/稀疏桶语义保持；新增意图 Agent 专用 audit-meta（系统、操作、资源类型），复用二期字段及 JSON 子路径探索"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:
@@ -67,6 +67,41 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
+      - name: "audit-log-analysis"
+        description: "审计日志分析 MCP 工具集，提供字段探索、明细检索和聚合统计"
+        labels:
+          - "audit"
+          - "log-analysis"
+        resource_names:
+          - mcp_get_log_field_metadata
+          - mcp_search_logs
+          - mcp_aggregate_logs
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
+      - name: "audit-meta"
+        description: "审计系统接入元数据 MCP，按需查询系统、操作和资源类型"
+        labels:
+          - "audit"
+          - "meta"
+        resource_names:
+          - mcp_list_audit_systems
+          - mcp_get_audit_system_detail
+          - mcp_list_system_actions
+          - mcp_list_system_resource_types
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
   - name: "prod"
     description: "生产环境"
     # 环境的英文名，蓝鲸官方网关需提供，以支持国际化
@@ -108,6 +143,41 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
+      - name: "audit-log-analysis"
+        description: "审计日志分析 MCP 工具集，提供字段探索、明细检索和聚合统计"
+        labels:
+          - "audit"
+          - "log-analysis"
+        resource_names:
+          - mcp_get_log_field_metadata
+          - mcp_search_logs
+          - mcp_aggregate_logs
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
+      - name: "audit-meta"
+        description: "审计系统接入元数据 MCP，按需查询系统、操作和资源类型"
+        labels:
+          - "audit"
+          - "meta"
+        resource_names:
+          - mcp_list_audit_systems
+          - mcp_get_audit_system_detail
+          - mcp_list_system_actions
+          - mcp_list_system_resource_types
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+        # 个人 token 与 OAuth2 登录：工具均为用户态资源，后端按 JWT 用户做数据权限校验
+        oauth2_personal_client_enabled: true
+        oauth2_public_client_enabled: true
 
 # 为网关添加关联应用，关联应用可以通过网关 bk-apigateway 的接口操作网关数据；每个网关最多可有 10 个关联应用；
 # 用于命令 `add_related_apps`

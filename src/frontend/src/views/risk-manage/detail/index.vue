@@ -51,7 +51,15 @@
         v-if="route.name !== 'attentionManageDetail'"
         :current-stage-name="currentStageName"
         :default-expanded="shouldExpandHandleDock">
+        <confirm-risk-handle
+          v-if="showConfirmHandle"
+          :key="`confirm-handle-${riskData.risk_id}`"
+          :data="riskData"
+          :risk-id="riskData.risk_id"
+          @update="handleUpdate" />
         <risk-handle
+          v-else-if="!!riskData.risk_id"
+          :key="`risk-handle-${riskData.risk_id}`"
           :data="riskData"
           embedded
           :event-data-list="eventDataList"
@@ -113,7 +121,6 @@
   } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import RiskManageModel from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
@@ -125,6 +132,13 @@
   import {
     execCopy,
   } from '@utils/assist';
+
+  import ConfirmRiskHandle from '@views/confirm-manage/components/confirm-risk-handle/index.vue';
+  import { isPendingConfirmStatus } from '@views/risk-manage/constants';
+  import {
+    getRiskViewTypeByDetailRoute,
+    useRiskListStrategyList,
+  } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import BaseInfo from './components/base-info.vue';
   import EditEventReport from './components/event-report/edit-event-report.vue';
@@ -140,7 +154,7 @@
   const isShowEditEventReport = ref(false);
   const renderComRef = ref();
   const hasAutoOpenedReport = ref(false);
-  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   const stageNameMap: Record<string, string> = {
     await_deal: t('人工处理'),
@@ -150,6 +164,8 @@
     closed: t('风险单关闭'),
     new: t('风险单产生'),
     stand_by: t('风险创建中'),
+    pending_confirm: t('风险确认'),
+    await_confirm: t('风险确认'),
   };
 
   const comMap: Record<string, any> = {
@@ -169,12 +185,9 @@
   let syncedActiveTabRiskId: string | undefined;
 
   const {
-    loading: strategyLoading,
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+    strategyList,
+    strategyLoading,
+  } = useRiskListStrategyList(getRiskViewTypeByDetailRoute(String(route.name || '')));
 
   const {
     data: riskStatusCommon,
@@ -228,7 +241,15 @@
     manual: true,
   });
 
-  const currentStageName = computed(() => stageNameMap[riskData.value.status] || t('人工处理'));
+  const showConfirmHandle = computed(() => (
+    route.name === 'riskManageDetail' && isPendingConfirmStatus(riskData.value.status)
+  ));
+
+  const currentStageName = computed(() => (
+    showConfirmHandle.value
+      ? t('风险确认')
+      : (stageNameMap[riskData.value.status] || t('人工处理'))
+  ));
 
   // 列表「处理」入口带 tab=handleRisk，进入详情时默认展开工单处理
   const shouldExpandHandleDock = computed(() => route.query.tab === 'handleRisk');
@@ -295,11 +316,22 @@
     isShowEditEventReport.value = true;
   };
 
+  const pickStrategyText = (...values: Array<string | null | undefined>) => (
+    values.find(item => item !== undefined && item !== null && item !== '') || ''
+  );
+
   // 合并数据（包含事件信息配置）
-  const detailData = computed(() => ({
-    ...riskData.value,
-    ...strategyInfoData.value,
-  }));
+  const detailData = computed(() => {
+    const risk = riskData.value;
+    const strategyInfo = strategyInfoData.value;
+    return {
+      ...risk,
+      ...strategyInfo,
+      risk_level: pickStrategyText(strategyInfo?.risk_level, risk?.risk_level),
+      risk_hazard: pickStrategyText(strategyInfo?.risk_hazard, risk?.risk_hazard),
+      risk_guidance: pickStrategyText(strategyInfo?.risk_guidance, risk?.risk_guidance),
+    };
+  });
 
   // 无调查报告时仅挂载「关联事件列表」panel，并隐藏页签头（由内容区展示区块标题）
   const visiblePanels = computed(() => (
@@ -358,6 +390,7 @@
       attentionManageDetail: 'attentionManageList',
       processedManageDetail: 'processedManageList',
       sceneRiskManageDetail: 'sceneRiskManageList',
+      confirmManageDetail: 'confirmManageList',
     };
     router.push({
       name: listNameMap[route.name as keyof typeof listNameMap],
@@ -397,9 +430,7 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isPageActive.value) {
-        claimHeaderSlot();
-      }
+      refreshHeaderSlot();
     },
   );
 

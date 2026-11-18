@@ -29,7 +29,7 @@ class TestListRiskRequestSerializerSort(TestCase):
         self.assertTrue(s.is_valid(), s.errors)
         self.assertEqual(
             s.validated_data["order_fields"],
-            ["-strategy__risk_level", "-event_time"],
+            ["-risk_level", "-event_time"],
         )
 
     def test_no_sort_defaults_to_empty(self):
@@ -106,19 +106,19 @@ class TestBkBaseFieldResolverMultiSort(TestCase):
 
     def test_resolve_value_fields_risk_level_adds_event_time(self):
         resolver = BkBaseFieldResolver(
-            order_fields=["-strategy__risk_level"],
+            order_fields=["-risk_level"],
             event_filters=[],
             duplicate_field_map={},
         )
         fields = resolver.resolve_value_fields(["risk_id", "strategy_id"])
-        self.assertIn("strategy__risk_level", fields)
+        self.assertIn("risk_level", fields)
         self.assertIn("event_time", fields)
 
 
 class TestFinalSelectAssemblerMultiSort(TestCase):
     def test_build_order_expressions_multi_fields(self):
         resolver = BkBaseFieldResolver(
-            order_fields=["-strategy__risk_level", "-event_time", "-risk_id"],
+            order_fields=["-risk_level", "-event_time", "-risk_id"],
             event_filters=[],
             duplicate_field_map={},
         )

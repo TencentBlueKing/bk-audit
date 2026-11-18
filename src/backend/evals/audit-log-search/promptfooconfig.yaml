@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: '审计 AI 日志检索条件评估'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'AIDev-audit-log-search'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+
+defaultTest:
+  assert:
+    - type: latency
+      threshold: 30000
+
+evaluateOptions:
+  maxConcurrency: 2
+  repeat: 1
+
+tests:
+  - file://tests/core_filters.yaml
+  - file://tests/time_windows.yaml
+  - file://tests/edge_cases.yaml
+  - file://tests/complex_language.yaml
+  - file://tests/multi_values.yaml
+  - file://tests/scenario_combinations.yaml
+  - file://tests/safety.yaml

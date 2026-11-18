@@ -18,6 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
+import os
+import threading
+import time
+from contextvars import ContextVar
+from typing import Any, Callable
 
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
@@ -26,11 +31,10 @@ from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
 from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
-from api.bk_plugins_ai_agent.constants import (
-    AI_STREAM_PREVIEW_LIMIT,
-    AI_THINKING_PLACEHOLDERS,
-)
-from api.constants import AIAgentCode
+from api.bk_plugins_ai_agent.constants import AI_THINKING_PLACEHOLDERS
+from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
+from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
+from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
 from core.bk_api_base import AuditBkApiResource
 
@@ -40,15 +44,35 @@ class AIAgentBase(AuditBkApiResource, abc.ABC):
 
     与 AIAuditReport 共享相同的认证逻辑，但 URL 通过 get_agent_base_url 动态路由。
     不直接继承 AIAuditReport 以避免循环导入（bk_resource 按字母序扫描 api/ 目录）。
+
+    凭证解析（原有全局链保持不变，per-agent 为新增覆盖）：
+      - 带 agent_code 的资源（ChatCompletion）优先读 BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY，
+        为需要独立凭证的智能体（如上云版的日志检索）提供与 URL 路由同作用域的专属凭证；
+      - 未配置 per-agent 凭证时走原有全局链，行为与历史版本完全一致：
+        AI_AGENT_APP_CODE/_SECRET_KEY → AI_AUDIT_REPORT_APP_CODE/_SECRET_KEY → APP_CODE/SECRET_KEY。
     """
 
     module_name = "bk_plugins_ai_agent"
     base_url = ""
     platform_authorization = True
     tags = ["AIAgent"]
-    TIMEOUT = 300
+    # 单次智能体调用超时（秒）：默认 300 保持历史行为；环境可经 BKAPP_AI_AGENT_API_TIMEOUT_SECONDS
+    # 收紧（如 60）——NL 链路重试预算的 deadline 只能在两次调用之间检查，正在进行的
+    # 调用不可中断，单次超时是链路总时长的实际上限闸门（部署反馈：AIDev 慢时单次
+    # 调用可拖数分钟且无拦截）
+    TIMEOUT = getattr(settings, "AI_AGENT_API_TIMEOUT_SECONDS", 300)
     app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
     secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
+    # 资源为进程级单例，agent 状态按线程隔离（gevent 部署下为 greenlet 隔离）
+    _agent_ctx = threading.local()
+
+    @property
+    def _current_agent_code(self):
+        return getattr(self._agent_ctx, "agent_code", None)
+
+    @_current_agent_code.setter
+    def _current_agent_code(self, agent_code):
+        self._agent_ctx.agent_code = agent_code
 
     @staticmethod
     def _get_first_setting(setting_names: tuple[str, ...], default_setting_name: str) -> str:
@@ -58,12 +82,29 @@ class AIAgentBase(AuditBkApiResource, abc.ABC):
                 return setting_value
         return getattr(settings, default_setting_name)
 
+    def _get_agent_scoped_credential(self, is_app_code: bool) -> str:
+        """per-agent 应用凭证：BKAPP_AI_{AGENT}_APP_CODE / BKAPP_AI_{AGENT}_SECRET_KEY
+
+        与 get_agent_base_url 的 URL 路由作用域一致，仅影响当前 agent，不影响其它智能体。
+        """
+        agent_code = self._current_agent_code
+        if agent_code is None:
+            return ""
+        tmpl = AI_AGENT_APP_CODE_TMPL if is_app_code else AI_AGENT_SECRET_KEY_TMPL
+        return os.getenv(tmpl.format(agent_code.name), "").strip()
+
     @property
     def app_code(self) -> str:
+        agent_scoped_credential = self._get_agent_scoped_credential(is_app_code=True)
+        if agent_scoped_credential:
+            return agent_scoped_credential
         return self._get_first_setting(self.app_code_setting_names, "APP_CODE")
 
     @property
     def secret_key(self) -> str:
+        agent_scoped_credential = self._get_agent_scoped_credential(is_app_code=False)
+        if agent_scoped_credential:
+            return agent_scoped_credential
         return self._get_first_setting(self.secret_key_setting_names, "SECRET_KEY")
 
     def add_esb_info_before_request(self, params: dict) -> dict:
@@ -82,11 +123,30 @@ class AIAgentBase(AuditBkApiResource, abc.ABC):
 
 
 class ChatCompletion(AIAgentBase):
-    """通用 AI Agent 对话接口，通过 agent_code 参数路由到不同智能体"""
+    """通用 AI Agent 对话接口，通过 agent_code 参数路由到不同智能体。
+
+    传入 on_event 时逐条交付 JSON 对象，消费到 EOF 后返回 None；不解释 AG-UI 业务语义。
+    不传回调时沿用最终正文解析，兼容已有 Agent 调用方。
+
+    保留 Resource 默认的请求/响应采集，并额外记录路由、耗时和流式事件摘要；
+    异常正文不做隐藏，便于通过生产日志分析 Agent 失败根因。
+    """
 
     name = gettext_lazy("通用智能体对话")
     method = "POST"
     action = "/bk_plugin/openapi/agent/chat_completion/"
+    # Resource 是进程级单例；回调必须按当前请求隔离，不写到实例属性或上游请求中。
+    _on_event_context: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar("chat_on_event", default=None)
+    agent_code: AIAgentCode | None = None
+    enable_agent_rate_limit = True
+
+    def _resolve_agent_code(self, validated_request_data: dict) -> AIAgentCode:
+        """解析通用参数或固定 Client 声明的 Agent Code。"""
+
+        agent_code = self.agent_code or validated_request_data.get("agent_code")
+        if not agent_code:
+            raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
+        return AIAgentCode(agent_code)
 
     def build_url(self, validated_request_data):
         agent_code = validated_request_data.pop("agent_code", None)
@@ -94,15 +154,52 @@ class ChatCompletion(AIAgentBase):
             raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
         if isinstance(agent_code, str):
             agent_code = AIAgentCode(agent_code)
+        # 记录本次请求的 agent，供 per-agent 凭证解析（build_url 先于 build_header 执行）
+        self._current_agent_code = agent_code
         base_url = get_agent_base_url(agent_code)
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
 
-    def set_headers(self, headers, validated_request_data):
-        """追加 AI Agent 专用 Header
+    def perform_request(self, validated_request_data):
+        """绑定流式回调并在取得 Agent 全局配额后发起 HTTP 请求。"""
 
-        设计理由：X-BKAIDEV-USER 是 AI Agent 网关认证必需 Header，
-        通过 set_headers 追加而不影响基类的多租户 Header 注入。
-        """
+        request_data = dict(validated_request_data)
+        on_event = request_data.pop("on_event", None)
+        # 单次开关只允许历史固定 Client 接入限流，不能关闭通用 Client 的默认限流。
+        request_rate_limit_opt_in = request_data.pop("_enable_agent_rate_limit", False)
+        enable_agent_rate_limit = self.enable_agent_rate_limit or request_rate_limit_opt_in
+        callback_token = self._on_event_context.set(on_event)
+        try:
+            agent_code = self._resolve_agent_code(request_data)
+            self._current_agent_code = agent_code
+            if enable_agent_rate_limit:
+                agent_rate_limiter.acquire(agent_code)
+            request_started_at = time.monotonic()
+            try:
+                result = super().perform_request(request_data)
+            except Exception as error:
+                logger.warning(
+                    "AI agent downstream request failed",
+                    extra={
+                        "agent_code": agent_code.value,
+                        "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                        "error_type": error.__class__.__name__,
+                    },
+                )
+                raise
+            logger.info(
+                "AI agent downstream request completed",
+                extra={
+                    "agent_code": agent_code.value,
+                    "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                },
+            )
+            return result
+        finally:
+            self._on_event_context.reset(callback_token)
+            self._current_agent_code = None
+
+    def set_headers(self, headers, validated_request_data):
+        """补充 Agent 用户头，保留基类已注入的租户与认证信息。"""
         user = validated_request_data.pop("user", None)
         if user:
             headers["X-BKAIDEV-USER"] = user
@@ -113,11 +210,13 @@ class ChatCompletion(AIAgentBase):
         if isinstance(request_data, dict):
             execute_kwargs = request_data.get("execute_kwargs") or {}
             logger.info(
-                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, chat_history_count=%s",
-                request_data.get("agent_code"),
+                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, "
+                "chat_history_count=%s, thread_id=%s",
+                self._current_agent_code,
                 bool(execute_kwargs.get("stream")),
                 len(request_data.get("input") or ""),
                 len(request_data.get("chat_history") or []),
+                execute_kwargs.get("thread_id"),
             )
             if execute_kwargs.get("stream"):
                 kwargs["stream"] = True
@@ -145,10 +244,6 @@ class ChatCompletion(AIAgentBase):
             return bool(execute_kwargs.get("stream"))
         except Exception:
             return False
-
-    @staticmethod
-    def _content_preview(content: str, limit: int = AI_STREAM_PREVIEW_LIMIT) -> str:
-        return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
 
     @staticmethod
     def _clean_final_content(content: str) -> str:
@@ -257,7 +352,7 @@ class ChatCompletion(AIAgentBase):
         logger.info(
             "AI stream parsed: status_code=%s, line_count=%s, data_line_count=%s, invalid_json_count=%s, "
             "event_counts=%s, terminal_seen=%s, stream_done=%s, event_done=%s, ag_ui_finished=%s, "
-            "text_size=%s, done_size=%s, final_size=%s, final_source=%s, preview_limit=%s",
+            "text_size=%s, done_size=%s, final_size=%s, final_source=%s",
             getattr(response, "status_code", None),
             line_count,
             data_line_count,
@@ -271,15 +366,7 @@ class ChatCompletion(AIAgentBase):
             len(done_content or ""),
             len(final_content),
             final_source,
-            AI_STREAM_PREVIEW_LIMIT,
         )
-        for part, content in (("text", text_content), ("done", done_content or ""), ("final", final_content)):
-            logger.info(
-                "AI stream content preview: part=%s, size=%s, preview=%s",
-                part,
-                len(content),
-                self._content_preview(content),
-            )
         if not terminal_seen:
             error_message = (
                 "智能体流式响应未完整结束，请稍后重试；"
@@ -331,15 +418,14 @@ class ChatCompletion(AIAgentBase):
         return final_content
 
     def parse_response(self, response):
+        on_event = self._on_event_context.get()
+        if on_event is not None:
+            content_type = (response.headers.get("Content-Type") or response.headers.get("content-type") or "").lower()
+            if content_type and "text/event-stream" not in content_type:
+                return self._reject_non_stream_callback_response(response)
+            return self._relay_stream_response(response, on_event)
         is_stream_response = self._is_stream_response(response)
-        logger.info(
-            "AI agent response received: status_code=%s, content_type=%s, stream_response=%s",
-            getattr(response, "status_code", None),
-            (response.headers.get("Content-Type") or response.headers.get("content-type") or "")
-            if getattr(response, "headers", None)
-            else "",
-            is_stream_response,
-        )
+        self._log_response_received(response, is_stream_response=is_stream_response)
         if is_stream_response:
             try:
                 response.raise_for_status()
@@ -354,6 +440,11 @@ class ChatCompletion(AIAgentBase):
                         code=result_json.get("code"),
                         message=result_json.get("message"),
                     )
+                logger.error(
+                    "AI agent stream HTTP error: status_code=%s, body=%s",
+                    response.status_code,
+                    content,
+                )
                 raise APIRequestError(
                     module_name=self.module_name,
                     url=self.action,
@@ -375,3 +466,72 @@ class ChatCompletion(AIAgentBase):
                     if isinstance(delta, dict) and "content" in delta:
                         return delta["content"]
         return data
+
+    def _reject_non_stream_callback_response(self, response) -> None:
+        """保留 Agent 的标准错误；成功的非 SSE 响应按传输协议错误处理。"""
+
+        try:
+            self._log_response_received(response, is_stream_response=False)
+            super().parse_response(response)
+            raise AGUIStreamProtocolError("Agent 未按约定返回 SSE 事件流")
+        finally:
+            response.close()
+
+    @staticmethod
+    def _log_response_received(response, *, is_stream_response: bool) -> None:
+        """记录响应传输元数据。"""
+
+        logger.info(
+            "AI agent response received: status_code=%s, content_type=%s, stream_response=%s",
+            getattr(response, "status_code", None),
+            (response.headers.get("Content-Type") or response.headers.get("content-type") or "")
+            if getattr(response, "headers", None)
+            else "",
+            is_stream_response,
+        )
+
+    def _relay_stream_response(self, response, on_event: Callable[[dict[str, Any]], None]) -> None:
+        """拆除 SSE 外壳后交付 JSON 对象；业务方自行归档并提取最终结果。
+
+        Agent 约定每条 data 行为一个完整 JSON 对象，不在此校验事件类型或生命周期。
+        不另存事件副本，也不在 RUN_FINISHED 提前退出，以免丢弃上游尾部事件。
+        """
+        event_count = 0
+        try:
+            self._log_response_received(response, is_stream_response=True)
+            try:
+                response.raise_for_status()
+            except HTTPError:
+                logger.error(
+                    "AI agent relayed stream HTTP error: status_code=%s, body=%s",
+                    getattr(response, "status_code", None),
+                    getattr(response, "content", b""),
+                )
+                raise
+            # 两种传输形态均复用库默认块大小。接受非 chunked 小事件等待缓冲或 EOF，
+            # 避免逐字节读取造成长行反复拼接、扫描；EOF 前必须消费完整响应。
+            for raw_line in response.iter_lines(decode_unicode=False):
+                line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                if not line or not line.startswith("data:"):
+                    continue
+                try:
+                    event = json.loads(line[len("data:") :])
+                except (TypeError, json.JSONDecodeError) as error:
+                    raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象") from error
+                if not isinstance(event, dict):
+                    raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象")
+                event_type = event.get("type") or event.get("event")
+                if event_type in {"RUN_ERROR", "error"}:
+                    error_message = event.get("message") or event.get("error") or event.get("content") or ""
+                    logger.error(
+                        "AI agent relayed stream error event: type=%s, code=%s, message=%s",
+                        event_type,
+                        event.get("code"),
+                        error_message,
+                    )
+                on_event(event)
+                event_count += 1
+            logger.info("AI agent stream relayed: event_count=%s", event_count)
+        finally:
+            # HTTP、协议或业务回调失败均需释放连接；请求上下文由 perform_request 清理。
+            response.close()

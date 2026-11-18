@@ -18,7 +18,15 @@
   <div
     ref="rootRef"
     class="audit-render-list">
-    <bk-loading :loading="isLoading">
+    <table-skeleton
+      v-if="showSkeleton"
+      :columns="skeletonColumns"
+      :row-count="skeletonRowCount"
+      row-size="medium"
+      :style="skeletonBoxStyle" />
+    <bk-loading
+      v-show="!showSkeleton"
+      :loading="useSkeleton ? false : isLoading">
       <bk-table
         :key="tableRenderKey"
         ref="tableRef"
@@ -29,7 +37,7 @@
         :data="listData.results"
         :height="tableHeight"
         :max-height="tableMaxHeight"
-        :min-height="300"
+        :min-height="isLayoutMaxHeight ? 0 : 300"
         :pagination="pagination"
         remote-pagination
         :scrollbar="false"
@@ -96,6 +104,7 @@
   import type { Settings } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import {
+    computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -116,6 +125,8 @@
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
+  import TableSkeleton from '@components/table-skeleton/index.vue';
+
   import { getSceneContextQuery, getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
@@ -131,7 +142,15 @@
     isNeedSceneParams?: boolean,
     // 是否需要场景ID
     isNeedSceneId?: boolean,
-    sceneIdKey?: string
+    sceneIdKey?: string,
+    /** 用表格骨架替代 bk-loading，默认关闭 */
+    useSkeleton?: boolean,
+    /** 表格最大高度（含表头和分页）。传入后按内容收缩，超出部分只在表体内滚动 */
+    layoutHeight?: number,
+    /** 骨架最短展示毫秒。请求快于淡入时避免停在透明帧，默认不额外等待 */
+    skeletonMinDuration?: number,
+    /** 是否把分页和筛选写回路由。嵌套在侧滑里的表格应关闭，避免污染外层列表 */
+    syncUrl?: boolean,
   }
 
   interface ISettings{
@@ -168,6 +187,10 @@
     isNeedSceneParams: false,
     isNeedSceneId: false,
     sceneIdKey: 'scope_id',
+    useSkeleton: false,
+    skeletonMinDuration: 0,
+    layoutHeight: undefined,
+    syncUrl: true,
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -176,8 +199,10 @@
   const slot = useSlots();
   const tableRef = ref();
   const rootRef = ref();
-  // 切换场景重置排序时递增，强制表头按未排序态重新初始化
+  // 切换场景清排序，或列变少后重挂表格，让列宽按当前容器重新计算
   const tableRenderKey = ref(0);
+  const countCheckedColumns = (setting?: { checked?: string[] } | null) => setting?.checked?.length ?? 0;
+  const visibleColumnCount = ref(countCheckedColumns(props.settings as { checked?: string[] } | undefined));
   const { t } = useI18n();
   const pagination = reactive<IPagination>({
     count: 0,
@@ -187,7 +212,8 @@
     align: 'right',
     layout: ['total', 'limit', 'list'],
   });
-  const tableMaxHeight = ref(0);
+  const isLayoutMaxHeight = computed(() => typeof props.layoutHeight === 'number' && props.layoutHeight > 0);
+  const tableMaxHeight = ref<string | number>(isLayoutMaxHeight.value ? 'auto' : 0);
   const tableHeight = ref<string | number>('auto');
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
@@ -195,6 +221,108 @@
   let isReady = false;
   let latestFetchSeq = 0;
   const isLoading = ref(false);
+  const showSkeleton = ref(props.useSkeleton);
+  let skeletonShownAt = props.useSkeleton ? Date.now() : 0;
+  let skeletonHideToken = 0;
+  // 与 bk-vision 一致：无数据时 3 行，有数据后记住上次条数
+  const lastSkeletonRowCount = ref(3);
+  const waitForPaint = () => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  const readColumnField = (column: { field?: string | (() => string) }) => {
+    if (typeof column.field === 'function') {
+      return column.field() || '';
+    }
+    return column.field || '';
+  };
+  const readColumnSize = (value: unknown) => {
+    const num = Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  };
+  const skeletonColumns = computed(() => {
+    const source = (props.columns || []) as Array<{
+      field?: string | (() => string);
+      width?: number | string;
+      minWidth?: number | string;
+    }>;
+    const checked = (props.settings as { checked?: string[] } | undefined)?.checked;
+    const checkedSet = checked?.length ? new Set(checked) : null;
+    const visible = source.filter((column) => {
+      const field = readColumnField(column);
+      if (!field) {
+        return true;
+      }
+      if (!checkedSet) {
+        return true;
+      }
+      return checkedSet.has(field);
+    });
+    const columns = visible.map((column) => {
+      const width = readColumnSize(column.width);
+      const minWidth = readColumnSize(column.minWidth);
+      if (width > 0) {
+        return { width, grow: false };
+      }
+      return { width: minWidth || 160, grow: true };
+    });
+    if (props.settings) {
+      columns.push({ width: 42, grow: false });
+    }
+    return columns.length ? columns : [{ width: 160, grow: true }];
+  });
+  const skeletonRowCount = computed(() => Math.max(lastSkeletonRowCount.value, 1));
+  const skeletonBoxStyle = computed(() => {
+    if (isLayoutMaxHeight.value) {
+      return {
+        maxHeight: `${props.layoutHeight}px`,
+        overflow: 'hidden',
+      };
+    }
+    if (typeof tableHeight.value !== 'number') {
+      return {
+        flex: '1 1 auto',
+        height: '100%',
+        minHeight: '0',
+        overflow: 'hidden',
+      };
+    }
+    return {
+      height: `${tableHeight.value}px`,
+      overflow: 'hidden',
+    };
+  });
+  watch(isLoading, async (loading) => {
+    if (!props.useSkeleton) {
+      showSkeleton.value = false;
+      return;
+    }
+    if (loading) {
+      skeletonHideToken += 1;
+      if (!showSkeleton.value) {
+        skeletonShownAt = Date.now();
+      }
+      showSkeleton.value = true;
+      return;
+    }
+    if (!showSkeleton.value) {
+      return;
+    }
+    const token = skeletonHideToken;
+    const remain = Math.max(0, props.skeletonMinDuration - (Date.now() - skeletonShownAt));
+    if (remain > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, remain);
+      });
+    }
+    await nextTick();
+    await waitForPaint();
+    if (token !== skeletonHideToken || isLoading.value) {
+      return;
+    }
+    showSkeleton.value = false;
+  });
   // 新增：用户是否手动选择了分页大小的标志
   const isUserSelectedPageSize = ref(false);
   /** page 非法（NaN/≤0）时回退为 1，避免添加/编辑返回后出现 page=NaN */
@@ -270,6 +398,9 @@
 
   watch(listData, (listData) => {
     pagination.count = listData.total;
+    if (listData.results?.length) {
+      lastSkeletonRowCount.value = listData.results.length;
+    }
   });
 
   const fetchListData = () => {
@@ -287,11 +418,11 @@
             delete cleanedParams.order_field;
             delete cleanedParams.order_type;
           }
-          delete cleanedParams.scene_id;
           delete cleanedParams.scope_id;
           delete cleanedParams.scope_type;
-          if (props.sceneIdKey) {
-            delete cleanedParams[props.sceneIdKey];
+          if (isNeedSceneId) {
+            delete cleanedParams[props.sceneIdKey || 'scene_id'];
+            delete cleanedParams.scene_id;
           }
           const pageSize = Math.max(pagination.limit, 10);
           // 以 getSceneSystemParams 为准（含内存选中 + 地址栏），不用可能滞后的 route.query
@@ -314,9 +445,12 @@
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
           run(params).finally(() => {
-            isLoading.value = false;
+            // 被新请求取消的旧请求不能关掉骨架，否则会先闪出空态
+            if (fetchSeq === latestFetchSeq) {
+              isLoading.value = false;
+            }
           });
-          if (fetchSeq === latestFetchSeq) {
+          if (props.syncUrl && fetchSeq === latestFetchSeq) {
             replaceSearchParams({
               ...params,
               ...sceneContext,
@@ -336,21 +470,21 @@
       sort,
     } = getSearchParams();
 
-    // 从详情/编辑返回：优先恢复 sessionStorage 中记录的分页
-    if (recordParams?.page_size) {
+    // 只恢复页码。page_size 可能是上次请求写进 URL/缓存的默认 10，
+    // 不能当成用户手选，否则会跳过按可视高度自适应。
+    if (recordParams?.page) {
       pagination.current = normalizePage(recordParams.page);
-      pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
-      pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
-      isUserSelectedPageSize.value = true;
     } else {
       const pageValue = isUnload.value ? 1 : page;
-      if (pageValue && pageSize) {
+      if (pageValue) {
         pagination.current = normalizePage(pageValue);
-        pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
-        pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
-      } else {
-        isUserSelectedPageSize.value = false;
       }
+    }
+    if (pageSize) {
+      pagination.limitList = [...new Set([
+        ...pagination.limitList,
+        Math.max(Number(pageSize) || 10, 10),
+      ])].sort((a, b) => a - b);
     }
     // 优先使用新的 sort 数组格式，向后兼容旧的 order_field + order_type
     if (sort) {
@@ -370,11 +504,18 @@
       };
     }
     // 注意：默认排序应该在具体页面组件中设置，而不是在通用组件中
-    // 从URL参数初始化时：有 page_size 则已在上方标记为用户分页状态
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
+    const nextCount = countCheckedColumns(setting);
+    const shouldRemount = visibleColumnCount.value > 0 && nextCount < visibleColumnCount.value;
+    visibleColumnCount.value = nextCount;
     emits('onSettingChange', setting);
+    // 列变少时 bk-table 只改 col 宽度，滚动容器仍保持变少前的宽度，要滚一下才重排。
+    // 设置面板在抛出事件前已关闭，这里重挂表格，按当前容器宽度重新布局。
+    if (shouldRemount) {
+      tableRenderKey.value += 1;
+    }
   };
   // 清除表头排序箭头高亮（bk-table 内部 sortType 不会随 column.sort 变更自动重置）
   const clearSortActiveUI = () => {
@@ -461,10 +602,6 @@
     if (isUserSelectedPageSize.value) {
       return;
     }
-    const { page_size: urlPageSize } = getSearchParams();
-    if (urlPageSize || getRecordPageParams()?.page_size) {
-      return;
-    }
     const dimensions = calculateTableDimensions();
     const nextLimit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
     pagination.limit = nextLimit;
@@ -496,14 +633,52 @@
     window.removeEventListener('resize', handleResize);
   });
 
+  const resolveTableBoxHeight = (dimensions: {
+    tableHeaderHeight: number;
+    paginationHeight: number;
+    tableRowHeight: number;
+    rowNum: number;
+    fixedHeight?: number;
+  }) => {
+    if (dimensions.fixedHeight) {
+      return dimensions.fixedHeight;
+    }
+    const nextHeight = dimensions.tableHeaderHeight
+      + dimensions.rowNum * dimensions.tableRowHeight
+      + dimensions.paginationHeight
+      + 8;
+    return nextHeight < 300 ? 300 : nextHeight;
+  };
+
   // 计算表格尺寸信息
   const calculateTableDimensions = () => {
-    const { top } = getOffset(rootRef.value);
-    const windowInnerHeight = window.innerHeight;
     const tableHeaderHeight = 42;
     const paginationHeight = 60;
-    const pageOffsetBottom = 20;
     const tableRowHeight = 42;
+    const layoutHeight = props.layoutHeight;
+    // 侧滑等容器传入总高度时，按容器计算，避免沿用窗口偏移把分页顶出可视区
+    if (typeof layoutHeight === 'number' && layoutHeight > 0) {
+      const tableRowTotalHeight = layoutHeight - tableHeaderHeight - paginationHeight - 8;
+      const rowNum = Math.max(1, Math.floor(tableRowTotalHeight / tableRowHeight));
+      return {
+        tableHeaderHeight,
+        paginationHeight,
+        tableRowHeight,
+        rowNum,
+        fixedHeight: layoutHeight,
+      };
+    }
+    if (!rootRef.value) {
+      return {
+        tableHeaderHeight,
+        paginationHeight,
+        tableRowHeight,
+        rowNum: 10,
+      };
+    }
+    const { top } = getOffset(rootRef.value);
+    const windowInnerHeight = window.innerHeight;
+    const pageOffsetBottom = 20;
 
     const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
 
@@ -516,17 +691,21 @@
     };
   };
 
+  const applyTableBoxHeight = (nextHeight: number) => {
+    // 侧滑的最大高度由外层加在表体上，这里保持 auto，分页才能紧跟内容
+    if (isLayoutMaxHeight.value) {
+      tableMaxHeight.value = 'auto';
+      tableHeight.value = 'auto';
+      return;
+    }
+    tableMaxHeight.value = nextHeight;
+    tableHeight.value = nextHeight;
+  };
+
   // 初始化表格高度
   const initTableHeight = () => {
     nextTick(() => {
-      const dimensions = calculateTableDimensions();
-      const nextHeight = dimensions.tableHeaderHeight
-        + dimensions.rowNum * dimensions.tableRowHeight
-        + dimensions.paginationHeight
-        + 8;
-      // eslint-disable-next-line max-len
-      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
-      tableHeight.value = tableMaxHeight.value;
+      applyTableBoxHeight(resolveTableBoxHeight(calculateTableDimensions()));
     });
   };
 
@@ -539,17 +718,11 @@
         ...pagination.limitList,
         nextLimit,
       ]);
+      const nextHeight = resolveTableBoxHeight(dimensions);
 
       // 如果用户已经手动选择了分页大小，则不再自动调整分页大小
       if (isUserSelectedPageSize.value) {
-        // 只更新表格高度，不修改分页大小
-        const nextHeight = dimensions.tableHeaderHeight
-          + dimensions.rowNum * dimensions.tableRowHeight
-          + dimensions.paginationHeight
-          + 8;
-        // eslint-disable-next-line max-len
-        tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
-        tableHeight.value = tableMaxHeight.value;
+        applyTableBoxHeight(nextHeight);
         return;
       }
 
@@ -557,13 +730,7 @@
       if (pagination.limit > 10) {
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
       }
-      const nextHeight = dimensions.tableHeaderHeight
-        + dimensions.rowNum * dimensions.tableRowHeight
-        + dimensions.paginationHeight
-        + 8;
-      // eslint-disable-next-line max-len
-      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
-      tableHeight.value = tableMaxHeight.value;
+      applyTableBoxHeight(nextHeight);
 
       if (isLimitChanged && isReady) {
         pagination.current = 1;
@@ -573,6 +740,13 @@
       }
     });
   };
+
+  watch(() => props.layoutHeight, (height) => {
+    if (typeof height !== 'number' || height <= 0) {
+      return;
+    }
+    calcTableHeight();
+  });
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>) {
@@ -629,13 +803,10 @@
       }
       if (recordParams) {
         pagination.current = normalizePage(recordParams.page);
-        pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
-        // 从详情/编辑返回时恢复离开前的分页大小，避免被 calcTableHeight 重置为 10
-        isUserSelectedPageSize.value = true;
       } else {
-        // 重置用户选择标志，允许重新计算分页大小
         isUserSelectedPageSize.value = false;
       }
+      applyHeightBasedPageSize();
       isLoading.value = true;
       fetchListData();
     },
@@ -662,6 +833,7 @@
       pagination.current = 1;
       isUserSelectedPageSize.value = false;
       removePageParams();
+      applyHeightBasedPageSize();
       // 恢复列配置，并强制表格重挂载以清除表头排序/筛选高亮
       (props.columns || []).forEach((col: any) => {
         if (col?.sort) {
@@ -720,6 +892,10 @@
 </script>
 
 <style lang="postcss" scoped>
+  .audit-render-list {
+    position: relative;
+  }
+
   .render-list {
     :deep(.new-row) {
       td {

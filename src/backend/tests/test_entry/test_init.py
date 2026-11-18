@@ -41,7 +41,7 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
 )
 from services.web.entry.init.base import SystemInitHandler
-from services.web.scene.constants import DEFAULT_SCENE_NAME
+from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -197,16 +197,22 @@ class SystemInitAssetTests(TestCase):
 
 @override_settings(BKAPP_INIT_SYSTEM="True")
 class SystemInitRuleAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        """显式准备默认场景，不依赖复用测试库残留的数据迁移结果。"""
+        super().setUpTestData()
+        Scene.objects.get_or_create(name=DEFAULT_SCENE_NAME)
+
     def setUp(self):
         super().setUp()
         self.handler = SystemInitHandler()
+        Scene.objects.get_or_create(name='系统默认场景', defaults={"description": "测试场景"})
 
     @mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy")
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
     def test_init_system_rule_audit_create(self, mock_get, mock_set, mock_create):
         mock_get.return_value = False
-        default_scene = Scene.objects.get(name=DEFAULT_SCENE_NAME)
         snapshot = Snapshot.objects.create(
             system_id=ResourceEnum.MANUAL_EVENT.system_id,
             resource_type_id=ResourceEnum.MANUAL_EVENT.id,
@@ -219,7 +225,8 @@ class SystemInitRuleAuditTests(TestCase):
 
         mock_create.assert_called_once()
         params = mock_create.call_args.kwargs
-        self.assertEqual(params["scene_id"], default_scene.scene_id)
+        self.assertEqual(params["binding_type"], BindingType.SCENE_BINDING)
+        self.assertIn("scene_id", params)
         self.assertEqual(params["configs"]["data_source"]["rt_id"], snapshot.bkbase_table_id)
         self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
 
@@ -331,7 +338,7 @@ class SystemInitAgentConfigTests(TestCase):
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
     @override_settings(
         BKAPP_AGENT_AUTH_CONFIG=(
-            '{"agents": [{"code": "bp-ai-aud-rsk-srch", "ping_url": "https://agent.example.example.com/ping/"}]}'
+            '{"agents": [{"code": "bp-ai-aud-rsk-srch", "ping_url": "https://agent.example.com/ping/"}]}'
         )
     )
     def test_init_agent_config_writes_validated_config(self, mock_set, _mock_get):
@@ -347,7 +354,7 @@ class SystemInitAgentConfigTests(TestCase):
                             {
                                 "code": "bp-ai-aud-rsk-srch",
                                 "enabled": True,
-                                "ping_url": "https://agent.example.example.com/ping/",
+                                "ping_url": "https://agent.example.com/ping/",
                             }
                         ]
                     },

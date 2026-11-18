@@ -37,6 +37,8 @@ import ruleEn from '@views/rule-manage/language/en.js';
 import ruleZh from '@views/rule-manage/language/zh.js';
 import sceneConfigEn from '@views/scene-config/language/en.js';
 import sceneConfigZh from '@views/scene-config/language/zh.js';
+import secChatEn from '@views/sec-chat/language/en.js';
+import secChatZh from '@views/sec-chat/language/zh.js';
 import storageEn from '@views/storage-manage/language/en.js';
 import storageZh from '@views/storage-manage/language/zh.js';
 import strategyEn from '@views/strategy-manage/language/en.js';
@@ -77,6 +79,7 @@ const i18n = createI18n({
       ...sceneConfigZh.landing,
       ...sceneConfigZh.userLanding,
       ...newSystemManageZh.systemAccess,
+      ...secChatZh.secChat,
       ...allZh,
     },
     'en-US': {
@@ -97,6 +100,7 @@ const i18n = createI18n({
       ...sceneConfigEn.landing,
       ...sceneConfigEn.userLanding,
       ...newSystemManageEn.systemAccess,
+      ...secChatEn.secChat,
       ...allEn,
     },
   },

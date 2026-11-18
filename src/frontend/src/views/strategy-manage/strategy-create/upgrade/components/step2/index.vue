@@ -83,6 +83,8 @@
 
   import { changeConfirm } from '@utils/assist';
 
+  import { getStrategyRouteNames } from '../../../../utils/strategy-routes';
+
   interface Emits{
     (e:'change', step: number): void,
   }
@@ -92,6 +94,7 @@
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { messageSuccess } = useMessage();
 
   const formRef = ref();
@@ -235,7 +238,7 @@
       window.changeConfirm = false;
       messageSuccess('升级成功');
       router.push({
-        name: 'strategyList',
+        name: strategyRoutes.list,
       });
     },
   });
@@ -307,7 +310,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyEdit',
+      name: strategyRoutes.edit,
       params: {
         id: route.params.strategyId,
       },

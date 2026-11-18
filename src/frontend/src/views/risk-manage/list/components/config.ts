@@ -122,6 +122,18 @@ export default {
     type: 'string',
     required: false,
   },
+  scene_id: {
+    label: '所属场景',
+    type: 'select',
+    required: false,
+    service: RiskManageService.fetchRiskScenes,
+    defaultParams: {
+      risk_view_type: 'all',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    },
+    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
+  },
   risk_level: {
     label: '风险等级',
     type: 'select',
@@ -156,16 +168,24 @@ export default {
       },
     ]),
   },
-  scene_id: {
-    label: '所属场景',
+  bksec_push_status: {
+    label: 'BKSEC工单',
     type: 'select',
     required: false,
-    service: RiskManageService.fetchRiskScenes,
-    defaultParams: {
-      risk_view_type: 'all',
-      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
-      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    },
-    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
+    multiple: false,
+    service: () => Promise.resolve([
+      {
+        id: 'not_pushed',
+        name: '未推送',
+      },
+      {
+        id: 'success',
+        name: '推送成功',
+      },
+      {
+        id: 'failed',
+        name: '推送失败',
+      },
+    ]),
   },
 } as Record<string, IFieldConfig>;

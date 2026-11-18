@@ -45,10 +45,10 @@
             {{ data.strategy_name || '--' }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_hazard'">
-            {{ data.risk_hazard || '--' }}
+            <span class="multiline-text">{{ data.risk_hazard || '--' }}</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_guidance'">
-            {{ data.risk_guidance || '--' }}
+            <span class="multiline-text">{{ data.risk_guidance || '--' }}</span>
           </template>
           <template v-else>
             {{ t('以实际内容为准') }}
@@ -148,6 +148,11 @@
   .render-info-item {
     min-width: 50%;
     align-items: flex-start;
+  }
+
+  .multiline-text {
+    white-space: pre-line;
+    word-break: break-word;
   }
 }
 </style>

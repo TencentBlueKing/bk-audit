@@ -12,6 +12,7 @@ bkapi-component-open>=1.1.0
 bkstorages==2.0.0
 blueapps[opentelemetry]==4.16rc2
 celery==5.5.3
+certifi==2026.10.19
 client-throttler==2.1.0
 django~=4.2.26
 django-celery-beat==2.7.0
@@ -30,6 +31,8 @@ django-treebeard==4.7.1
 djangorestframework~=3.15.2
 drf-pydantic==2.7.1
 drf-spectacular[sidecar]>=0.29.0
+# Swagger UI 5.33+ 虚拟滚动会影响全页搜索和复制，固定到内置 5.30.3 的版本。
+drf-spectacular-sidecar==2025.12.1
 drf-yasg==1.21.9
 elasticsearch==7.17.9
 flower==2.0.1
@@ -39,6 +42,7 @@ ipython==8.10.0
 jinja2>=3.1.5
 JSON-log-formatter==0.4.0
 kafka-python==2.0.2
+markdownify>=1.2.2
 mistune>=3.2.0
 nh3>=0.3.0
 numpy==1.24.2
@@ -74,6 +78,7 @@ sqlglot==26.26.0
 stackprinter==0.2.12
 supervisor~=4.3.0
 svglib<1.6.0
+ui-stream[redis]==0.1.0
 whitenoise==5.2.0
 xhtml2pdf>=0.2.17
 xlsxwriter==3.2.3

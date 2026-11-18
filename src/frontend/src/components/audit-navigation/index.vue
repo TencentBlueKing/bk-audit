@@ -29,6 +29,7 @@
     }">
     <div
       class="audit-navigation-side"
+      :class="{ 'is-side-collapsed': isSideCollapsed }"
       :style="sideStyles">
       <div
         class="audit-navigation-header"
@@ -77,7 +78,7 @@
     <div
       class="audit-navigation-main"
       :class="{
-        'show-notice-navigation-main': showNotice.enabled
+        'show-notice-navigation-main': showNotice.enabled && showAlert
       }"
       :style="mainStyles">
       <div
@@ -136,7 +137,8 @@
   const PAGE_MIDDLE_WIDTH = 1920;
   const SIDE_LEFT_EXPAND_SMALL_WIDTH = 220;
   const SIDE_LEFT_EXPAND_BIG_WIDTH = 280;
-  const SIDE_LEFT_INEXPAND_WIDTH = 60;
+  // 收起后只留图标和子级圆点，不再留文字和选择框的空位
+  const SIDE_LEFT_INEXPAND_WIDTH = 48;
 
   // const isSideMenuFixed = ref(Boolean(localStorage.getItem(TOGGLE_CACHE)));
   const isSideMenuFixed = ref(true);
@@ -145,13 +147,24 @@
   const pageWidth = ref(PAGE_MIN_WIDTH);
   const sideLeftExpandWidth = ref();
 
+  // 报表、检索等页面把内容放在侧栏槽位，不能沿用普通菜单的收起宽度和隐藏样式
+  const usesCustomSide = computed(() => (
+    Boolean(route.meta?.nodeSideContent)
+    && route.params?.isShowSideBar !== 'true'
+    && !route.meta?.hideSidebar
+  ));
+  const isSideCollapsed = computed(() => (
+    !usesCustomSide.value && !isSideMenuFixed.value && !isSideMenuHover.value
+  ));
+
   const realSideWidth = computed(() => {
     if (route.meta?.hideSidebar) {
       return 0;
     }
-    return isSideMenuFixed.value
-      ? sideLeftExpandWidth.value
-      : SIDE_LEFT_INEXPAND_WIDTH;
+    if (usesCustomSide.value || isSideMenuFixed.value) {
+      return sideLeftExpandWidth.value;
+    }
+    return SIDE_LEFT_INEXPAND_WIDTH;
   });
   const zIndex = ref(1999);
   const sideStyles = computed(() => {
@@ -180,11 +193,8 @@
 
 
   const scrollStyles = computed(() => {
-    let headerTipsHeight = 0;
-    if (headerTipsRef.value) {
-      headerTipsHeight = 32;
-    }
-
+    // 提示节点始终存在，没有内容时高度是 0，不能按 32px 预扣，否则滚动区比视口矮一截
+    const headerTipsHeight = headerTipsRef.value?.offsetHeight ?? 0;
     const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
@@ -340,6 +350,96 @@
       width: 100%;
       overflow: hidden;
       flex: 1 1 auto;
+
+      .scroll-faker-content {
+        overflow-x: hidden;
+      }
+    }
+
+    &.is-side-collapsed {
+      .search-wrapper,
+      .audit-menu-group-title,
+      .side-group-name,
+      .side-group-arrow,
+      .selector-text,
+      .selector-arrow,
+      .type-tag-full {
+        display: none;
+      }
+
+      .scene-selector-wrapper {
+        display: flex;
+        justify-content: center;
+        padding: 10px 0 6px;
+        margin: 0;
+      }
+
+      .scene-system-selector {
+        width: auto !important;
+        height: auto;
+        padding: 0;
+        background: transparent !important;
+        border: none !important;
+        justify-content: center;
+      }
+
+      .selector-content {
+        flex: none;
+        justify-content: center;
+      }
+
+      .type-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        margin: 0;
+        line-height: 22px;
+      }
+
+      .type-tag-short {
+        display: inline;
+        font-size: 12px;
+        line-height: 22px;
+      }
+
+      .side-group-header,
+      .audit-menu-item,
+      .side-group-children .audit-menu-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        padding: 0;
+        overflow: hidden;
+        font-size: 0;
+        line-height: 40px;
+      }
+
+      .side-group-icon,
+      .menu-item-icon,
+      .audit-menu-item .audit-icon {
+        display: inline-flex;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        font-size: 16px;
+        line-height: 16px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .side-child-dot {
+        margin: 0;
+      }
+
+      .audit-side-toggle-btn {
+        justify-content: center;
+        margin-left: 0;
+      }
     }
 
     .audit-side-toggle-btn {
@@ -394,8 +494,12 @@
   }
 
   .audit-navigation-content {
+    height: 100%;
+
     .navigation-content-wrapper {
       position: relative;
+      box-sizing: border-box;
+      height: 100%;
       padding: 20px 24px 0;
     }
   }

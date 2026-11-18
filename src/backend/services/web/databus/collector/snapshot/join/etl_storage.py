@@ -488,8 +488,8 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 "is_dimension": False,
                 "is_key": False,
                 "field_index": index,
-                "is_json": field["type"] in [JsonSchemaFieldType.OBJECT.value, JsonSchemaFieldType.ARRAY.value],
-                "is_original_json": field["type"] in [JsonSchemaFieldType.JSON.value],
+                "is_json": False,
+                "is_original_json": JsonSchemaFieldType.is_original_json(field["type"]),
                 "is_index": field.get("is_index", False),
             }
             for index, field in enumerate(schema)

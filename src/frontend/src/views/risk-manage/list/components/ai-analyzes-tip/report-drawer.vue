@@ -88,7 +88,7 @@
               <div class="ai-report-section-title">
                 <img
                   class="ai-report-section-icon"
-                  src="@images/ai-icon.svg">
+                  :src="aiIcon">
                 <span class="title">{{ t('报告内容') }}</span>
               </div>
               <bk-popover
@@ -181,6 +181,8 @@
   import { useI18n } from 'vue-i18n';
 
   import useRequest from '@hooks/use-request';
+
+  import aiIcon from '@images/ai-icon.svg?inline';
 
   import ReportEditor from './report-editor.vue';
   import { toPreviewHtml } from './report-content-utils';

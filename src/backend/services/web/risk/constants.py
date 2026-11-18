@@ -138,6 +138,7 @@ class EventMappingFields:
             self.EVENT_CONTENT,
             self.RAW_EVENT_ID,
             self.STRATEGY_ID,
+            self.STRATEGY_RULE_ID,
             self.EVENT_EVIDENCE,
             self.EVENT_TYPE,
             self.EVENT_DATA,
@@ -193,6 +194,16 @@ class EventMappingFields:
         field_name="strategy_id",
         alias_name="strategy_id",
         description=gettext_lazy("命中策略(ID)"),
+        field_type=FIELD_TYPE_LONG,
+        option=dict(),
+        is_index=True,
+        is_dimension=False,
+    )
+
+    STRATEGY_RULE_ID = Field(
+        field_name="strategy_rule_id",
+        alias_name="strategy_rule_id",
+        description=gettext_lazy("命中发现规则(ID)"),
         field_type=FIELD_TYPE_LONG,
         option=dict(),
         is_index=True,
@@ -301,6 +312,9 @@ class RiskStatus(TextChoices):
     # 新
     NEW = "new", gettext_lazy("新")
 
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
+
     # 人工处理
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
     FOR_APPROVE = "for_approve", gettext_lazy("自动处理审批中")
@@ -363,6 +377,9 @@ class RiskDisplayStatus(TextChoices):
     # 新
     NEW = "new", gettext_lazy("新")
 
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
+
     # 待处理（仅 NEW → 未配置处理规则 时）
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
 
@@ -386,6 +403,41 @@ class TicketNodeStatus(TextChoices):
 
     RUNNING = "running", gettext_lazy("运行中")
     FINISHED = "finished", gettext_lazy("已完成")
+
+
+class ItsmVersion(TextChoices):
+    V3 = "v3", gettext_lazy("ITSM V3")
+    V4 = "v4", gettext_lazy("ITSM V4")
+
+
+class BkSecPushStatus(TextChoices):
+    """
+    BKSEC 推送状态（风险单维度，只记当前状态）
+
+    SUCCESS 由发单插件在 BKSEC 推单成功（响应 2xx）后主动上报置位；
+    FAILED 在套餐任务终态失败时置位（推单重试耗尽 → 节点失败 → 任务失败）。
+
+    SOPS 侧无法推断该状态：发单发生在长驻的「回调 / 轮询」节点内部，节点始终 RUNNING，
+    任务状态只能证明「套餐跑了」，不能证明「工单发了」。
+    """
+
+    NOT_PUSHED = "not_pushed", gettext_lazy("未推送")
+    SUCCESS = "success", gettext_lazy("推送成功")
+    FAILED = "failed", gettext_lazy("推送失败")
+
+
+# 执行记录 keyword 全量搜索：枚举字段「内部值 → 前端中文展示词」映射（展示词与 docs/bksec_frontend_api.md 5.1 一致）
+# 命中规则：keyword 等于内部值（大小写不敏感），或是展示词的子串（子串命中要求 keyword 长度 >= 2，防单字噪音）
+PA_TRIGGER_KEYWORD_LABELS = {
+    "auto": "自动",
+    "manual": "手动",
+    "test": "测试",
+}
+PA_RESULT_KEYWORD_LABELS = {
+    "success": "执行成功",
+    "failed": "执行失败",
+    "running": "执行中",
+}
 
 
 class RiskRuleOperator(TextChoices):
@@ -471,6 +523,7 @@ class RiskViewType(TextChoices):
     TODO = "todo", gettext_lazy("待我处理")
     WATCH = "watch", gettext_lazy("我的关注")
     PROCESSED = "processed", gettext_lazy("处理历史")
+    CONFIRM = "confirm", gettext_lazy("待我确认")
 
 
 class RiskEventSubscriptionFieldCategory(TextChoices):
@@ -818,7 +871,7 @@ EVENT_BASIC_COLUMN_MAP = {field.value: field.column for field in EventBasicField
 EventBasicField.NUMERIC_FIELDS = frozenset({EventBasicField.STRATEGY_ID.value})
 
 # 风险等级排序字段
-RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
+RISK_LEVEL_ORDER_FIELD = "risk_level"
 
 
 @register_choices("risk_report_status")

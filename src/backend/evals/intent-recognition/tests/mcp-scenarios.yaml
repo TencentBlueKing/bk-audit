@@ -1,0 +1,68 @@
+# 非流式Agent按最终效果验收，不依赖工具调用轨迹或本地模拟MCP。
+- description: 按需上下文-已有系统保留账号原文
+  vars:
+    query: 查操作人为Eval_User.X9的日志
+    current_system_id: eval_audit_system
+    expected_conditions:
+      - raw_name: username
+        operator: eq
+        filters: [Eval_User.X9]
+  assert:
+    - type: javascript
+      value: 'const d=JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_system" && JSON.stringify(d.messages.map(m=>m.message_type)) === JSON.stringify(["LOG_SEARCH"])'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
+
+- description: 按需上下文-纯时间检索不添加业务条件
+  vars:
+    query: 查最近一天日志
+    current_system_id: eval_audit_system
+    expected_conditions: []
+  assert:
+    - type: javascript
+      value: 'const d=JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH"'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
+
+- description: 按需上下文-明确系统ID仅切换系统
+  vars:
+    query: 选择系统ID为eval_audit_system的系统
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d=JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_system" && JSON.stringify(d.messages.map(m=>m.message_type)) === JSON.stringify(["SYSTEM_SELECTION"]) && d.condition === null'
+
+- description: 按需上下文-会话范围外系统不得进入计划
+  vars:
+    query: 选择系统ID为eval_other_scope的系统
+    current_system_id: ''
+    candidates:
+      - system_id: eval_scope_allowed
+        name: 示例允许系统
+  assert:
+    - type: javascript
+      value: 'const d=JSON.parse(output); d.status === "success" && d.outcome === "error" && d.error_code === "SYSTEM_UNAVAILABLE" && d.messages.length === 0'
+
+- description: 按需上下文-任意月份保留动态时间
+  vars:
+    query: 查最近2个月的日志
+    current_system_id: eval_audit_system
+    current_time: '2026-08-31T22:00:00+08:00'
+    expected_conditions: []
+  assert:
+    - type: javascript
+      value: 'const d=JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.messages[0].message_input.condition.time_shortcut === "now-2M" && Date.parse(d.condition.start_time) === Date.parse("2026-06-30T22:00:00+08:00") && Date.parse(d.condition.end_time) === Date.parse("2026-08-31T22:00:00+08:00")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
+
+- description: 按需上下文-分钟窗口保留动态时间
+  vars:
+    query: 查最近30分钟的日志
+    current_system_id: eval_audit_system
+    current_time: '2026-10-23T22:00:00+08:00'
+    expected_conditions: []
+  assert:
+    - type: javascript
+      value: 'const d=JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.messages[0].message_input.condition.time_shortcut === "now-30m" && Date.parse(d.condition.start_time) === Date.parse("2026-10-23T21:30:00+08:00") && Date.parse(d.condition.end_time) === Date.parse("2026-10-23T22:00:00+08:00")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
