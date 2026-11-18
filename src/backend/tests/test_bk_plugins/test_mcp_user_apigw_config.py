@@ -265,9 +265,9 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()
 
-        self.assertEqual(definition["release"]["version"], "0.0.23")
+        self.assertEqual(definition["release"]["version"], "0.0.24")
         self.assertEqual(definition["release"]["title"], definition["release"]["version"])
-        self.assertIn("audit-meta", definition["release"]["comment"])
+        self.assertIn("risk_whitelist_callback", definition["release"]["comment"])
 
     def _get_operations(self):
         return {
