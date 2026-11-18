@@ -20,42 +20,83 @@ import abc
 import base64
 import os
 
-from bk_resource import BkApiResource
 from bk_resource.utils.cache import CacheTypeItem
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.constants import APIProvider
 from api.domains import USER_MANAGE_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class UserManageResource(BkApiResource, abc.ABC):
-    base_url = USER_MANAGE_URL
+class UserManageResource(AuditBkApiResource, abc.ABC):
     module_name = "user_manage"
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_USER_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return USER_MANAGE_URL
 
 
 class ListUsers(UserManageResource):
     name = gettext_lazy("获取用户列表")
     method = "GET"
-    action = "/list_users/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/api/v3/open/tenant/users/"
+        return "/list_users/"
 
 
 class RetrieveUser(UserManageResource):
     name = gettext_lazy("获取单个用户信息")
     method = "GET"
-    action = "/retrieve_user/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/api/v3/open/tenant/users/{bk_username}/"
+        return "/retrieve_user/"
+
+    @property
+    def url_keys(self):
+        if self.use_multi_tenant_mode():
+            return ["bk_username"]
+        return []
 
 
 class ListUserDepartments(UserManageResource):
     name = gettext_lazy("查询用户的部门信息 (v2)")
     method = "GET"
-    action = "/list_profile_departments/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/api/v3/open/tenant/users/{bk_username}/departments/"
+        return "/list_profile_departments/"
+
+    @property
+    def url_keys(self):
+        if self.use_multi_tenant_mode():
+            return ["bk_username"]
+        return []
+
     cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60, user_related=False)
 
 
 class ListDepartments(UserManageResource):
     name = gettext_lazy("查询部门 (v2)")
     method = "GET"
-    action = "/list_departments/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/api/v3/open/tenant/departments/"
+        return "/list_departments/"
+
     cache_type = CacheTypeItem(key="list_departments", timeout=60 * 60, user_related=False)
     platform_authorization = True
 
@@ -63,9 +104,39 @@ class ListDepartments(UserManageResource):
 class RetrieveDepartment(UserManageResource):
     name = gettext_lazy("查询单个部门信息 (v2)")
     method = "GET"
-    action = "/retrieve_department/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/api/v3/open/tenant/departments/{department_id}/"
+        return "/retrieve_department/"
+
+    @property
+    def url_keys(self):
+        if self.use_multi_tenant_mode():
+            return ["department_id"]
+        return []
+
     cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
     platform_authorization = True
+
+
+class BatchLookupVirtualUserResource(UserManageResource):
+    """批量查找虚拟用户（多租户模式下查询 bk_admin 使用）
+
+    设计理由：get_admin_username() 依赖此 API 查询租户内的 bk_admin 虚拟用户。
+    该调用自身会经 AuditBkApiResource.build_header 携带 X-Bk-Tenant-Id，
+    调用时硬编码 bk_username="admin" 作为该 API 的访问凭据，
+    不会形成 build_header → get_admin_username → build_header 循环。
+    """
+
+    name = gettext_lazy("批量查找虚拟用户")
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/api/v3/open/tenant/virtual-users/-/lookup/"
+        return "/batch_lookup_virtual_user/"
 
 
 class GetSnapshotSchema(UserManageResource):

@@ -141,7 +141,14 @@ class EventHandler(ElasticHandler):
             storage_shards_nums,
             storage_shards_size,
         ) = StorageConfig.get_default(settings.DEFAULT_NAMESPACE, self.cluster_id)
-        retention = os.getenv("BKAPP_EVENT_ES_RETENTION", retention)
+        _env_retention = os.getenv("BKAPP_EVENT_ES_RETENTION")
+
+        if _env_retention is not None:
+            try:
+                retention = int(_env_retention)
+            except ValueError:
+                logger.warning("[EventHandler] BKAPP_EVENT_ES_RETENTION 非整数，忽略: %s", _env_retention)
+
         params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "bkdata_biz_id": settings.DEFAULT_BK_BIZ_ID,

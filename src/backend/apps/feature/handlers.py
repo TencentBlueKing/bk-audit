@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from functools import lru_cache
 from typing import Union
 
 from bk_resource.utils.text import underscore_to_camel
@@ -31,8 +32,9 @@ from apps.feature.plugins import BaseFeaturePlugin
 class FeatureHandler:
     """特性处理"""
 
-    def __init__(self, feature_id: Union[str, FeatureTypeChoices]) -> None:
+    def __init__(self, feature_id: Union[str, FeatureTypeChoices], skip_db: bool = False) -> None:
         self.feature_id = str(feature_id)
+        self.skip_db = skip_db
         self.feature = self.get_feature()
 
     def check(self) -> bool:
@@ -83,6 +85,11 @@ class FeatureHandler:
     def _get_db_feature(self) -> Union[FeatureToggle, None]:
         """从数据库获取Feature"""
 
+        # skip_db=True 时仅基于 settings 计算，不触发任何数据库查询
+        # （用于首屏 entry 等禁止查库的路径）
+        if self.skip_db:
+            return None
+
         try:
             return FeatureToggle.objects.get(feature_id=self.feature_id)
         except FeatureToggle.DoesNotExist:
@@ -95,3 +102,20 @@ class FeatureHandler:
         except ImportError:
             plugin = BaseFeaturePlugin
         return plugin(feature).feature
+
+
+# 首屏入口需要下发的特性开关集合（仅基于 settings 计算，不查库，且每个 feature 只初始化一次）
+ENTRY_FEATURE_IDS = (
+    FeatureTypeChoices.WATERMARK.value,
+    FeatureTypeChoices.AI_CAPABILITY.value,
+)
+
+
+@lru_cache(maxsize=1)
+def get_entry_feature_toggle() -> dict:
+    """首屏一次性计算各特性的 enabled 状态，供前端控制入口显隐。"""
+    result = {}
+    for feature_id in ENTRY_FEATURE_IDS:
+        handler = FeatureHandler(feature_id, skip_db=True)
+        result[feature_id] = handler.check() and handler.feature.is_enable_view
+    return result

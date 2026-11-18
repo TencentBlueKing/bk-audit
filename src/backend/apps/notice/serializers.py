@@ -47,7 +47,10 @@ class GetMsgTypeResponseSerializer(serializers.Serializer):
         ref_name = "notice.serializers.GetMsgTypeResponseSerializer"
 
     def to_internal_value(self, data: dict) -> dict:
-        return super().to_internal_value({"id": data.get("type"), "name": data.get("label"), "icon": data.get("icon")})
+        # v1 接口返回 name（旧 ESB 返回 label），两者均兼容
+        return super().to_internal_value(
+            {"id": data.get("type"), "name": data.get("label") or data.get("name"), "icon": data.get("icon")}
+        )
 
 
 class NoticeGroupInfoSerializer(serializers.ModelSerializer):
