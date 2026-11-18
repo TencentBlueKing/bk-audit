@@ -56,6 +56,7 @@ from services.web.risk.whitelist.service import (
     progress_map,
     refresh_whitelist_nodes,
     renew_whitelist,
+    resolve_callback_ticket,
     review_whitelist,
     serialize_rule,
     submit_whitelist,
@@ -121,7 +122,9 @@ class ListRiskWhitelists(RiskWhitelistMeta):
             "page": page,
             "page_size": page_size,
             "total": total,
-            "results": [serialize_rule(row, getattr(row, "hit_count", 0), snapshots.get(str(row.id))) for row in rows],
+            "results": [
+                serialize_rule(row, getattr(row, "hit_count", 0), snapshots.get(str(row.id)), username) for row in rows
+            ],
         }
 
 
@@ -153,6 +156,7 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
                 username=username,
             ),
             progress={},
+            username=username,
         )
 
 
@@ -183,7 +187,7 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
         )
         if not isinstance(created, list):
             created = [created]
-        return [serialize_rule(item, progress={}) for item in created]
+        return [serialize_rule(item, progress={}, username=username) for item in created]
 
 
 def _misreport_for_whitelist(risks, validated_request_data) -> None:
@@ -233,11 +237,11 @@ class UpdateRiskWhitelist(RiskWhitelistMeta):
                 expire_at=validated_request_data.get("expire_at"),
                 username=get_request_username(),
             )
-            return serialize_rule(renewed)
+            return serialize_rule(renewed, username=get_request_username())
         rule.match_scope = validated_request_data["match_scope"]
         rule.reason = validated_request_data["reason"]
         rule.save(update_fields=["match_scope", "reason", "updated_at", "updated_by"])
-        return serialize_rule(rule)
+        return serialize_rule(rule, username=get_request_username())
 
 
 class ApproveRiskWhitelist(RiskWhitelistMeta):
@@ -247,9 +251,9 @@ class ApproveRiskWhitelist(RiskWhitelistMeta):
     def perform_request(self, validated_request_data):
         rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status != WhitelistStatus.PENDING:
-            return serialize_rule(rule)
+            return serialize_rule(rule, username=get_request_username())
         rule = review_whitelist(rule, "approve", get_request_username())
-        return serialize_rule(rule)
+        return serialize_rule(rule, username=get_request_username())
 
 
 class RejectRiskWhitelist(RiskWhitelistMeta):
@@ -259,14 +263,14 @@ class RejectRiskWhitelist(RiskWhitelistMeta):
     def perform_request(self, validated_request_data):
         rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status != WhitelistStatus.PENDING:
-            return serialize_rule(rule)
+            return serialize_rule(rule, username=get_request_username())
         rule = review_whitelist(
             rule,
             "refuse",
             get_request_username(),
             reject_reason=validated_request_data["reason"],
         )
-        return serialize_rule(rule)
+        return serialize_rule(rule, username=get_request_username())
 
 
 class EnableRiskWhitelist(RiskWhitelistMeta):
@@ -282,7 +286,7 @@ class EnableRiskWhitelist(RiskWhitelistMeta):
         else:
             rule.status = WhitelistStatus.ACTIVE
         rule.save(update_fields=["status", "updated_at", "updated_by"])
-        return serialize_rule(rule)
+        return serialize_rule(rule, username=get_request_username())
 
 
 class DisableRiskWhitelist(RiskWhitelistMeta):
@@ -295,7 +299,7 @@ class DisableRiskWhitelist(RiskWhitelistMeta):
             raise ValidationError(gettext("只有生效中的规则可以停用"))
         rule.status = WhitelistStatus.DISABLED
         rule.save(update_fields=["status", "updated_at", "updated_by"])
-        return serialize_rule(rule)
+        return serialize_rule(rule, username=get_request_username())
 
 
 class RenewRiskWhitelist(RiskWhitelistMeta):
@@ -312,7 +316,7 @@ class RenewRiskWhitelist(RiskWhitelistMeta):
             expire_at=validated_request_data.get("expire_at"),
             username=get_request_username(),
         )
-        return serialize_rule(renewed)
+        return serialize_rule(renewed, username=get_request_username())
 
 
 class DeleteRiskWhitelist(RiskWhitelistMeta):
@@ -409,6 +413,7 @@ class RiskWhitelistCallback(RiskWhitelistMeta):
         if not rule.itsm_ticket_id:
             _bind_ticket(rule, ticket)
             rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
+        ticket = resolve_callback_ticket(rule, ticket)
         if rule.status == WhitelistStatus.PENDING:
             rule = apply_whitelist_result(rule, ticket)
         elif rule.status in {WhitelistStatus.ACTIVE, WhitelistStatus.REJECTED}:

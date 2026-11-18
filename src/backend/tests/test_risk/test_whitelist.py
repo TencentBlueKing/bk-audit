@@ -205,7 +205,8 @@ class WhitelistCreateTests(SimpleTestCase):
             refresh_whitelist_nodes(rule, {"id": "ticket-1", "status": "running", "status_display": "审批中"})
         self.assertEqual(node.extra["whitelist"]["itsm_status"], WhitelistStatus.ACTIVE)
         self.assertEqual(node.extra["whitelist"]["itsm_status_display"], "生效中")
-        self.assertEqual(node.process_result["ticket"]["status_display"], "生效中")
+        self.assertNotIn("status", node.process_result["ticket"])
+        self.assertNotIn("status_display", node.process_result["ticket"])
 
 
 class WhitelistTicketCreateTests(SimpleTestCase):
@@ -721,6 +722,33 @@ class WhitelistFlowTests(SimpleTestCase):
         apply_result.assert_not_called()
         refresh_nodes.assert_called_once_with(rule, ticket)
 
+    @patch("services.web.risk.whitelist.service._ticket_from_logs")
+    @patch("services.web.risk.whitelist.service._load_ticket_detail", return_value={})
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service._close_source_risk")
+    @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
+    def test_callback_without_approve_result_reads_logs_and_returns_active(
+        self, close_risk, refresh_nodes, ticket_detail, ticket_logs
+    ):
+        ticket_logs.return_value = {
+            "id": "ticket-1",
+            "status": ITSMV4TicketStatus.FINISHED,
+            "approve_result": True,
+        }
+        rule = _Rule(status=WhitelistStatus.PENDING, callback_token="token", risk_id="risk-1")
+        rule.itsm_ticket_id = "ticket-1"
+        manager = _WhitelistManager()
+        manager.rules.append(rule)
+        with patch.object(RiskWhitelist, "objects", manager):
+            result = RiskWhitelistCallback().perform_request(
+                {"callback_token": "token", "ticket": {"id": "ticket-1", "status": "finished"}}
+            )
+        self.assertTrue(result["result"])
+        self.assertEqual(result["status"], WhitelistStatus.ACTIVE)
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        close_risk.assert_called_once()
+        refresh_nodes.assert_called()
+
 
 class WhitelistPollTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
@@ -938,13 +966,31 @@ class WhitelistApproveCloseTests(SimpleTestCase):
 
 
 class WhitelistReviewTests(SimpleTestCase):
+    def test_pending_approve_actions_only_for_scene_admin(self):
+        from services.web.risk.whitelist.service import list_actions
+
+        rule = SimpleNamespace(status=WhitelistStatus.PENDING, scene_id=3, expire_at=None)
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False):
+            self.assertEqual(list_actions(rule, "bob"), [])
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True):
+            self.assertEqual(list_actions(rule, "alice"), ["approve", "reject"])
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_non_admin_cannot_approve_or_reject(self, is_admin):
+        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1", scene_id=3, status=WhitelistStatus.PENDING)
+        with self.assertRaises(ValidationError):
+            review_whitelist(rule, "approve", "bob")
+        with self.assertRaises(ValidationError):
+            review_whitelist(rule, "refuse", "bob", reject_reason="不准")
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service.apply_whitelist_result", side_effect=lambda rule, ticket: ticket)
     @patch(
         "services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_handle",
         return_value={"success": True, "message": "操作成功"},
     )
-    def test_success_true_updates_status(self, ticket_handle, apply_result):
-        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1")
+    def test_success_true_updates_status(self, ticket_handle, apply_result, is_admin):
+        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1", scene_id=3)
         review_whitelist(rule, "approve", "alice")
         self.assertTrue(apply_result.call_args.args[1]["approve_result"])
         review_whitelist(rule, "refuse", "alice", reject_reason="不准")
@@ -952,13 +998,14 @@ class WhitelistReviewTests(SimpleTestCase):
         self.assertEqual(apply_result.call_args.args[1]["comment"], "不准")
         self.assertEqual(ticket_handle.call_count, 2)
 
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch(
         "services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_handle",
         return_value={"success": False, "message": "操作失败"},
     )
-    def test_success_false_keeps_status(self, ticket_handle, apply_result):
-        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1")
+    def test_success_false_keeps_status(self, ticket_handle, apply_result, is_admin):
+        rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1", scene_id=3)
         returned = review_whitelist(rule, "approve", "alice")
         self.assertIs(returned, rule)
         apply_result.assert_not_called()

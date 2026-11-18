@@ -215,13 +215,19 @@ def _kept(ticket: dict, previous: dict, key: str):
     return (previous or {}).get(key) or []
 
 
+def _node_status(ticket: dict) -> tuple:
+    """节点和白名单用同一套工单结果。回调带回结果时一起改成待审批、生效中或已驳回。"""
+
+    mapped, display = map_whitelist_status(ticket)
+    return mapped, display, ticket.get("approve_result")
+
+
 def _node_payload(rule: RiskWhitelist, ticket: dict = None, previous: dict = None) -> dict:
-    """节点上保留申请内容和 ITSM 单。状态、处理人、当前步骤取工单返回。"""
+    """节点上保留申请内容和 ITSM 单。申请状态取本次工单结果，处理人、当前步骤取工单返回。"""
 
     ticket = ticket or {}
     previous = previous or {}
-    status, status_display = map_whitelist_status(ticket)
-    approved = ticket.get("approve_result")
+    status, status_display, approved = _node_status(ticket)
     return {
         "rule_id": str(rule.id or ""),
         "match_scope": rule.match_scope,
@@ -274,24 +280,18 @@ def map_whitelist_status(ticket: dict) -> tuple:
     return mapped, str(WhitelistStatus(mapped).label)
 
 
-def _ticket_process_result(rule: RiskWhitelist, ticket: dict, previous: dict = None) -> dict:
+def _ticket_process_result(rule: RiskWhitelist, ticket: dict) -> dict:
+    """处理记录只留工单入口。审批状态只放在 whitelist 上，避免和 extra 各写一份。"""
+
     ticket = ticket or {}
-    previous = previous or {}
-    status, status_display = map_whitelist_status(ticket)
-    approved = ticket.get("approve_result")
-    stored = {
-        "id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
-        "sn": ticket.get("sn") or rule.itsm_sn or "",
-        "frontend_url": ticket.get("frontend_url") or rule.itsm_ticket_url or "",
-        "rule_id": str(rule.id or ""),
-        "status": status,
-        "status_display": status_display,
-        "approve_result": approved,
-        "comment": ticket.get("comment") or "",
-        "current_processors": _kept(ticket, previous, "current_processors"),
-        "current_steps": _kept(ticket, previous, "current_steps"),
+    return {
+        "ticket": {
+            "id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
+            "sn": ticket.get("sn") or rule.itsm_sn or "",
+            "frontend_url": ticket.get("frontend_url") or rule.itsm_ticket_url or "",
+            "rule_id": str(rule.id or ""),
+        }
     }
-    return {"ticket": stored}
 
 
 def _ticket_on_rule(rule: RiskWhitelist) -> dict:
@@ -365,7 +365,7 @@ def refresh_whitelist_nodes(rule: RiskWhitelist, ticket: dict = None) -> None:
         if not _node_belongs_to_rule(node, rule):
             continue
         previous = (node.process_result or {}).get("ticket") or {}
-        process_result = _ticket_process_result(rule, ticket, previous)
+        process_result = _ticket_process_result(rule, ticket)
         node.extra = {"whitelist": _node_payload(rule, ticket, previous)}
         node.process_result = process_result
         node.save(update_fields=["extra", "process_result"])
@@ -504,8 +504,9 @@ def operate_itsm(rule: RiskWhitelist, method: str, operator: str):
 
 
 def review_whitelist(rule: RiskWhitelist, method: str, operator: str, reject_reason: str = "") -> RiskWhitelist:
-    """点击通过或驳回。ITSM 返回 success 为 true 才改状态，为 false 不改。"""
+    """场景管理员点击通过或驳回。ITSM 返回 success 为 true 才改状态，为 false 不改。"""
 
+    ensure_admin(operator, rule.scene_id)
     payload = operate_itsm(rule, method, operator)
     if not (isinstance(payload, dict) and payload.get("success") is True):
         return rule
@@ -783,8 +784,8 @@ def create_itsm_ticket(rule_id: int) -> None:
         raise
     _bind_ticket(rule, ticket)
     rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
-    refresh_whitelist_nodes(rule, ticket)
     rule.refresh_from_db()
+    refresh_whitelist_nodes(rule, ticket)
 
 
 def sync_pending_whitelists(limit: int = 50) -> None:
@@ -823,6 +824,37 @@ def refresh_pending_whitelist(rule: RiskWhitelist) -> dict:
     return ticket
 
 
+def _callback_ticket_decided(ticket: dict) -> bool:
+    """回调体已经能判断通过或驳回。finished 但没带 approve_result 时还不算。"""
+
+    status = _raw_ticket_status(ticket)
+    if status == ITSMV4TicketStatus.TERMINATION:
+        return True
+    if status != ITSMV4TicketStatus.FINISHED:
+        return False
+    return "approve_result" in (ticket or {})
+
+
+def resolve_callback_ticket(rule: RiskWhitelist, ticket: dict) -> dict:
+    """回调体没有终态时，当场查工单详情和日志，通过后这次回调就返回生效中。"""
+
+    ticket = dict(ticket or {})
+    if _callback_ticket_decided(ticket):
+        return ticket
+    if rule.itsm_ticket_id:
+        detail = _load_ticket_detail(rule)
+        if detail and _callback_ticket_decided(detail):
+            detail.setdefault("id", rule.itsm_ticket_id)
+            return detail
+        logged = _ticket_from_logs(rule)
+        if logged:
+            return logged
+        if detail:
+            detail.setdefault("id", rule.itsm_ticket_id)
+            return detail
+    return ticket
+
+
 def _ticket_from_logs(rule: RiskWhitelist):
     """用工单日志判断审批是否已经结束。和场景权限轮询同一套日志解析。"""
 
@@ -857,6 +889,8 @@ def _load_ticket_detail(rule: RiskWhitelist) -> dict:
 
 
 def expire_whitelists() -> int:
+    """到期只改白名单状态。节点申请状态仍是已通过。"""
+
     return RiskWhitelist.objects.filter(
         status=WhitelistStatus.ACTIVE, expire_at__isnull=False, expire_at__lte=timezone.now()
     ).update(status=WhitelistStatus.EXPIRED)
@@ -938,9 +972,13 @@ def intercept_whitelist(event: dict, create_params: dict, scene_id) -> bool:
     return True
 
 
-def list_actions(rule: RiskWhitelist) -> list:
+def list_actions(rule: RiskWhitelist, username: str = "") -> list:
+    """待审批时只有场景管理员能看到通过和驳回。续期重新进入审批后也一样。"""
+
     if rule.status == WhitelistStatus.PENDING:
-        return ["approve", "reject"]
+        if username and is_scene_admin(username, rule.scene_id):
+            return ["approve", "reject"]
+        return []
     if rule.status == WhitelistStatus.ACTIVE:
         actions = ["edit", "disable", "hits"]
     elif rule.status == WhitelistStatus.DISABLED:
@@ -1056,7 +1094,7 @@ def _write_terminal_status(rule: RiskWhitelist, ticket: dict) -> None:
 
 
 def sync_whitelist_nodes_for_risk(risk_id: str) -> None:
-    """打开风险时，把已经生效或驳回的白名单状态写回节点。节点上的申请状态是提工单时的快照。"""
+    """审批已经通过或驳回、节点仍停在待审批时，补写成已通过或被驳回。"""
 
     from services.web.risk.models import TicketNode
 
@@ -1075,9 +1113,12 @@ def sync_whitelist_nodes_for_risk(risk_id: str) -> None:
     else:
         rules = list(RiskWhitelist.objects.filter(risk_id=risk_id))
     for rule in rules:
-        if rule.status not in {WhitelistStatus.ACTIVE, WhitelistStatus.REJECTED}:
+        if rule.status == WhitelistStatus.ACTIVE:
+            expected = WhitelistStatus.ACTIVE
+        elif rule.status == WhitelistStatus.REJECTED:
+            expected = WhitelistStatus.REJECTED
+        else:
             continue
-        expected = WhitelistStatus.ACTIVE if rule.status == WhitelistStatus.ACTIVE else WhitelistStatus.REJECTED
         stale = False
         for node in nodes:
             if not _node_belongs_to_rule(node, rule):
@@ -1090,7 +1131,7 @@ def sync_whitelist_nodes_for_risk(risk_id: str) -> None:
             refresh_whitelist_nodes(rule)
 
 
-def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = None) -> dict:
+def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = None, username: str = "") -> dict:
     if progress is None:
         progress = getattr(rule, "_itsm_progress", None)
     if progress is None and rule.status in FLOW_STATUS:
@@ -1114,7 +1155,7 @@ def serialize_rule(rule: RiskWhitelist, hit_count: int = 0, progress: dict = Non
         "itsm_sn": rule.itsm_sn or "",
         "itsm_url": rule.itsm_ticket_url or "",
         "flow": flow_of(rule, progress),
-        "actions": list_actions(rule),
+        "actions": list_actions(rule, username),
     }
 
 
