@@ -49,10 +49,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_ACCEPTANCE_DAYS = 30
 
 
-def is_scene_admin(username: str, scene_id: int) -> bool:
-    """场景管理员只看 IAM 的管理场景权限。"""
+def is_platform_admin(username: str) -> bool:
+    """平台管理员看 IAM 的平台管理权限。这个身份不能通过、驳回或续期，可以编辑、启停和删除。"""
 
-    if not username or not scene_id:
+    if not username:
+        return False
+    return Permission(username=username).has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
+
+
+def is_scene_admin(username: str, scene_id: int) -> bool:
+    """场景管理员只看 IAM 的管理场景权限。平台管理员不算场景管理员，不能通过、驳回或续期。"""
+
+    if not username or not scene_id or is_platform_admin(username):
         return False
     return Permission(username=username).is_allowed(
         ActionEnum.MANAGE_SCENE,
@@ -621,14 +629,6 @@ def _whitelist_approvers(scene_id) -> list:
     return _scene_admin_usernames(scene_id)
 
 
-def _can_pass_immediately(username: str, scene_id) -> bool:
-    """IAM 场景管理员，或该场景 managers 里的人，创建后立刻审批。"""
-
-    if is_scene_admin(username, scene_id):
-        return True
-    return username in _scene_admin_usernames(scene_id)
-
-
 def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: str, reason=None, match_scope=None):
     """提交 ITSM 工单。"""
 
@@ -672,9 +672,9 @@ def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
 
 
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
-    """管理员创建后立刻审批。handle 成功即写成生效中；回调若已先写入则保持回调结果。"""
+    """IAM 场景管理员创建后立刻审批。handle 成功即写成生效中；回调若已先写入则保持回调结果。"""
 
-    if not username or not _can_pass_immediately(username, rule.scene_id):
+    if not username or not is_scene_admin(username, rule.scene_id):
         return
     payload = None
     try:
@@ -1003,15 +1003,50 @@ def intercept_whitelist(event: dict, create_params: dict, scene_id) -> bool:
     return True
 
 
-def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list:
-    """待审批时只有场景管理员能看到通过和驳回。续期重新进入审批后也一样。"""
+def _can_apply_renew(rule: RiskWhitelist) -> bool:
+    """续期是申请。有到期时间、且不是待审批或已驳回时都可以发起。"""
 
+    return bool(getattr(rule, "expire_at", None)) and rule.status in {
+        WhitelistStatus.ACTIVE,
+        WhitelistStatus.EXPIRED,
+        WhitelistStatus.DISABLED,
+    }
+
+
+def _with_renew(actions: list, rule: RiskWhitelist) -> list:
+    if not _can_apply_renew(rule) or "renew" in actions:
+        return actions
+    if "edit" in actions:
+        actions.insert(actions.index("edit") + 1, "renew")
+    else:
+        actions.insert(0, "renew")
+    return actions
+
+
+def _maintenance_actions(rule: RiskWhitelist) -> list:
+    """编辑、启停和删除。续期另算，谁都可以申请。"""
+
+    if rule.status == WhitelistStatus.ACTIVE:
+        return ["edit", "disable", "hits"]
+    if rule.status == WhitelistStatus.DISABLED:
+        return ["edit", "enable", "hits", "delete"]
+    if rule.status == WhitelistStatus.EXPIRED:
+        return ["edit", "hits", "delete"]
+    if rule.status == WhitelistStatus.REJECTED:
+        return ["delete"]
+    return []
+
+
+def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list:
+    """通过和驳回只给 IAM 场景管理员。续期是申请，看到这条白名单的人都可以发起。"""
+
+    if is_admin is None:
+        is_admin = bool(username and is_scene_admin(username, rule.scene_id))
+    if not is_admin:
+        actions = _maintenance_actions(rule) if username and is_platform_admin(username) else []
+        return _with_renew(actions, rule)
     if rule.status == WhitelistStatus.PENDING:
-        if is_admin is None:
-            is_admin = bool(username and is_scene_admin(username, rule.scene_id))
-        if is_admin:
-            return ["approve", "reject"]
-        return []
+        return ["approve", "reject"]
     if rule.status == WhitelistStatus.ACTIVE:
         actions = ["edit", "disable", "hits"]
     elif rule.status == WhitelistStatus.DISABLED:
@@ -1022,9 +1057,7 @@ def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list
         return ["delete"]
     else:
         return []
-    if rule.expire_at:
-        actions.insert(1, "renew")
-    return actions
+    return _with_renew(actions, rule)
 
 
 def flow_of(rule: RiskWhitelist, ticket: dict = None):
@@ -1202,9 +1235,14 @@ def ensure_admin(username: str, scene_id: int) -> None:
         raise ValidationError(gettext("没有该场景的白名单管理权限"))
 
 
-def get_rule_for_admin(rule_id: int, username: str) -> RiskWhitelist:
+def get_rule_for_admin(rule_id: int, username: str, *, maintain: bool = False) -> RiskWhitelist:
+    """maintain 为真时，平台管理员也可以编辑、启停和删除。通过和驳回仍只认场景管理员。"""
+
     rule = RiskWhitelist.objects.filter(pk=rule_id).first()
     if rule is None:
         raise ValidationError(gettext("白名单不存在"))
-    ensure_admin(username, rule.scene_id)
-    return rule
+    if is_scene_admin(username, rule.scene_id):
+        return rule
+    if maintain and is_platform_admin(username) and rule.scene_id in set(managed_scene_ids(username)):
+        return rule
+    raise ValidationError(gettext("没有该场景的白名单管理权限"))

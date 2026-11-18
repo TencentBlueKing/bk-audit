@@ -313,18 +313,6 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         )
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
-    @patch("services.web.risk.whitelist.service.operate_itsm", return_value={"success": True})
-    @patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"])
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_scene_manager_passes_immediately_without_iam(self, is_admin, managers, operate, apply_result):
-        from services.web.risk.whitelist.service import _pass_if_admin
-
-        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
-        _pass_if_admin(rule, "alice")
-        operate.assert_called_once_with(rule, "approve", "alice")
-        apply_result.assert_called_once()
-
-    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
@@ -336,6 +324,15 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         _pass_if_admin(rule, "alice")
         ticket_detail.assert_not_called()
         apply_result.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service.operate_itsm")
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_scene_manager_without_iam_stays_pending(self, is_admin, operate):
+        from services.web.risk.whitelist.service import _pass_if_admin
+
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
+        _pass_if_admin(rule, "alice")
+        operate.assert_not_called()
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [
@@ -1100,6 +1097,7 @@ class WhitelistReviewTests(SimpleTestCase):
         with patch("services.web.risk.whitelist.service.Permission") as permission_cls, patch(
             "services.web.risk.whitelist.service.ResourceEnum.SCENE.create_instance", return_value="scene-3"
         ) as create_instance:
+            permission_cls.return_value.has_action_any_permission.return_value = False
             permission_cls.return_value.is_allowed.return_value = True
             self.assertTrue(is_scene_admin("alice", 3))
             create_instance.assert_called_once_with(3)
@@ -1112,11 +1110,37 @@ class WhitelistReviewTests(SimpleTestCase):
             self.assertEqual(managed_scene_ids("alice"), [3])
             self.assertEqual(scope_cls.return_value.get_scene_ids.call_args.args[1], ActionEnum.MANAGE_SCENE)
 
+    def test_platform_admin_can_edit_and_renew_but_not_approve(self):
+        from services.web.risk.whitelist.service import is_scene_admin, list_actions
+
+        active = SimpleNamespace(status=WhitelistStatus.ACTIVE, scene_id=3, expire_at="2026-12-01 00:00:00")
+        pending = SimpleNamespace(status=WhitelistStatus.PENDING, scene_id=3, expire_at=None)
+        disabled = SimpleNamespace(status=WhitelistStatus.DISABLED, scene_id=3, expire_at=None)
+        with patch("services.web.risk.whitelist.service.Permission") as permission_cls:
+            permission_cls.return_value.has_action_any_permission.return_value = True
+            self.assertFalse(is_scene_admin("root", 3))
+            permission_cls.return_value.is_allowed.assert_not_called()
+        with patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True):
+            self.assertEqual(list_actions(active, "root", is_admin=False), ["edit", "renew", "disable", "hits"])
+            self.assertEqual(list_actions(pending, "root", is_admin=False), [])
+            self.assertEqual(list_actions(disabled, "root", is_admin=False), ["edit", "enable", "hits", "delete"])
+
+    def test_anyone_can_apply_renew(self):
+        from services.web.risk.whitelist.service import list_actions
+
+        active = SimpleNamespace(status=WhitelistStatus.ACTIVE, scene_id=3, expire_at="2026-12-01 00:00:00")
+        permanent = SimpleNamespace(status=WhitelistStatus.ACTIVE, scene_id=3, expire_at=None)
+        with patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False):
+            self.assertEqual(list_actions(active, "bob", is_admin=False), ["renew"])
+            self.assertEqual(list_actions(permanent, "bob", is_admin=False), [])
+
     def test_pending_approve_actions_only_for_scene_admin(self):
         from services.web.risk.whitelist.service import list_actions
 
         rule = SimpleNamespace(status=WhitelistStatus.PENDING, scene_id=3, expire_at=None)
-        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False):
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service.is_platform_admin", return_value=False
+        ):
             self.assertEqual(list_actions(rule, "bob"), [])
         with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True):
             self.assertEqual(list_actions(rule, "alice"), ["approve", "reject"])
