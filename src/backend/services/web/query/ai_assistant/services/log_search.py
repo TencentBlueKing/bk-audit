@@ -32,7 +32,7 @@ import json
 import time
 from typing import Dict, List, Tuple
 
-from bk_resource import api, resource
+from bk_resource import resource
 from bk_resource.base import Empty
 from blueapps.utils.logger import logger
 from django.utils import timezone
@@ -44,6 +44,7 @@ from apps.meta.permissions import SearchLogPermission
 from core.exceptions import ValidationError as CoreValidationError
 from core.sql.constants import FieldType
 from core.utils.data import extract_nested_value
+from services.web.bkbase import query as bkbase_query
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
     LOG_SEARCH_SNAPSHOT_PAGE_SIZE,
@@ -308,7 +309,7 @@ class LogSearchService:
         logger.info(f"[LogSearchService] data sql: {data_sql}; count sql: {count_sql}")
 
         started_at = time.time() * 1000
-        data_resp, count_resp = api.bk_base.query_sync.bulk_request(
+        data_resp, count_resp = bkbase_query.query_sync_bulk(
             [
                 {"sql": data_sql, "prefer_storage": StorageType.DORIS.value},
                 {"sql": count_sql, "prefer_storage": StorageType.DORIS.value},

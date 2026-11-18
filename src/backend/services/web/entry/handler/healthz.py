@@ -26,6 +26,7 @@ from django.conf import settings
 from redis import StrictRedis
 
 from apps.exceptions import HealthzCheckFailed
+from services.web.bkbase import clean as bkbase_clean
 from services.web.databus.models import RedisConfig
 
 
@@ -133,7 +134,7 @@ class HealthzHandler(object):
         tasks = [
             # 检查bk_base
             self._check_api(
-                api.bk_base.clean_preview,
+                bkbase_clean.clean_preview,
                 msg=MockData.BkBaseCleanPreview.msg,
                 conf=MockData.BkBaseCleanPreview.conf,
                 debug_by_step=True,

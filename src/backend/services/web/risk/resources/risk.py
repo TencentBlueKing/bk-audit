@@ -70,6 +70,7 @@ from core.utils.data import (
     choices_to_dict,
     value_to_label,
 )
+from services.web.bkbase import query as bkbase_query
 from services.web.common.constants import ScopeQueryField
 from services.web.common.monitor import NL2RiskFilterFailedEvent
 from services.web.common.scope_permission import ScopeContext, ScopePermission
@@ -610,7 +611,7 @@ class ListRisk(RiskMeta):
         assembler = FinalSelectAssembler(resolver)
         count_query_builder = BkBaseCountQueryBuilder(assembler)
         data_query_builder = BkBaseDataQueryBuilder(assembler)
-        sql_runner = BkBaseSQLRunner(api.bk_base.query_sync)
+        sql_runner = BkBaseSQLRunner(bkbase_query.query_sync)
         count_executor = BkBaseCountExecutor(
             components_builder=components_builder,
             count_query_builder=count_query_builder,

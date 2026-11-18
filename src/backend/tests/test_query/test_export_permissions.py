@@ -79,7 +79,7 @@ class TestLogExportPermissions(TestCase):
         self.enterContext(patch("services.web.query.serializers.get_request_username", return_value="export-user"))
         self.enterContext(patch("core.models.get_request_username", return_value="export-user"))
         self.queries = []
-        self.enterContext(patch("services.web.query.resources.doris.api.bk_base.query_sync.bulk_request", self._query))
+        self.enterContext(patch("services.web.bkbase.query.api.bk_base.query_sync.bulk_request", self._query))
         self.enterContext(patch("services.web.query.resources.doris.process_one_log_export_task.apply_async"))
         self.params = {
             "namespace": "example",

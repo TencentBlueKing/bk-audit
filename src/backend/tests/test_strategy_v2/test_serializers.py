@@ -871,7 +871,7 @@ class TestLinkTableDataPermissionMixin(TestCase):
         self.assertIn("数据表[rt2]不在场景", str(cm.exception))
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_user_has_permission(
@@ -901,7 +901,7 @@ class TestLinkTableDataPermissionMixin(TestCase):
         self.assertEqual(mock_user_auth.call_count, 2)
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_user_no_permission(
@@ -931,7 +931,7 @@ class TestLinkTableDataPermissionMixin(TestCase):
         self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_partial_permission(
@@ -962,7 +962,7 @@ class TestLinkTableDataPermissionMixin(TestCase):
         self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_auth_check_failed(
@@ -1016,7 +1016,7 @@ class TestLinkTableDataPermissionMixin(TestCase):
         serializer.validate(data)
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_with_other_types(
@@ -1253,7 +1253,7 @@ class TestStrategyDataPermissionValidation(TestCase):
         mock_get_table_ids.assert_called_once_with(self.scene_id)
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch(
         'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
     )
@@ -1278,7 +1278,7 @@ class TestStrategyDataPermissionValidation(TestCase):
         mock_user_auth.assert_not_called()
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch(
         'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
     )
@@ -1309,7 +1309,7 @@ class TestStrategyDataPermissionValidation(TestCase):
         )
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch(
         'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
     )
@@ -1336,7 +1336,7 @@ class TestStrategyDataPermissionValidation(TestCase):
         self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
-    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('bk_resource.api.bk_base.user_auth_check')
     @unittest.mock.patch(
         'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
     )
@@ -1386,18 +1386,14 @@ class TestStrategyDataPermissionValidation(TestCase):
     def test_check_user_table_permission_success(self):
         """测试_check_user_table_permission - 用户有权限"""
         with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
-            with unittest.mock.patch(
-                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', return_value=True
-            ):
+            with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check', return_value=True):
                 # 不应该抛出异常
                 self.serializer._check_user_table_permission(["rt_id_1", "rt_id_2"])
 
     def test_check_user_table_permission_no_permission(self):
         """测试_check_user_table_permission - 用户没有权限"""
         with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
-            with unittest.mock.patch(
-                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', return_value=False
-            ):
+            with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check', return_value=False):
                 # 应该抛出验证错误
                 with self.assertRaises(serializers.ValidationError) as cm:
                     self.serializer._check_user_table_permission(["rt_id_1"])
@@ -1408,9 +1404,7 @@ class TestStrategyDataPermissionValidation(TestCase):
         """测试_check_user_table_permission - 多个RT ID，部分没有权限"""
         with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
             # 第一个RT有权限，第二个没有
-            with unittest.mock.patch(
-                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', side_effect=[True, False]
-            ):
+            with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check', side_effect=[True, False]):
                 # 应该抛出验证错误
                 with self.assertRaises(serializers.ValidationError) as cm:
                     self.serializer._check_user_table_permission(["rt_id_1", "rt_id_2"])
@@ -1421,16 +1415,14 @@ class TestStrategyDataPermissionValidation(TestCase):
     def test_check_user_table_permission_empty_rt_ids(self):
         """测试_check_user_table_permission - 空的RT ID列表"""
         # 空列表不应该调用API
-        with unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check') as mock_auth:
+        with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check') as mock_auth:
             self.serializer._check_user_table_permission([])
             mock_auth.assert_not_called()
 
     def test_check_user_table_permission_api_exception(self):
         """测试_check_user_table_permission - API调用异常"""
         with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
-            with unittest.mock.patch(
-                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', side_effect=Exception("API Error")
-            ):
+            with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check', side_effect=Exception("API Error")):
                 # 应该抛出验证错误
                 with self.assertRaises(serializers.ValidationError) as cm:
                     self.serializer._check_user_table_permission(["rt_id_1"])
@@ -1441,16 +1433,14 @@ class TestStrategyDataPermissionValidation(TestCase):
         """测试_check_user_table_permission - 用户名为空"""
         with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value=""):
             # 用户名为空时不应该调用API
-            with unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check') as mock_auth:
+            with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check') as mock_auth:
                 self.serializer._check_user_table_permission(["rt_id_1"])
                 mock_auth.assert_not_called()
 
     def test_check_user_table_permission_with_none_and_empty_values(self):
         """测试_check_user_table_permission - 过滤None和空值"""
         with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
-            with unittest.mock.patch(
-                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', return_value=True
-            ) as mock_auth:
+            with unittest.mock.patch('bk_resource.api.bk_base.user_auth_check', return_value=True) as mock_auth:
                 # 包含None和空字符串
                 self.serializer._check_user_table_permission(["rt_id_1", None, "", "rt_id_2"])
 

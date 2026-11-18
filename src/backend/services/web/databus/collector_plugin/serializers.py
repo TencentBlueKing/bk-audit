@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
+from services.web.bkbase import clean as bkbase_clean
 from services.web.databus.constants import (
     PLUGIN_CONDITION_SEPARATOR_OPTION,
     CollectorParamConditionMatchType,
@@ -113,6 +114,12 @@ class CreatePluginResponseSerializer(serializers.ModelSerializer):
 
 
 class PluginListResponseSerializer(serializers.ModelSerializer):
+    bkbase_table_id = serializers.SerializerMethodField()
+
+    def get_bkbase_table_id(self, obj):
+        """返回当前版本已就绪的结果表ID，旧字段只读。"""
+        return bkbase_clean.result_table_id(obj)
+
     class Meta:
         model = CollectorPlugin
-        fields = "__all__"
+        exclude = ["bkbase_v4_resources"]

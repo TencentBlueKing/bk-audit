@@ -643,7 +643,7 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_return_datasource_metadata(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
+        with patch("bk_resource.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
             mock_bulk.return_value = [{"list": [{"id": 1}]}]
             result = executor.execute(
                 {
@@ -701,7 +701,7 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_flatten_sql_in_bkbase_error_message(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
+        with patch("bk_resource.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
             mock_bulk.side_effect = APIRequestError("bkbase error")
 
             with self.assertRaises(BkbaseApiRequestError) as ctx:
@@ -718,8 +718,8 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_use_debug_query_sync(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_debug_bulk:
-            with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
+        with patch("bk_resource.api.bk_base.debug_query_sync.bulk_request") as mock_debug_bulk:
+            with patch("bk_resource.api.bk_base.query_sync.bulk_request") as mock_bulk:
                 mock_debug_bulk.return_value = [{"list": [{"id": 1}]}]
                 executor.execute(
                     {

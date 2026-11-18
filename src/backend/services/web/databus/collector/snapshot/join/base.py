@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 
-from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db.models import QuerySet
@@ -34,6 +33,10 @@ from apps.meta.utils.fields import (
     SYSTEM_ID,
 )
 from apps.notice.handlers import ErrorMsgHandler
+from services.web.bkbase import source as bkbase_source
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion, TaskState
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
@@ -120,15 +123,25 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
 
     def start(self, multiple_storage: bool = False):
         """
-        如果是建立多个存储，则需要独立设置成功标记位
+        如果是建立多个存储，则需要独立设置成功标记位。
+        V4入库未确认运行时返回等待，不推进采集链路和成功状态。
         """
         try:
             # 创建DATAID
             self.create_data_id()
+            if get_bkbase_version() == BKBaseVersion.V4 and (self.snapshot.bkbase_v4_resources or {}).get(
+                "source_provision"
+            ):
+                return False
             # 创建清洗
             self.create_data_etl()
             # 创建入库
-            self.create_data_storage()
+            storage_ready = self.create_data_storage()
+            if get_bkbase_version() == BKBaseVersion.V4 and storage_ready is False:
+                self.update_status(SnapshotRunningStatus.PREPARING)
+                self.snapshot.status_msg = gettext("入库任务尚未确认运行")
+                self.snapshot.save(update_fields=["status", "status_msg"])
+                return False
             # 更新采集项清洗链路
             self.update_log_clean_link()
             # 更新状态
@@ -166,12 +179,7 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
                 "config_mode": "full",
                 "scope": [{"deploy_plan_id": 0, "hosts": []}],
             }
-            api.bk_base.stop_collector(**params)
-            # 更新状态
-            if not multiple_storage:
-                self.update_status(SnapshotRunningStatus.CLOSED.value)
-                self.snapshot.save()
-            return True
+            return bkbase_source.stop_snapshot(self.snapshot, params, multiple_storage=multiple_storage)
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             title = gettext("JoinDataStopFailed")
             content = gettext("Error: %s") % str(err)
@@ -189,7 +197,11 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
         # 判断是否已有
         logger.info(f"{self.__class__.__name__} Update or Create Collector; SnapshotID => {self.snapshot.id}")
         http_pull_handler = HttpPullHandler(self.system, self.resource_type, self.snapshot, self.join_data_type)
-        self.snapshot.bkbase_data_id = http_pull_handler.update_or_create()
+        result = http_pull_handler.update_or_create()
+        if get_bkbase_version() == BKBaseVersion.V4 and result is None:
+            self.snapshot.refresh_from_db()
+            return
+        self.snapshot.bkbase_data_id = result
         self.snapshot.save()
 
     def create_data_etl(self):
@@ -210,6 +222,7 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
         self.snapshot.save()
 
     def create_data_storage(self):
+        """配置入库；V4 独立存储经正式观察就绪，受理后继续等待。"""
         etl_storage_handler = self.etl_storage_handler_cls(
             self.snapshot.bkbase_data_id,
             self.system,
@@ -219,6 +232,27 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
         )
         # 已有入库不做调整
         storage = self.snapshot.storages.filter(storage_type=self.storage_type).first()
+        if get_bkbase_version() == BKBaseVersion.V4 and (
+            self.storage_type in (SnapShotStorageChoices.DORIS, SnapShotStorageChoices.REDIS)
+            or (self.join_data_type == JoinDataType.ASSET and self.storage_type == SnapShotStorageChoices.HDFS)
+        ):
+            # 本地RUNNING不替代上游任务观察；配置受理后仍可能等待或失败。
+            try:
+                observed = etl_storage_handler.create_storage(update=storage.status != SnapshotRunningStatus.CLOSED)
+                state = observed.get("task_state") if isinstance(observed, dict) else None
+                if state == TaskState.FAILED:
+                    raise BKBaseResourceMappingError(message=observed.get("message") or "V4 storage failed")
+                if state != TaskState.RUNNING:
+                    storage.status = SnapshotRunningStatus.PREPARING
+                    storage.save(update_fields=["status"])
+                    return False
+                storage.status = SnapshotRunningStatus.RUNNING
+                storage.save(update_fields=["status"])
+                return True
+            except Exception:
+                storage.status = SnapshotRunningStatus.FAILED
+                storage.save(update_fields=["status"])
+                raise
         try:
             if storage.status == SnapshotRunningStatus.RUNNING:
                 logger.info(f"{self.__class__.__name__} Skip Storage; SnapshotID => {self.snapshot.id}")

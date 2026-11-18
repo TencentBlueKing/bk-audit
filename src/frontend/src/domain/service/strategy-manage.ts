@@ -172,11 +172,11 @@ export default {
     table_type: string;
     scene_id?: string;
     bk_biz_id?: string | number;
-  }) {
+  }, payload: Record<string, any> = {}) {
     if (!params?.table_type) {
       return Promise.reject(new Error('table_type is required'));
     }
-    return StrategySource.getTable(params)
+    return StrategySource.getTable(params, payload)
       .then(({ data }) => data);
   },
   /**
@@ -186,16 +186,27 @@ export default {
     table_type: string;
     scene_id?: string;
     bk_biz_id?: string | number;
-  }) {
+  }, payload: Record<string, any> = {}) {
     if (!params?.table_type) {
       return Promise.reject(new Error('table_type is required'));
     }
     if (params.table_type === 'BuildIn' || params.table_type === 'BizRt') {
-      return StrategySource.getScenePermissionTable(params)
+      return StrategySource.getScenePermissionTable(params, payload)
         .then(({ data }) => data);
     }
-    return StrategySource.getTable(params)
+    return StrategySource.getTable(params, payload)
       .then(({ data }) => data);
+  },
+  /** V4 项目目录只读取 namespace，不枚举结果表。 */
+  fetchTableProjects(params: { table_type: string; scene_id?: string }, payload: Record<string, any> = {}) {
+    return StrategySource.getTableProjects(params, payload).then(({ data }) => data);
+  },
+  /** 成功表示当前项目完整 RT 集合；namespace 不能为空。 */
+  fetchProjectTables(params: {
+    table_type: string; bkbase_namespace: string; scene_id?: string;
+  }, payload: Record<string, any> = {}) {
+    if (!params.bkbase_namespace) return Promise.reject(new Error('bkbase_namespace is required'));
+    return StrategySource.getProjectTables(params, payload).then(({ data }) => data);
   },
   /**
    * @desc 获取表格信息
