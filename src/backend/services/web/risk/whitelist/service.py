@@ -18,8 +18,6 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.settings import api_settings
 
-from apps.meta.handlers.iam_group import IAMGroupManager
-from apps.permission.constants import IAMV4Role
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
@@ -605,16 +603,16 @@ def _usernames(values) -> list:
 
 
 def _scene_admin_usernames(scene_id) -> list:
-    """审批人取 IAM 里该场景的场景管理员。"""
+    """审批人里的场景管理员直接取该场景的 managers。"""
 
-    if not scene_id:
-        return []
     try:
-        members = IAMGroupManager.get_scene_role_members(IAMV4Role.SCENE_ADMIN, str(scene_id))
+        scene = Scene.objects.filter(pk=scene_id, is_deleted=False).first()
     except Exception:
-        logger.exception("[RiskWhitelist] load iam scene admins failed, scene_id=%s", scene_id)
+        logger.exception("[RiskWhitelist] load scene admins failed, scene_id=%s", scene_id)
         return []
-    return _usernames(members)
+    if scene is None:
+        return []
+    return _usernames(getattr(scene, "managers", None))
 
 
 def _whitelist_approvers(scene_id) -> list:

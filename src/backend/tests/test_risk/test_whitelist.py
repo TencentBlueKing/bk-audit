@@ -275,13 +275,13 @@ class WhitelistTicketCreateTests(SimpleTestCase):
             create_itsm_ticket(1)
         abort.assert_called_once_with(rule)
 
-    @patch(
-        "services.web.risk.whitelist.service.IAMGroupManager.get_scene_role_members",
-        return_value=["scene-admin"],
-    )
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
-    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_members):
+    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_filter):
+        from services.web.scene.models import Scene
+
+        scene_filter.return_value.first.return_value = Scene(scene_id=3, managers=["scene-admin"])
         rule = SimpleNamespace(
             id=1,
             scene_id=3,
@@ -294,7 +294,6 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         _submit_itsm_ticket(rule, operator="alice", callback_token="token")
         form_data = ticket_create.call_args.kwargs["form_data"]
         self.assertEqual(form_data["approver"], ["scene-admin"])
-        self.assertEqual(scene_members.call_args.args[1], "3")
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
