@@ -68,16 +68,17 @@ def _create_node(
         process_result.update({"task_name": task_name, "trigger": trigger})
     if start_time or finish_time:
         process_result["status"].update({"start_time": start_time, "finish_time": finish_time})
+    created_at = time.time()
     return TicketNode.objects.create(
         risk_id=risk_id,
         operator="admin",
         current_operator=[],
         action=action,
-        timestamp=time.time(),
+        timestamp=created_at,
         time="2026-09-20 12:00:00",
         process_result=process_result,
         extra={},
-        sops_start_time=sops_start_time,
+        sops_start_time=sops_start_time if sops_start_time is not None else created_at,
     )
 
 
@@ -118,6 +119,48 @@ class TestListPAExecutionRecords:
         assert records[0]["sops_task_url"] == "https://sops.example/11"
         assert records[0]["result"] == "success"
         assert records[0]["risk_title"] == (risk_a.title or "")
+
+    def test_filter_by_pa_multi_select(self):
+        """套餐ID支持多选（逗号分隔，任一命中），兼容单值"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=31, pa_id=pa_a.id, pa_name="套餐A")
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=32, pa_id=pa_b.id, pa_name="套餐B")
+        # 单值（兼容旧调用方 int）
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"31"}
+        # 多值：逗号分隔
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": f"{pa_a.id},{pa_b.id}"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"31", "32"}
+        # 多值含空白与空项容错
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": f" {pa_a.id} , {pa_b.id} ,"})
+        assert resp["count"] == 2
+        # 无命中
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": f"{pa_a.id},999999999"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"31"}
+        # 非法值拒绝
+        with pytest.raises(ValidateException):
+            resource.risk.list_pa_execution_records.request({"pa_id": f"{pa_a.id},abc"})
+
+    def test_filter_pa_name_uses_execution_snapshot(self):
+        """名称筛选匹配执行时快照：套餐改名后按旧名可查，按新名只命中无快照的历史记录"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        # 历史无快照节点：展示/筛选都走当前套餐名兜底
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=41)
+        # 执行时快照：记录快照名「套餐A」
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=42, pa_id=pa_a.id, pa_name="套餐A")
+        # 套餐改名为「套餐A-新名」
+        pa_a.name = "套餐A-新名"
+        pa_a.save(update_fields=["name"])
+
+        # 按快照旧名筛：只命中快照记录，展示也是旧名
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_name": "套餐A"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"42"}
+        assert next(r for r in resp["results"] if r["sops_task_id"] == "42")["pa_name"] == "套餐A"
+
+        # 按当前新名筛：只命中无快照的历史记录（展示走当前名兜底），旧快照记录不命中
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_name": "套餐A-新名"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"41"}
+        assert next(r for r in resp["results"] if r["sops_task_id"] == "41")["pa_name"] == "套餐A-新名"
 
     def test_duration_sort_running_first_then_duration(self):
         """执行中的记录始终在前；组内按开始时间，已完成的按 duration 排序。"""
@@ -251,6 +294,7 @@ class TestListPAExecutionRecords:
             timestamp=time.time(),
             time="2026-09-20 12:00:00",
             process_result={"task": {"task_id": 3}},
+            sops_start_time=time.time(),
             extra={},
         )
         # 非 AutoProcess 节点不进执行记录
@@ -294,6 +338,7 @@ class TestListPAExecutionRecords:
             timestamp=time.time(),
             time="2026-09-20 12:00:00",
             process_result={"task": {"task_id": 5}},
+            sops_start_time=time.time(),
             extra={},
         )
         # 单值（兼容旧调用方）
@@ -518,10 +563,14 @@ class TestListPAExecutionRecords:
         assert resp["count"] == 0
 
     @staticmethod
-    def _stamp(node, when):
+    def _stamp(node, when, sync_sops_start_time=True):
         node.timestamp = when.timestamp()
         node.time = timezone.localtime(when).strftime("%Y-%m-%d %H:%M:%S")
-        node.save(update_fields=["timestamp", "time"])
+        update_fields = ["timestamp", "time"]
+        if sync_sops_start_time:
+            node.sops_start_time = when.timestamp()
+            update_fields.append("sops_start_time")
+        node.save(update_fields=update_fields)
 
     def test_default_range_is_last_30_days(self):
         """套餐列表不传 from/to 时只保留近 30 天的开始时间"""
@@ -576,8 +625,8 @@ class TestListPAExecutionRecords:
             sops_start_time=actual_before.timestamp(),
         )
         # 创建时间与真实开始时间相反：创建过早的在范围内，创建在范围内的实际过早
-        self._stamp(in_range, actual_in_range - datetime.timedelta(hours=1))
-        self._stamp(out_of_range, actual_in_range + datetime.timedelta(minutes=30))
+        self._stamp(in_range, actual_in_range - datetime.timedelta(hours=1), sync_sops_start_time=False)
+        self._stamp(out_of_range, actual_in_range + datetime.timedelta(minutes=30), sync_sops_start_time=False)
         window_from = actual_in_range - datetime.timedelta(minutes=30)
         window_to = actual_in_range + datetime.timedelta(minutes=30)
         resp = resource.risk.list_pa_execution_records.perform_request({"from": window_from, "to": window_to})
@@ -605,8 +654,8 @@ class TestListPAExecutionRecords:
             sops_start_time=actual_late.timestamp(),
         )
         # 创建时间与真实开始时间相反
-        self._stamp(created_late, actual_late)
-        self._stamp(created_early, actual_early)
+        self._stamp(created_late, actual_late, sync_sops_start_time=False)
+        self._stamp(created_early, actual_early, sync_sops_start_time=False)
         resp = resource.risk.list_pa_execution_records.perform_request({"order_by": "start_time"})
         assert [item["sops_task_id"] for item in resp["results"]] == ["1", "2"]
         resp = resource.risk.list_pa_execution_records.perform_request({"order_by": "-start_time"})

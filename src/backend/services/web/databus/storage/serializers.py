@@ -139,6 +139,7 @@ class CreateRedisResponseSerializer(serializers.ModelSerializer):
 class StorageCreateRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     cluster_name = serializers.CharField(label=gettext_lazy("集群名称"))
+    display_name = serializers.CharField(label=gettext_lazy("集群展示名称"), default="", allow_blank=True)
     bkbase_cluster_en_name = serializers.RegexField(label=gettext_lazy("集群英文名称"), regex=CLUSTER_NAME_EN_REGEX)
     domain_name = serializers.CharField(label=gettext_lazy("集群域名"))
     port = serializers.IntegerField(label=gettext_lazy("集群端口"))
@@ -160,6 +161,9 @@ class StorageCreateRequestSerializer(serializers.Serializer):
     pre_defined_extra_config = serializers.DictField(label=gettext_lazy("预定义集群额外配置"), required=False, default=dict)
 
     def validate(self, attrs):
+        # 远程 bk-log create_storage 接口要求 display_name 必填；若调用方未传则回退用 cluster_name 填充
+        if not attrs.get("display_name"):
+            attrs["display_name"] = attrs.get("cluster_name", "")
         if not attrs["enable_hot_warm"]:
             return attrs
         if not all(

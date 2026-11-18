@@ -103,6 +103,23 @@ export const buildSceneContextQueryFromSelection = (item: {
   return { scene_id: item.id, scope_id: item.id, scope_type: 'scene' };
 };
 
+const firstQueryValue = (value: unknown) => {
+  if (Array.isArray(value)) return String(value[0] ?? '');
+  if (value === undefined || value === null) return '';
+  return String(value);
+};
+
+/** 地址栏当前是系统范围。此时 scene_id 是系统 id，不能当作场景 id。 */
+export const isSystemScopedContextQuery = (query: {
+  scene_id?: unknown;
+  scope_id?: unknown;
+  scope_type?: unknown;
+} = {}) => {
+  const scopeType = firstQueryValue(query.scope_type);
+  const rawId = firstQueryValue(query.scene_id) || firstQueryValue(query.scope_id);
+  return scopeType === 'system' || scopeType === 'cross_system' || rawId === 'allSystem';
+};
+
 /** 根据当前生效的场景上下文生成 URL query */
 export const getSceneContextQuery = (): Record<string, string> => {
   const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();

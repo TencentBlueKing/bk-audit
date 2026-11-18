@@ -136,3 +136,53 @@ class StorageTest(TestCase):
         self.assertEqual(serializer.validated_data.get('admin'), ["admin", ""])
 
         return serializer.is_valid()
+
+
+class FakeSM2Cipher:
+    """模拟真实 SM2 的「密文/明文不可互换」：只接受自己产出的密文。"""
+
+    PREFIX = "SM2#"
+
+    def encrypt(self, plaintext: str) -> str:
+        return "{}{}".format(self.PREFIX, plaintext)
+
+    def decrypt(self, ciphertext: str) -> str:
+        if not (isinstance(ciphertext, str) and ciphertext.startswith(self.PREFIX)):
+            raise ValueError("decrypt failed: not a ciphertext")
+        return ciphertext[len(self.PREFIX) :]
+
+
+class StoragePasswordContractTest(TestCase):
+    """CreateStorageResource 的密码是接口契约：入参密文，送 bk_log 前解密为明文。"""
+
+    def setUp(self):
+        for target in (
+            "databus.storage.resources.StorageConfig",
+            "databus.storage.resources.StorageOperateLog",
+            "databus.storage.resources.GlobalMetaConfig",
+        ):
+            patcher = mock.patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        cipher_patcher = mock.patch("databus.storage.resources.asymmetric_cipher", new=FakeSM2Cipher())
+        cipher_patcher.start()
+        self.addCleanup(cipher_patcher.stop)
+
+    @staticmethod
+    def _params(password: str) -> dict:
+        params = {**CREATE_STORAGE_PARAMS}
+        params["auth_info"] = {"username": "u", "password": password}
+        return params
+
+    def test_plaintext_password_rejected(self):
+        """明文直接进资源层会解密失败——即初始化链路原样透传时的故障形态。"""
+        with self.assertRaises(ValueError):
+            self.resource.databus.storage.create_storage(**self._params("PLAIN-PWD"))
+
+    def test_ciphertext_password_decrypted_for_api(self):
+        """边界加密后的值交给资源层，真正送给 bk_log 的必须是原始口令。"""
+        api_mock = mock.Mock(return_value=CLUSTER_ID)
+        with mock.patch("databus.storage.resources.api.bk_log.create_storage", api_mock):
+            self.resource.databus.storage.create_storage(**self._params("SM2#PLAIN-PWD"))
+        sent = api_mock.call_args[0][0]
+        self.assertEqual(sent["auth_info"]["password"], "PLAIN-PWD")

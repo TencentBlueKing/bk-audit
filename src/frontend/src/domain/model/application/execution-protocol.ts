@@ -39,14 +39,25 @@ const mapOrderBy = (sort?: string | string[]) => {
   return desc ? `-${mapped}` : mapped;
 };
 
+/**
+ * 套餐筛选值是套餐 id。一个 id 传整数，多个 id 用逗号拼成 pa_id。
+ * 已有 id 文本但没有合法数字时，不回退成 pa_name。
+ */
+const packageIds = (value?: string) => {
+  if (value == null || value === '') return [];
+  return String(value).split(',').map(item => item.trim()).filter(item => /^\d+$/.test(item));
+};
+
 /** 页面筛选名转成执行记录列表协议的 query。任务 ID 筛选项对应协议 id（记录主键）。 */
 export const toExecutionListQuery = (params: ExecutionListQuery = {}) => {
   const query: Record<string, string | number> = {};
   if (params.page) query.page = params.page;
   if (params.page_size) query.page_size = params.page_size;
-  const paId = toNumber(params.application_id);
-  if (paId != null) query.pa_id = paId;
-  if (params.application_name) query.pa_name = params.application_name;
+  const packageIdText = String(params.application_id || '').trim();
+  const paIds = packageIds(params.application_id);
+  if (paIds.length === 1) query.pa_id = Number(paIds[0]);
+  else if (paIds.length > 1) query.pa_id = paIds.join(',');
+  else if (!packageIdText && params.application_name) query.pa_name = params.application_name;
   if (params.risk_id) query.risk_id = params.risk_id;
   const sceneId = toNumber(params.scene_id);
   if (sceneId != null) query.scene_id = sceneId;
