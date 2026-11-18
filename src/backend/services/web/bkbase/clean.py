@@ -531,7 +531,75 @@ def _same_clean_rules(declared, actual, *, strict_types=False):
     )
 
 
-def ensure_clean(context, owner, *, rules, rt_ref, publish=True, _locked_clean_ref=None, _require_existing=False):
+def _same_json_decode_path(old_rules, new_rules, output_id, legacy_json_decoders):
+    """从解码输出回溯到原始输入，逐节点核对唯一生产者、取值和分支语义。"""
+
+    def unique_output(rules, name):
+        matches = [rule for rule in rules if isinstance(rule, dict) and rule.get("output_id") == name]
+        return matches[0] if len(matches) == 1 else None
+
+    seen = set()
+    while output_id != "__raw_data":
+        if not isinstance(output_id, str) or not output_id or output_id in seen:
+            return False
+        seen.add(output_id)
+        old = unique_output(old_rules, output_id)
+        new = unique_output(new_rules, output_id)
+        if old is None or new is None:
+            return False
+        before, after = old.get("operator"), new.get("operator")
+        if not isinstance(before, dict) or not isinstance(after, dict):
+            return False
+        comparable = deepcopy(old)
+        if (
+            (new.get("input_id"), output_id) in legacy_json_decoders
+            and before.get("type") == after.get("type") == "json_de"
+            and before.get("error_strategy") == "null"
+            and "error_strategy" not in after
+        ):
+            # 仅将本次可保留的解码策略视为相同；显式修改仍使下游路径不同。
+            comparable["operator"].pop("error_strategy")
+        if not _same_clean_rules([new], [comparable], strict_types=True):
+            return False
+        output_id = new.get("input_id")
+    # 原始输入不能被规则同名覆盖，否则不具备可信根。
+    return not any(rule.get("output_id") == "__raw_data" for rule in old_rules + new_rules if isinstance(rule, dict))
+
+
+def _preserve_bound_json_decoders(current, desired, legacy_json_decoders):
+    """同可信绑定、完整同解码路径的旧 null 不退为默认 drop；不改赋值类型。"""
+    old_rules, new_rules = current.get("rules"), desired.get("rules")
+    if not isinstance(old_rules, list) or not isinstance(new_rules, list):
+        return
+    preserved = []
+    for rule in new_rules:
+        input_id, output_id = rule.get("input_id"), rule.get("output_id")
+        operator = rule.get("operator", {})
+        if (
+            (input_id, output_id) in legacy_json_decoders
+            and operator.get("type") == "json_de"
+            and "error_strategy" not in operator
+            and _same_json_decode_path(old_rules, new_rules, output_id, legacy_json_decoders)
+        ):
+            old = next(r for r in old_rules if r.get("output_id") == output_id)
+            if old["operator"].get("error_strategy") == "null":
+                preserved.append(rule)
+    # 完成全部路径核验后再补策略，避免上游补值影响其他节点的比较顺序。
+    for rule in preserved:
+        rule["operator"]["error_strategy"] = "null"
+
+
+def ensure_clean(
+    context,
+    owner,
+    *,
+    rules,
+    rt_ref,
+    publish=True,
+    _locked_clean_ref=None,
+    _require_existing=False,
+    _legacy_json_decoders=(),
+):
     """稳定引用下声明/更新Clean，首次失败后的重试先核实远端。"""
     binding = deepcopy(owner.bkbase_v4_resources or {})
     ref = owner_clean_ref(context, owner)
@@ -552,7 +620,6 @@ def ensure_clean(context, owner, *, rules, rt_ref, publish=True, _locked_clean_r
         "clean": ref,
         "clean_role": role,
         "result_table_id": logical_id,
-        "clean_pending_create": True,
     }
     if rt_ref is not None:
         resource_params(context, rt_ref, kind="ResultTable")
@@ -571,7 +638,19 @@ def ensure_clean(context, owner, *, rules, rt_ref, publish=True, _locked_clean_r
                 raise BKBaseResourceMappingError(message="Existing Clean logical result table ID mismatch")
             if _locked_clean_ref is not None:
                 _preserve_collector_join(owner, old["spec"], spec)
-        # 在远端写入前保存已声明的逻辑ID与Clean引用，不生成ResultTable引用。
+            if (
+                _require_existing
+                and binding.get("clean") == ref
+                and binding.get("data_id") == data_ref
+                and binding.get("clean_role") == role
+                and binding.get("result_table_id") == logical_id
+                and rt_ref is not None
+                and binding.get("result_table") == rt_ref
+            ):
+                _preserve_bound_json_decoders(old["spec"], spec, _legacy_json_decoders)
+        if old is None:
+            pending["clean_pending_create"] = True
+        # 仅真正创建才标记结果待确认；已建立资源的更新失败不能降为创建重试。
         update_owner_binding(owner, pending)
         if old is None:
             revision = int(time.time() * 1000)
@@ -633,7 +712,7 @@ def declared_result_table_id(params):
     return f"{business}_{table_name}"
 
 
-def build_clean_spec(params, *, data_ref, logical_id, rt_owner):
+def build_clean_spec(params, *, data_ref, logical_id, rt_owner, _legacy_json_decoders=None):
     """转换业务规则为正式 Clean 声明，发布版本由调用方补充。"""
     raw_config = json.loads(params["json_config"]) if isinstance(params["json_config"], str) else params["json_config"]
     spec = {
@@ -646,6 +725,10 @@ def build_clean_spec(params, *, data_ref, logical_id, rt_owner):
         "result_table_alias": params.get("result_table_name_alias", ""),
         "rules": convert_rules(raw_config, fields=params.get("fields", ())),
     }
+    if _legacy_json_decoders is not None:
+        _legacy_json_decoders.update(
+            (rule["input_id"], rule["output_id"]) for rule in spec["rules"] if rule["operator"]["type"] == "json_de"
+        )
     if "join" in raw_config:
         spec["join"] = deepcopy(raw_config["join"])
     return spec
@@ -697,11 +780,20 @@ def configure_clean(owner, params, *, rt_owner=False, publish=True, _locked_clea
     else:
         plugin = CollectorPlugin.objects.get(collector_plugin_id=owner.collector_plugin_id)
         rt_id, rt_ref = _shared_plugin_table(context, plugin)
-    spec = build_clean_spec(params, data_ref=owner.bkbase_v4_resources["data_id"], logical_id=rt_id, rt_owner=rt_owner)
+    legacy_json_decoders = set()
+    spec = build_clean_spec(
+        params,
+        data_ref=owner.bkbase_v4_resources["data_id"],
+        logical_id=rt_id,
+        rt_owner=rt_owner,
+        _legacy_json_decoders=legacy_json_decoders,
+    )
     require_existing = (owner.bkbase_v4_resources or {}).get("clean") and not (owner.bkbase_v4_resources or {}).get(
         "clean_pending_create"
     )
     intent = {"_require_existing": True} if require_existing else {}
+    if require_existing and legacy_json_decoders:
+        intent["_legacy_json_decoders"] = legacy_json_decoders
     return ensure_clean(
         context, owner, rules=spec, rt_ref=rt_ref, publish=publish, _locked_clean_ref=_locked_clean_ref, **intent
     )
