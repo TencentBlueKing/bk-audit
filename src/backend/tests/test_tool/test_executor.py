@@ -164,8 +164,9 @@ class TestSqlDataSearchExecutor(DjangoTestCase):
             return_value=[{"result": False, "user_id": "test_user", "object_id": "mocked_table"}],
         ):
             executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.analyzer_cls)
-            with self.assertRaises(DataSearchTablePermission):
+            with self.assertRaises(DataSearchTablePermission) as raised:
                 executor.execute(self.sql_params)
+            self.assertEqual(str(raised.exception.MESSAGE), "无数据查询权限，并联系场景管理员处理")
 
     def test_variable_missing(self):
         """测试必填变量缺失时抛出 InputVariableMissingError"""
@@ -1184,12 +1185,11 @@ class ApiToolExecutorTestCase(DjangoTestCase):
             ]
         }
 
-        # 应返回结果，而非抛出异常
         result = self.executor.execute(params_data)
         self.assertEqual(result.status_code, 404)
         self.assertEqual(result.result, mock_json_content)
         self.assertEqual(result.err_type, ApiToolErrorType.NONE)
-        self.assertEqual(result.message, "")
+        self.assertEqual(result.message, "内部错误，并联系场景管理员处理")
 
     @patch('requests.request')
     def test_execute_non_json_response(self, mock_requests_request):
