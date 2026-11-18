@@ -24,28 +24,23 @@
       class="title">
       {{ t('工单处理') }}
     </div>
+    <!-- 操作按钮在面板内容区顶部靠左（标题栏下方、时间线上方），不是 dock 标题栏右上角 -->
     <div
       v-if="showHeaderActions"
       class="header">
-      <div style="margin-right: auto;">
-        <!-- 标记误报 / 解除误报 -->
+      <div class="header-actions">
         <mark-misreport-btn
           v-if="showHeaderMisreportBtn"
-         
           :data="data"
           :last-ticket-history="_.last(ticketHistory)"
           :user-info="userInfo"
-          @update="handleUpdate" style="margin-right: var(--bk-theme-space-16)" />
-        <!-- 重开 -->
+          @update="handleUpdate" />
         <reopen-btn
           v-if="data.status==='closed' && data.risk_label ==='normal'"
-         
           :data="data"
           :user-info="userInfo"
-          @update="handleUpdate" style="margin-right: var(--bk-theme-space-16)" />
-        <!-- 跳转到风险总结的锚点 -->
+          @update="handleUpdate" />
         <span id="risk-manage-content-btn" />
-        <!-- 风险总结 -->
         <risk-content-btn
           v-if="data.status==='closed'"
           ref="riskContentRef"
@@ -590,6 +585,12 @@
     display: flex;
     padding-bottom: var(--bk-theme-space-12);
     justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: var(--bk-theme-space-16);
     align-items: center;
   }
 }

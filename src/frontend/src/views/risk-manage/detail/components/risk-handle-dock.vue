@@ -51,28 +51,21 @@
 
 
       <div
-
         class="risk-handle-dock__header"
-
         @click.stop="toggleExpanded">
         <audit-icon
-
           class="risk-handle-dock__toggle"
-
           :type="isExpanded ? 'angle-fill-down' : 'angle-fill-rignt'" />
 
         <span class="risk-handle-dock__title">{{ t('工单处理') }}</span>
 
         <audit-icon
           class="risk-handle-dock__info"
-
           type="info-fill" />
 
         <div class="risk-handle-dock__stage">
           <span class="risk-handle-dock__stage-text">{{ t('当前处于') }}</span>
-
           <span class="risk-handle-dock__stage-tag">{{ currentStageName }}</span>
-
           <span class="risk-handle-dock__stage-text">{{ t('环节') }}</span>
         </div>
       </div>
@@ -648,10 +641,10 @@
   border-radius: var(--bk-theme-tag-radius);
 }
 
-
 .risk-handle-dock__body {
   flex: 1;
-  min-height: 0;padding: var(--bk-theme-space-16) var(--dock-content-padding, var(--bk-theme-space-24)) var(--bk-theme-space-16);
+  min-height: 0;
+  padding: var(--bk-theme-space-16) var(--dock-content-padding, var(--bk-theme-space-24)) var(--bk-theme-space-16);
   overflow: hidden auto;
 }
 

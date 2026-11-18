@@ -66,6 +66,8 @@
     tooltipContentClass?: string,
     line?: number,  // 行数控制属性
     tip?: string,   // 自定义 tooltip 提示内容（有值时 tooltip 显示此内容，不影响文本溢出判断）
+    /** 空间不足时是否自动翻转到对侧，默认 true */
+    flip?: boolean,
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -77,14 +79,35 @@
     tooltipContentClass: '',
     line: 1,
     tip: '',
+    flip: true,
   });
 
-  const tooltipContentStyle = computed((): CSSProperties => ({
-    maxHeight: props.tooltipMaxHeight,
-    overflow: 'auto',
-    wordBreak: 'break-all',
-    whiteSpace: 'pre-wrap',
-  }));
+  const resolvedMaxWidth = computed(() => {
+    if (props.maxWidth === 'none' || props.maxWidth === undefined || props.maxWidth === null) {
+      return 'none';
+    }
+    if (typeof props.maxWidth === 'number') {
+      return props.maxWidth;
+    }
+    const raw = String(props.maxWidth).trim();
+    if (/^\d+$/.test(raw)) {
+      return Number(raw);
+    }
+    return raw;
+  });
+
+  const tooltipContentStyle = computed((): CSSProperties => {
+    const maxWidth = resolvedMaxWidth.value;
+    return {
+      maxHeight: props.tooltipMaxHeight,
+      ...(maxWidth !== 'none'
+        ? { maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }
+        : {}),
+      overflow: 'auto',
+      wordBreak: 'break-all',
+      whiteSpace: 'pre-wrap',
+    };
+  });
 
   const rootRef = ref();
   const templateRef = ref<HTMLElement | null>(null);
@@ -112,18 +135,33 @@
           allowHTML: true,
           appendTo: () => document.body,
           theme: props.theme || 'dark',
-          maxWidth: props.maxWidth || 'none',
+          maxWidth: resolvedMaxWidth.value,
           interactive: true,
           arrow: true,
           offset: [0, 8],
           zIndex: 999999,
           hideOnClick: true,
+          popperOptions: {
+            modifiers: [
+              {
+                name: 'flip',
+                enabled: props.flip,
+              },
+            ],
+          },
         });
       }
     });
   };
 
-  watch(() => [props.data, props.maxWidth, props.tooltipMaxHeight, props.tooltipContentClass], () => {
+  watch(() => [
+    props.data,
+    props.maxWidth,
+    props.tooltipMaxHeight,
+    props.tooltipContentClass,
+    props.placement,
+    props.flip,
+  ], () => {
     initTippy();
   }, {
     deep: true,

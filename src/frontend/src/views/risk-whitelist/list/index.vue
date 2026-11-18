@@ -42,6 +42,7 @@
       is-need-scene-id
       row-key="id"
       scene-id-key="scene_id"
+      use-skeleton
       @clear-search="handleClearSearch">
       <template #empty>
         <div
@@ -70,8 +71,9 @@
   </div>
 </template>
 <script setup lang="tsx">
-  import { onMounted, onUnmounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RiskWhitelistService from '@service/risk-whitelist';
 
@@ -83,6 +85,12 @@
   import MatchScopeExpression from '@components/risk-whitelist/match-scope-expression.vue';
   import { WHITELIST_STATUS_TEXT, WHITELIST_TYPE_TEXT } from '@components/risk-whitelist/constants';
   import TdesignList from '@components/tdesign-list/index.vue';
+
+  import {
+    getSceneSystemParams,
+    SCENE_SELECTOR_STORAGE_KEY,
+    setActiveSceneSelection,
+  } from '@/utils/assist/scene-system-params';
 
   import CreateEditSideslider from '../components/create-edit-sideslider.vue';
   import DeleteDialog from '../components/delete-dialog.vue';
@@ -98,7 +106,18 @@
     values?: Array<{ id: string; name: string }>;
   }
 
+  interface CachedSceneItem {
+    id: string;
+    permission?: {
+      manage_scene?: boolean;
+      view_scene?: boolean;
+    };
+  }
+
+  const EMPTY_LIST = { results: [] as RiskWhitelist[], total: 0, count: 0 };
+
   const { t } = useI18n();
+  const router = useRouter();
   const { messageSuccess } = useMessage();
   const { on: onEvent, off } = useEventBus();
   const listRef = ref<InstanceType<typeof TdesignList>>();
@@ -110,6 +129,74 @@
   const hitRef = ref<InstanceType<typeof HitRecordSideslider>>();
   const searchValue = ref<SearchKey[]>([]);
   const hasSearch = ref(false);
+
+  const readCachedSceneList = (): CachedSceneItem[] => {
+    try {
+      const list = JSON.parse(localStorage.getItem('scene-system-selector:sceneList') || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const readManagePlatform = () => {
+    try {
+      const permission = JSON.parse(sessionStorage.getItem('userScenePermission') || '{}');
+      return permission.manage_platform === true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** 当前场景是否具备白名单管理权限；列表未就绪时返回 null，避免误请求 */
+  const getCurrentSceneManageAccess = (): boolean | null => {
+    if (readManagePlatform()) return true;
+    const sceneId = String(getSceneSystemParams().scope_id || '');
+    if (!sceneId) return false;
+    const list = readCachedSceneList();
+    if (!list.length) return null;
+    const current = list.find(item => String(item.id) === sceneId);
+    if (!current) return false;
+    return current.permission?.manage_scene === true;
+  };
+
+  /**
+   * 与场景配置路由分流一致：无当前场景管理权时切到可管理场景 / 引导申请，不打白名单接口。
+   * @returns true 表示可继续请求列表
+   */
+  const ensureManageAccessBeforeFetch = (): boolean => {
+    const access = getCurrentSceneManageAccess();
+    if (access === true) return true;
+    if (access === null) return false;
+
+    const sceneId = String(getSceneSystemParams().scope_id || '');
+    const list = readCachedSceneList();
+    const firstManageable = list.find(item => item.permission?.manage_scene === true);
+    if (firstManageable) {
+      const manageableSceneId = String(firstManageable.id);
+      const selection = { id: manageableSceneId, type: 'scene' as const };
+      setActiveSceneSelection(selection);
+      localStorage.setItem(SCENE_SELECTOR_STORAGE_KEY, JSON.stringify(selection));
+      router.replace({
+        name: 'riskWhitelistList',
+        query: {
+          scene_id: manageableSceneId,
+          scope_id: manageableSceneId,
+          scope_type: 'scene',
+        },
+      });
+      return false;
+    }
+
+    const hasViewOnly = list.some(item => item.permission?.view_scene === true);
+    router.replace({
+      name: hasViewOnly || list.length > 0 ? 'userLandingPage' : 'permissionsPage',
+      query: hasViewOnly || list.length > 0
+        ? (sceneId ? { scene_id: sceneId } : {})
+        : { role: 'manager', ...(sceneId ? { scene_id: sceneId } : {}) },
+    });
+    return false;
+  };
 
   const searchData = [
     { id: 'rule_code', name: t('规则标识') },
@@ -165,21 +252,52 @@
       });
   };
 
-  const renderMore = (items: Array<{ label: string; onClick: () => void }>) => (
-    <bk-dropdown trigger="click">
+  /** bk-dropdown 的 isShow 仅在 trigger=manual 时生效；columns 需依赖 moreOpenId 才能重渲染 */
+  const moreOpenId = ref<number | string | null>(null);
+
+  const closeMoreMenu = () => {
+    moreOpenId.value = null;
+  };
+
+  const runMoreAction = (action: () => void) => {
+    closeMoreMenu();
+    nextTick(() => {
+      action();
+    });
+  };
+
+  const renderMore = (
+    rowId: number | string,
+    items: Array<{ label: string; onClick: () => void }>,
+  ) => (
+    <bk-dropdown
+      isShow={moreOpenId.value === rowId}
+      placement="bottom-end"
+      trigger="manual"
+      onShowChange={(show: boolean) => {
+        if (!show && moreOpenId.value === rowId) {
+          moreOpenId.value = null;
+        }
+      }}>
       {{
         default: () => (
           <button
             class="more-trigger"
             title={t('更多')}
-            type="button">
+            type="button"
+            onClick={(event: MouseEvent) => {
+              event.stopPropagation();
+              moreOpenId.value = moreOpenId.value === rowId ? null : rowId;
+            }}>
             <audit-icon type="more" />
           </button>
         ),
         content: () => (
           <bk-dropdown-menu>
             {items.map(item => (
-              <bk-dropdown-item onClick={item.onClick}>{item.label}</bk-dropdown-item>
+              <bk-dropdown-item onClick={() => runMoreAction(item.onClick)}>
+                {item.label}
+              </bk-dropdown-item>
             ))}
           </bk-dropdown-menu>
         ),
@@ -187,9 +305,16 @@
     </bk-dropdown>
   );
 
-  /** 按钮以列表返回的 actions 为准，不按 status 本地推导 */
+  /**
+   * 操作列布局对齐设计稿（仍以 actions 决定能否展示）：
+   * - 已停用：启用；更多：命中记录、删除（不展示续期/编辑）
+   * - 已到期：编辑、续期；更多：命中记录、删除
+   * - 生效中：编辑、停用；更多：续期、命中记录（及删除若有）
+   */
   const renderActions = (row: RiskWhitelist) => {
     const set = new Set(row.actions || []);
+    const isDisabled = row.status === 'disabled';
+    const isExpired = row.status === 'expired';
     const primary: any[] = [];
     const more: Array<{ label: string; onClick: () => void }> = [];
 
@@ -210,7 +335,8 @@
         <bk-button text theme="primary" onClick={() => rejectRef.value?.open(row)}>{t('驳回')}</bk-button>,
       );
     }
-    if (set.has('edit')) {
+    // 已停用不展示编辑
+    if (set.has('edit') && !isDisabled) {
       primary.push(
         <bk-button text theme="primary" onClick={() => editRef.value?.open(row)}>{t('编辑')}</bk-button>,
       );
@@ -225,15 +351,15 @@
         <bk-button text theme="primary" onClick={() => toggleRef.value?.open(row, true)}>{t('启用')}</bk-button>,
       );
     }
-    if (set.has('renew')) {
-      const renewBtn = (
-        <bk-button text theme="primary" onClick={() => renewRef.value?.open(row)}>{t('续期')}</bk-button>
-      );
-      // 生效中/已停用：续期放更多；已到期等：续期与编辑并列
-      if (set.has('disable') || set.has('enable')) {
+    if (set.has('renew') && !isDisabled) {
+      // 已停用：先启用再续期，不展示续期
+      // 生效中：续期进更多；已到期：续期与编辑并列
+      if (set.has('disable') && !isExpired) {
         more.push({ label: t('续期'), onClick: () => renewRef.value?.open(row) });
       } else {
-        primary.push(renewBtn);
+        primary.push(
+          <bk-button text theme="primary" onClick={() => renewRef.value?.open(row)}>{t('续期')}</bk-button>,
+        );
       }
     }
     if (set.has('hits')) {
@@ -253,93 +379,97 @@
     return (
       <div class="row-actions">
         {primary}
-        {more.length ? renderMore(more) : null}
+        {more.length ? renderMore(row.id, more) : null}
       </div>
     );
   };
 
-  const columns = [
-    {
-      title: t('规则标识'),
-      colKey: 'rule_code',
-      width: 128,
-      minWidth: 128,
-      sorter: true,
-    },
-    {
-      title: t('匹配范围'),
-      colKey: 'match_scope',
-      width: 350,
-      cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
-        <div class="scope-cell">
-          <MatchScopeExpression mode="tag" scope={row.match_scope} />
-        </div>
-      ),
-    },
-    {
-      title: t('加白类型'),
-      colKey: 'whitelist_type',
-      width: 124,
-      minWidth: 124,
-      filter: {
-        type: 'multiple',
-        resetValue: [],
-        showConfirmAndReset: true,
-        list: filterList(WHITELIST_TYPE_TEXT),
+  const columns = computed(() => {
+    // 依赖 moreOpenId，保证菜单开关时操作列重渲染
+    void moreOpenId.value;
+    return [
+      {
+        title: t('规则标识'),
+        colKey: 'rule_code',
+        width: 128,
+        minWidth: 128,
+        sorter: true,
       },
-      cell: (_: unknown, { row }: { row: RiskWhitelist }) => t(WHITELIST_TYPE_TEXT[row.whitelist_type]),
-    },
-    {
-      title: t('到期时间'),
-      colKey: 'expire_at',
-      width: 180,
-      minWidth: 180,
-      sorter: true,
-      cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
-        <span class="expire-cell">{row.is_permanent ? t('永久') : (row.expire_at || '--')}</span>
-      ),
-    },
-    {
-      title: t('状态'),
-      colKey: 'status',
-      width: 90,
-      filter: {
-        type: 'multiple',
-        resetValue: [],
-        showConfirmAndReset: true,
-        list: filterList(WHITELIST_STATUS_TEXT),
+      {
+        title: t('匹配范围'),
+        colKey: 'match_scope',
+        width: 350,
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
+          <div class="scope-cell">
+            <MatchScopeExpression mode="tag" scope={row.match_scope} />
+          </div>
+        ),
       },
-      cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
-        <StatusFlowPopover applicant={row.applicant} flow={row.flow} status={row.status} />
-      ),
-    },
-    {
-      title: t('加白原因'),
-      colKey: 'reason',
-      width: 161,
-      ellipsis: true,
-    },
-    {
-      title: t('命中次数'),
-      colKey: 'hit_count',
-      width: 115,
-      sorter: true,
-      cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
-        row.hit_count > 0
-          ? <bk-button text theme="primary" onClick={() => openHit(row)}>{row.hit_count}</bk-button>
-          : <span class="hit-zero">{row.hit_count}</span>
-      ),
-    },
-    { title: t('更新人'), colKey: 'updated_by', width: 103, ellipsis: true },
-    { title: t('更新时间'), colKey: 'updated_at', width: 180, minWidth: 180, sorter: true },
-    {
-      title: t('操作'),
-      colKey: 'action',
-      width: 136,
-      fixed: 'right',
-      cell: (_: unknown, { row }: { row: RiskWhitelist }) => renderActions(row),
-    },
-  ];
+      {
+        title: t('加白类型'),
+        colKey: 'whitelist_type',
+        width: 124,
+        minWidth: 124,
+        filter: {
+          type: 'multiple',
+          resetValue: [],
+          showConfirmAndReset: true,
+          list: filterList(WHITELIST_TYPE_TEXT),
+        },
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => t(WHITELIST_TYPE_TEXT[row.whitelist_type]),
+      },
+      {
+        title: t('到期时间'),
+        colKey: 'expire_at',
+        width: 180,
+        minWidth: 180,
+        sorter: true,
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
+          <span class="expire-cell">{row.is_permanent ? t('永久') : (row.expire_at || '--')}</span>
+        ),
+      },
+      {
+        title: t('状态'),
+        colKey: 'status',
+        width: 90,
+        filter: {
+          type: 'multiple',
+          resetValue: [],
+          showConfirmAndReset: true,
+          list: filterList(WHITELIST_STATUS_TEXT),
+        },
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
+          <StatusFlowPopover applicant={row.applicant} flow={row.flow} status={row.status} />
+        ),
+      },
+      {
+        title: t('加白原因'),
+        colKey: 'reason',
+        width: 161,
+        ellipsis: true,
+      },
+      {
+        title: t('命中次数'),
+        colKey: 'hit_count',
+        width: 115,
+        sorter: true,
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
+          row.hit_count > 0
+            ? <bk-button text theme="primary" onClick={() => openHit(row)}>{row.hit_count}</bk-button>
+            : <span class="hit-zero">{row.hit_count}</span>
+        ),
+      },
+      { title: t('更新人'), colKey: 'updated_by', width: 103, ellipsis: true },
+      { title: t('更新时间'), colKey: 'updated_at', width: 180, minWidth: 180, sorter: true },
+      {
+        title: t('操作'),
+        colKey: 'action',
+        width: 136,
+        fixed: 'right',
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => renderActions(row),
+      },
+    ];
+  });
 
   const buildSearchParams = () => {
     const params: Record<string, string> = {};
@@ -351,6 +481,9 @@
   };
 
   const dataSource = (params: Record<string, any>) => {
+    if (!ensureManageAccessBeforeFetch()) {
+      return Promise.resolve(EMPTY_LIST);
+    }
     const search = buildSearchParams();
     hasSearch.value = Object.keys(search).length > 0 || Object.keys(params).some(key => (
       !['page', 'page_size', 'sort', 'scene_id', 'scope_id'].includes(key) && params[key]
@@ -362,31 +495,42 @@
   };
 
   const handleSearch = () => {
+    if (!ensureManageAccessBeforeFetch()) return;
     listRef.value?.fetchData(buildSearchParams());
   };
 
   const handleClearSearch = () => {
     searchValue.value = [];
     hasSearch.value = false;
+    if (!ensureManageAccessBeforeFetch()) return;
     listRef.value?.fetchData({});
   };
 
   const refresh = () => {
+    if (!ensureManageAccessBeforeFetch()) return;
     listRef.value?.fetchData(buildSearchParams());
   };
 
-  const openCreate = () => editRef.value?.open();
+  const openCreate = () => {
+    if (!ensureManageAccessBeforeFetch()) return;
+    editRef.value?.open();
+  };
 
   const handleSceneChange = () => refresh();
 
+  const handleSceneListReady = () => {
+    // 场景列表就绪后再判定权限，避免首屏用旧 scene_id 打出裸 toast
+    refresh();
+  };
+
   onMounted(() => {
-    setTimeout(() => {
-      onEvent('scene:change', handleSceneChange);
-    }, 1000);
+    onEvent('scene:change', handleSceneChange);
+    onEvent('scene-list-ready', handleSceneListReady);
   });
 
   onUnmounted(() => {
     off('scene:change', handleSceneChange);
+    off('scene-list-ready', handleSceneListReady);
   });
 </script>
 <style lang="postcss" scoped>

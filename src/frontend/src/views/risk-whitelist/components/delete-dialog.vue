@@ -118,7 +118,14 @@
     display: flex;
     gap: var(--bk-theme-space-8);
     align-items: flex-start;
+    min-width: 0;
     padding: var(--bk-theme-space-4) 0;
+  }
+
+  .desc-row :deep(.match-scope-text),
+  .desc-value {
+    flex: 1;
+    min-width: 0;
   }
 
   .desc-label {

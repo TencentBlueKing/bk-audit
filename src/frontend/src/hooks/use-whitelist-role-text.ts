@@ -27,9 +27,13 @@ const readRoles = () => {
   }
 };
 
+/** 场景管理员自己发起会代审批，规则可直接生效；平台管理员走待审批。 */
+const canDirectActivate = () => readRoles().includes('scene_admin');
+
 /** 后端口径：误报加白会先误报关单；冒险加白等审批通过后再关单。 */
 export const getWhitelistApplyHint = (type: WhitelistType, isAdmin: boolean) => {
-  if (isAdmin) return '';
+  // 仅场景管理员代审批可直接生效，不展示待审批提示；平台管理员与普通人一致
+  if (isAdmin && canDirectActivate()) return '';
   if (type === 'false_positive') {
     return '提交后将按误报关闭当前风险单，加白规则待场景管理员审批通过后生效。';
   }
@@ -37,7 +41,7 @@ export const getWhitelistApplyHint = (type: WhitelistType, isAdmin: boolean) => 
 };
 
 export const getWhitelistApplySuccess = (type: WhitelistType, isAdmin: boolean) => {
-  if (isAdmin) {
+  if (isAdmin && canDirectActivate()) {
     return type === 'false_positive'
       ? '已按误报关单，白名单已生效'
       : '白名单已生效';
@@ -47,17 +51,16 @@ export const getWhitelistApplySuccess = (type: WhitelistType, isAdmin: boolean) 
     : '加白申请已提交';
 };
 
-export const getWhitelistRiskCloseImpact = (type: WhitelistType, isAdmin: boolean) => {
+export const getWhitelistRiskCloseImpact = (type: WhitelistType, _isAdmin: boolean) => {
   if (type === 'false_positive') {
     return '当前风险单将按误报关闭。';
   }
-  return isAdmin
-    ? '当前风险单将关闭。'
-    : '审批通过后当前风险单将关闭。';
+  // 冒险加白：发起时不改风险单，审批通过后才关单（场景管理员代审批也属审批通过）
+  return '审批通过后当前风险单将关闭。';
 };
 
 export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) => {
-  if (isAdmin) {
+  if (isAdmin && canDirectActivate()) {
     return '白名单立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
   }
   if (type === 'false_positive') {
@@ -68,13 +71,14 @@ export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) 
 
 /**
  * 管理员（saas_admin / scene_admin）与处理人、场景用户的加白文案。
- * 同时拥有管理员角色时走管理员文案。
+ * 同时拥有管理员角色时走管理员入口文案；是否「立即生效」以场景管理员为准。
  */
 export default function useWhitelistRoleText() {
   const isAdmin = computed(() => {
     const roles = readRoles();
     return roles.includes('saas_admin') || roles.includes('scene_admin');
   });
+  const isDirectActivate = computed(() => canDirectActivate());
   const text = computed(() => (isAdmin.value
     ? {
       method: '加入白名单',
@@ -82,9 +86,13 @@ export default function useWhitelistRoleText() {
       confirmTitle: '确定加入白名单？',
       confirmOk: '确定加白',
       misreportAlertTail: '请同时加入白名单',
-      misreportSuccess: '已标记误报，白名单已生效',
-      applySuccess: '白名单已生效',
-      applyHint: getWhitelistApplyHint('risk_acceptance', false),
+      misreportSuccess: isDirectActivate.value
+        ? '已标记误报，白名单已生效'
+        : '已标记误报，加白申请已提交',
+      applySuccess: isDirectActivate.value
+        ? '白名单已生效'
+        : '加白申请已提交',
+      applyHint: getWhitelistApplyHint('risk_acceptance', true),
     }
     : {
       method: '申请加白',

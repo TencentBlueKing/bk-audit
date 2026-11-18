@@ -109,6 +109,7 @@
           {{ t('通知组') }}
         </audit-menu-item>
         <audit-menu-item
+          v-if="canAccessRiskWhitelist"
           :class="{ active: currentRoute === 'riskWhitelist' || currentRoute === 'riskWhitelistList' }"
           index="riskWhitelist"
           @click="handleMenuClick('riskWhitelist')">
@@ -189,6 +190,16 @@
   const route = useRoute();
   const router = useRouter();
   const { emit } = useEventBus();
+
+  const userRole = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('userRole') || '[]') as string[];
+    } catch {
+      return [] as string[];
+    }
+  })();
+  // 与需求一致：仅平台管理员 / 场景管理员可见风险白名单入口
+  const canAccessRiskWhitelist = userRole.includes('saas_admin') || userRole.includes('scene_admin');
 
   // 当前激活的路由
   const currentRoute = computed(() => route.name as string);

@@ -36,6 +36,21 @@ const sceneParams = (sceneId?: string | number) => {
   return /^\d+$/.test(String(value ?? '')) ? { scene_id: Number(value) } : {};
 };
 
+/** 列表接口仅接受文档约定字段，避免 URL/表格残留参数触发「参数验证失败」 */
+const LIST_QUERY_KEYS = [
+  'scene_id',
+  'id',
+  'status',
+  'whitelist_type',
+  'reason',
+  'match_scope',
+  'updated_by',
+  'keyword',
+  'sort',
+  'page',
+  'page_size',
+] as const;
+
 /** 规则标识列按后端整数主键 id 排序 */
 const toSortField = (field: string) => field.replace(/^(-?)rule_code$/, '$1id');
 
@@ -46,21 +61,35 @@ const normalizeListParams = (params: Record<string, any>): Record<string, any> =
     match_scope: matchScope,
     condition_keyword: conditionKeyword,
     sort,
+    keyword: rawKeyword,
     ...rest
   } = params;
-  const keyword = [rest.keyword, matchScope, conditionKeyword].filter(Boolean).join(' ');
-  return {
+  const keyword = [rawKeyword, matchScope, conditionKeyword].filter(Boolean).join(' ');
+  const normalized: Record<string, any> = {
     ...rest,
     ...(ruleCode ? { id: ruleCode } : {}),
     ...(keyword ? { keyword } : {}),
     ...(sort ? { sort: Array.isArray(sort) ? sort.map(toSortField) : toSortField(String(sort)) } : {}),
   };
+  return LIST_QUERY_KEYS.reduce((result, key) => {
+    const value = normalized[key];
+    if (value !== undefined && value !== null && value !== '') {
+      result[key] = value;
+    }
+    return result;
+  }, {} as Record<string, any>);
 };
 
 export default {
   fetchList(params: Record<string, any>) {
-    const { scene_id: sceneId, ...rest } = normalizeListParams(params);
-    return RiskWhitelistSource.getList({ ...rest, ...sceneParams(sceneId) }, { permission: 'page' })
+    const normalized = normalizeListParams(params);
+    const { scene_id: sceneId, ...rest } = normalized;
+    const withScene = { ...rest, ...sceneParams(sceneId) };
+    // 列表必须带合法 scene_id，否则后端会直接「参数验证失败」
+    if (withScene.scene_id === undefined) {
+      return Promise.resolve({ results: [], total: 0, count: 0 });
+    }
+    return RiskWhitelistSource.getList(withScene, { permission: 'page' })
       .then(({ data }) => ({
         ...data,
         results: (data.results || []).map(item => new RiskWhitelist(item)),
@@ -86,7 +115,7 @@ export default {
       .then(({ data }) => data);
   },
 
-  /** 带 duration_days 时后端按原规则续期并重新提审，不带只改匹配范围和原因 */
+  /** 编辑只改匹配范围和原因；带 duration_days/expire_at 时后端按续期处理 */
   update(params: WhitelistPayload & { id: number | string; renew?: boolean }) {
     const mode = params.validity_mode;
     const renewParams = params.renew && mode

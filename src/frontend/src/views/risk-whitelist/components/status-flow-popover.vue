@@ -34,16 +34,21 @@
         <div class="flow-title">{{ t('蓝鲸流程服务') }}</div>
         <div class="flow-row">
           <span class="flow-label">{{ t('ITSM单号') }}</span>
-          <a
-            v-if="flow.itsm_url"
-            class="flow-link"
-            :href="flow.itsm_url"
-            rel="noopener noreferrer"
-            target="_blank">
-            {{ flow.itsm_sn || '--' }}
-            <audit-icon type="jump-link" />
-          </a>
-          <span v-else>{{ flow.itsm_sn || '--' }}</span>
+          <span
+            v-if="flow.itsm_sn || flow.itsm_url"
+            class="jump-cell">
+            <span class="jump-text">{{ flow.itsm_sn || '--' }}</span>
+            <a
+              v-if="flow.itsm_url"
+              v-bk-tooltips="{ content: t('打开ITSM单据'), delay: 80 }"
+              class="jump-icon"
+              :href="flow.itsm_url"
+              rel="noopener noreferrer"
+              target="_blank">
+              <audit-icon type="jump-link" />
+            </a>
+          </span>
+          <span v-else>--</span>
         </div>
         <div class="flow-row">
           <span class="flow-label">{{ t('申请状态') }}</span>
@@ -166,7 +171,19 @@
     text-align: right;
   }
 
-  .flow-link {
+  .jump-cell {
+    display: inline-flex;
+    gap: var(--bk-theme-space-4);
+    align-items: center;
+    min-width: 0;
+  }
+
+  .jump-text {
+    color: var(--bk-theme-text-strong);
+  }
+
+  .jump-icon {
+    display: inline-flex;
     color: var(--bk-theme-color-brand-2);
   }
 </style>
