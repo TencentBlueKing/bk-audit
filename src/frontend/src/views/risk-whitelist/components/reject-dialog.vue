@@ -111,8 +111,15 @@
     RiskWhitelistService.reject({
       id: record.value.id,
       reason: reason.value.trim(),
-    }).then(() => {
-      messageSuccess(t('已驳回，关联风险单回到待处理'));
+    }).then((data) => {
+      const status = data?.status;
+      if (status === 'pending') {
+        messageSuccess(t('驳回已提交，工单仍在处理中'));
+      } else if (status === 'rejected') {
+        messageSuccess(t('已驳回，关联风险单回到待处理'));
+      } else {
+        messageSuccess(t('操作成功'));
+      }
       isShow.value = false;
       emit('success');
     })

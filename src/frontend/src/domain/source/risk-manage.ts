@@ -300,15 +300,14 @@ class RiskManage extends ModuleBase {
       },
     });
   }
-  // 确认为误报
+  // 确认为误报（可带 whitelist，仅 false_positive）
   confirmAsMisreport(params: {
     risk_id: string | number,
     description?: string,
+    [key: string]: any,
   }) {
     return Request.post(`${this.module}/${params.risk_id}/confirm_as_misreport/`, {
-      params: {
-        description: params.description,
-      },
+      params,
     });
   }
   // 批量确认风险单
@@ -320,10 +319,11 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
-  // 批量标记误报
+  // 批量确认为误报（可带 whitelist，仅 false_positive）
   batchConfirmAsMisreport(params: {
     risk_ids: string[],
     description?: string,
+    [key: string]: any,
   }) {
     return Request.post(`${this.module}/batch_confirm_as_misreport/`, {
       params,

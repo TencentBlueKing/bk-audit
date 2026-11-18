@@ -115,7 +115,7 @@
 
   const editValue = ref<string[]>([]);
   // bk-tag-input 通过 focusInputTrigger 进入编辑态并弹出候选；仅 focus 原生 input 无效（input 默认 v-show 隐藏）
-  const tagInputRef = ref<{ focusInputTrigger?: (e?: MouseEvent) => void } | null>(null);
+  const tagInputRef = ref<{ focusInputTrigger?:(e?: MouseEvent) => void } | null>(null);
 
   // 负数 tag_id 为系统内置/虚拟分类（全部、无标签、我创建的等），不能作为业务标签选择
   const tagOptions = computed(() => props.tagList.reduce((res, item) => {

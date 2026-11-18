@@ -47,7 +47,7 @@
         </div>
         <div class="flow-row">
           <span class="flow-label">{{ t('申请状态') }}</span>
-          <span>{{ status === 'rejected' ? t('已驳回') : t('审批中') }}</span>
+          <span>{{ status === 'rejected' ? t('已驳回') : t('待审批') }}</span>
         </div>
         <div class="flow-row">
           <span class="flow-label">{{ t('当前节点') }}</span>
