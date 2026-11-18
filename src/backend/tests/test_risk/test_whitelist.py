@@ -313,6 +313,18 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         )
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.operate_itsm", return_value={"success": True})
+    @patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"])
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_scene_manager_passes_immediately_without_iam(self, is_admin, managers, operate, apply_result):
+        from services.web.risk.whitelist.service import _pass_if_admin
+
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
+        _pass_if_admin(rule, "alice")
+        operate.assert_called_once_with(rule, "approve", "alice")
+        apply_result.assert_called_once()
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)

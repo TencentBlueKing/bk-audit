@@ -621,6 +621,14 @@ def _whitelist_approvers(scene_id) -> list:
     return _scene_admin_usernames(scene_id)
 
 
+def _can_pass_immediately(username: str, scene_id) -> bool:
+    """IAM 场景管理员，或该场景 managers 里的人，创建后立刻审批。"""
+
+    if is_scene_admin(username, scene_id):
+        return True
+    return username in _scene_admin_usernames(scene_id)
+
+
 def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: str, reason=None, match_scope=None):
     """提交 ITSM 工单。"""
 
@@ -666,7 +674,7 @@ def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
     """管理员创建后立刻审批。handle 成功即写成生效中；回调若已先写入则保持回调结果。"""
 
-    if not username or not is_scene_admin(username, rule.scene_id):
+    if not username or not _can_pass_immediately(username, rule.scene_id):
         return
     payload = None
     try:
