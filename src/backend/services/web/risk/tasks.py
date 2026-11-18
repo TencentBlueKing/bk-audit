@@ -628,15 +628,14 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
 
     每次只执行当前状态对应的一个 handler。handler 事务提交后，若状态推进到
     下一个 handler，则释放锁后重新投递本任务；否则结束，等待周期扫描或外部回调。
-    锁使用短 TTL + owner token：worker 丢失后残留锁在 TTL（默认 15 分钟）内过期，
-    周期扫描即可在下一轮接住；延迟确认保证消息不丢，但立即重投会被未过期的
-    残留锁挡住并跳过，崩溃恢复以"锁过期 + 周期扫描"为准。owner token 保证
-    锁过期后被他人持有时不会误删他人的锁。
+    锁 TTL 不短于任务硬时限（宽限 60 秒），保证执行中锁不会被周期扫描或重投
+    提前抢占导致重复建单；worker 丢失后残留锁在 TTL 内过期，周期扫描即可在
+    下一轮接住。owner token 保证锁过期后被他人持有时不会误删他人的锁。
     """
 
     lock_name = f"celery:process_one_risk:{risk_id}"
     next_task_kwargs = None
-    with CacheLock(lock_name=lock_name, timeout=settings.PROCESS_ONE_RISK_LOCK_TIMEOUT) as acquired:
+    with CacheLock(lock_name=lock_name, timeout=settings.DEFAULT_CACHE_LOCK_TIMEOUT + 60) as acquired:
         if not acquired:
             logger_celery.warning("[CacheLockCheckFailed] MultiProcessRunning %s", lock_name)
             return

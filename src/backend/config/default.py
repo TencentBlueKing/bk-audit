@@ -493,8 +493,6 @@ ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK
 
 # cache lock
 DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
-# process_one_risk 单步流转锁 TTL：需覆盖单步最坏耗时，避免执行中锁过期导致并发重复建单/建任务
-PROCESS_ONE_RISK_LOCK_TIMEOUT = int(os.getenv("BKAPP_PROCESS_ONE_RISK_LOCK_TIMEOUT", 60 * 15))
 
 # Event 异步上报 Celery Task 的硬时限（秒），只限制 BKM 事件 API 投递任务，
 # 不是产生 Event 的 AI 助手或其他业务任务执行超时。
