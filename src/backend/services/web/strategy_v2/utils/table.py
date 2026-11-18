@@ -36,7 +36,7 @@ from services.web.bkbase import clean as bkbase_clean
 from services.web.bkbase import metadata as bkbase_metadata
 from services.web.bkbase import permissions as bkbase_permissions
 from services.web.bkbase import table_capabilities
-from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.common import get_bkbase_context, get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.common.constants import ScopeType
@@ -92,6 +92,42 @@ class TableHandler:
         data = list(spaces.values())
         data.sort(key=lambda biz: (not bool(biz["children"]), int(biz["value"])))
         return data
+
+
+@bkbase_metadata.list_read_scope()
+def list_scoped_v4_tables(*, table_type, namespace, bkbase_namespace=None, result_table_ids=None, scene_id=None):
+    """单项目或有限已选 ID 的 V4 候选，共用原业务能力及同一读取预算。"""
+    if get_bkbase_version() != BKBaseVersion.V4 or table_type not in ("BizRt", "BuildIn"):
+        raise BKBaseResourceMappingError(message="Unsupported scoped BKBase table type or version")
+    context = {**get_bkbase_context(), "rt_namespaces": {}}
+    tables = (
+        bkbase_permissions.list_namespace_result_tables(bkbase_namespace, context=context)
+        if bkbase_namespace is not None
+        else bkbase_permissions.list_queryable_result_tables(result_table_ids or [], context=context)
+    )
+    if scene_id:
+        from services.web.scene.data_filter import SceneDataFilter
+
+        allowed = set(SceneDataFilter.get_table_ids(scene_id))
+        tables = [rt for rt in tables if rt["result_table_id"] in allowed]
+    if table_type == "BizRt":
+        excluded = BizRtTableHandler(table_type, namespace).get_exclude_rt_ids()
+        tables = [rt for rt in tables if rt["result_table_id"] not in excluded]
+    candidates = bkbase_metadata.get_result_tables_with_capabilities(
+        [rt["result_table_id"] for rt in tables], context=context, namespace=bkbase_namespace
+    )
+    return [
+        rt
+        for rt, capability in candidates
+        if (
+            table_capabilities.asset_status(capability) is True
+            if table_type == "BuildIn"
+            else any(
+                table_capabilities.source_node_type(capability, mode) is not None
+                for mode in (RuleAuditSourceType.REALTIME, RuleAuditSourceType.BATCH)
+            )
+        )
+    ]
 
 
 class EventLogTableHandler(TableHandler):

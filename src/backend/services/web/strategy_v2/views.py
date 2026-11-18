@@ -204,7 +204,9 @@ class StrategyTableViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "scene_id")
 
     def get_permissions(self):
-        if self.action in ["scene_permission_tables"]:
+        if self.action == "scene_permission_tables" or (
+            self.action in ("projects", "project_tables") and self.get_scene_id()
+        ):
             return [
                 InstanceActionPermission(
                     actions=[ActionEnum.MANAGE_SCENE],
@@ -228,6 +230,8 @@ class StrategyTableViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_tables),
+        ResourceRoute("GET", resource.strategy_v2.list_table_projects, endpoint="projects"),
+        ResourceRoute("GET", resource.strategy_v2.list_project_tables, endpoint="project_tables"),
         ResourceRoute("GET", resource.strategy_v2.get_rt_fields, endpoint="rt_fields"),
         ResourceRoute("GET", resource.strategy_v2.get_rt_meta, endpoint="rt_meta"),
         ResourceRoute("GET", resource.strategy_v2.get_rt_last_data, endpoint="rt_last_data"),

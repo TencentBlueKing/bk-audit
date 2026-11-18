@@ -223,17 +223,22 @@ def get_source_capabilities(result_table_id, *, context=None):
     return capabilities
 
 
-def get_result_tables_with_capabilities(result_table_ids, *, context=None):
+def get_result_tables_with_capabilities(result_table_ids, *, context=None, namespace=None):
     """候选只读取需要的正式详情/能力，共用RT身份且不展开未消费的存储列表。"""
     context = {**_context(context), "_result_table_info": {}}
     identifiers = list(dict.fromkeys(result_table_ids))
-    return bounded_read_map(
-        lambda rt_id: (
-            get_result_table(rt_id, related=[], context=context),
-            get_source_capabilities(rt_id, context=context),
-        ),
-        identifiers,
-    )
+
+    def read(rt_id):
+        if namespace is not None:
+            ref = get_result_table_ref(context, rt_id)
+            if ref["namespace"] != namespace:
+                raise BKBaseResourceMappingError(message="Dataset project differs from formal ResultTable")
+            selected = {**context, "rt_namespaces": {rt_id: namespace}}
+        else:
+            selected = context
+        return get_result_table(rt_id, related=[], context=selected), get_source_capabilities(rt_id, context=selected)
+
+    return bounded_read_map(read, identifiers)
 
 
 def _dataset_namespace(context, result_table_id):

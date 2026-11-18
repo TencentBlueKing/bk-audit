@@ -25,14 +25,18 @@ class RoleDisplayFallbackTests(SimpleTestCase):
             "services.web.bkbase.metadata.get_result_table", return_value={"fields": fields}
         ), mock.patch(
             "services.web.bkbase.metadata.get_sensitivity_info_via_dataset", return_value={"level": "private"}
+        ), mock.patch(
+            "services.web.bkbase.metadata.get_result_table_ref",
+            return_value={"kind": "ResultTable", "tenant": "tenant_a", "namespace": "actual_project", "name": "rt"},
         ), mock.patch.object(
             GlobalMetaConfig, "get", return_value=None
         ):
-            result = GetRTMeta().request(table_id="synthetic_rt")
+            result = GetRTMeta().request(table_id="1_synthetic_rt")
         self.assertEqual(
             result,
             {
                 "fields": fields,
+                "bkbase_namespace": "actual_project",
                 "managers": [],
                 "viewers": [],
                 "sensitivity_info": {"level": "private"},
