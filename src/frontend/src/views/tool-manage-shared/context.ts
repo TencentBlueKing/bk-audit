@@ -121,11 +121,12 @@ export function createSceneToolManageContext(): ToolManageContext {
         scene_id: Number(scopeParams.scope_id) || 0,
       });
     },
-    toggleToolStatus: ({ uid }) => {
+    toggleToolStatus: ({ uid, enable }) => {
       const scopeParams = getSceneSystemParams();
       return ToolManageService.publishPlatformTool({
         uid,
         scene_id: Number(scopeParams.scope_id) || 0,
+        status: enable ? 'published' : 'unpublished',
       });
     },
     statusActionLabels: sceneStatusLabels,

@@ -49,6 +49,8 @@ export interface FormData {
   name: string;
   tags: string[];
   description: string;
+  /** 是否在工具广场展示：published 展示，unpublished 不展示 */
+  status?: 'published' | 'unpublished';
   tool_type: string;
   updated_at: string;
   updated_by: string;

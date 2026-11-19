@@ -162,11 +162,13 @@ class ToolManage extends ModuleBase {
   publishPlatformTool(params: {
     uid: string,
     scene_id: number,
+    status?: 'published' | 'unpublished',
   }) {
     return Request.post(`${this.path}/tool/scene/${params.uid}/publish/`, {
       params: {
         uid: params.uid,
         scene_id: params.scene_id,
+        ...(params.status ? { status: params.status } : {}),
       },
     });
   }
