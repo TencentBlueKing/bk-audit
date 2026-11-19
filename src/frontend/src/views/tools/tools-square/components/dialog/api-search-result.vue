@@ -86,10 +86,11 @@
                           :key="config.tool.uid">
                           {{ config.drill_name || props.getToolNameAndType(config.tool.uid).name }}
                           <bk-button
-                           
+
+                            style="margin-left: var(--bk-theme-space-8)"
                             text
                             theme="primary"
-                            @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)" style="margin-left: var(--bk-theme-space-8)">
+                            @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)">
                             {{ t('去查看') }}
                             <audit-icon
                               class="mr-18"
@@ -187,25 +188,39 @@
       {{ t('暂无数据') }}
     </bk-exception>
   </div>
-  <!-- 查询失败时显示异常 -->
+  <!-- 查询失败时显示异常：status_code !== 200；主文案取外壳 message -->
   <div v-else>
     <bk-exception
-      :description="t('请联系工具维护人员进行修复')"
+      :description="executeErrorDescription"
       :title="t('数据查询失败')"
       type="500">
-      <div>
-        <div style="color: #3a84ff; cursor: pointer;">
-          <audit-icon
-            style="margin-right: 6px;"
-            type="qw" />
+      <!-- 场景管理员：最多展示 3 个可点企微，超出 +N 悬停看剩余 -->
+      <div
+        v-if="sceneManagers.length"
+        class="scene-admin-list">
+        <img
+          alt=""
+          class="admin-qw-icon"
+          :src="qwIcon">
+        <span class="admin-name">
           <span
-            v-for="(user, userIndex) in linkUsers"
+            v-for="(user, userIndex) in visibleSceneManagers"
             :key="user"
+            class="admin-name-item"
             @click="handleOpenUserWx(user)">
-            {{ user }}
-            <span v-if="linkUsers.length > 1 && userIndex !== linkUsers.length - 1">、</span>
+            {{ user }}<template v-if="userIndex !== visibleSceneManagers.length - 1">、</template>
           </span>
-        </div>
+        </span>
+        <span
+          v-if="sceneManagers.length > 3"
+          v-bk-tooltips="{
+            content: sceneManagers.slice(3).join('、'),
+            placement: 'top',
+            extCls: 'api-search-scene-admin-tips',
+          }"
+          class="admin-more">
+          +{{ sceneManagers.length - 3 }}
+        </span>
       </div>
     </bk-exception>
   </div>
@@ -217,6 +232,7 @@
   import { computed, nextTick, type Ref, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import SceneManageService from '@service/scene-manage';
   import ToolManageService from '@service/tool-manage';
 
   import { PrimaryTable } from '@blueking/tdesign-ui';
@@ -236,6 +252,8 @@
     getSearchItemDefaultValue,
     isEmptySearchValue,
   } from '@/views/tools/tools-square/utils/search-item-default';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import qwIcon from '@/images/qw.svg';
 
   interface Exposes {
     executeTool: () => void;
@@ -353,8 +371,38 @@
     });
   }
 
-  const linkUsers = computed(() => [...new Set([props.toolDetails.created_by, props.toolDetails.updated_by]
-    .filter(Boolean))]);
+  const sceneManagers = ref<string[]>([]);
+
+  const {
+    run: fetchSceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const resolveSceneIdForManagers = () => {
+    const params = getSceneSystemParams();
+    if (params.scope_type === 'scene' && params.scope_id) {
+      return String(params.scope_id);
+    }
+    const toolSceneId = props.toolDetails?.config?.property?.scene_id;
+    return toolSceneId != null && toolSceneId !== '' ? String(toolSceneId) : '';
+  };
+
+  const loadSceneManagers = () => {
+    const sceneId = resolveSceneIdForManagers();
+    if (!sceneId) {
+      sceneManagers.value = [];
+      return;
+    }
+    fetchSceneList({ status: 'enabled' }).then((list) => {
+      const scene = (list || []).find(item => String(item.scene_id) === sceneId);
+      sceneManagers.value = (scene?.managers || []).filter(Boolean);
+    });
+  };
+
+  // 失败态联系人：场景管理员；最多展示 3 个（与场景落地页 / AI 检索一致）
+  const visibleSceneManagers = computed(() => sceneManagers.value.slice(0, 3));
 
   const isGrouping = computed(() => props.toolDetails.config.output_config?.enable_grouping);
 
@@ -366,6 +414,27 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
   });
+
+  // 外壳 message 优先；空则兜底（下游 200 不走此分支，仍按 status_code === 200 成功）
+  const executeErrorDescription = computed(() => {
+    const outerMessage = toolExecuteData.value?.message;
+    if (typeof outerMessage === 'string' && outerMessage.trim()) {
+      return outerMessage;
+    }
+    return t('工具执行失败，请联系场景管理员处理');
+  });
+
+  watch(
+    () => [
+      toolExecuteData.value?.data?.status_code,
+      props.toolDetails?.config?.property?.scene_id,
+    ],
+    ([statusCode]) => {
+      if (statusCode != null && statusCode !== 200) {
+        loadSceneManagers();
+      }
+    },
+  );
 
   // 格式化工具变量值
   const formatToolVariableValue = (item: SearchItem) => {
@@ -1113,6 +1182,42 @@
 
 <style scoped lang="postcss">
 /* stylelint-disable */
+.scene-admin-list {
+  display: inline-flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--bk-theme-space-6);
+  justify-content: center;
+  margin-top: var(--bk-theme-space-4);
+
+  .admin-qw-icon {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    vertical-align: text-bottom;
+  }
+
+  .admin-name {
+    font-size: 14px;
+    line-height: 22px;
+    color: #3a84ff;
+  }
+
+  .admin-name-item {
+    cursor: pointer;
+  }
+
+  .admin-more {
+    font-size: 14px;
+    line-height: 22px;
+    color: var(--bk-theme-text-weak);
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+}
+
 :deep(.card-content) {
   padding: var(--bk-theme-space-16);
   background-color: var(--bk-theme-table-header-bg);
@@ -1253,6 +1358,15 @@
 }
 </style>
 <style  lang="postcss">
+/* tooltips 挂 body，与人名统一 14px */
+.bk-popper.api-search-scene-admin-tips {
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 22px;
+  word-break: break-all;
+  white-space: normal;
+}
+
 .api-search-result-table {
   :deep(.t-table--header-wrapper) {
     background-color: var(--bk-theme-surface-muted) !important;

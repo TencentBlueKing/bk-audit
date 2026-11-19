@@ -115,8 +115,10 @@ export default  {
      * @param { Object } params
      */
   fetchToolsExecute(params: ToolExecutePayload) {
-    return ToolManageSources.getToolsExecute(params).then(({ data }) =>  ({
+    // 保留外壳 message：API 工具下游非 200 时，产品文案在外层 message（code 仍为 0）
+    return ToolManageSources.getToolsExecute(params).then(({ data, message }) => ({
       ...data,
+      message: message || '',
     }));
   },
   /**

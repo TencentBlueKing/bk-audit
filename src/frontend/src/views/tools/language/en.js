@@ -160,6 +160,8 @@ export default {
     个策略中: ' to strategies',
     '加载中...': 'Loading...',
     暂无数据: 'No Data',
+    数据查询失败: 'Data query failed',
+    '工具执行失败，请联系场景管理员处理': 'Tool execution failed. Please contact the scene administrator.',
     删除成功: 'Delete Success',
     请输入关键字: 'Enter keyword',
     请输入说明: 'Enter description',
