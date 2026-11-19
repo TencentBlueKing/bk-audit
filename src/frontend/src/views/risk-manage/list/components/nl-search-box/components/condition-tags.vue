@@ -244,16 +244,26 @@
     },
     { immediate: true },
   );
+  type OrderedConditionEntry = {
+    key: string;
+    kind: 'field';
+    tag: IConditionTag;
+  } | {
+    key: string;
+    kind: 'event';
+    item: Record<string, any>;
+  };
+
   const orderedConditionTags = computed(() => {
     const fieldMap = new Map(otherConditionTags.value.map(tag => [`field:${tag.fieldName}`, tag]));
     const eventMap = new Map((props.eventFieldItems || []).map(item => [`event:${String(item.id)}`, item]));
-    return tagOrder.value.flatMap((key) => {
+    return tagOrder.value.flatMap((key): OrderedConditionEntry[] => {
       if (key.startsWith('field:')) {
         const tag = fieldMap.get(key);
-        return tag ? [{ key, kind: 'field' as const, tag }] : [];
+        return tag ? [{ key, kind: 'field', tag }] : [];
       }
       const item = eventMap.get(key);
-      return item ? [{ key, kind: 'event' as const, item }] : [];
+      return item ? [{ key, kind: 'event', item }] : [];
     });
   });
 

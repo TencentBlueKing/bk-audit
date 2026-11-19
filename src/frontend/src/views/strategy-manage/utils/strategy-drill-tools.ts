@@ -37,7 +37,7 @@ type ToolTagItem = {
  */
 export const fetchStrategyDrillTools = (route: StrategyRoute): Promise<Array<ToolDetailModel>> => {
   if (getStrategyBindingScope(route).isPlatform) {
-    return ToolManageService.fetchToolsList() as unknown as Promise<Array<ToolDetailModel>>;
+    return ToolManageService.fetchToolsList({}) as unknown as Promise<Array<ToolDetailModel>>;
   }
   return ToolManageService.fetchAllTools({
     ...getStrategySystemScopeParams(route),
