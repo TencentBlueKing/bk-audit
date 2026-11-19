@@ -104,11 +104,16 @@
           class="select-group">
           <data-source-picker
             ref="dataSourcePickerRef"
+            :key="projectLazyEnabled ? JSON.stringify(strategySceneParams) : 'legacy'"
             v-model="tableId"
             :decode-type-biz-id="decodeTypeBizId"
             :disabled="isDataSourceLocked"
             :list="allConfigTypeTable"
             :load-children="handlePickerLoadChildren"
+            :load-directory="handlePickerLoadDirectory"
+            :project-mode="projectLazyEnabled"
+            :cancel-loading="projectTables.cancel"
+            :rt-labels="selectedRtLabels"
             :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
             :system-ids="formData.configs.data_source.system_ids"
             @change="handleChangeTable"
@@ -295,6 +300,7 @@
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import useProjectTable, { encodeProjectNamespace, isProjectTableLazyEnabled, isProjectTableType } from '@/hooks/use-project-table';
   import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
   import { normalizeWhereForDisplay } from '@/utils/assist/normalize-condition-filter';
   import {
@@ -357,9 +363,14 @@
   interface ConfigTypeTableItem {
     label: string
     value: string
+    lazyDirectory?: boolean
+    directoryLoaded?: boolean
     children: Array<{
       label: string
       value: string
+      node_type?: string
+      namespace?: string
+      loaded?: boolean
       version?: number
       leaf?: boolean
       disabled?: boolean
@@ -400,6 +411,8 @@
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
   const isPlatformMode = isPlatformStrategyRoute(route.name);
+  const projectLazyEnabled = isProjectTableLazyEnabled();
+  const projectTables = useProjectTable();
   const strategyStatus = computed(() => props.editData?.status);
   const { isStrategyConfigLocked, isDraftStrategyEdit } = useStrategyConfigLock(strategyStatus);
   const isDataSourceLocked = computed(() => isEditMode && !isDraftStrategyEdit.value);
@@ -425,6 +438,7 @@
 
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
+  const selectedRtLabels = ref<Record<string, string>>({});
   let isInit = false;
   let isInitFromParent = false;
   const isInitializing = ref(isEditMode || isCloneMode);
@@ -655,18 +669,21 @@
   ): Promise<BizChildNode[]> => {
     const cacheKey = getBizChildrenCacheKey(tableType, bizId);
     const cached = bizChildrenCache.value[cacheKey];
-    if (cached?.length) {
+    if (cached) {
       return Promise.resolve(cached);
     }
     const pending = bizChildrenPending.get(cacheKey);
     if (pending) {
       return pending;
     }
-    const promise = fetchStrategyTableList({
-      table_type: tableType,
-      bk_biz_id: bizId,
-      ...strategySceneParams.value,
-    }).then((data) => {
+    const request = projectLazyEnabled
+      ? projectTables.loadMineTables(String(bizId), strategySceneParams.value.scene_id)
+      : fetchStrategyTableList({
+        table_type: tableType,
+        bk_biz_id: bizId,
+        ...strategySceneParams.value,
+      });
+    const promise = request.then((data) => {
       // 兼容：带 bk_biz_id 时可能直接返回子表，也可能仍返回业务树
       let tableList = data as Array<Record<string, any>>;
       if (tableList?.[0]?.children) {
@@ -698,11 +715,12 @@
     const typeItem = allConfigTypeTable.value.find(item => item.value === tableType);
     const encodedBizId = encodeTypeBizId(tableType, bizId);
     const bizItem = typeItem?.children?.find(item => (
-      String(item.value) === encodedBizId
+      item.namespace === String(bizId)
+      || String(item.value) === encodedBizId
       || decodeTypeBizId(tableType, item.value) === String(bizId)
     ));
     if (!bizItem) return;
-    bizItem.value = encodedBizId;
+    if (!isProjectTableType(tableType)) bizItem.value = encodedBizId;
     bizItem.children = children;
     bizItem.leaf = false;
     bizItem.disabled = false;
@@ -718,7 +736,37 @@
     });
   };
 
+  /** 只在进入分类后获取目录；定位生成的临时项目节点不代表项目完整数据。 */
+  const handlePickerLoadDirectory = async (tableType: string) => {
+    const item = allConfigTypeTable.value.find(item => item.value === tableType);
+    if (!item?.lazyDirectory || item.directoryLoaded) return;
+    const data = isProjectTableType(tableType)
+      ? await projectTables.loadDirectory(tableType, strategySceneParams.value.scene_id)
+      : await projectTables.loadMineDirectory(strategySceneParams.value.scene_id);
+    const children = isProjectTableType(tableType)
+      ? data.map(node => ({
+        ...node, value: encodeProjectNamespace(tableType, node.namespace || node.value), leaf: false,
+      }))
+      : mapLazyLoadBizChildren(data);
+    const echoNodes = item.children;
+    children.forEach((node) => {
+      const previous = echoNodes.find(previous => previous.value === node.value);
+      if (previous?.children) Object.assign(node, { children: previous.children, loaded: previous.loaded });
+    });
+    item.children = children;
+    item.directoryLoaded = true;
+  };
+
   const handlePickerLoadChildren = async (tableType: string, bizId: string) => {
+    if (isProjectTableType(tableType)) {
+      const data = await projectTables.loadProject(tableType, bizId, strategySceneParams.value.scene_id);
+      const children = data.map(node => ({ ...node, value: encodeTypeBizId(tableType, node.table_id || node.value), leaf: true }));
+      patchBizChildren(tableType, bizId, children);
+      const project = allConfigTypeTable.value.find(item => item.value === tableType)?.children
+        .find(item => item.namespace === bizId);
+      if (project) project.loaded = true;
+      return children;
+    }
     if (tableType === 'EventLog') {
       return loadEventLogSystems();
     }
@@ -783,6 +831,9 @@
   const getAllConfigTypeTable = () => {
     typeTableLoading.value = true;
     const requests = ruleAuditConfigType.value.map((item) => {
+      if (projectLazyEnabled && (isProjectTableType(item.value) || item.value === MINE_BIZ_RT_TYPE)) {
+        return async () => [{ ...item, children: [], lazyDirectory: true, directoryLoaded: false }];
+      }
       if (item.value === 'LinkTable') {
         return async () => {
           const LinkTableData = await fetchLinkTableAll(strategySceneParams.value);
@@ -816,6 +867,7 @@
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
         allConfigTypeTable.value = flattenedResults;
         syncBizChildrenCacheToList();
+      }).finally(() => {
         typeTableLoading.value = false;
       });
   };
@@ -1474,6 +1526,32 @@
           return Boolean(rtId && findEchoPathInTableItem(item, rtId));
         });
       if (!tableItem) return;
+      if (projectLazyEnabled && !['EventLog', 'LinkTable'].includes(tableItem.value)) {
+        const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
+        if (!rtId) return;
+        // 立即保留原 RT；仅精确元数据用于导航，不预加载个人表或项目全部 RT。
+        applyEchoPath([tableItem.value, encodeTypeBizId(tableItem.value, rtId)]);
+        isEchoingTableId = false;
+        try {
+          const meta = await StrategyManageService.fetchTableRtMeta({ table_id: rtId }, { silent: true, catchError: true });
+          if (!isEchoValid()) return;
+          selectedRtLabels.value[rtId] = meta.result_table_name_alias || meta.result_table_name || rtId;
+          if (!isProjectTableType(tableItem.value) || !meta.bkbase_namespace) return;
+          const namespace = meta.bkbase_namespace;
+          const projectValue = encodeProjectNamespace(tableItem.value, namespace);
+          let project = tableItem.children.find(node => node.value === projectValue);
+          if (!project) {
+            project = { label: namespace, value: projectValue, namespace, node_type: 'project', leaf: false };
+            tableItem.children.push(project);
+          }
+          if (!project.loaded) project.children = [{ label: selectedRtLabels.value[rtId],
+            value: encodeTypeBizId(tableItem.value, rtId), leaf: true }];
+          applyEchoPath([tableItem.value, projectValue, encodeTypeBizId(tableItem.value, rtId)]);
+        } catch {
+          // 元数据失败保留原始 ID 与全部配置。
+        }
+        return;
+      }
       // 操作日志：插件路径回显，系统多选走 system_ids
       if (tableItem.value === 'EventLog') {
         if (!isEchoValid()) return;
@@ -1651,6 +1729,19 @@
       }
     }
   };
+
+  watch(() => JSON.stringify(strategySceneParams.value), () => {
+    if (!projectLazyEnabled) return;
+    projectTables.cancel();
+    bizChildrenCache.value = {};
+    bizChildrenPending.clear();
+    allConfigTypeTable.value.forEach((item) => {
+      if (item.lazyDirectory) {
+        item.children = [];
+        item.directoryLoaded = false;
+      }
+    });
+  });
 
   // 监听formData变化，更新数据
   watch(

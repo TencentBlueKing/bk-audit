@@ -137,16 +137,26 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
         error.response,
       ));
     }
-    return Promise.reject(new RequestError(-1, `${window.PROJECT_CONFIG.AJAX_URL_PREFIX} 无法访问`));
+    const requestError = new RequestError(
+      error.code === 'ECONNABORTED' ? 'ECONNABORTED' : -1,
+      `${window.PROJECT_CONFIG.AJAX_URL_PREFIX} 无法访问`,
+    );
+    // 无 response 的超时/网络错误只保留局部处理标记，避免将凭据或整份 config 附到日志。
+    const localPayload = (error.config as { payload?: { catchError?: boolean; silent?: boolean } } | undefined)?.payload;
+    requestError.localHandling = {
+      catchError: localPayload?.catchError,
+      silent: localPayload?.silent,
+    };
+    return Promise.reject(requestError);
   });
 
   // 统一错误处理逻辑
   interceptors.use(undefined, (error: RequestError) => {
     // 调用方声明自行处理错误时，跳过全局 toast
-    if (error.response?.config?.payload?.catchError) {
+    if (error.response?.config?.payload?.catchError || error.localHandling?.catchError) {
       return Promise.reject(error);
     }
-    const isSilent = Boolean(error.response?.config?.payload?.silent);
+    const isSilent = Boolean(error.response?.config?.payload?.silent || error.localHandling?.silent);
     const responseData = error.response?.data;
     const responseCode = responseData && typeof responseData === 'object'
       ? (responseData as { code?: string | number }).code

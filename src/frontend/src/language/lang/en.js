@@ -101,6 +101,9 @@ export default {
   短信: 'SMS',
   语音: 'Voice',
   微信: 'Wechat',
+  '微信当前不可选，原有配置已保留，可手动移除。': 'WeChat is unavailable. Existing settings are kept until you remove it.',
+  '微信（已停用）': 'WeChat (unavailable)',
+  移除微信: 'Remove WeChat',
   企业微信: 'Wework',
   机器人: 'Wework robot',
   系统ID: 'System ID',
@@ -649,4 +652,8 @@ export default {
   '仅控制工具是否在工具广场展示。关闭后，审计策略中配置的下钻仍可正常使用。': 'Only controls whether the tool appears in the tool square. Drill-down configured in audit strategies still works after it is turned off.',
   已在工具广场展示: 'Shown in the tool square',
   已从工具广场隐藏: 'Hidden from the tool square',
+  '加载失败，点击重试': 'Failed to load. Click to retry',
+  '搜索项目 namespace': 'Search project namespace',
+  '请先选择项目': 'Select a project first',
+  '点击加载项目数据': 'Click to load project tables',
 };

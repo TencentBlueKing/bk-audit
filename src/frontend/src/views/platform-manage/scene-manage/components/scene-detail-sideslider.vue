@@ -176,6 +176,7 @@
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { isProjectTableLazyEnabled } from '@/hooks/use-project-table';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
@@ -236,6 +237,7 @@
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
     onSuccess: (data) => {
+      if (isProjectTableLazyEnabled()) return;
       type ConfigTypeItem = { label: string; value: string };
       // eslint-disable-next-line max-len
       const targetTypes = (data.rule_audit_config_type as ConfigTypeItem[]).filter(item => item.value !== 'EventLog' && item.value !== 'LinkTable');
@@ -325,6 +327,24 @@
     onSuccess: (res) => {
       isLoading.value = false;
       detailData.value = res;
+      if (isProjectTableLazyEnabled()) {
+        const sceneId = props.sceneId;
+        flatTableList.value = [];
+        const queue = [...new Set((res.tables || []).map(item => item.table_id))];
+        Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+          while (queue.length) {
+            const tableId = queue.shift()!;
+            try {
+              const meta = await StrategyManageService.fetchTableRtMeta({ table_id: tableId }, { silent: true, catchError: true });
+              if (props.sceneId !== sceneId) return;
+              flatTableList.value.push({ value: tableId, pathName: [meta.bkbase_namespace,
+                meta.result_table_name_alias || meta.result_table_name || tableId].filter(Boolean).join('/') });
+            } catch {
+              // 名称失败继续显示真实 ID。
+            }
+          }
+        }));
+      }
     },
   });
 

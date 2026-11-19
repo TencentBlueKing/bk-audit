@@ -18,6 +18,7 @@ export default class RequestError extends Error {
   code: number|string;
   message: string;
   response: any;
+  localHandling?: { catchError?: boolean; silent?: boolean };
   constructor(code: number|string, message: string, response?: any) {
     super();
     this.code = code;

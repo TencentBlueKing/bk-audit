@@ -34,7 +34,7 @@
     :scroll-height="600"
     @clear="handleClearTable"
     @tag-remove="handleRemoveTableTag"
-    @toggle="(val: boolean) => { if (val) tableSearchKey = '' }">
+    @toggle="handlePopoverToggle">
     <div
       class="table-select-panel"
       @click.stop>
@@ -59,6 +59,7 @@
           size="small" />
       </div>
       <div
+        v-if="!isProjectTableType(activeTableType)"
         class="table-select-all-data"
         :class="{ 'is-active': isSelectAllTableData }"
         @click.stop="handleToggleAllTableData">
@@ -68,6 +69,12 @@
       <div
         class="table-tree-wrapper"
         :class="{ 'is-disabled': isSelectAllTableData }">
+        <bk-loading :loading="directoryState?.loading" mode="spin" size="small">
+          <span v-if="directoryState?.loading">{{ t('加载中') }}</span>
+          <bk-button v-if="directoryState?.error" text theme="primary" @click="loadActiveDirectory">
+            {{ t('加载失败，点击重试') }}
+          </bk-button>
+        </bk-loading>
         <bk-tree
           v-if="currentTableTreeData.length"
           :key="activeTableType"
@@ -80,12 +87,17 @@
           :node-content-action="['click']"
           node-key="value"
           :search="tableSearchKey"
-          show-checkbox
+          :show-checkbox="isProjectTableType(activeTableType) ? showProjectCheckbox : true"
           :show-node-type-icon="false"
           @node-checked="handleTableTreeChecked">
           <template #default="{ data: nodeData }: { data: ConfigTypeTableNode }">
-            <span class="table-tree-node">
+            <span class="table-tree-node" @click="handleProjectClick(nodeData, $event)">
               {{ nodeData.label }}
+              <template v-if="nodeData.node_type === 'project' && !nodeData.loaded">
+                <span v-if="getProjectState(nodeData)?.loading"> — {{ t('加载中') }}</span>
+                <span v-else-if="getProjectState(nodeData)?.error"> — {{ t('加载失败，点击重试') }}</span>
+                <span v-else> — {{ t('点击加载项目数据') }}</span>
+              </template>
             </span>
           </template>
         </bk-tree>
@@ -111,10 +123,14 @@
   import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@/hooks/use-request';
+  import useProjectTable, { isProjectTableLazyEnabled, isProjectTableType } from '@/hooks/use-project-table';
 
   interface ConfigTypeTableNode {
     label: string;
     value: string;
+    node_type?: 'project' | 'table';
+    namespace?: string;
+    loaded?: boolean;
     leaf?: boolean;
     disabled?: boolean;
     children?: ConfigTypeTableNode[];
@@ -124,6 +140,7 @@
     label: string;
     value: string;
     children: ConfigTypeTableNode[];
+    directoryLoaded?: boolean;
   }
 
   interface SelectedTableNode {
@@ -153,6 +170,18 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const projectLazyEnabled = isProjectTableLazyEnabled();
+  const projectTables = useProjectTable();
+  // 场景配置沿用平台候选权限，不能把已有表的场景交集用作候选；本地 ID 仅防止切换编辑对象后的旧回写。
+  const sceneParam = () => props.isEditMode ? props.sceneId : undefined;
+  const directoryState = computed(() => projectTables.states[
+    projectTables.key('directory', activeTableType.value)
+  ]);
+  const getProjectState = (node: ConfigTypeTableNode) => projectTables.states[
+    projectTables.key('project', activeTableType.value, undefined, node.namespace)
+  ];
+  const selectedLabels = ref<Record<string, string>>({});
+  let labelSequence = 0;
 
   // refs
   const tableSelectRef = ref();
@@ -176,9 +205,14 @@
   const currentTableType = computed(() => allConfigTypeTable.value.find(item => item.value === activeTableType.value)
     || allConfigTypeTable.value[0]);
 
-  const isTableLeafNode = (node: ConfigTypeTableNode) => !node.children || node.children.length === 0;
+  const isTableLeafNode = (node: ConfigTypeTableNode) => node.node_type !== 'project'
+    && (!node.children || node.children.length === 0);
 
   const isSelectableTableNode = (node: ConfigTypeTableNode) => isTableLeafNode(node) && !node.disabled;
+
+  const showProjectCheckbox = ({ data }: { data: ConfigTypeTableNode }) => (
+    data.node_type !== 'project' || (data.loaded === true && !data.disabled)
+  );
 
   const isSelectAllTableData = computed(() => tableSelectModeMap.value[activeTableType.value] === 'all');
 
@@ -215,6 +249,7 @@
 
   const syncSelectedTableNodes = () => {
     const result: SelectedTableNode[] = [];
+    const represented = new Set<string>();
     const selectedIdSet = new Set(props.modelValue);
 
     // 遍历所有类型
@@ -223,6 +258,7 @@
       const isTypeAll = tableSelectModeMap.value[typeValue] === 'all';
 
       if (isTypeAll) {
+        getTableLeafNodes(typeItem.children || []).forEach(node => represented.add(node.value));
         // 当前类型为全选模式
         result.push({
           value: `__all__${typeValue}`,
@@ -234,6 +270,7 @@
           const sysLeaves = getTableLeafNodes(sysNode.children || []);
           const selectableLeaves = sysLeaves.filter(leaf => !leaf.disabled);
           const selectedInSys = selectableLeaves.filter(leaf => selectedIdSet.has(leaf.value));
+          selectedInSys.forEach(node => represented.add(node.value));
 
           if (selectableLeaves.length > 0 && selectedInSys.length === selectableLeaves.length) {
             result.push({
@@ -252,6 +289,10 @@
       }
     }
 
+    // 未加载、无权限或元数据失败的旧 RT 仍以 modelValue 为准保留标签。
+    props.modelValue.filter(id => !represented.has(id)).forEach(id => result.push({
+      value: id, label: selectedLabels.value[id] || id,
+    }));
     selectedTableNodes.value = result;
     nextTick(() => {
       if (tableSelectRef.value) {
@@ -312,6 +353,7 @@
   // ========== 事件处理 ==========
 
   const handleToggleAllTableData = () => {
+    if (isProjectTableType(activeTableType.value)) return;
     const typeValue = activeTableType.value;
     if (isSelectAllTableData.value) {
       // 取消当前类型的全选：移除当前类型的所有叶子节点
@@ -342,6 +384,7 @@
   const handleTableTypeChange = (value: string) => {
     activeTableType.value = value;
     tableSearchKey.value = '';
+    loadActiveDirectory();
     syncCurrentTreeChecked();
   };
 
@@ -463,12 +506,81 @@
     // 检测每个类型是否全选
     const newModeMap: Record<string, 'all'> = {};
     for (const typeItem of allConfigTypeTable.value) {
+      if (isProjectTableType(typeItem.value)) continue;
       const leaves = getTableLeafNodes(typeItem.children || []).filter(leaf => !leaf.disabled);
       if (leaves.length > 0 && leaves.every(leaf => selectedIdSet.has(leaf.value))) {
         newModeMap[typeItem.value] = 'all';
       }
     }
     tableSelectModeMap.value = newModeMap;
+  };
+
+  /** 项目目录始终不可提交；只有后端完整成功后才允许项目级全选。 */
+  const loadActiveDirectory = async () => {
+    const item = currentTableType.value;
+    if (!item || !isProjectTableType(item.value) || item.directoryLoaded) return;
+    const sceneId = sceneParam();
+    try {
+      const nodes = await projectTables.loadDirectory(item.value);
+      if (sceneParam() !== sceneId) return;
+      item.children = nodes.map(node => ({ ...node, loaded: false, disabled: true, children: [],
+        value: `__project__${item.value}__${node.namespace}`, leaf: false }));
+      item.directoryLoaded = true;
+    } catch {
+      // 项目请求状态由 key 管理，原选择保持。
+    }
+  };
+
+  const handlePopoverToggle = (visible: boolean) => {
+    if (visible) {
+      tableSearchKey.value = '';
+      loadActiveDirectory();
+    } else {
+      projectTables.cancel();
+    }
+  };
+
+  const handleProjectClick = async (node: ConfigTypeTableNode, event: MouseEvent) => {
+    if (node.node_type !== 'project' || node.loaded || !node.namespace) return;
+    event.stopPropagation();
+    const tableType = activeTableType.value;
+    const sceneId = sceneParam();
+    try {
+      const children = await projectTables.loadProject(tableType, node.namespace);
+      if (sceneParam() !== sceneId) return;
+      const target = allConfigTypeTable.value.find(item => item.value === tableType)?.children
+        .find(item => item.namespace === node.namespace);
+      if (!target) return;
+      target.children = children;
+      target.loaded = true;
+      target.disabled = !children.length;
+      syncSelectedTableNodes();
+      syncCurrentTreeChecked();
+    } catch {
+      // 失败只影响该项目，可点击同一节点重试。
+    }
+  };
+
+  /** 有限已选 ID 的元数据只补充标签，不作为可选权限或完整项目数据。 */
+  const locateSelectedTables = async () => {
+    if (!projectLazyEnabled) return;
+    const sequence = ++labelSequence;
+    const ids = props.modelValue.filter(id => !selectedLabels.value[id]);
+    const queue = [...ids];
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+      while (queue.length && sequence === labelSequence) {
+        const id = queue.shift()!;
+        try {
+          const meta = await StrategyManageService.fetchTableRtMeta({ table_id: id }, { silent: true, catchError: true });
+          if (sequence !== labelSequence) return;
+          selectedLabels.value[id] = [meta.bkbase_namespace,
+            meta.result_table_name_alias || meta.result_table_name || id].filter(Boolean).join('/');
+        } catch {
+          // 不可定位时继续使用原 ID。
+        }
+      }
+    }));
+    if (sequence === labelSequence) syncSelectedTableNodes();
   };
 
   // ========== 数据加载 ==========
@@ -488,6 +600,7 @@
       // eslint-disable-next-line max-len
       const targetTypes = (data.rule_audit_config_type as ConfigTypeItem[]).filter(item => item.value !== 'EventLog' && item.value !== 'LinkTable' && item.value !== 'MineBizRt');
       const requests = targetTypes.map((item: ConfigTypeItem) => {
+        if (isProjectTableType(item.value)) return Promise.resolve({ ...item, children: [], directoryLoaded: false });
         const req = fetchTable({ table_type: item.value, scene_id: props.isEditMode ? props.sceneId : '' });
         return req.then((tableData: any[]) => ({
           label: item.label,
@@ -518,7 +631,10 @@
   /** 对外暴露：加载数据 */
   const loadData = () => {
     typeTableLoading.value = true;
+    projectTables.cancel();
+    allConfigTypeTable.value = [];
     fetchStrategyCommon();
+    locateSelectedTables();
   };
 
   /** 对外暴露：重置状态 */
@@ -536,6 +652,7 @@
     if (!isSyncingTableTree.value) {
       detectAndSetSelectMode();
       syncSelectedTableNodes();
+      locateSelectedTables();
     }
   }, { deep: true });
 

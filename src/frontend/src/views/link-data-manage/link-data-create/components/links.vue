@@ -44,12 +44,14 @@
                   :list="index === 0 ? allConfigTypeTable : leftTableList"
                   name-key="label"
                   :placeholder="t('搜索数据名称、别名、数据ID等')"
+                  :custom-text-fillback="projectLazyEnabled ? (value: string[], nodes: Array<Record<string, any>>) => getTableText(value, nodes, link.left_table.table_type) : undefined"
                   :popover-options="{ clickContentAutoHide: false }"
-                  :remote-method="handleCascaderRemoteLoad"
+                  :remote-method="(node: Record<string, any>, updateNodes: RemoteNodesUpdate) => handleCascaderRemoteLoad(node, updateNodes, index, 'left')"
                   trigger="click"
                   @change="(value: Array<string>) => handleSelectLeftTable(value, index)"
-                  @toggle="handleCascaderToggle">
+                  @toggle="(visible: boolean) => handleCascaderToggle(visible, index, 'left')">
                   <p
+                    v-cascader-browse="{ node, index, side: 'left' }"
                     v-bk-tooltips="{
                       disabled: !data.disabled || !data.leaf,
                       content: node.pathNames[0] === '资产数据'
@@ -58,6 +60,7 @@
                       delay: 400,
                     }">
                     {{ node.name }}
+                    <span v-if="getNodeError(node)"> — {{ t('加载失败，点击重试') }}</span>
                   </p>
                 </bk-cascader>
                 <audit-icon
@@ -109,12 +112,14 @@
                   :list="rightTableList"
                   name-key="label"
                   :placeholder="t('搜索数据名称、别名、数据ID等')"
+                  :custom-text-fillback="projectLazyEnabled ? (value: string[], nodes: Array<Record<string, any>>) => getTableText(value, nodes, link.right_table.table_type) : undefined"
                   :popover-options="{ clickContentAutoHide: false }"
-                  :remote-method="handleCascaderRemoteLoad"
+                  :remote-method="(node: Record<string, any>, updateNodes: RemoteNodesUpdate) => handleCascaderRemoteLoad(node, updateNodes, index, 'right')"
                   trigger="click"
                   @change="(value: Array<string>) => handleSelectRightTable(value, index)"
-                  @toggle="handleCascaderToggle">
+                  @toggle="(visible: boolean) => handleCascaderToggle(visible, index, 'right')">
                   <p
+                    v-cascader-browse="{ node, index, side: 'right' }"
                     v-bk-tooltips="{
                       disabled: !data.disabled || !data.leaf,
                       content: node.pathNames[0] === '资产数据'
@@ -123,6 +128,7 @@
                       delay: 400,
                     }">
                     {{ node.name }}
+                    <span v-if="getNodeError(node)"> — {{ t('加载失败，点击重试') }}</span>
                   </p>
                 </bk-cascader>
                 <audit-icon
@@ -183,7 +189,7 @@
 </template>
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
-  import { computed, h, inject, nextTick, type Ref, ref, watch } from 'vue';
+  import { computed, type Directive, h, inject, nextTick, type Ref, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -197,7 +203,10 @@
   import TableField from './components/table-field.vue';
 
   import useRequest from '@/hooks/use-request';
+  import useProjectTable, { encodeProjectNamespace, isProjectTableLazyEnabled, isProjectTableType } from '@/hooks/use-project-table';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  type RemoteNodesUpdate = (nodes: Array<Record<string, any>>) => void;
 
   interface Exposes{
     getValue: () => Promise<any>;
@@ -207,7 +216,11 @@
   interface ConfigTypeTableItem {
     label: string
     value: string
+    lazyDirectory?: boolean
     children: Array<{
+      node_type?: string
+      namespace?: string
+      loaded?: boolean
       label: string
       value: string
       leaf?: boolean
@@ -228,6 +241,35 @@
   type BizChildNode = { label: string, value: string, leaf: boolean };
 
   const { t } = useI18n();
+  const projectLazyEnabled = isProjectTableLazyEnabled();
+  const projectTables = useProjectTable();
+  const tableLabels = ref<Record<string, string>>({});
+  const directoryNodes = new Map<string, ConfigTypeTableItem['children']>();
+  const projectNodes = new Map<string, BizChildNode[]>();
+  const browseTokens = new Map<string, number>();
+  const browseNodes = new Map<string, Record<string, any>>();
+  let echoSequence = 0;
+  let listScopeKey = projectTables.key('context', '', getSceneSystemParams().scope_id);
+  const ensureListScope = () => {
+    const scope = projectTables.key('context', '', getSceneSystemParams().scope_id);
+    if (scope === listScopeKey) return;
+    projectTables.cancel();
+    listScopeKey = scope;
+    directoryNodes.clear();
+    projectNodes.clear();
+    bizChildrenCache.value = {};
+    bizChildrenPending.clear();
+    browseTokens.forEach((token, key) => browseTokens.set(key, token + 1));
+    allConfigTypeTable.value.forEach((item) => {
+      if (item.lazyDirectory) item.children = [];
+    });
+  };
+  const getTableText = (value: string[], nodes: Array<Record<string, any>>, tableType: string) => {
+    const id = getRealRtId(tableType, value);
+    if (!id) return '';
+    const node = nodes.find(node => node.path?.[0] === tableType && node.id === value[value.length - 1]);
+    return node?.pathNames?.join(' / ') || tableLabels.value[id] || id;
+  };
   const tableFieldRef = ref();
   const selectVerifyRef = ref();
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
@@ -297,6 +339,9 @@
 
   const setDeepestLeafDisabled = (node: any, selectedRtIds: Set<string>, tableType = '') => {
     const type = tableType || node.value;
+    if (projectLazyEnabled && (node.lazyDirectory || node.node_type === 'project' || node.leaf === false)) {
+      return { ...node, children: node.children?.map((child: any) => setDeepestLeafDisabled(child, selectedRtIds, type)) };
+    }
     if (!node.children || node.children.length === 0) {
       // 当前节点就是叶子节点
       const realValue = decodeTypeBizId(type, node.value);
@@ -407,18 +452,19 @@
   ): Promise<BizChildNode[]> => {
     const cacheKey = getBizChildrenCacheKey(tableType, bizId);
     const cached = bizChildrenCache.value[cacheKey];
-    if (cached?.length) {
+    if (cached) {
       return Promise.resolve(cached);
     }
     const pending = bizChildrenPending.get(cacheKey);
     if (pending) {
       return pending;
     }
-    const promise = StrategyManageService.fetchScenePermissionTable({
-      table_type: tableType,
-      bk_biz_id: bizId,
-      scene_id: getSceneSystemParams().scope_id,
-    }).then((data) => {
+    const request = projectLazyEnabled
+      ? projectTables.loadMineTables(String(bizId), getSceneSystemParams().scope_id)
+      : StrategyManageService.fetchScenePermissionTable({
+        table_type: tableType, bk_biz_id: bizId, scene_id: getSceneSystemParams().scope_id,
+      });
+    const promise = request.then((data) => {
       let tableList = data as Array<Record<string, any>>;
       if (tableList?.[0]?.children) {
         const bizNode = tableList.find(item => String(item.value) === String(bizId));
@@ -468,41 +514,140 @@
     });
   };
 
-  const handleCascaderToggle = (visible: boolean) => {
-    if (!visible) {
-      syncBizChildrenCacheToList();
+  /** 列切换与关闭只作废当前选择器的回调，其他左右栏可继续各自加载。 */
+  const markCascaderNode = (node: Record<string, any>, index: number, side: string) => {
+    const key = `${index}_${side}`;
+    const old = browseNodes.get(key);
+    if (old && old !== node) old.loading = false;
+    browseTokens.set(key, (browseTokens.get(key) || 0) + 1);
+    browseNodes.set(key, node);
+  };
+
+  // bk-cascader 没有列展开事件，捕获整行（含箭头）的点击，避免已加载节点绕过 remote-method。
+  type BrowseBinding = { node: Record<string, any>; index: number; side: string };
+  const browseRows = new WeakMap<HTMLElement, { row: HTMLElement; listener: () => void; value: BrowseBinding }>();
+  const vCascaderBrowse: Directive<HTMLElement, BrowseBinding> = {
+    mounted(element, { value }) {
+      const row = element.closest('li');
+      if (!row) return;
+      const entry = { row, value, listener: () => {
+        const current = browseRows.get(element)?.value;
+        if (current) markCascaderNode(current.node, current.index, current.side);
+      } };
+      browseRows.set(element, entry);
+      row.addEventListener('click', entry.listener, true);
+    },
+    updated(element, { value }) {
+      const entry = browseRows.get(element);
+      if (entry) entry.value = value;
+    },
+    unmounted(element) {
+      const entry = browseRows.get(element);
+      entry?.row.removeEventListener('click', entry.listener, true);
+      browseRows.delete(element);
+    },
+  };
+
+  const getNodeError = (node: Record<string, any>) => {
+    const type = node.level === 1 ? node.id : node.parent?.id;
+    const kind = node.level === 1 ? 'directory' : (type === MINE_BIZ_RT_TYPE ? 'business' : 'project');
+    const namespace = node.level === 1 ? '' : (node.data?.namespace || decodeTypeBizId(type, node.id));
+    return projectTables.states[projectTables.key(kind, type, getSceneSystemParams().scope_id, namespace)]?.error;
+  };
+
+  const syncProjectChildrenToList = () => {
+    for (const [type, nodes] of directoryNodes) {
+      const item = allConfigTypeTable.value.find(item => item.value === type);
+      if (!item) continue;
+      item.children = nodes.map((node) => {
+        const children = projectNodes.get(`${type}__${node.namespace || decodeTypeBizId(type, node.value)}`);
+        return children ? { ...node, children, loaded: true, disabled: children.length === 0 } : node;
+      });
     }
   };
 
-  const handleCascaderRemoteLoad = (
+  const handleCascaderToggle = (visible: boolean, index: number, side: string) => {
+    if (visible && projectLazyEnabled) ensureListScope();
+    if (!visible) {
+      const key = `${index}_${side}`;
+      browseTokens.set(key, (browseTokens.get(key) || 0) + 1);
+      const node = browseNodes.get(key);
+      if (node) node.loading = false;
+      syncBizChildrenCacheToList();
+      syncProjectChildrenToList();
+    }
+  };
+
+  const handleCascaderRemoteLoad = async (
     node: Record<string, any>,
     updateNodes: (nodes: Array<Record<string, any>>) => void,
+    index: number,
+    side: string,
   ) => {
-    const tableType = node.parent?.id;
-    if (tableType !== MINE_BIZ_RT_TYPE || node.level !== 2) {
-      updateNodes(node.data?.children || []);
-      return;
+    if (projectLazyEnabled) ensureListScope();
+    const scopeKey = listScopeKey;
+    const sceneId = getSceneSystemParams().scope_id;
+    const key = `${index}_${side}`;
+    markCascaderNode(node, index, side);
+    const token = browseTokens.get(key);
+    const tableType = node.level === 1 ? node.id : node.parent?.id;
+    try {
+      let children: Array<Record<string, any>>;
+      if (projectLazyEnabled && node.level === 1 && (isProjectTableType(tableType) || tableType === MINE_BIZ_RT_TYPE)) {
+        const data = isProjectTableType(tableType)
+          ? await projectTables.loadDirectory(tableType, sceneId)
+          : await projectTables.loadMineDirectory(sceneId);
+        children = isProjectTableType(tableType)
+          ? data.map(item => ({ ...item, value: encodeProjectNamespace(tableType, item.namespace || item.value), leaf: false }))
+          : mapLazyLoadBizChildren(data);
+        if (scopeKey !== projectTables.key('context', '', getSceneSystemParams().scope_id)) return;
+        directoryNodes.set(tableType, children as ConfigTypeTableItem['children']);
+      } else if (projectLazyEnabled && node.level === 2 && isProjectTableType(tableType)) {
+        const namespace = node.data?.namespace || decodeTypeBizId(tableType, node.id);
+        const data = await projectTables.loadProject(tableType, namespace, sceneId);
+        children = data.map(item => ({ ...item, value: encodeTypeBizId(tableType, item.table_id || item.value), leaf: true }));
+        if (scopeKey !== projectTables.key('context', '', getSceneSystemParams().scope_id)) return;
+        projectNodes.set(`${tableType}__${namespace}`, children as BizChildNode[]);
+      } else if (tableType === MINE_BIZ_RT_TYPE && node.level === 2) {
+        children = await loadBizTableChildren(tableType, decodeTypeBizId(tableType, node.id));
+      } else {
+        children = node.data?.children || [];
+      }
+      if (browseTokens.get(key) !== token
+        || scopeKey !== projectTables.key('context', '', getSceneSystemParams().scope_id)) return;
+      // bk-cascader 的 updateNodes 会直接 push 当前列，因此只允许当前节点的回调执行。
+      const usedIds = new Set(links.value.flatMap(link => [
+        getRealRtId(link.left_table.table_type, link.left_table.rt_id),
+        getRealRtId(link.right_table.table_type, link.right_table.rt_id),
+      ]).filter(Boolean));
+      const restrictLeaves = (items: Array<Record<string, any>>): Array<Record<string, any>> => items.map(item => ({
+        ...item,
+        ...(item.leaf === true && tableType !== 'EventLog' ? {
+          disabled: side === 'left' && index > 0
+            ? !usedIds.has(decodeTypeBizId(tableType, item.value))
+            : (side === 'right' ? usedIds.has(decodeTypeBizId(tableType, item.value)) : item.disabled),
+        } : {}),
+        ...(item.children ? { children: restrictLeaves(item.children) } : {}),
+      }));
+      updateNodes(projectLazyEnabled ? restrictLeaves(children) : children);
+      if (projectLazyEnabled && !children.length) {
+        node.data.disabled = true;
+        node.data.leaf = false;
+      }
+    } catch {
+      // 不调用 updateNodes([])，否则失败会被组件标记为已加载空叶子。
+    } finally {
+      node.loading = false;
     }
-    const bizId = decodeTypeBizId(tableType, node.id);
-    if (node.data?.children?.length) {
-      updateNodes(node.data.children);
-      return;
-    }
-    const cacheKey = getBizChildrenCacheKey(tableType, bizId);
-    const cached = bizChildrenCache.value[cacheKey];
-    if (cached?.length) {
-      updateNodes(cached);
-      return;
-    }
-    loadBizTableChildren(tableType, bizId).then((children) => {
-      updateNodes(children);
-    });
   };
 
   // 获取全部tableid
   const getAllConfigTypeTable = () => {
     loading.value = true;
-    const requests = linkTableTableTypeList.value.map(item => async () => {
+    const requests = linkTableTableTypeList.value.map(item => async (): Promise<ConfigTypeTableItem[]> => {
+      if (projectLazyEnabled && (isProjectTableType(item.value) || item.value === MINE_BIZ_RT_TYPE)) {
+        return [{ ...item, children: [], lazyDirectory: true }];
+      }
       const data = await fetchTable({
         table_type: item.value,
         scene_id: getSceneSystemParams().scope_id,
@@ -521,13 +666,14 @@
           (acc, curr) => acc.concat(curr),
           [] as Array<ConfigTypeTableItem>,
         );
-        allConfigTypeTable.value = flattenedResults.filter(item => item.children && item.children.length > 0);
+        allConfigTypeTable.value = flattenedResults.filter(item => item.lazyDirectory || (item.children && item.children.length > 0));
         loading.value = false;
       });
   };
 
   // 搜索数据源
   const configTypeTableFilter = (node: Record<string, any>, key: string) => {
+    if (projectLazyEnabled && !node.isLeaf) return false;
     // 转换searchKey为小写以支持大小写不敏感的搜索
     const lowercaseSearchKey = key.toLowerCase();
     return (node.data.label.toLowerCase().includes(lowercaseSearchKey)
@@ -586,6 +732,7 @@
    */
   const handleSelectLeftTable = (value: Array<string>, index: number) => {
     if (!isInit) return;
+    echoSequence += 1;
     const configType = value[0];
 
     // 检查是否需要显示提示框的条件
@@ -631,6 +778,7 @@
    */
   const handleSelectRightTable = (value: Array<string>, index: number) => {
     if (!isInit) return;
+    echoSequence += 1;
     const configType = value[0];
     links.value[index].right_table.table_type = configType;
     links.value[index].link_fields = links.value[index].link_fields.map(field => ({
@@ -696,6 +844,20 @@
   const findFullPath = async (rtId: string, tableType: string): Promise<string[]> => {
     if (!rtId) return [];
 
+    if (projectLazyEnabled && tableType !== 'EventLog') {
+      const fallback = [tableType, encodeTypeBizId(tableType, rtId)];
+      if (!isProjectTableType(tableType)) return fallback;
+      try {
+        const meta = await StrategyManageService.fetchTableRtMeta({ table_id: rtId }, { silent: true, catchError: true });
+        tableLabels.value[rtId] = [meta.bkbase_namespace,
+          meta.result_table_name_alias || meta.result_table_name || rtId].filter(Boolean).join(' / ');
+        if (meta.bkbase_namespace) return [tableType, encodeProjectNamespace(tableType, meta.bkbase_namespace), encodeTypeBizId(tableType, rtId)];
+      } catch {
+        // 定位失败保留原 RT 与关联配置，不扫描全部项目或个人表。
+      }
+      return fallback;
+    }
+
     // 如果是EventLog类型，直接返回两层路径
     if (tableType === 'EventLog') {
       return [tableType, rtId];
@@ -753,6 +915,28 @@
       ]);
     },
     async setValue(value: LinkDataDetailModel['config']['links']) {
+      if (projectLazyEnabled) {
+        const sequence = ++echoSequence;
+        links.value = value.map(link => ({ ...link,
+          left_table: { ...link.left_table, rt_id: Array.isArray(link.left_table.rt_id) ? [...link.left_table.rt_id]
+            : [link.left_table.table_type, link.left_table.table_type === 'EventLog' ? link.left_table.rt_id : encodeTypeBizId(link.left_table.table_type, link.left_table.rt_id)] },
+          right_table: { ...link.right_table, rt_id: Array.isArray(link.right_table.rt_id) ? [...link.right_table.rt_id]
+            : [link.right_table.table_type, link.right_table.table_type === 'EventLog' ? link.right_table.rt_id : encodeTypeBizId(link.right_table.table_type, link.right_table.rt_id)] },
+        }));
+        nextTick(() => { isInit = true; });
+        value.forEach((link, index) => {
+          (['left_table', 'right_table'] as const).forEach(async (side) => {
+            const table = link[side];
+            const id = getRealRtId(table.table_type, table.rt_id);
+            const path = await findFullPath(id, table.table_type);
+            if (sequence !== echoSequence || getRealRtId(links.value[index]?.[side]?.table_type, links.value[index]?.[side]?.rt_id) !== id) return;
+            // 只补充展示元数据；不写 v-model，避免级联 change 清空已配置关联字段。
+            if (!tableLabels.value[id]) tableLabels.value[id] = path.length === 3
+              ? `${decodeTypeBizId(table.table_type, path[1])} / ${id}` : id;
+          });
+        });
+        return;
+      }
       // 等待allConfigTypeTable有值
       if (!allConfigTypeTable.value.length) {
         await new Promise<void>((resolve) => {
