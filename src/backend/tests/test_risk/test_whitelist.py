@@ -776,18 +776,18 @@ class WhitelistFlowTests(SimpleTestCase):
         apply_result.assert_not_called()
         refresh_nodes.assert_called_once_with(rule, ticket)
 
-    @patch("services.web.risk.whitelist.service._ticket_from_logs")
-    @patch("services.web.risk.whitelist.service._load_ticket_detail", return_value={})
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_logs")
     @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
     @patch("services.web.risk.whitelist.service._close_source_risk")
     @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
-    def test_callback_without_approve_result_reads_logs_and_returns_active(
-        self, close_risk, refresh_nodes, ticket_detail, ticket_logs
-    ):
+    def test_finished_without_approve_result_is_rejected(self, close_risk, refresh_nodes, ticket_logs):
         ticket_logs.return_value = {
-            "id": "ticket-1",
-            "status": ITSMV4TicketStatus.FINISHED,
-            "approve_result": True,
+            "items": [
+                {
+                    "action": "refuse",
+                    "extra": [{"type": "name_value", "name": "审批意见", "value": "不是误报"}],
+                }
+            ]
         }
         rule = _Rule(status=WhitelistStatus.PENDING, callback_token="token", risk_id="risk-1")
         rule.itsm_ticket_id = "ticket-1"
@@ -798,10 +798,12 @@ class WhitelistFlowTests(SimpleTestCase):
                 {"callback_token": "token", "ticket": {"id": "ticket-1", "status": "finished"}}
             )
         self.assertTrue(result["result"])
-        self.assertEqual(result["status"], WhitelistStatus.ACTIVE)
-        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
-        close_risk.assert_called_once()
+        self.assertEqual(result["status"], WhitelistStatus.REJECTED)
+        self.assertEqual(rule.status, WhitelistStatus.REJECTED)
+        self.assertEqual(rule.reject_reason, "不是误报")
+        close_risk.assert_not_called()
         refresh_nodes.assert_called()
+        ticket_logs.assert_called_once_with(ticket_id="ticket-1")
 
 
 class WhitelistPollTests(SimpleTestCase):

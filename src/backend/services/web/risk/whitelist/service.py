@@ -43,6 +43,10 @@ from services.web.risk.whitelist.match import (
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.scene.constants import ITSMV4TicketStatus
 from services.web.scene.models import Scene
+from services.web.scene.permission import (
+    _extract_reject_reason_from_logs,
+    parse_itsm_ticket,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -867,35 +871,34 @@ def refresh_pending_whitelist(rule: RiskWhitelist) -> dict:
     return ticket
 
 
-def _callback_ticket_decided(ticket: dict) -> bool:
-    """回调体已经能判断通过或驳回。finished 但没带 approve_result 时还不算。"""
+def prepare_callback_ticket(ticket: dict) -> dict:
+    """和场景权限回调一样，只看回调体里的 status、approve_result。
 
-    status = _raw_ticket_status(ticket)
-    if status == ITSMV4TicketStatus.TERMINATION:
-        return True
-    if status != ITSMV4TicketStatus.FINISHED:
-        return False
-    return "approve_result" in (ticket or {})
-
-
-def resolve_callback_ticket(rule: RiskWhitelist, ticket: dict) -> dict:
-    """回调体没有终态时，当场查工单详情和日志，通过后这次回调就返回生效中。"""
+    approve_result 缺省当未通过。finished 且通过才是生效中；finished 未通过是已驳回；
+    termination 也记为已驳回。日志只补驳回或终止理由，不改通过还是驳回。
+    """
 
     ticket = dict(ticket or {})
-    if _callback_ticket_decided(ticket):
-        return ticket
-    if rule.itsm_ticket_id:
-        detail = _load_ticket_detail(rule)
-        if detail and _callback_ticket_decided(detail):
-            detail.setdefault("id", rule.itsm_ticket_id)
-            return detail
-        logged = _ticket_from_logs(rule)
-        if logged:
-            return logged
-        if detail:
-            detail.setdefault("id", rule.itsm_ticket_id)
-            return detail
+    ticket["status"] = _raw_ticket_status(ticket)
+    parsed = parse_itsm_ticket(ticket)
+    ticket["status"] = parsed["status"]
+    ticket["approve_result"] = parsed["approve_result"]
+    terminal = parsed["status"] in {ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION}
+    if terminal and not parsed["approve_result"]:
+        ticket["comment"] = _callback_reject_reason(ticket) or ticket.get("comment") or ""
     return ticket
+
+
+def _callback_reject_reason(ticket: dict) -> str:
+    ticket_id = str((ticket or {}).get("id") or "")
+    if not ticket_id:
+        return ""
+    try:
+        logs = api.bk_itsm_v4.ticket_logs(ticket_id=ticket_id) or {}
+    except Exception:
+        logger.exception("[RiskWhitelist] callback ticket_logs failed, ticket_id=%s", ticket_id)
+        return ""
+    return _extract_reject_reason_from_logs(logs if isinstance(logs, dict) else {})
 
 
 def _ticket_from_logs(rule: RiskWhitelist):

@@ -54,9 +54,9 @@ from services.web.risk.whitelist.service import (
     get_rule_for_admin,
     is_platform_admin,
     managed_scene_ids,
+    prepare_callback_ticket,
     refresh_whitelist_nodes,
     renew_whitelist,
-    resolve_callback_ticket,
     review_whitelist,
     serialize_rule,
     submit_whitelist,
@@ -427,7 +427,7 @@ class RiskWhitelistCallback(RiskWhitelistMeta):
         if not rule.itsm_ticket_id:
             _bind_ticket(rule, ticket)
             rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
-        ticket = resolve_callback_ticket(rule, ticket)
+        ticket = prepare_callback_ticket(ticket)
         if rule.status == WhitelistStatus.PENDING:
             rule = apply_whitelist_result(rule, ticket)
         elif rule.status in {WhitelistStatus.ACTIVE, WhitelistStatus.REJECTED}:
