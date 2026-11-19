@@ -29,7 +29,9 @@ def _append_scene_admin_contact(message):
     if not isinstance(message, str):
         return message
     text = message.strip().rstrip("。；;，, ")
-    if not text or text.endswith("并联系场景管理员处理"):
+    if text == "工具不存在":
+        return gettext("工具不存在，联系场景管理员")
+    if not text or text.endswith("并联系场景管理员处理") or text.endswith("联系场景管理员"):
         return text or message
     return gettext("%(reason)s%(contact)s") % {"reason": text, "contact": _SCENE_ADMIN_CONTACT}
 

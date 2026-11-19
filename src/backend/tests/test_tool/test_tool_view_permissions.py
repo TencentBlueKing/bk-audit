@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
 import uuid
 from types import SimpleNamespace
+from unittest.mock import patch
 
+from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
 
 from apps.permission.handlers.drf import AnyOfPermissions, InstanceActionPermission
+from core.exceptions import PermissionException, ValidationError
+from services.web.common.scope_permission import ScopeInstancePermission
 from services.web.scene.constants import BindingType, ResourceVisibilityType
 from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.tool.models import Tool
 from services.web.tool.permissions import CallerContextPermission, UseToolPermission
-from services.web.tool.views import SceneScopeToolViewSet, ToolViewSet
+from services.web.tool.views import (
+    SceneScopeToolViewSet,
+    ToolViewSet,
+    _append_scene_admin_contact,
+)
 from tests.base import TestCase
 
 
@@ -96,3 +104,97 @@ class TestToolViewPermissions(TestCase):
 
         self.assertIsInstance(permission, InstanceActionPermission)
         self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
+
+
+class TestUseToolEmptyApplyWindow(SimpleTestCase):
+    def _call(self, uid="tool-1"):
+        request = SimpleNamespace()
+        view = SimpleNamespace(kwargs={"uid": uid}, lookup_field="uid", lookup_url_kwarg=None)
+        return UseToolPermission().has_permission(request, view)
+
+    def test_missing_tool_is_plain_message(self):
+        with patch.object(Tool, "last_version_tool", return_value=None):
+            with self.assertRaises(ValidationError) as raised:
+                self._call()
+
+        self.assertEqual(raised.exception.message, "工具不存在，联系场景管理员")
+        self.assertEqual(raised.exception.STATUS_CODE, 400)
+        self.assertNotEqual(raised.exception.code, "9900403")
+
+    def test_empty_apply_url_keeps_original_message(self):
+        denied = PermissionException(action_name="访问资源(tool:tool-1)", permission={}, apply_url="")
+        with (
+            patch.object(Tool, "last_version_tool", return_value=SimpleNamespace(status="published")),
+            patch.object(UseToolPermission, "_is_scene_binding_enabled", return_value=True),
+            patch.object(UseToolPermission, "_is_resource_manager_exception", return_value=False),
+            patch.object(UseToolPermission, "_is_resource_published", return_value=True),
+            patch.object(ScopeInstancePermission, "has_permission", side_effect=denied),
+        ):
+            with self.assertRaises(ValidationError) as raised:
+                self._call()
+
+        self.assertEqual(raised.exception.message, "当前用户无 [访问资源(tool:tool-1)] 权限，联系场景管理员")
+        self.assertEqual(raised.exception.STATUS_CODE, 400)
+        self.assertIsNone(raised.exception.data)
+        self.assertNotEqual(raised.exception.code, "9900403")
+
+    def test_inner_apply_url_is_not_returned(self):
+        denied = PermissionException(
+            action_name="访问资源(tool:tool-1)",
+            permission={"id": "tool"},
+            apply_url="https://iam.example/apply",
+        )
+        with (
+            patch.object(Tool, "last_version_tool", return_value=SimpleNamespace(status="published")),
+            patch.object(UseToolPermission, "_is_scene_binding_enabled", return_value=True),
+            patch.object(UseToolPermission, "_is_resource_manager_exception", return_value=False),
+            patch.object(UseToolPermission, "_is_resource_published", return_value=True),
+            patch.object(ScopeInstancePermission, "has_permission", side_effect=denied),
+        ):
+            with self.assertRaises(ValidationError) as raised:
+                self._call()
+
+        self.assertEqual(raised.exception.STATUS_CODE, 400)
+        self.assertIsNone(raised.exception.data)
+        self.assertEqual(raised.exception.message, "当前用户无 [访问资源(tool:tool-1)] 权限，联系场景管理员")
+
+    def test_unpublished_tool_is_400_for_ordinary_user(self):
+        with (
+            patch.object(Tool, "last_version_tool", return_value=SimpleNamespace(status="unpublished")),
+            patch.object(UseToolPermission, "_is_scene_binding_enabled", return_value=True),
+            patch.object(UseToolPermission, "_is_resource_manager_exception", return_value=False),
+            patch.object(UseToolPermission, "_is_resource_published", return_value=False),
+        ):
+            with self.assertRaises(ValidationError) as raised:
+                self._call()
+
+        self.assertEqual(raised.exception.message, "工具未上架，联系场景管理员")
+        self.assertEqual(raised.exception.STATUS_CODE, 400)
+
+    def test_manager_can_use_unpublished_tool(self):
+        with (
+            patch.object(Tool, "last_version_tool", return_value=SimpleNamespace(status="unpublished")),
+            patch.object(UseToolPermission, "_is_scene_binding_enabled", return_value=True),
+            patch.object(UseToolPermission, "_is_resource_manager_exception", return_value=True),
+            patch.object(ScopeInstancePermission, "has_permission", return_value=True),
+        ):
+            self.assertTrue(self._call())
+
+    def test_disabled_or_deleted_scene_binding_is_400(self):
+        with (
+            patch.object(Tool, "last_version_tool", return_value=SimpleNamespace(status="published")),
+            patch.object(UseToolPermission, "_is_scene_binding_enabled", return_value=False),
+            patch.object(UseToolPermission, "_is_resource_manager_exception", return_value=True),
+        ):
+            with self.assertRaises(ValidationError) as raised:
+                self._call()
+
+        self.assertEqual(raised.exception.message, "绑定场景停用或被删除，联系场景管理员")
+        self.assertEqual(raised.exception.STATUS_CODE, 400)
+
+    def test_execute_contact_does_not_rewrite_these_messages(self):
+        self.assertEqual(_append_scene_admin_contact("工具不存在"), "工具不存在，联系场景管理员")
+        self.assertEqual(
+            _append_scene_admin_contact("当前用户无 [访问资源(tool:tool-1)] 权限，联系场景管理员"),
+            "当前用户无 [访问资源(tool:tool-1)] 权限，联系场景管理员",
+        )
