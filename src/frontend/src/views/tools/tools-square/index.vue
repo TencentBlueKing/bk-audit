@@ -328,6 +328,15 @@
 
   // 当前场景下所有工具的 uid 集合
   const sceneToolUids = ref<Set<string>>(new Set());
+  const sceneToolNameMap = ref<Record<string, string>>({});
+  const applySceneToolNames = () => {
+    openedTools.value.forEach((tool) => {
+      const name = sceneToolNameMap.value[tool.uid];
+      if (name && tool.name === tool.uid) {
+        tool.name = name;
+      }
+    });
+  };
 
   // 获取当前场景下的全量工具 uid
   const {
@@ -335,7 +344,15 @@
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     onSuccess: (data: any[]) => {
-      sceneToolUids.value = new Set(data.map(item => item.uid));
+      const nameMap: Record<string, string> = {};
+      (data || []).forEach((item) => {
+        if (item?.uid && item?.name) {
+          nameMap[String(item.uid)] = item.name;
+        }
+      });
+      sceneToolNameMap.value = nameMap;
+      sceneToolUids.value = new Set((data || []).map(item => item.uid));
+      applySceneToolNames();
     },
   });
 
@@ -468,6 +485,18 @@
     } else if (activeToolUid.value !== routeUid) {
       switchTab(routeUid);
     }
+    String(route.query.open_tools || '')
+      .split(',')
+      .map(uid => uid.trim())
+      .filter(uid => uid && uid !== routeUid)
+      .forEach((uid) => {
+        if (openedTools.value.some(tool => tool.uid === uid)) return;
+        openTool(new ToolInfo({
+          uid,
+          name: sceneToolNameMap.value[uid] || uid,
+        } as ToolInfo), { switchToNew: false });
+      });
+    applySceneToolNames();
   }
 
   // 安全地重置左侧标签栏（防止 resetAll 触发的 checked 事件关闭工具详情）
