@@ -17,10 +17,12 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_resource import api
+from django.utils.translation import gettext
 from rest_framework.permissions import BasePermission
 
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
+from core.exceptions import PermissionException, ValidationError
 from core.models import get_request_username
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
@@ -54,6 +56,25 @@ class UseToolPermission(ScopeInstancePermission):
     def _get_tool_status(tool_uid: str):
         tool = Tool.last_version_tool(uid=tool_uid)
         return tool.status if tool else None
+
+    def has_permission(self, request, view) -> bool:
+        """工具不存在、未上架、场景停用和不可见都返回 400，不带申请链接。"""
+
+        resource_id = str(self._get_instance_id(request, view))
+        if Tool.last_version_tool(uid=resource_id) is None:
+            raise ValidationError(message=gettext("工具不存在，联系场景管理员"))
+        if not self._is_scene_binding_enabled(resource_id):
+            raise ValidationError(message=gettext("绑定场景停用或被删除，联系场景管理员"))
+        username = get_request_username()
+        if not self._is_resource_manager_exception(username, resource_id) and not self._is_resource_published(
+            resource_id
+        ):
+            raise ValidationError(message=gettext("工具未上架，联系场景管理员"))
+        try:
+            return super().has_permission(request, view)
+        except PermissionException as exc:
+            reason = str(exc.args[0] if exc.args else exc.message or "").strip().rstrip("。；;，, ")
+            raise ValidationError(message=gettext("%(reason)s，联系场景管理员") % {"reason": reason}) from exc
 
 
 def check_bkvision_share_permission(user_id, share_uid) -> bool:
