@@ -39,11 +39,14 @@
         @update:model-value="handleSearch" />
       <tdesign-list
         ref="listRef"
+        class="hit-list"
         :columns="columns"
         :data-source="dataSource"
         disable-url-sync
+        :fit-viewport-height="false"
         :persist-table-filters="false"
-        row-key="id" />
+        row-key="id"
+        table-max-height="calc(100vh - 200px)" />
     </div>
   </audit-sideslider>
   <event-detail-dialog ref="eventRef" />
@@ -59,7 +62,10 @@
 
   import MatchScopeExpression from '@components/risk-whitelist/match-scope-expression.vue';
   import { INTERCEPT_ACTION_TEXT } from '@components/risk-whitelist/constants';
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
+
+  import { getSceneContextQuery } from '@/utils/assist/scene-system-params';
 
   import EventDetailDialog from './event-detail-dialog.vue';
 
@@ -77,6 +83,39 @@
   const searchValue = ref<SearchKey[]>([]);
   const listRef = ref<InstanceType<typeof TdesignList>>();
   const eventRef = ref<InstanceType<typeof EventDetailDialog>>();
+
+  const readUserRoles = (): string[] => {
+    try {
+      return JSON.parse(sessionStorage.getItem('userRole') || '[]') as string[];
+    } catch {
+      return [];
+    }
+  };
+
+  /**
+   * 与 execution-links 对齐：
+   * - 场景管理员，或白名单当前处于具体场景上下文 → 场景风险详情 + 场景 query
+   * - 其余（如平台管理员且非具体场景）→ 所有风险详情
+   */
+  const resolveHitRiskDetailHref = (riskId: string) => {
+    const roles = readUserRoles();
+    const isSceneAdmin = roles.includes('scene_admin');
+    const sceneQuery = getSceneContextQuery();
+    const inSceneContext = sceneQuery.scope_type === 'scene' && !!sceneQuery.scope_id;
+
+    if (isSceneAdmin || inSceneContext) {
+      return router.resolve({
+        name: 'sceneRiskManageDetail',
+        params: { riskId },
+        query: sceneQuery,
+      }).href;
+    }
+
+    return router.resolve({
+      name: 'riskManageDetail',
+      params: { riskId },
+    }).href;
+  };
 
   const searchData = [
     { id: 'action', name: t('拦截动作'), children: [
@@ -109,16 +148,15 @@
     {
       title: t('关联风险单'),
       colKey: 'risk_id',
-      width: 160,
+      width: 200,
       cell: (_: unknown, { row }: { row: HitRecord }) => {
         if (row.action === 'suppress_new' || !row.risk_id) return '-';
-        const riskUrl = row.risk_url || router.resolve({
-          name: 'riskManageDetail',
-          params: { riskId: row.risk_id },
-        }).href;
+        const riskUrl = resolveHitRiskDetailHref(String(row.risk_id));
         return (
           <span class="risk-cell">
-            <span class="risk-text">{row.risk_id}</span>
+            <ShowTooltipsText
+              class="risk-text"
+              data={String(row.risk_id)} />
             <a
               class="risk-link"
               href={riskUrl}
@@ -190,13 +228,25 @@
   }
 
   .hit-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
     padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
+    overflow: hidden;
+    box-sizing: border-box;
   }
 
   .hit-search {
     display: block;
+    flex-shrink: 0;
     width: 100%;
     margin-bottom: var(--bk-theme-space-16);
+  }
+
+  .hit-list {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   :deep(td:has(.scope-cell)) {
@@ -218,15 +268,23 @@
   }
 
   :deep(.risk-text) {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     color: var(--bk-theme-text-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   :deep(.risk-link) {
     display: inline-flex;
+    flex-shrink: 0;
     color: var(--bk-theme-color-brand-2);
   }
 
   :deep(.risk-link-icon) {
+    flex-shrink: 0;
     visibility: hidden;
   }
 

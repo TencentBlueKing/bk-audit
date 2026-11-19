@@ -147,6 +147,15 @@
                 name: 'flip',
                 enabled: props.flip,
               },
+              {
+                // 避免长内容 tip 顶部被视口裁切（placement=top 且空间不足时）
+                name: 'preventOverflow',
+                options: {
+                  padding: 8,
+                  boundary: 'viewport',
+                  altAxis: true,
+                },
+              },
             ],
           },
         });
