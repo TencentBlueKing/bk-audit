@@ -21,14 +21,22 @@ import copy
 import json
 from typing import List
 
-from bk_resource import api
 from bk_resource.base import Empty
 from django.conf import settings
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 
+from apps.exceptions import SnapshotPreparingException
 from apps.meta.utils.fields import PYTHON_FIELD_TYPE_MAP
 from core.models import get_request_username
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase.common import (
+    get_bkbase_context,
+    get_bkbase_version,
+    resource_lock,
+)
+from services.web.bkbase.constants import BKBaseVersion, TaskState
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.constants import (
     JOIN_DATA_RT_FORMAT,
     EtlConfigEnum,
@@ -73,9 +81,18 @@ class EtlClean(metaclass=abc.ABCMeta):
     ) -> None:
         # 校验字段类型是否匹配
         self.check_field_type(fields)
-
-        instance_fields = copy.deepcopy(fields)
         instance: CollectorConfig = CollectorConfig.objects.get(collector_config_id=collector_config_id)
+
+        if get_bkbase_version() == BKBaseVersion.V4:
+            context = get_bkbase_context()
+            ref = bkbase_clean.owner_clean_ref(context, instance)
+            with resource_lock(context, ref):
+                instance = CollectorConfig.objects.get(pk=instance.pk)
+                if bkbase_clean.owner_clean_ref(context, instance) != ref:
+                    raise BKBaseResourceMappingError(message="Collector Clean binding changed under lock")
+                self._check_restore_write(instance)
+                self._save_clean(instance, etl_params, fields, locked_ref=ref)
+            return
 
         # 新建的采集需要自动关联
         if not instance.join_data_rt:
@@ -88,6 +105,29 @@ class EtlClean(metaclass=abc.ABCMeta):
                     system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id
                 ).replace("-", "_")
                 instance.join_data_rt = f"{settings.DEFAULT_BK_BIZ_ID}_{rt_name}"
+        self._save_clean(instance, etl_params, fields)
+
+    @staticmethod
+    def _check_restore_write(instance):
+        """Clean PUT 与生效观察之间，保留快照已认领的关联配置。"""
+        snapshots = Snapshot.objects.filter(system_id=instance.system_id, join_data_type=JoinDataType.BASIC)
+        for binding in snapshots.values_list("bkbase_v4_resources", flat=True):
+            if not isinstance(binding, dict):
+                continue
+            operation = binding.get("source_replay") or {}
+            if not isinstance(operation, dict) or operation.get("mode") != "restore":
+                continue
+            write = (operation.get("writes") or {}).get(f"collector:{instance.pk}")
+            if write and (
+                operation.get("active")
+                or not write.get("linked")
+                and (operation.get("outcome_unknown") or write.get("observed") == TaskState.PENDING)
+            ):
+                raise SnapshotPreparingException()
+
+    def _save_clean(self, instance, etl_params, fields, *, locked_ref=None):
+        """生成规则并保存本次编辑的本地配置。"""
+        instance_fields = copy.deepcopy(fields)
 
         # 获取清洗入库
         bkbase_params = self.get_bkbase_etl_config(instance, etl_params, fields)
@@ -95,27 +135,18 @@ class EtlClean(metaclass=abc.ABCMeta):
         # 结构转换
         bkbase_params["json_config"] = json.dumps(bkbase_params["json_config"])
 
-        # 创建清洗
-        if not instance.bkbase_table_id:
-            result = api.bk_base.databus_cleans_post(bkbase_params)
-            self.start_bkbase_clean(
-                bkbase_params["result_table_id"],
-                bkbase_params["processing_id"],
-            )
-            instance.processing_id = result["processing_id"]
-            instance.bkbase_table_id = result["result_table_id"]
-            instance.save()
-
-        # 更新清洗
+        if locked_ref is None:
+            bkbase_clean.configure_clean(instance, bkbase_params, rt_owner=False)
         else:
-            bkbase_params.update({"processing_id": bkbase_params["processing_id"]})
-            api.bk_base.databus_cleans_put(bkbase_params, request_cookies=False)
-            self.restart_bkbase_clean(bkbase_params["result_table_id"], bkbase_params["processing_id"])
+            bkbase_clean.configure_clean(instance, bkbase_params, rt_owner=False, _locked_clean_ref=locked_ref)
 
         instance.fields = instance_fields
         instance.etl_config = self.etl_config
         instance.etl_params = etl_params
-        instance.save()
+        if locked_ref is None:
+            instance.save()
+        else:
+            instance.save(update_fields=["fields", "etl_config", "etl_params"])
 
     @classmethod
     def check_field_type(cls, fields: List[dict]):

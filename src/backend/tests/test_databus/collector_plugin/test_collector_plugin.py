@@ -140,15 +140,15 @@ class CollectorPluginTest(TestCase):
         self.assertEqual(ordered_dict_to_json(result), GET_PLUGIN_LIST_DATA)
 
     @mock.patch(
-        "services.web.databus.collector_plugin.handlers.api.bk_base.get_rawdata_list",
+        "bk_resource.api.bk_base.get_rawdata_list",
         mock.Mock(return_value=RAW_DATA_LIST),
     )
     @mock.patch(
-        "services.web.databus.collector_plugin.handlers.api.bk_base.databus_cleans_post",
+        "bk_resource.api.bk_base.databus_cleans_post",
         mock.Mock(return_value=DATACLEAN_RESULT),
     )
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_storages_post", mock.Mock())
     @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=GET_STORAGES_API_RESP))
     def test_create_or_update_plugin_etl(self):
         """CreateOrUpdatePluginEtlResource"""

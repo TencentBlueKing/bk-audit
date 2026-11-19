@@ -101,6 +101,9 @@ export default {
   短信: 'SMS',
   语音: 'Voice',
   微信: 'Wechat',
+  '微信当前不可选，原有配置已保留，可手动移除。': 'WeChat is unavailable. Existing settings are kept until you remove it.',
+  '微信（已停用）': 'WeChat (unavailable)',
+  移除微信: 'Remove WeChat',
   企业微信: 'Wework',
   机器人: 'Wework robot',
   系统ID: 'System ID',
@@ -641,4 +644,8 @@ export default {
   '请输入类似 pageSize 的字段': 'Enter a field like pageSize',
   搜索字段: 'Search fields',
   暂无可选字段: 'No selectable fields',
+  '加载失败，点击重试': 'Failed to load. Click to retry',
+  '搜索项目 namespace': 'Search project namespace',
+  '请先选择项目': 'Select a project first',
+  '点击加载项目数据': 'Click to load project tables',
 };

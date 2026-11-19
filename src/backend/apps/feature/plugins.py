@@ -25,6 +25,7 @@ from django.utils.translation import gettext
 from apps.feature.constants import FeatureStatusChoices
 from apps.feature.models import FeatureToggle
 from core.tenant import use_multi_tenant_mode
+from services.web.bkbase import deprecated as bkbase_deprecated
 
 
 class BaseFeaturePlugin(abc.ABC):
@@ -51,7 +52,9 @@ class BkbaseAiopsPlugin(BaseFeaturePlugin):
         if self.feature.status == FeatureStatusChoices.DENY.value:
             return FeatureStatusChoices.DENY.value
         # 其他状态需要获取AIOPS接口判断是否启用
-        return FeatureStatusChoices.AVAILABLE.value if api.bk_base.check_aiops() else FeatureStatusChoices.DENY.value
+        return (
+            FeatureStatusChoices.AVAILABLE.value if bkbase_deprecated.check_aiops() else FeatureStatusChoices.DENY.value
+        )
 
 
 class BklogOtlpPlugin(BaseFeaturePlugin):

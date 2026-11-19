@@ -27,6 +27,8 @@ from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler, get_entry_feature_toggle
 from apps.meta.models import GlobalMetaConfig
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.entry.constants import (
     AGENT_AUTH_KEY,
     AI_PRACTICES_KEY,
@@ -63,7 +65,10 @@ class EntryHandler(object):
             static_url = "//%s/static/" % app_subdomains.split(";")[0]
 
         # 特性开关：首屏一次性下发各开关的 enabled 状态，前端据此控制入口显隐
-        feature_toggle = get_entry_feature_toggle()
+        feature_toggle = {
+            **get_entry_feature_toggle(),
+            "bkbase_project_rt_lazy_load": get_bkbase_version() == BKBaseVersion.V4,
+        }
 
         # 平台管理员
         manage_actions = "list_storage,list_sensitive_object"

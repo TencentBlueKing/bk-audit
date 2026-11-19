@@ -42,7 +42,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
-            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+            'bk_resource.api.bk_base.user_auth_batch_check'
         ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
@@ -60,7 +60,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
-            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+            'bk_resource.api.bk_base.user_auth_batch_check'
         ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
@@ -78,7 +78,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
-            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+            'bk_resource.api.bk_base.user_auth_batch_check'
         ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
@@ -95,7 +95,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
-            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+            'bk_resource.api.bk_base.user_auth_batch_check'
         ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': False},
@@ -113,7 +113,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
-            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+            'bk_resource.api.bk_base.user_auth_batch_check'
         ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
@@ -134,7 +134,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.executor.tool = None
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
 
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+        with patch('bk_resource.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
             'services.web.tool.executor.tool.get_request_username', return_value='request_user'
         ):
             mock_auth_check.return_value = [
@@ -173,7 +173,7 @@ class TestSceneTablePermissionValidation(TestCase):
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
             'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['table1', 'table2']
-        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+        ), patch('bk_resource.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
             'services.web.tool.executor.tool.get_request_username', return_value='test_user'
         ):
 
@@ -191,7 +191,7 @@ class TestSceneTablePermissionValidation(TestCase):
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
             'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['table1']
-        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+        ), patch('bk_resource.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
             'services.web.tool.executor.tool.get_request_username', return_value='test_user'
         ):
             mock_auth_check.return_value = [
@@ -217,7 +217,7 @@ class TestSceneTablePermissionValidation(TestCase):
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
             'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['table1']
-        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+        ), patch('bk_resource.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
             'services.web.tool.executor.tool.get_request_username', return_value='test_user'
         ):
             mock_auth_check.return_value = [
@@ -235,7 +235,7 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
 
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
-            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+            'bk_resource.api.bk_base.user_auth_batch_check'
         ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
@@ -262,7 +262,7 @@ class TestCheckTablePermission(TestCase):
         mock_tool.uid = 'test_tool_uid'
         with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
             'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['t1', 't2']
-        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+        ), patch('bk_resource.api.bk_base.user_auth_batch_check') as mock_auth:
             SqlDataSearchExecutor.check_table_permission(tables, tool=mock_tool)
             mock_auth.assert_not_called()
 

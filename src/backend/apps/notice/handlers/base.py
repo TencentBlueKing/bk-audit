@@ -28,6 +28,11 @@ from apps.notice.aggregators import AGGREGATORS
 from apps.notice.aggregators.base import Aggregator
 from apps.notice.builders import BUILDERS
 from apps.notice.builders.base import Builder
+from apps.notice.constants import (
+    WEIXIN_UNAVAILABLE_MESSAGE,
+    MsgType,
+    get_supported_msg_types,
+)
 from apps.notice.models import NoticeLogV2
 from apps.notice.senders import SENDERS
 from apps.notice.senders.base import Sender
@@ -131,6 +136,9 @@ class NoticeHandler:
         title, content, button = "", "", None
         for msg_type in notice_log.msg_type:
             try:
+                if msg_type == MsgType.WEIXIN and msg_type not in get_supported_msg_types():
+                    logger.warning("[NoticeChannelRetired] notice_log=%s channel=weixin", notice_log.id)
+                    raise ValueError(str(WEIXIN_UNAVAILABLE_MESSAGE))
                 # 获取发送器
                 sender: Type[Sender] = SENDERS[msg_type]
                 # 构造消息内容

@@ -28,6 +28,9 @@ from apps.notice.constants import (
     ADMIN_NOTICE_GROUP_ID,
     NOTICE_GROUP_NAME_REGEX,
     NOTICE_WHITELIST_USER_KEY,
+    WEIXIN_UNAVAILABLE_MESSAGE,
+    MsgType,
+    get_supported_msg_types,
 )
 from apps.notice.exceptions import NoticeGroupNameDuplicate
 from apps.notice.models import NoticeGroup, NoticeLogV2
@@ -130,6 +133,12 @@ class NoticeConfigSerializer(serializers.Serializer):
     """
 
     msg_type = serializers.CharField(label=gettext_lazy("通知方式"))
+
+    def validate_msg_type(self, value):
+        """保存时拒绝已退出渠道，存量详情仍按原配置返回。"""
+        if value == MsgType.WEIXIN and value not in get_supported_msg_types():
+            raise serializers.ValidationError(WEIXIN_UNAVAILABLE_MESSAGE)
+        return value
 
 
 class EditNoticeGroupSerializer(serializers.ModelSerializer):

@@ -17,9 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import Optional
 
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
+from services.web.bkbase.constants import BKBaseVersion
 
 ADMIN_NOTICE_GROUP_ID = 1
 ADMIN_NOTICE_GROUP_NAME = gettext_lazy("审计中心管理员")
@@ -51,6 +53,16 @@ class MsgType(TextChoices):
     MAIL = "mail", gettext_lazy("邮件")
     VOICE = "voice", gettext_lazy("语音")
     SMS = "sms", gettext_lazy("短信")
+
+
+WEIXIN_UNAVAILABLE_MESSAGE = gettext_lazy("当前环境不支持微信通知，请移除微信后重新保存")
+
+
+def get_supported_msg_types():
+    """V4退出微信；保留共享渠道定义及V3的发送能力。"""
+    if getattr(settings, "BKBASE_API_VERSION", BKBaseVersion.V3) == BKBaseVersion.V4:
+        return [value for value in MsgType.values if value != MsgType.WEIXIN]
+    return MsgType.values
 
 
 def get_default_notice_config():
