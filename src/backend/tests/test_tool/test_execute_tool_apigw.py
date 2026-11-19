@@ -6,7 +6,6 @@ from rest_framework.test import APIRequestFactory
 from core.permissions import APIGWPermission
 from services.web.scene.constants import PanelStatus
 from services.web.tool.constants import ToolTypeEnum
-from services.web.tool.exceptions import ToolNotPublished
 from services.web.tool.models import Tool
 from services.web.tool.views import ToolAPIGWViewSet
 
@@ -33,6 +32,7 @@ class TestExecuteToolAPIGWResource(TestCase):
                 return_value=mock_executor,
             ) as mock_create_executor,
             mock.patch("tool.resources.recent_tool_usage_manager.record_usage") as mock_record_usage,
+            mock.patch("tool.resources.tool_usage_count_manager.incr_usage") as mock_incr_usage,
             mock.patch("tool.resources.should_skip_permission_from") as mock_skip_permission,
         ):
             result = self.resource.tool.execute_tool_apigw({"uid": "tool_uid", "params": {}})
@@ -40,9 +40,11 @@ class TestExecuteToolAPIGWResource(TestCase):
         self.assertEqual(result["data"], {"ok": True})
         mock_create_executor.assert_called_once_with(tool)
         mock_record_usage.assert_called_once_with("admin", tool.uid)
+        mock_incr_usage.assert_called_once_with("admin", tool.uid)
         mock_skip_permission.assert_not_called()
 
-    def test_execute_tool_apigw_denies_unpublished_tool(self):
+    def test_execute_tool_apigw_allows_unpublished_tool(self):
+        """广场展示关闭（unpublished）的工具仍可执行：开关仅控制工具广场展示"""
         Tool.objects.create(
             namespace="ns",
             name="draft_apigw_tool",
@@ -53,15 +55,19 @@ class TestExecuteToolAPIGWResource(TestCase):
             permission_owner="owner",
             status=PanelStatus.UNPUBLISHED,
         )
+        mock_executor = mock.Mock()
+        mock_executor.execute.return_value = mock.Mock(model_dump=mock.Mock(return_value={"ok": True}))
 
         with (
-            mock.patch("tool.resources.ToolExecutorFactory.create_from_tool") as mock_create_executor,
-            mock.patch("tool.resources.recent_tool_usage_manager.record_usage") as mock_record_usage,
+            mock.patch("tool.resources.ToolExecutorFactory.create_from_tool", return_value=mock_executor),
+            mock.patch("tool.resources.recent_tool_usage_manager.record_usage"),
+            mock.patch("tool.resources.tool_usage_count_manager.incr_usage"),
         ):
-            with self.assertRaises(ToolNotPublished):
-                self.resource.tool.execute_tool_apigw({"uid": "draft_tool_uid", "params": {}})
-        mock_create_executor.assert_not_called()
-        mock_record_usage.assert_not_called()
+            result = self.resource.tool.execute_tool_apigw({"uid": "draft_tool_uid", "params": {}})
+
+        self.assertEqual(result["tool_type"], ToolTypeEnum.BK_VISION.value)
+        self.assertEqual(result["data"], {"ok": True})
+        mock_executor.execute.assert_called_once()
 
 
 class TestToolNameNotUnique(TestCase):
@@ -182,9 +188,11 @@ class TestGetToolDetailByNameAPIGWResource(TestCase):
         self.assertEqual(len(permissions), 1)
         self.assertIsInstance(permissions[0], APIGWPermission)
 
-    def test_get_tool_detail_by_name_apigw_denies_unpublished_tool(self):
+    def test_get_tool_detail_by_name_apigw_allows_unpublished_tool(self):
+        """广场展示关闭（unpublished）的工具仍可获取调用契约：开关仅控制工具广场展示"""
         self.tool.status = PanelStatus.UNPUBLISHED
         self.tool.save(update_fields=["status"])
 
-        with self.assertRaises(ToolNotPublished):
-            self.resource.tool.get_tool_detail_by_name_apigw({"name": "test_tool_by_name"})
+        result = self.resource.tool.get_tool_detail_by_name_apigw({"name": "test_tool_by_name"})
+
+        self.assertEqual(result["uid"], "tool_uid_by_name")

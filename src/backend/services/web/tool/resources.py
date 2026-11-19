@@ -56,7 +56,6 @@ from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
     BindingType,
-    PanelStatus,
     ResourceVisibilityType,
     SceneStatus,
 )
@@ -88,7 +87,6 @@ from services.web.tool.exceptions import (
     InputVariableNotFoundError,
     SmartPageDataSourceNotFound,
     ToolDoesNotExist,
-    ToolNotPublished,
     ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import SmartPageExecuteParams
@@ -136,6 +134,7 @@ from services.web.tool.tool import (
     create_tool_with_config,
     recent_tool_usage_manager,
     sync_resource_tags,
+    tool_usage_count_manager,
 )
 
 
@@ -404,6 +403,34 @@ class ListTool(ToolBase):
     many_response_data = True
     bind_request = True
 
+    @staticmethod
+    def _sort_tools_by_user_preference(queryset, current_user: str) -> List[Tool]:
+        """默认排序：收藏 > 最近使用 > 工具被使用次数 > 名称（三个维度均以人为维度隔离）
+
+        Redis 故障时对应层级降级，不影响接口可用性。
+        """
+        try:
+            recent_uids = recent_tool_usage_manager.get_recent_uids(current_user) or []
+        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>次数>名称)
+            logger.exception("[list_tool] get recent uids failed, degrade sorting")
+            recent_uids = []
+        recent_set = set(recent_uids)
+        try:
+            usage_scores = tool_usage_count_manager.get_usage_scores(current_user)
+        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>最近使用>名称)
+            logger.exception("[list_tool] get usage scores failed, degrade sorting")
+            usage_scores = {}
+        # 先按名称取确定性序，再按四层优先级稳定排序（次数全为 0 时第三层不产生区分）
+        return sorted(
+            queryset.order_by("name"),
+            key=lambda t: (
+                0 if getattr(t, "favorite", False) else 1,  # 收藏优先
+                0 if t.uid in recent_set else 1,  # 最近使用次之
+                -usage_scores.get(t.uid, 0),  # 工具被使用次数
+                t.name,  # 名称兜底
+            ),
+        )
+
     def perform_request(self, validated_request_data):
         validated_request_data.pop("_request", None)
         tags = validated_request_data.pop("tags", [])
@@ -520,19 +547,20 @@ class ListTool(ToolBase):
             tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
-        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先，默认保持旧逻辑
+        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先；
+        # 默认按 收藏 > 最近使用 > 工具被使用次数 > 名称（三个维度均以人为维度隔离）
         if recent_used and recent_tool_uids:
             queryset = preserved_order_sort(
                 queryset,
                 ordering_field="uid",
                 value_list=recent_tool_uids,
             )
+            tools = list(queryset)
         elif order_fields:
-            queryset = queryset.order_by(*order_fields)
+            tools = list(queryset.order_by(*order_fields))
         else:
-            queryset = queryset.order_by("-favorite", "name")
+            tools = self._sort_tools_by_user_preference(queryset, current_user)
 
-        tools = list(queryset)
         tool_uids = [t.uid for t in tools]
 
         # 查询 tags
@@ -1257,6 +1285,7 @@ class ExecuteTool(ToolBase):
         current_user = get_request_username()
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
+            tool_usage_count_manager.incr_usage(current_user, uid)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1358,12 +1387,11 @@ class ExecuteToolAPIGW(ExecuteTool):
         tool: Tool = Tool.last_version_tool(uid=uid)
         if not tool:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            raise ToolNotPublished()
 
         current_user = "admin"
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
+            tool_usage_count_manager.incr_usage(current_user, uid)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1889,15 +1917,10 @@ class GetToolDetailByNameAPIGW(ToolBase):
     def get_tool(self, validated_request_data):
         return Tool.all_latest_tools().filter(name=validated_request_data["name"]).first()
 
-    def raise_tool_not_published(self):
-        raise ToolNotPublished()
-
     def get_tool_detail(self, validated_request_data):
         tool = self.get_tool(validated_request_data)
         if not tool:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            self.raise_tool_not_published()
         if tool.tool_type == ToolTypeEnum.SMART_PAGE:
             raise ToolTypeNotSupport()
 
@@ -2031,16 +2054,9 @@ class DeletePlatformSceneTool(DeleteTool):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        from services.web.scene.constants import (
-            BindingType,
-            PanelStatus,
-            ResourceVisibilityType,
-        )
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.models import ResourceBinding
-        from services.web.tool.exceptions import (
-            SceneToolCannotDelete,
-            SceneToolNotExist,
-        )
+        from services.web.tool.exceptions import SceneToolNotExist
 
         uid = validated_request_data.get("uid")
         # 通过 ResourceBinding 确认是平台级工具
@@ -2053,10 +2069,6 @@ class DeletePlatformSceneTool(DeleteTool):
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
-
-        tool = Tool.last_version_tool(uid)
-        if tool and tool.status == PanelStatus.PUBLISHED:
-            raise SceneToolCannotDelete()
 
         # 删除绑定关系（级联删除关联的场景和系统）
         BindingMetadataHelper.delete_resource_binding(
