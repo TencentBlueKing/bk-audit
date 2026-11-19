@@ -168,8 +168,6 @@
 
   import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
-  import useRouterBack from '@hooks/use-router-back';
-
   import CardPartVue from '../step1/components/card-part.vue';
   import ControlDescriptionVue from '../step1/components/control-description.vue';
   import Customize from '../step1/components/customize/index.vue';
@@ -719,11 +717,6 @@
   // window.changeConfirm = false;
   };
 
-  useRouterBack(() => {
-    router.push({
-      name: strategyRoutes.list,
-    });
-  });
   onMounted(() => {
     window.addEventListener('beforeunload', handleBeforeUnload);
   });
