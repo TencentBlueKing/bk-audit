@@ -365,6 +365,8 @@
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
 
+  import { resolveReadyRoute } from '@utils/assist/ready-route';
+
   // import Tooltips from '@components/show-tooltips-text/index.vue';
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 
@@ -731,7 +733,7 @@
   //   });
   // };
   watch(route, () => {
-    curNavName.value = route.meta.navName as string;
+    curNavName.value = String(resolveReadyRoute(route, router).meta.navName || '');
     // 切换菜单项时同步更新 descriptionRef
     if (curNavName.value === 'auditStatement' && route.params.id && menuData.value.length > 0) {
       const matched = menuData.value.find(item => item.id === route.params.id);
