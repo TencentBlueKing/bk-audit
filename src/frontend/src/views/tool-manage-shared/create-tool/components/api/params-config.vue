@@ -284,8 +284,7 @@
                   <audit-user-selector-tenant
                     v-else-if="item.field_category === 'person_select'"
                     v-model="item.default_value"
-                    allow-create
-                    :placeholder="t('请输入人员进行搜索')" />
+                    allow-create />
                   <div
                     v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
                     class="time-range-select-wrapper"

@@ -90,6 +90,7 @@ export interface SceneToolWritePayload {
   description: string;
   tool_type: string;
   data_search_config_type: string;
+  status?: 'published' | 'unpublished';
   config: ToolConfigPayload;
   scene_id?: number | string;
   updated_time?: string | null;
@@ -126,6 +127,7 @@ export interface UpdatePlatformToolPayload {
   tool_type?: string;
   data_search_config_type?: string;
   namespace?: string;
+  status?: 'published' | 'unpublished';
   config?: ToolConfigPayload;
   visibility?: VisibilityPayload;
 }

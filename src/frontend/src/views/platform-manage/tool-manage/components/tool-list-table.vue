@@ -56,6 +56,7 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { useToolManageContext } from '@views/tool-manage-shared/context';
   import { formatReferencedStrategyNames, type StrategyOption } from '@views/tool-manage-shared/strategy-reference';
 
   import sceneIconUrl from '@images/scene.svg';
@@ -125,7 +126,7 @@
   interface Emits {
     (e: 'edit', row: ToolModel): void;
     (e: 'delete', row: ToolModel): void;
-    (e: 'toggle-status', row: ToolModel): void;
+    (e: 'status-changed'): void;
     (e: 'edit-visibility', row: ToolModel): void;
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
@@ -148,6 +149,8 @@
   const { t } = useI18n();
   const router = useRouter();
   const { messageSuccess } = useMessage();
+  const toolManageCtx = useToolManageContext();
+  const squareDisplayTip = t('仅控制工具是否在工具广场展示。关闭后，审计策略中配置的下钻仍可正常使用。');
 
   const listRef = ref();
   const activeJumpPopoverUid = ref<string | null>(null);
@@ -786,18 +789,23 @@
       },
     },
     {
-      title: t('状态'),
-      colKey: 'status',
-      width: 100,
-      ellipsis: true,
-      cell: (_h: any, { row }: { row: ToolModel }) => (
-        <span>
-          {row.status === 'published' ? (
-            <bk-tag radius="4px" theme="success">{t('启用')}</bk-tag>
-          ) : (
-            <bk-tag radius="4px" theme="default">{t('停用')}</bk-tag>
-          )}
+      title: () => (
+        <span class="square-display-title">
+          {t('是否展示')}
+          <audit-icon
+            v-bk-tooltips={{ content: squareDisplayTip }}
+            class="square-display-tip"
+            type="info-fill" />
         </span>
+      ),
+      colKey: 'status',
+      width: 140,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <bk-switcher
+          before-change={(nextValue: boolean) => handleSquareDisplayChange(row, nextValue)}
+          model-value={row.status === 'published'}
+          size="small"
+          theme="primary" />
       ),
     },
     {
@@ -826,13 +834,8 @@
       width: 120,
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
-        const isPublished = row.status === 'published';
         const referencedStrategyNames = formatReferencedStrategyNames(row.strategies, props.strategyList);
         const isReferenced = Boolean(referencedStrategyNames);
-        const deleteDisabledTip = isReferenced
-          ? t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames })
-          : t('请先停用后再删除');
-
         return (
           <div class="action-cell">
             <bk-button
@@ -842,30 +845,6 @@
               onClick={() => emit('edit', row)}>
               {t('编辑')}
             </bk-button>
-            {isPublished && isReferenced ? (
-              <span
-                class="mr8"
-                v-bk-tooltips={{
-                  content: t('该工具正在被{strategies}使用，无法停用', { strategies: referencedStrategyNames }),
-                  placement: 'top',
-                  extCls: 'tool-strategy-ref-tips',
-                }}>
-                <bk-button
-                  text
-                  theme="primary"
-                  disabled>
-                  {t('停用')}
-                </bk-button>
-              </span>
-            ) : (
-              <bk-button
-                text
-                theme="primary"
-                class="mr8"
-                onClick={() => emit('toggle-status', row)}>
-                {isPublished ? t('停用') : t('启用')}
-              </bk-button>
-            )}
             <bk-popover
               extCls="tool-more-action-popover"
               placement="bottom-start"
@@ -881,10 +860,10 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    {isPublished || isReferenced ? (
+                    {isReferenced ? (
                       <span
                         v-bk-tooltips={{
-                          content: deleteDisabledTip,
+                          content: t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames }),
                           placement: 'bottom',
                           extCls: 'tool-strategy-ref-tips',
                         }}>
@@ -907,6 +886,17 @@
       },
     },
   ]);
+
+  const handleSquareDisplayChange = (row: ToolModel, nextValue: boolean) => toolManageCtx
+    .toggleToolStatus({
+      uid: row.uid,
+      enable: nextValue,
+    })
+    .then(() => {
+      row.status = nextValue ? 'published' : 'unpublished';
+      messageSuccess(t(nextValue ? '已在工具广场展示' : '已从工具广场隐藏'));
+      emit('status-changed');
+    });
 
   const handleClearSearch = () => {
     emit('clear-search');
@@ -1077,6 +1067,18 @@
 </style>
 
 <style lang="postcss">
+  .square-display-title {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .square-display-tip {
+    margin-left: 4px;
+    font-size: 14px;
+    color: var(--audit-neutral-text-03);
+    cursor: default;
+  }
+
   .smart-page-edit-disabled-tips {
     max-width: 280px;
     word-break: break-word;

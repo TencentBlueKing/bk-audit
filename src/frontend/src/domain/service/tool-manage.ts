@@ -147,6 +147,7 @@ export default  {
   publishPlatformTool(params: {
       uid: string,
       scene_id: number,
+      status?: 'published' | 'unpublished',
     }) {
     return ToolManageSources.publishPlatformTool(params).then(({ data }) => data);
   },
