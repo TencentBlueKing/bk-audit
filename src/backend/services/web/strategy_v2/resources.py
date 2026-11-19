@@ -2007,7 +2007,10 @@ class GetScenePermissionTables(StrategyV2Base):
 
         if get_bkbase_version() == BKBaseVersion.V4:
             tables = list_scoped_v4_tables(
-                table_type=table_type, namespace=settings.DEFAULT_NAMESPACE, result_table_ids=scene_table_ids
+                table_type=table_type,
+                namespace=settings.DEFAULT_NAMESPACE,
+                result_table_ids=scene_table_ids,
+                skip_missing=True,
             )
             if not tables:
                 return []

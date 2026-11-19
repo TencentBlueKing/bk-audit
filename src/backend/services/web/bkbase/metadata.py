@@ -12,6 +12,7 @@ from threading import Event
 from time import monotonic
 
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -59,6 +60,31 @@ def _unavailable_candidate(rt_id, reason, *, incomplete=True):
     logger.warning(
         "BKBase candidate unavailable: rt_hash=%s reason=%s", hashlib.sha256(rt_id.encode()).hexdigest()[:16], reason
     )
+
+
+def read_candidate_or_none(resource, **params):
+    """候选读取可排除资源/绑定目标缺失；不能据此推断RT已删除或允许创建接管。"""
+    try:
+        return get_resource_or_none(resource, **params)
+    except APIRequestError as error:
+        # ResultTableInfo保留严格失败标记；只有候选投影可接受已知缺失响应。
+        payload = error.data
+        if (
+            getattr(error, "http_status", None) in (None, 200)
+            and isinstance(payload, dict)
+            and payload.get("result") is False
+            and "data" in payload
+            and (
+                str(payload.get("code")) == "1558025"
+                or (
+                    str(payload.get("code")) == "1500102"
+                    and isinstance(payload["data"], dict)
+                    and payload["data"].get("err") == "resource not exists"
+                )
+            )
+        ):
+            return None
+        raise
 
 
 def _remaining_read_time():
@@ -255,14 +281,20 @@ def get_source_capabilities(result_table_id, *, context=None):
     return capabilities
 
 
-def get_result_tables_with_capabilities(result_table_ids, *, context=None, allow_unavailable=False):
-    """候选按正式RT归属读取；按项目选表可排除无效单表，整体读取故障仍向上抛出。"""
+def get_result_tables_with_capabilities(result_table_ids, *, context=None, allow_unavailable=False, skip_missing=False):
+    """候选按正式RT归属读取；skip_missing只排除缺失资源，不放宽身份或Binding校验。"""
     context = {**_context(context), "_result_table_info": {}}
     identifiers = list(dict.fromkeys(result_table_ids))
 
+    def read_strict(rt_id):
+        return get_result_table(rt_id, related=[], context=context), get_source_capabilities(rt_id, context=context)
+
     def read(rt_id):
         if not allow_unavailable:
-            return get_result_table(rt_id, related=[], context=context), get_source_capabilities(rt_id, context=context)
+            result = read_candidate_or_none(read_strict, rt_id=rt_id) if skip_missing else read_strict(rt_id)
+            if result is None:
+                _unavailable_candidate(rt_id, "candidate_resource_unavailable")
+            return result
         try:
             ref = get_resource_or_none(get_result_table_ref, context=context, result_table_id=rt_id)
             if ref is None:
