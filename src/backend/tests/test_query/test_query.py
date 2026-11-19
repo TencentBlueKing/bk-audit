@@ -161,7 +161,7 @@ class V4CollectorCountTest(TestCase):
         responses = deepcopy(BKBASE_COLLECTOR_SEARCH_API_RESP)
         responses[0]["total_records"] = 999999
         with self.settings(BKBASE_API_VERSION="v4"), mock.patch(
-            "bk_resource.api.bk_base_v4.query_sync.bulk_request", return_value=responses
+            "bk_resource.api.bk_base.query_sync.bulk_request", return_value=responses
         ) as query:
             result = self.resource.query.collector_search(**COLLECTOR_SEARCH_PARAMS)
         self.assertEqual(result, COLLECTOR_SEARCH_DATA_RESP)
