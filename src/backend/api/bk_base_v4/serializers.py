@@ -1,4 +1,4 @@
-"""V4 Query请求及结果校验；行内数值保持上游类型。"""
+"""V4资源请求及结果校验。"""
 from rest_framework import serializers
 
 from api.bk_base_v4.constants import AuthAction
@@ -34,24 +34,6 @@ class DirectAuthByResourcesResponseSerializer(serializers.BaseSerializer):
 
     def to_representation(self, instance):
         return instance
-
-
-class QuerySyncRequestSerializer(serializers.Serializer):
-    """只接受用户态查询协议，不接受旧版数据Token。"""
-
-    sql = serializers.CharField()
-    prefer_storage = serializers.CharField(required=False, allow_blank=True)
-    bkdata_authentication_method = serializers.ChoiceField(choices=["user"], default="user")
-    request_timeout = serializers.FloatField(required=False, min_value=0.001, max_value=300, write_only=True)
-
-
-class QuerySyncResponseSerializer(serializers.Serializer):
-    """校验审计当前使用的行式查询结果，未知存储结构明确失败。"""
-
-    list = serializers.ListField(child=serializers.DictField())
-    total_records = serializers.IntegerField(required=False)
-    select_fields_order = serializers.ListField(child=serializers.CharField(), required=False)
-    timetaken = serializers.FloatField(required=False)
 
 
 class CleanDebugRequestSerializer(serializers.Serializer):

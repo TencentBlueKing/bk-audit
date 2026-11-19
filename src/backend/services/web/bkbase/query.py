@@ -1,16 +1,13 @@
-"""同步查询的业务入口。
+"""统一同步查询入口。
 
-保留调用方SQL、COUNT和批量顺序，版本选择集中于此。
-普通与调试查询仅区别上游地址；失败直接传播。
+Query协议不随BKBASE_API_VERSION切换，复用已有V3 Resource及可配置action。
+保留SQL、COUNT、批量顺序和调试地址；BKBase内部转发V4，失败直接传播。
 """
 from bk_resource import api
 
-from services.web.bkbase.common import get_bkbase_version
-from services.web.bkbase.constants import BKBaseVersion
-
 
 def _resource(debug=False, safe=False):
-    service = api.bk_base_v4 if get_bkbase_version() == BKBaseVersion.V4 else api.bk_base
+    service = api.bk_base
     if safe and not debug:
         return service.safe_query_sync
     return service.debug_query_sync if debug else service.query_sync

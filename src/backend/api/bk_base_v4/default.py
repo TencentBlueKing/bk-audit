@@ -10,7 +10,6 @@ from time import monotonic
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
-from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
@@ -34,8 +33,6 @@ from api.bk_base_v4.serializers import (
     NotifyUpdateRequestSerializer,
     ObjectResponseSerializer,
     PayloadResponseSerializer,
-    QuerySyncRequestSerializer,
-    QuerySyncResponseSerializer,
     RedisAssetCreateRequestSerializer,
     ResourceRefRequestSerializer,
     ResourceWriteRequestSerializer,
@@ -48,7 +45,7 @@ from api.bk_base_v4.serializers import (
     UserScopesRequestSerializer,
     UserTablesRequestSerializer,
 )
-from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+from api.domains import BK_BASE_API_URL
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
 READ_MAX_TIMEOUT = 30.0
@@ -189,48 +186,6 @@ class BatchStatusList(BkBaseV4Resource):
         if isinstance(value, bool):
             kwargs["params"]["is_data_time"] = "true" if value else "false"
         return kwargs
-
-
-class QuerySyncResource(BkBaseV4Resource):
-    """以平台用户权限执行同步SQL，保留现有五分钟超时。"""
-
-    action = "/v4/queryengine/user/query_sync/"
-    method = "POST"
-    TIMEOUT = 300
-    RequestSerializer = QuerySyncRequestSerializer
-    ResponseSerializer = QuerySyncResponseSerializer
-
-    def build_request_data(self, validated_request_data):
-        """省略未选择的存储，让上游按默认规则选择。"""
-        data = super().build_request_data(dict(validated_request_data))
-        if not data.get("prefer_storage"):
-            data.pop("prefer_storage", None)
-        return data
-
-    def before_request(self, kwargs):
-        """在 HTTP 层应用单次查询预算，保持网关请求体不变。"""
-        payload = kwargs.get("json") or {}
-        request_timeout = payload.pop("request_timeout", None)
-        if request_timeout is not None:
-            kwargs["timeout"] = Timeout(total=request_timeout)
-        return super().before_request(kwargs)
-
-
-class SafeQuerySyncResource(QuerySyncResource):
-    """日志工具的 V4 查询，沿用原 SafeQuery 的 SQL 诊断日志契约。"""
-
-    def before_request(self, kwargs):
-        """仅记录最终 SQL，交项目日志处理链控制输出，不记录鉴权头。"""
-        request_data = kwargs.get("json") or kwargs.get("data") or {}
-        if isinstance(request_data, dict):
-            logger.info("[SafeQuerySyncResource] SQL => %s", request_data.get("sql", ""))
-        return super().before_request(kwargs)
-
-
-class DebugQuerySyncResource(QuerySyncResource):
-    """调试使用独立地址，其余协议与普通查询相同。"""
-
-    base_url = BK_BASE_DEBUG_API_URL
 
 
 class ResultTable(BkBaseV4Resource):

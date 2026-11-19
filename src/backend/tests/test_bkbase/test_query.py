@@ -1,4 +1,4 @@
-"""验证版本选择及查询调用的业务边界。"""
+"""验证统一V3查询入口及调用的业务边界。"""
 from unittest import mock
 
 from django.core.exceptions import ImproperlyConfigured
@@ -26,17 +26,16 @@ class QueryServiceTests(SimpleTestCase):
     def test_bulk_order_and_debug_route(self):
         values = [{"list": [{"tag": "first"}]}, {"list": [{"tag": "second"}]}]
         with mock.patch(
-            "services.web.bkbase.query.api.bk_base_v4.debug_query_sync.bulk_request", return_value=values
+            "services.web.bkbase.query.api.bk_base.debug_query_sync.bulk_request", return_value=values
         ) as call:
             self.assertEqual(query.query_sync_bulk([{"sql": "first"}, {"sql": "second"}], debug=True), values)
             call.assert_called_once_with([{"sql": "first"}, {"sql": "second"}])
 
     @override_settings(BKBASE_API_VERSION="v4")
-    def test_v4_failure_never_falls_back(self):
+    def test_configured_v3_query_failure_propagates(self):
         with mock.patch(
-            "services.web.bkbase.query.api.bk_base_v4.query_sync",
+            "services.web.bkbase.query.api.bk_base.query_sync",
             side_effect=RuntimeError("upstream unavailable"),
-        ), mock.patch("services.web.bkbase.query.api.bk_base.query_sync") as old:
+        ):
             with self.assertRaisesRegex(RuntimeError, "upstream unavailable"):
                 query.query_sync("SELECT 1")
-            old.assert_not_called()

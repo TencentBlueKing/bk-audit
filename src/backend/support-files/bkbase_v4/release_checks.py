@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 MAX_BYTES = 512 * 1024 * 1024
+APPROVED_CONFIG_KEYS = {"bkbase_v4_storage_clusters", "bkbase_v4_flow_config"}
 REF_KEYS = {"kind", "tenant", "namespace", "name"}
 KINDS = {"data_source": "DataSource", "data_id": "DataId", "clean": "Clean", "result_table": "ResultTable"}
 ROUTES = {
@@ -451,12 +452,12 @@ class Inspector:
         }
 
     def table_binding(self, body, table, cluster, purpose, scope):
-        """Verify actual ready Redis/HDFS Binding and its RT/storage identity."""
+        """Verify a ready Binding and its RT/storage identity."""
         related = body.get("status", {}).get("related")
         if not isinstance(related, list):
             self.add("TABLE_BINDING_MISSING", scope, "NOT_CHECKED")
             return
-        kind = {"redis": "RedisBinding", "hdfs": "HdfsBinding"}[purpose]
+        kind = {"redis": "RedisBinding", "hdfs": "HdfsBinding", "doris": "DorisBinding"}[purpose]
         candidates = [b for b in related if b.get("kind") == kind and b.get("spec", {}).get("storage") == cluster]
         self.require(len(candidates) == 1, "TABLE_BINDING_IDENTITY")
         binding = candidates[0]
@@ -477,7 +478,7 @@ class Inspector:
                 and targets[0].get("status", {}).get("phase") == "Ok",
                 "BINDING_CLUSTER_STATE",
             )
-        else:
+        elif purpose == "hdfs":
             config = binding.get("spec", {}).get("storageConfig", {})
             dimensions = [
                 config[k]["dimensionTable"]
@@ -555,6 +556,8 @@ class Inspector:
                 self.require(spec.get("predefined", {}).get("dataId") == legacy["raw_data_id"], "SOURCE_IDENTITY")
             elif key == "clean":
                 role = "existing" if scenario == "collector" else "new"
+                if scenario == "snapshot" and item["expected_binding"].get("clean_role") == "existing":
+                    role = "existing"
                 self.require(
                     spec.get("raw_data_id") == legacy["raw_data_id"]
                     and spec.get("data_id") == mapping["data_id"]
@@ -630,7 +633,8 @@ class Inspector:
                 "COLLECTOR_PARENT",
             )
         elif scenario in {"snapshot", "iam"}:
-            self.require(bool(storages) and set(storages) <= {"redis", "hdfs"}, "STORAGE_PURPOSE")
+            supported = {"redis", "hdfs", "doris"} if scenario == "snapshot" else {"redis"}
+            self.require(bool(storages) and set(storages) <= supported, "STORAGE_PURPOSE")
             if scenario == "snapshot":
                 self.require(
                     fields.get("status") in {"closed", "running"}
@@ -659,7 +663,8 @@ class Inspector:
                 "main": "Doris" if scenario == "event_plugin" else "ElasticSearch",
                 "replica": "Doris",
                 "redis": "Redis",
-                "hdfs": "HDFS",
+                "hdfs": "Hdfs",
+                "doris": "Doris",
             }[purpose]
             self.ref(entry["cluster"], cluster_kind)
             body = self.resource(entry["resource"], scope)
@@ -705,10 +710,26 @@ class Inspector:
         scenario, mapping, fields = item["scenario"], item["mapping"], row["fields"]
         legacy, storages = mapping["legacy"], mapping["storages"]
         namespace = self.local_resource_identity(item, row, rows, scope)
+        if scenario == "snapshot":
+            explicit = item["expected_binding"]
+            role = explicit.get("clean_role")
+            self.require(
+                role == "owner" or (role == "existing" and fields.get("join_data_type") == "basic"), "CLEAN_IDENTITY"
+            )
+            expected = {
+                **{key: mapping[key] for key in KINDS},
+                "raw_data_id": legacy["raw_data_id"],
+                "result_table_id": legacy["result_table_id"],
+                "clean_role": role,
+                "storages": {purpose: value["resource"] for purpose, value in storages.items()},
+            }
+            self.require(digest(explicit) == digest(expected), "LOCAL_BINDING_PLAN")
         self.remote_resource_identity(item, scope)
         self.storage_purposes(item, row, rows, namespace)
         patch = self.resource_patch(item, scope)
-        if scenario in {"snapshot", "iam"}:
+        if scenario == "snapshot":
+            return {"bkbase_v4_resources": explicit}
+        if scenario == "iam":
             # These imports have separate contracts: require an explicit narrow local binding.
             explicit = item["expected_binding"]
             allowed_keys = {
@@ -771,8 +792,57 @@ class Inspector:
             return {"config_value": {"bkbase_v4": {self.context["tenant"]: {item["binding_namespace"]: patch}}}}
         return {"bkbase_v4_resources": patch}
 
+    def approved_configs(self, plan):
+        """Read exact expected V4 setup values from the approved plan."""
+        changes = plan.get("approved_config_changes", [])
+        self.require(isinstance(changes, list), "APPROVED_CONFIG_STRUCTURE")
+        approved = {}
+        for change in changes:
+            self.require(
+                isinstance(change, dict)
+                and set(change) == {"instance_key", "config_key", "config_value"}
+                and isinstance(change["instance_key"], str)
+                and bool(change["instance_key"].strip())
+                and isinstance(change["config_key"], str)
+                and change["config_key"] in APPROVED_CONFIG_KEYS
+                and isinstance(change["config_value"], dict),
+                "APPROVED_CONFIG_STRUCTURE",
+            )
+            key = (change["instance_key"], change["config_key"])
+            self.require(key not in approved, "APPROVED_CONFIG_STRUCTURE")
+            approved[key] = change["config_value"]
+        return approved
+
+    def approved_config_patches(self, approved, rows, after_rows):
+        def matching(inventory, namespace, config_key):
+            return [
+                identity
+                for identity, row in inventory.items()
+                if row["model"] == "meta.globalmetaconfig"
+                and row["fields"].get("config_level") == "namespace"
+                and row["fields"].get("instance_key") == namespace
+                and row["fields"].get("config_key") == config_key
+            ]
+
+        patches = {}
+        for (namespace, config_key), expected in approved.items():
+            prev = matching(rows, namespace, config_key)
+            current = matching(after_rows, namespace, config_key)
+            self.require(len(current) == 1 and (not prev or prev == current), "APPROVED_CONFIG_IDENTITY")
+            key = current[0]
+            self.require(bool(prev) or key not in rows, "APPROVED_CONFIG_IDENTITY")
+            actual = after_rows[key]["fields"].get("config_value")
+            self.require(digest(actual) == digest(expected), "APPROVED_CONFIG_VALUE")
+            allowed = {"config_value": None, "updated_at": None, "updated_by": None}
+            if prev and not rows[key]["fields"].get("created_by"):
+                allowed["created_by"] = None
+            patches[key] = allowed
+            self.add("APPROVED_CONFIG_CHECKED", digest([namespace, config_key])[:16], "PASS")
+        return patches
+
     def inspect(self, plan, before, after):
         self.require(plan["schema_version"] == 1 and plan["context"] == self.context, "TARGET_CONTEXT")
+        approved = self.approved_configs(plan)
         self.require(
             all(
                 str(before["manifest"]["database"][k]) == str(self.context["database"][k])
@@ -780,8 +850,12 @@ class Inspector:
             ),
             "DATABASE_TARGET",
         )
-        timestamp(before["manifest"]["created_at"])
-        for bundle, expected in ((before, self.context["source_version"]), (after, self.context["release_version"])):
+        current_age = self.context.get("max_evidence_age_seconds", 14400)
+        baseline_age = self.context.get("max_baseline_age_seconds", current_age)
+        for bundle, expected, max_age in (
+            (before, self.context["source_version"], baseline_age),
+            (after, self.context["release_version"], current_age),
+        ):
             if bundle is None:
                 continue
             manifest = bundle["manifest"]
@@ -798,7 +872,7 @@ class Inspector:
             if "context_sha256" in manifest:
                 self.require(manifest["context_sha256"] == digest(self.context), "SNAPSHOT_CONTEXT")
             age = (self.now - timestamp(manifest["created_at"])).total_seconds()
-            self.require(0 <= age <= self.context.get("max_evidence_age_seconds", 14400), "SNAPSHOT_TIME")
+            self.require(0 <= age <= max_age, "SNAPSHOT_TIME")
         rows = {identity(row): row for row in before["rows"]}
         self.require(len(rows) == len(before["rows"]), "INVENTORY_DUPLICATE")
         if after is not None:
@@ -813,7 +887,10 @@ class Inspector:
                 timestamp(after["manifest"]["created_at"]) >= timestamp(before["manifest"]["created_at"]), "POST_TIME"
             )
             after_rows = {identity(row): row for row in after["rows"]}
-            self.require(len(after_rows) == len(after["rows"]) and set(after_rows) == set(rows), "POST_SCOPE")
+            self.require(len(after_rows) == len(after["rows"]), "POST_SCOPE")
+            config_patches = self.approved_config_patches(approved, rows, after_rows)
+            approved_additions = config_patches.keys() - rows.keys()
+            self.require(after_rows.keys() == rows.keys() | approved_additions, "POST_SCOPE")
         seen, writers, old_flows = set(), set(), set()
         patches = {}
         for item in plan["objects"]:
@@ -876,7 +953,7 @@ class Inspector:
             self.add("SCOPE_MISSING", digest(key)[:16])
         if after is not None:
             for key, row in rows.items():
-                allowed = deepcopy(patches.get(key, {}))
+                allowed = {**deepcopy(patches.get(key, {})), **config_patches.get(key, {})}
                 # Normal import clears these flags; no other unknown V4 keys may change.
                 if "bkbase_v4_resources" in allowed:
                     allowed["bkbase_v4_resources"].update(ready=None, clean_ready=None)
@@ -909,7 +986,12 @@ def verify(context, plan, before, receipts, *, after=None, now=None):
             and not origin.fragment
             and isinstance(context["namespaces"], list)
             and bool(context["namespaces"])
-            and len(set(context["namespaces"])) == len(context["namespaces"]),
+            and len(set(context["namespaces"])) == len(context["namespaces"])
+            and all(
+                type(context[key]) is int and context[key] > 0
+                for key in ("max_baseline_age_seconds", "max_evidence_age_seconds")
+                if key in context
+            ),
             "TARGET_CONTEXT",
         )
         inspector.require(isinstance(plan["objects"], list), "INPUT_STRUCTURE")
