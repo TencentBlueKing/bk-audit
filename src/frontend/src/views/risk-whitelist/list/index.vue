@@ -459,7 +459,13 @@
             : <span class="hit-zero">{row.hit_count}</span>
         ),
       },
-      { title: t('更新人'), colKey: 'updated_by', width: 103, ellipsis: true },
+      {
+        title: t('更新人'),
+        colKey: 'updated_by',
+        width: 103,
+        ellipsis: true,
+        cell: (_: unknown, { row }: { row: RiskWhitelist }) => row.updated_by || '--',
+      },
       { title: t('更新时间'), colKey: 'updated_at', width: 180, minWidth: 180, sorter: true },
       {
         title: t('操作'),

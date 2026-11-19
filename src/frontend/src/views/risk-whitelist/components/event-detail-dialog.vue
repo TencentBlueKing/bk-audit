@@ -42,7 +42,6 @@
             <td class="value-cell">
               <show-tooltips-text
                 :data="formatFieldValue(item.field_value)"
-                :flip="false"
                 :line="4"
                 :max-width="360"
                 placement="top"

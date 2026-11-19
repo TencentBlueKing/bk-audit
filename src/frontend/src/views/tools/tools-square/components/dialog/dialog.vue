@@ -552,7 +552,7 @@
       });
     }
 
-    formRef.value.clearValidate();
+    formRef.value?.clearValidate();
   };
 
   const handleFormItemChange = (val: any, item: SearchItem) => {
@@ -774,18 +774,18 @@
 
   // 关闭弹窗
   const handleCloseDialog = () => {
-    handleReset();
-    if (apiSearchResultRef.value) {
-      apiSearchResultRef.value.resetGroupData();
-    }
-    // 关闭BKVision实例
-    if (bkVisionResultRef.value) {
-      bkVisionResultRef.value.closeBK();
-    }
+    // 先关窗，避免重置逻辑异常导致叉号点了没反应
+    const uid = dialogUid.value;
+    isShow.value = false;
     dialogWidth.value = '50%';
     isFullScreen.value = false;
-    isShow.value = false;
-    emit('close', dialogUid.value);
+    try {
+      handleReset();
+      apiSearchResultRef.value?.resetGroupData();
+      bkVisionResultRef.value?.closeBK();
+    } finally {
+      emit('close', uid);
+    }
   };
 
   watch(() => isFullScreen.value, (val) => {
@@ -1066,11 +1066,17 @@
     border-radius: 16px 16px 8px 8px;
 
     .bk-dialog-tool {
-      height: 0;
+      /* 保留拖拽条，但避开右上角关闭按钮热区，避免盖住叉号导致无法关闭 */
+      right: 48px;
+      height: 18px;
     }
 
     .bk-dialog-header {
       padding: 0;
+    }
+
+    .bk-modal-close {
+      z-index: 20002;
     }
   }
 

@@ -52,12 +52,14 @@
           v-if="row.showAnd"
           class="match-scope-tag__op">and</span>
         <span
-          v-bk-tooltips="chipTip(row.field)"
-          class="match-scope-tag__chip is-field">{{ row.field }}</span>
+          v-bk-tooltips="buildChipTip(row.field, `${index}-field`)"
+          class="match-scope-tag__chip is-field"
+          @mouseenter="(e) => syncChipOverflow(`${index}-field`, e)">{{ row.field }}</span>
         <span class="match-scope-tag__op-chip">{{ row.operator }}</span>
         <span
-          v-bk-tooltips="chipTip(row.value)"
-          class="match-scope-tag__chip is-value">{{ row.value }}</span>
+          v-bk-tooltips="buildChipTip(row.value, `${index}-value`)"
+          class="match-scope-tag__chip is-value"
+          @mouseenter="(e) => syncChipOverflow(`${index}-value`, e)">{{ row.value }}</span>
         <button
           v-if="row.showToggle"
           class="match-scope-tag__toggle"
@@ -103,6 +105,7 @@
   const { t } = useI18n();
   const expanded = ref(false);
   const textOverflowed = ref(false);
+  const overflowedChipKeys = ref<Record<string, boolean>>({});
 
   const groups = computed<MatchGroup[]>(() => {
     const input = props.scope || {};
@@ -137,9 +140,24 @@
   const groupLabel = computed(() => (groups.value[1]?.connector || 'and').toUpperCase());
 
   const operatorText = (operator: CompareOperator) => (operator === 'neq' ? '不等于' : '等于');
-  const chipTip = (text: string) => ({
+
+  const isEllipsisOverflow = (el: HTMLElement) => el.scrollWidth > el.clientWidth + 1;
+
+  const syncChipOverflow = (key: string, event: MouseEvent) => {
+    const el = event.currentTarget as HTMLElement;
+    const overflowed = isEllipsisOverflow(el);
+    if (overflowedChipKeys.value[key] === overflowed) return;
+    overflowedChipKeys.value = {
+      ...overflowedChipKeys.value,
+      [key]: overflowed,
+    };
+  };
+
+  const buildChipTip = (text: string, key: string) => ({
     content: text,
-    disabled: false,
+    disabled: !overflowedChipKeys.value[key],
+    delay: 80,
+    placement: 'top',
   });
 
   const clipGroups = (input: MatchGroup[], maxRows: number) => {
@@ -218,10 +236,7 @@
     }
     const root = event.currentTarget as HTMLElement;
     const contents = root.querySelectorAll('.match-scope-text__content');
-    textOverflowed.value = Array.from(contents).some((node) => {
-      const el = node as HTMLElement;
-      return el.scrollWidth > el.clientWidth + 1;
-    });
+    textOverflowed.value = Array.from(contents).some(node => isEllipsisOverflow(node as HTMLElement));
   };
 </script>
 <style lang="postcss" scoped>
@@ -276,11 +291,12 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .match-scope-tag.is-multi {
-  padding-left: var(--bk-theme-space-16);
+  /* 为 group-op 半宽压边留白，避免被父级裁切 */
+  padding-left: calc(var(--bk-theme-space-16) + var(--bk-theme-space-4));
 }
 
 .match-scope-tag__rail {
