@@ -244,7 +244,7 @@
   };
 
   const getVisiblePopover = () => {
-    const nodes = document.querySelectorAll('.bk-user-selector-popover');
+    const nodes = Array.from(document.querySelectorAll('.bk-user-selector-popover'));
     for (const node of nodes) {
       if (!(node instanceof HTMLElement)) continue;
       const style = window.getComputedStyle(node);

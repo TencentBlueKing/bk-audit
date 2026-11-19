@@ -157,7 +157,7 @@
   interface ToolItem {
     uid: string;
     name: string;
-    status: 'published' | '';
+    status: 'published' | 'unpublished' | '';
     strategies: number[];
   }
 
