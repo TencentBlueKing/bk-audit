@@ -7,6 +7,7 @@ from django.test import SimpleTestCase, override_settings
 
 from services.web.analyze.constants import FlowDataSourceNodeType as NodeType
 from services.web.analyze.controls.rule_audit import RuleAuditController
+from services.web.analyze.storage_node import HDFSStorageNode
 from services.web.analyze.utils import is_asset
 from services.web.bkbase import flow, metadata
 from services.web.bkbase import table_capabilities as capabilities
@@ -284,7 +285,10 @@ class TableCapabilitiesTests(SimpleTestCase):
                 configs={"config_type": config_type, "data_source": {"source_type": mode}},
             )
             controller = SimpleNamespace(
-                strategy=strategy, event_log_rt_id="11_log", rt_ids=["11_input"], storage_nodes=[]
+                strategy=strategy,
+                event_log_rt_id="11_log",
+                rt_ids=["11_input"],
+                storage_nodes=[] if mode == NodeType.REALTIME else [HDFSStorageNode],
             )
 
             def check_source_type(rt_id):
@@ -292,7 +296,7 @@ class TableCapabilitiesTests(SimpleTestCase):
 
             controller.check_source_type = check_source_type
             dedicated = {
-                "schedule_config": {"schedule_period": "hour", "count_freq": 1},
+                "schedule_config": {"schedule_period": "hour", "count_freq": 1, "start_time": "2026-11-19 17:00:00"},
                 "self_dependence": {"self_dependency_config": {}},
                 "output_config": {"output_baseline_type": "schedule_time"},
             }
@@ -306,8 +310,10 @@ class TableCapabilitiesTests(SimpleTestCase):
 
             controller._build_sql_node_config = build_sql_node_config
             profile = {
-                "operation_config": {"start_position": "continue"},
-                "batch_schedules": {"hour:1": {"start_time": 42}},
+                "operation_config": {
+                    "start_position": "continue",
+                    "batch_sql_deploy_config": {"cluster": "synthetic_batch"},
+                },
             }
             with self.subTest(expected=expected, mode=mode), mock.patch.object(
                 metadata, "get_source_capabilities", return_value=self.parse(binding)
@@ -319,6 +325,12 @@ class TableCapabilitiesTests(SimpleTestCase):
                 flow.GlobalMetaConfig, "get", return_value=profile
             ), mock.patch.object(
                 flow, "_save_operation_binding"
+            ), mock.patch.object(
+                HDFSStorageNode, "cluster", new_callable=mock.PropertyMock, return_value="synthetic_hdfs"
+            ), mock.patch.object(
+                flow.storage_service,
+                "resolve_storage_cluster",
+                return_value={"kind": "Hdfs", "tenant": "tenant_a", "namespace": "clusters", "name": "hdfs"},
             ):
                 graph = flow.build_controller_spec(controller, context=self.context)
             self.assertEqual(graph["nodes"][0]["kind"], expected)
