@@ -48,6 +48,29 @@ class RedisRegistrationParamsTests(SimpleTestCase):
             {"resource_set_id": "synthetic_redis", "resource_set_name": "Synthetic Redis", "connection_info": info}
         )[2]
 
+    @override_settings(BKBASE_API_VERSION="v3")
+    def test_v3_redis_registration_uses_configured_region(self):
+        data = {
+            "redis_name_en": "synthetic_redis",
+            "redis_name": "Synthetic Redis",
+            "connection_info": self.info,
+            "version": "6.0",
+        }
+        handler = RedisHandler()
+        handler.redis_config = mock.Mock()
+        for region in ("inland", "SEA"):
+            with (
+                self.subTest(region=region),
+                override_settings(BKBASE_GEOG_AREA_CODE=region),
+                mock.patch.object(storage, "update_resource_set") as register,
+                mock.patch(
+                    "services.web.databus.storage.handler.redis.get_request_username",
+                    return_value="synthetic_operator",
+                ),
+            ):
+                handler.update_or_create(data)
+                self.assertEqual(register.call_args.kwargs["geog_area_code"], region)
+
     def test_disabled_sentinel_placeholders_are_omitted_from_direct_connection(self):
         serializer = RedisConnectionInfoSerializer(data=self.info)
         self.assertTrue(serializer.is_valid(), serializer.errors)
