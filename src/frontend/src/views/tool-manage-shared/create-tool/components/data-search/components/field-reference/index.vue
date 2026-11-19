@@ -38,7 +38,7 @@
       class="field-reference-form"
       form-type="vertical"
       :model="formData">
-      <div style="display: flex;">
+      <div class="tool-select-row">
         <bk-form-item
           error-display-type="tooltips"
           :label="t('选择工具')"
@@ -120,12 +120,15 @@
           </bk-loading>
         </bk-form-item>
         <bk-button
-         
+          class="tool-open-link"
           :disabled="formData.selectTool.length === 0"
           text
           theme="primary"
-          @click="handleOpenTool" style="margin-left: var(--bk-theme-space-16)">
+          @click="handleOpenTool">
           {{ t('去使用') }}
+          <audit-icon
+            class="tool-open-link-icon"
+            type="jump-link" />
         </bk-button>
       </div>
 
@@ -148,69 +151,69 @@
                   <div
                     class="field-title"
                     @click="handleClick">
+                    <audit-icon
+                      v-bk-tooltips="{
+                        content: t('拖动调整顺序'),
+                      }"
+                      class="field-drag-icon"
+                      type="move"
+                      @click.stop />
                     <div style="margin-right: 10px;">
                       <audit-icon :type="isCollapseActive ? 'angle-fill-down' : 'angle-fill-rignt'" />
                     </div>
                     <div style="flex: 1">
                       <span style="font-weight: 700;">{{ getToolName(toolConfig.tool.uid) }}</span>
-                      <span>{{ t('的输入字段') }}</span>
-                    </div>
-                    <div style="width: 38px;" />
-                    <div style="flex: 1">
-                      <span style="font-weight: 700;">{{ newToolName }}</span>
-                      <span>{{ t('的结果字段') }}</span>
                     </div>
                   </div>
                   <div class="field-title-icon">
-                    <audit-icon
-                      v-bk-tooltips="{
-                        content: t('拖动调整顺序'),
-                      }"
-                      class="field-title-icon-item"
-                      style="margin: 0 10px;"
-                      type="move" />
                     <audit-icon
                       class="field-title-icon-item"
                       type="delete"
                       @click="handleDeleteTool(toolConfig)" />
                   </div>
                 </template>
+                <bk-form-item
+                  :label="t('下钻按钮名称')"
+                  label-width="160"
+                  property="tools.${toolIndex}.drill_name">
+                  <bk-input
+                    v-model="formData.tools[toolIndex].drill_name"
+                    :placeholder="t('未填写时将使用工具名称作为下钻按钮名称')" />
+                </bk-form-item>
                 <div class="field-list">
+                  <div
+                    v-if="toolConfig.config.length"
+                    class="field-column-labels">
+                    <div class="field-key">
+                      {{ t('输入字段') }}
+                    </div>
+                    <div class="field-reference-type">
+                      {{ t('引用方式') }}
+                    </div>
+                    <div class="field-value">
+                      {{ t('结果字段') }}
+                    </div>
+                    <div class="field-value-suffix is-placeholder">
+                      {{ t('的值作为输入') }}
+                    </div>
+                  </div>
                   <div
                     v-for="(item, index) in toolConfig.config"
                     :key="index"
                     class="field-item">
                     <div class="field-key">
-                      <div
-                        class="field-display"
-                        style="
-                          height: 30px;
-                          padding: 0 8px;
-                          font-size: 12px;
-                          color: #63656e;
-                          background-color: #f5f7fa;
-                          border: 1px solid #c4c6cc;
-                          border-radius: 2px;
-                          flex: 1;
-                        ">
+                      <div class="field-display">
                         {{ getFieldDisplayName(toolConfig.tool.uid, item.source_field) }}
                       </div>
                     </div>
                     <div class="field-reference-type">
                       <bk-select
                         v-model="item.target_value_type"
-                        class="bk-select"
+                        :clearable="false"
                         :disabled="isOnlyFixedValue(toolConfig.tool.uid, item.source_field)"
                         :filterable="false"
                         :input-search="false"
                         @change="() => handleTypeChange(Number(toolIndex), Number(index))">
-                        <template #trigger>
-                          <bk-button
-                            :disabled="isOnlyFixedValue(toolConfig.tool.uid, item.source_field)"
-                            style="width: 100px;">
-                            {{ getDictName(item.target_value_type) }}
-                          </bk-button>
-                        </template>
                         <bk-option
                           v-for="(typeItem, typeIndex) in getAvailableReferenceTypeList(
                             toolConfig.tool.uid, item.source_field
@@ -280,21 +283,14 @@
                           @change="(val:any) => handleFormItemChange(val, Number(toolIndex), Number(index))" />
                       </div>
                     </bk-form-item>
-                    <div style=" width: 75px;margin-left: 10px; color: #979ba5;">
-                      <span v-if="item.target_value_type==='field'"> {{ t('的值作为输入') }}</span>
+                    <div
+                      class="field-value-suffix"
+                      :class="{ 'is-placeholder': item.target_value_type !== 'field' }">
+                      {{ t('的值作为输入') }}
                     </div>
                   </div>
                 </div>
               </audit-collapse-panel>
-            </bk-form-item>
-            <bk-form-item
-              :label="t('下钻按钮名称')"
-              label-width="160"
-              property="tools.${toolIndex}.drill_name"
-              style="padding-left: 20px;">
-              <bk-input
-                v-model="formData.tools[toolIndex].drill_name"
-                :placeholder="t('未填写时将使用工具名称作为下钻按钮名称')" />
             </bk-form-item>
           </div>
         </template>
@@ -319,7 +315,7 @@
   import _ from 'lodash';
   import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import { useToolManageContext } from '@views/tool-manage-shared/context';
   import Vuedraggable from 'vuedraggable';
@@ -418,6 +414,7 @@
   const activeFieldName = ref<string>('');
 
   const route = useRoute();
+  const router = useRouter();
   const { createRouteName } = useToolManageContext();
   const toolTypeMap = ref<Record<string, string>>({
     data_search: 'SQL',
@@ -700,13 +697,28 @@
   };
 
   const handleOpenTool = () => {
-    const uids = formData.value.tools.map(tool => tool.tool.uid).join('&');
-    emit('openTool', uids);
-  };
-
-  const getDictName = (value: string) => {
-    const selectItem = referenceTypeList.value.find(item => item.id === value);
-    return selectItem ? selectItem.name : '';
+    const configuredUids = formData.value.tools.map(item => item.tool.uid).filter(uid => !!uid);
+    const uids = configuredUids.length
+      ? configuredUids
+      : formData.value.selectTool.filter(uid => !!uid);
+    if (!uids.length) return;
+    const [activeUid, ...restUids] = uids;
+    const query: Record<string, string> = {};
+    ['scene_id', 'scope_id', 'scope_type'].forEach((key) => {
+      const value = route.query[key];
+      if (typeof value === 'string' && value) {
+        query[key] = value;
+      }
+    });
+    if (restUids.length) {
+      query.open_tools = restUids.join(',');
+    }
+    const { href } = router.resolve({
+      name: 'toolDetail',
+      params: { uid: activeUid },
+      query,
+    });
+    window.open(href, '_blank');
   };
 
   const handleTypeChange = (toolIndex: number, configIndex: number) => {
@@ -1044,6 +1056,45 @@
   });
 </script>
 <style scoped lang="postcss">
+:global(.field-reference-sideslider .tool-select-row) {
+  display: flex;
+  align-items: flex-end;
+}
+
+:global(.field-reference-sideslider .tool-open-link.bk-button) {
+  height: 32px;
+  margin-bottom: var(--bk-theme-space-16);
+  margin-left: var(--bk-theme-space-16);
+  font-size: var(--bk-theme-font-size-sm);
+}
+
+:global(.field-reference-sideslider .tool-open-link-icon) {
+  margin-left: var(--bk-theme-space-4);
+  font-size: var(--bk-theme-font-size-sm);
+  color: inherit;
+}
+
+:global(.field-reference-sideslider form.field-reference-form > div > .bk-form-item) {
+  margin-bottom: var(--bk-theme-space-16);
+}
+
+:global(.field-reference-sideslider .bk-sideslider-footer) {
+  padding-left: var(--bk-theme-space-40);
+  margin-top: var(--bk-theme-space-8);
+}
+
+:global(.field-reference-sideslider .filed-wrapper > .bk-form-item) {
+  margin-bottom: 0;
+}
+
+:global(.field-reference-sideslider .filed-wrapper .bk-form-item:has(+ .field-list)) {
+  margin-bottom: var(--bk-theme-space-24);
+}
+
+:global(.field-reference-sideslider .filed-wrapper:has(.collapse-panel > div[style*="display: none"]) .field-title) {
+  margin-bottom: 0;
+}
+
 .field-reference-sideslider {
   .custom-title {
     align-items: center;
@@ -1063,9 +1114,10 @@
 
     .filed-wrapper {
       position: relative;
-      padding: var(--bk-theme-space-12);
+      padding: var(--bk-theme-space-12) var(--bk-theme-space-24);
       margin-bottom: var(--bk-theme-space-16);
       background-color: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-card-radius);
 
       :deep(.collapse-panel) {
         border: none;
@@ -1074,9 +1126,29 @@
 
       .field-list {
         display: flex;
-        padding-left: var(--bk-theme-space-16);
+        padding-right: 0;
+        padding-left: 0;
+        margin-bottom: var(--bk-theme-space-12);
         background: var(--bk-theme-surface-subtle);
         flex-direction: column;
+
+        > .field-item:last-child {
+          margin-bottom: 0;
+        }
+      }
+
+
+      .field-drag-icon {
+        margin-right: var(--bk-theme-space-8);
+        font-size: var(--bk-theme-font-size-lg);
+        color: var(--bk-theme-text-weak);
+        cursor: move;
+      }
+
+      .field-title :deep(.audit-icon-angle-fill-down),
+      .field-title :deep(.audit-icon-angle-fill-rignt) {
+        font-size: var(--bk-theme-font-size-sm);
+        color: var(--bk-theme-text-weak);
       }
 
       .field-title-icon {
@@ -1105,19 +1177,70 @@
       }
 
       .field-title,
-      .field-item {
+      .field-item,
+      .field-column-labels {
         display: flex;
         align-items: center;
         margin: var(--bk-theme-space-4) 0;
 
         .field-reference-type {
-          width: 100px;
+          width: 120px;
           margin: 0 var(--bk-theme-space-12);
+
+          :deep(.bk-select) {
+            width: 100%;
+          }
         }
 
         .field-key,
         .field-value {
           flex: 1 1 220px;
+          min-width: 0;
+        }
+
+        .field-display {
+          display: flex;
+          align-items: center;
+          height: 30px;
+          min-width: 0;
+          padding: 0 var(--bk-theme-space-8);
+          overflow: hidden;
+          font-size: 12px;
+          line-height: 18px;
+          color: #63656e;
+          white-space: nowrap;
+          background-color: var(--bk-theme-surface-subtle);
+          border: 1px solid var(--bk-theme-border-default);
+          border-radius: var(--bk-theme-control-radius);
+        }
+
+        .field-value-suffix {
+          flex: none;
+          margin-left: 10px;
+          font-size: var(--bk-theme-font-size-sm);
+          line-height: 20px;
+          color: #979ba5;
+          white-space: nowrap;
+
+          &.is-placeholder {
+            visibility: hidden;
+          }
+        }
+
+        &.field-title {
+          margin-top: 0;
+        }
+
+        &.field-column-labels {
+          margin-bottom: 0;
+          font-size: var(--bk-theme-font-size-sm);
+          font-weight: 400;
+          line-height: 20px;
+          color: var(--bk-theme-text-default);
+        }
+
+        &.field-column-labels + .field-item {
+          margin-top: var(--bk-theme-form-label-gap);
         }
 
         .field-value {
@@ -1128,6 +1251,10 @@
           &:hover {
             border-color: var(--bk-theme-text-weak);
           }
+        }
+
+        &.field-column-labels .field-value {
+          color: var(--bk-theme-text-default);
         }
 
         .field-list-empty {
@@ -1152,6 +1279,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  :deep(.bk-select-trigger input::placeholder) {
+    color: var(--bk-theme-text-disabled);
+    opacity: 1;
   }
 
   :deep(.bk-node-row),
