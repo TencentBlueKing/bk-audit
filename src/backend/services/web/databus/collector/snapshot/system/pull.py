@@ -28,6 +28,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from apps.permission.handlers.permission import FetchInstancePermission
+from core.tenant import TENANT_ID_HEADER, get_bk_tenant_id, use_multi_tenant_mode
 from services.web.bkbase import source as bkbase_source
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
@@ -78,6 +79,10 @@ class HttpPullHandler:
             self.url = get_saas_url(settings.APP_CODE, module_name="puller") + "/api/v1/resources/"
 
     def build_params(self):
+        headers = {"Content-type": "application/json", "Authorization": self.token}
+        if self.resource_type in ("action", "resource_type") and use_multi_tenant_mode():
+            # 审计自有 puller 使用实例租户路由；外部用户信息接口不透传租户。
+            headers[TENANT_ID_HEADER] = get_bk_tenant_id()
         return {
             "bk_app_code": settings.APP_CODE,
             "bk_app_secret": settings.SECRET_KEY,
@@ -114,10 +119,7 @@ class HttpPullHandler:
                         {
                             "method": "post",
                             "url": self.url,
-                            "headers": {
-                                "Content-type": "application/json",
-                                "Authorization": self.token,
-                            },
+                            "headers": headers,
                             "body": {
                                 "time": {
                                     "enabled": True,

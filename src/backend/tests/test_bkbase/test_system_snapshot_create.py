@@ -420,6 +420,25 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         token.get.assert_called_once()
         token.set.assert_called_once()
 
+    @override_settings(BKPAAS_MULTI_TENANT_MODE=True, BK_TENANT_ID="tencent")
+    def test_multitenant_data_conn_registers_internal_callback_tenant_header(self):
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+        kind, registration = self.posts[0]
+        self.assertEqual(kind, "DataConn")
+        headers = registration["spec"]["conn_info"]["headers"]
+        self.assertEqual(headers["X-Bk-Tenant-Id"], "tencent")
+        self.assertTrue(headers["Authorization"].startswith("Basic "))
+
+    def test_callback_tenant_header_is_not_sent_to_external_provider_or_in_single_tenant(self):
+        for multi_tenant, kind in ((True, "user"), (False, "resource_type")):
+            with (
+                self.subTest(multi_tenant=multi_tenant, kind=kind),
+                override_settings(BKPAAS_MULTI_TENANT_MODE=multi_tenant, BK_TENANT_ID="system"),
+            ):
+                params = pull.HttpPullHandler(kind).build_params()
+                headers = params["access_conf_info"]["resource"]["scope"][0]["headers"]
+                self.assertNotIn("X-Bk-Tenant-Id", headers)
+
     def test_unowned_existing_name_and_changed_inputs_do_not_write(self):
         provision.ensure_system_snapshot("action")
         self._settle()
