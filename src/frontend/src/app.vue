@@ -131,11 +131,11 @@
         </bk-dropdown>
       </template>
       <template
-        v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true'))"
+        v-if="showNodeSide"
         #nodeSideContent>
         <keep-alive-router-view />
       </template>
-      <keep-alive-router-view v-if="(!route.meta?.nodeSideContent || (route.params?.isShowSideBar === 'true'))" />
+      <keep-alive-router-view v-if="!showNodeSide" />
       <version-log v-model:is-show="isShowVersionLog" />
     </layout>
   </bk-config-provider>
@@ -169,6 +169,8 @@
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
   import VersionLog from '@components/version-log/index.vue';
 
+  import { useReadyRoute } from '@utils/assist/ready-route';
+
   import Layout from './layout.vue';
 
   interface SceneItem {
@@ -179,6 +181,7 @@
 
   const { locale, t } = useI18n();
   const route = useRoute();
+  const { showNodeSide } = useReadyRoute();
   const isShowVersionLog = ref(false);
 
   const bkuiLocal = locale.value === 'en-US' ? bkuiLocalEN : bkuiLocalZHCN;

@@ -51,12 +51,12 @@
       </div>
       <slot name="sideAppendBefore" />
       <div
-        v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true')) && !hideSidebar"
+        v-if="showNodeSide && !hideSidebar"
         class="none-side">
         <slot name="nodeSideContent" />
       </div>
       <div
-        v-if="(!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true') && !hideSidebar"
+        v-if="!showNodeSide && !hideSidebar"
         class="audit-side-menu"
         :class="{
           'show-notice-side-menu': showNotice.enabled && showAlert
@@ -68,8 +68,7 @@
         </scroll-faker>
       </div>
       <div
-        v-if="((!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true')
-          && !hideSidebar && !route.meta?.hideToggleBtn) || route.params?.isShowSideBar === 'true'"
+        v-if="(!showNodeSide && !hideSidebar && !hideToggleBtn) || showSideBarParam"
         class="audit-side-toggle-btn">
         <audit-icon
           class="fixed-flag"
@@ -82,7 +81,7 @@
       class="audit-navigation-main"
       :class="{
         'show-notice-navigation-main': showNotice.enabled && showAlert,
-        'is-statement-page': route.meta?.navName === 'auditStatement'
+        'is-statement-page': isStatementPage
       }"
       :style="mainStyles">
       <div
@@ -123,12 +122,13 @@
     onMounted,
     ref,
   } from 'vue';
-  import { useRoute, useRouter } from 'vue-router';
 
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
 
   import NoticeComponent from '@blueking/notice-component';
+
+  import { useReadyRoute } from '@utils/assist/ready-route';
 
   interface Emits{
     (e: 'menu-flod', value: boolean):void
@@ -136,15 +136,14 @@
   const emit = defineEmits<Emits>();
   const { emit: emits } = useEventBus();
   const { feature: showNotice } = useFeature('bknotice');
-  const route = useRoute();
-  const router = useRouter();
-  // 首屏路由守卫和页面包还没完成时，route.meta 还是空的，侧栏会先按 240px 画出来。
-  // 这时用地址直接匹配路由表，工具广场刷新不会先闪出空白菜单。
-  const hideSidebar = computed(() => {
-    if (route.meta?.hideSidebar) return true;
-    if (route.matched.length > 0) return false;
-    return Boolean(router.resolve(window.location.pathname).meta?.hideSidebar);
-  });
+  const {
+    readyRoute,
+    showSideBarParam,
+    showNodeSide,
+    hideSidebar,
+  } = useReadyRoute();
+  const hideToggleBtn = computed(() => Boolean(readyRoute.value.meta?.hideToggleBtn));
+  const isStatementPage = computed(() => readyRoute.value.meta?.navName === 'auditStatement');
   const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
   // const TOGGLE_CACHE = 'navigation_toggle_status';
   const PAGE_MIN_WIDTH = 1366;
@@ -162,11 +161,7 @@
   const sideLeftExpandWidth = ref();
 
   // 报表、检索等页面把内容放在侧栏槽位，不能沿用普通菜单的收起宽度和隐藏样式
-  const usesCustomSide = computed(() => (
-    Boolean(route.meta?.nodeSideContent)
-    && route.params?.isShowSideBar !== 'true'
-    && !hideSidebar.value
-  ));
+  const usesCustomSide = computed(() => showNodeSide.value && !hideSidebar.value);
   const isSideCollapsed = computed(() => (
     !usesCustomSide.value && !isSideMenuFixed.value && !isSideMenuHover.value
   ));
