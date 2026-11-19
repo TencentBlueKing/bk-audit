@@ -150,3 +150,49 @@ class SnapshotV4IdentityTests(SimpleTestCase):
             self.snapshot.bkbase_processing_id = pid
             with self.subTest(pid=pid), self.assertRaises(BKBaseResourceMappingError):
                 source._discover_snapshot_binding(self.snapshot, self.context, {"redis"})
+
+    def test_release_snapshot_preview_returns_approved_binding_without_locking_or_saving(self):
+        self.snapshot.status = SnapshotRunningStatus.RUNNING
+        self.snapshot.storages.values_list = lambda *args, **kwargs: ["redis"]
+        discovered = {**deepcopy(self.binding), "raw_data_id": 71}
+        with (
+            mock.patch.object(source, "_discover_snapshot_binding", return_value=discovered),
+            mock.patch.object(source, "_binding_snapshot_digest", return_value="original"),
+            mock.patch.object(source.Snapshot.objects, "select_for_update") as lock,
+        ):
+            self.assertEqual(
+                source.ingest_snapshot_binding(self.snapshot, self.context, expected_binding=discovered, dry_run=True),
+                discovered,
+            )
+        self.assertNotIn("raw_data_id", self.snapshot.bkbase_v4_resources)
+        lock.assert_not_called()
+
+    def test_release_snapshot_apply_rejects_discovery_different_from_approved_binding(self):
+        self.snapshot.status = SnapshotRunningStatus.RUNNING
+        self.snapshot.storages.values_list = lambda *args, **kwargs: ["redis"]
+        approved = {**deepcopy(self.binding), "raw_data_id": 71}
+        discovered = {**approved, "raw_data_id": 72}
+        with (
+            mock.patch.object(source, "_discover_snapshot_binding", return_value=discovered),
+            mock.patch.object(source, "_binding_snapshot_digest", return_value="original"),
+            mock.patch.object(source.Snapshot.objects, "select_for_update") as lock,
+            self.assertRaisesRegex(BKBaseResourceMappingError, "approved manifest"),
+        ):
+            source.ingest_snapshot_binding(self.snapshot, self.context, expected_binding=approved)
+        lock.assert_not_called()
+
+    def test_release_snapshot_apply_persists_only_the_approved_binding(self):
+        self.snapshot.status = SnapshotRunningStatus.RUNNING
+        self.snapshot.storages.values_list = lambda *args, **kwargs: ["redis"]
+        approved = {**deepcopy(self.binding), "raw_data_id": 71}
+        latest = SimpleNamespace(bkbase_v4_resources={}, save=mock.Mock())
+        with (
+            mock.patch.object(source, "_discover_snapshot_binding", return_value=approved),
+            mock.patch.object(source, "_binding_snapshot_digest", return_value="original"),
+            mock.patch.object(source.transaction, "atomic"),
+            mock.patch.object(source.Snapshot.objects, "select_for_update") as lock,
+        ):
+            lock.return_value.get.return_value = latest
+            source.ingest_snapshot_binding(self.snapshot, self.context, expected_binding=approved)
+        self.assertEqual(latest.bkbase_v4_resources, approved)
+        latest.save.assert_called_once_with(update_fields=["bkbase_v4_resources"], update_record=False)

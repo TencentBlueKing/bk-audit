@@ -1184,10 +1184,11 @@ def _discover_snapshot_binding(snapshot, context, storage_types):
     }
 
 
-def ingest_snapshot_binding(snapshot, context):
+def ingest_snapshot_binding(snapshot, context, *, expected_binding=None, dry_run=False):
     """从可信default项目摄入存量Asset/Basic身份；HTTP外置，条件短事务保存。
 
     已有字段必须一致，任何配置/集合/操作变化都拒绝本次旧发现结果。
+    发布接管可先预览，应用时须重新发现并核对已签收的完整绑定。
     不以资源或任务运行态决定是否保存正确身份；实际重放另行预检。
     """
     resource_params(context)
@@ -1210,6 +1211,8 @@ def ingest_snapshot_binding(snapshot, context):
     if not storage_types or not storage_types.issubset(BKBASE_V4_STORAGE_CLUSTER_KINDS):
         raise BKBaseResourceMappingError(message="Snapshot required storage set is unsupported")
     discovered = _discover_snapshot_binding(snapshot, context, storage_types)
+    if expected_binding is not None and discovered != expected_binding:
+        raise BKBaseResourceMappingError(message="Snapshot discovery differs from the approved manifest")
     merged = deepcopy(binding)
     for key, value in discovered.items():
         old = merged.get(key)
@@ -1221,12 +1224,14 @@ def ingest_snapshot_binding(snapshot, context):
         elif old not in (None, "", {}) and old != value:
             raise BKBaseResourceMappingError(message="Existing snapshot binding conflicts")
         merged[key] = value
+    if dry_run:
+        return discovered
     with transaction.atomic():
         latest = Snapshot.objects.select_for_update().get(pk=snapshot.pk)
         if _binding_snapshot_digest(latest, locked=True) != baseline:
             raise BKBaseResourceMappingError(message="Snapshot changed during resource discovery")
         latest.bkbase_v4_resources = merged
-        latest.save(update_fields=["bkbase_v4_resources"])
+        latest.save(update_fields=["bkbase_v4_resources"], update_record=expected_binding is None)
     snapshot.bkbase_v4_resources = deepcopy(merged)
 
 
