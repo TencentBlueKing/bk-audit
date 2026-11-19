@@ -87,6 +87,7 @@ from services.web.tool.exceptions import (
     InputVariableNotFoundError,
     SmartPageDataSourceNotFound,
     ToolDoesNotExist,
+    ToolReferencedByStrategy,
     ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import SmartPageExecuteParams
@@ -595,6 +596,9 @@ class DeleteTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
+        # 删除与广场展示解耦；被策略引用的工具禁止删除（后端兜底，与前端禁用提示对齐）
+        if StrategyTool.objects.filter(tool_uid=uid).exists():
+            raise ToolReferencedByStrategy()
         self.deletel_enum_mappings(tool_uid=uid)
         Tool.delete_by_uid(uid)
 
