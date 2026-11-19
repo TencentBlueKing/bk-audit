@@ -143,14 +143,21 @@ def list_namespace_result_tables(namespace, *, context=None):
 
 
 @metadata.list_read_scope()
-def list_queryable_result_tables(result_table_ids, *, context=None):
-    """有限逻辑 ID 按正式项目精确核权；不枚举项目或读取租户全量。"""
+def list_queryable_result_tables(result_table_ids, *, context=None, skip_missing=False):
+    """有限逻辑 ID 按正式项目精确核权；候选列表可跳过明确缺失的RT，权限读取失败仍上抛。"""
     context = {**(context or get_bkbase_context()), "_result_table_info": {}}
     if context["version"] != BKBaseVersion.V4:
         raise BKBaseResourceMappingError(message="Finite Dataset reads require BKBase V4")
 
     def read(rt_id):
-        ref = metadata.get_result_table_ref(context, rt_id)
+        ref = (
+            metadata.read_candidate_or_none(metadata.get_result_table_ref, context=context, result_table_id=rt_id)
+            if skip_missing
+            else metadata.get_result_table_ref(context, rt_id)
+        )
+        if ref is None:
+            metadata._unavailable_candidate(rt_id, "formal_unavailable")
+            return []
         rows = metadata.list_datasets({**context, "namespace": ref["namespace"]}, dataset_name=rt_id)
         exact = [row for row in _rows(rows) if row.get("dataset_name") == rt_id]
         return _queryable_tables([exact])

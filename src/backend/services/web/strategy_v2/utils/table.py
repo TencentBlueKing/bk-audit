@@ -95,15 +95,19 @@ class TableHandler:
 
 
 @bkbase_metadata.list_read_scope()
-def list_scoped_v4_tables(*, table_type, namespace, bkbase_namespace=None, result_table_ids=None, scene_id=None):
-    """单项目或有限已选 ID 的 V4 候选，共用原业务能力及同一读取预算。"""
+def list_scoped_v4_tables(
+    *, table_type, namespace, bkbase_namespace=None, result_table_ids=None, scene_id=None, skip_missing=False
+):
+    """单项目或有限ID读取共用能力和预算；场景候选可跳过缺失表，已选回显默认严格。"""
     if get_bkbase_version() != BKBaseVersion.V4 or table_type not in ("BizRt", "BuildIn"):
         raise BKBaseResourceMappingError(message="Unsupported scoped BKBase table type or version")
     context = {**get_bkbase_context(), "rt_namespaces": {}}
     tables = (
         bkbase_permissions.list_namespace_result_tables(bkbase_namespace, context=context)
         if bkbase_namespace is not None
-        else bkbase_permissions.list_queryable_result_tables(result_table_ids or [], context=context)
+        else bkbase_permissions.list_queryable_result_tables(
+            result_table_ids or [], context=context, skip_missing=skip_missing
+        )
     )
     if scene_id:
         from services.web.scene.data_filter import SceneDataFilter
@@ -114,7 +118,10 @@ def list_scoped_v4_tables(*, table_type, namespace, bkbase_namespace=None, resul
         excluded = BizRtTableHandler(table_type, namespace).get_exclude_rt_ids()
         tables = [rt for rt in tables if rt["result_table_id"] not in excluded]
     candidates = bkbase_metadata.get_result_tables_with_capabilities(
-        [rt["result_table_id"] for rt in tables], context=context, allow_unavailable=bkbase_namespace is not None
+        [rt["result_table_id"] for rt in tables],
+        context=context,
+        allow_unavailable=bkbase_namespace is not None,
+        skip_missing=skip_missing,
     )
     return [
         rt
