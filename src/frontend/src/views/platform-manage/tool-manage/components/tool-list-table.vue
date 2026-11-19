@@ -902,9 +902,9 @@
   }
 
   .square-display-tip {
-    margin-left: 4px;
-    font-size: 14px;
-    color: var(--audit-neutral-text-03);
+    margin-left: var(--bk-theme-space-4);
+    font-size: var(--bk-theme-font-size-base);
+    color: var(--bk-theme-text-weak);
     cursor: default;
   }
 

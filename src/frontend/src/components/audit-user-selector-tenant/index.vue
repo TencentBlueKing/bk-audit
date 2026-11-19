@@ -270,6 +270,8 @@
   const CREATE_OPTION_SELECTOR = '.audit-user-create-option';
   let createOptionTimer = 0;
   let createOptionActive = false;
+  // 搜索结果出来后库会高亮第一条人员。在用户按向下键之前，光标停在「按 Enter 填入」。
+  let createOptionPinned = true;
 
   const syncCreateOption = () => {
     const popover = getVisiblePopover();
@@ -281,9 +283,11 @@
     if (!canCreate) {
       current?.remove();
       createOptionActive = false;
+      createOptionPinned = true;
       content.classList.remove('is-create-option-active');
       return;
     }
+    if (createOptionPinned) createOptionActive = true;
     let option = current;
     if (!(option instanceof HTMLElement)) {
       option = document.createElement('div');
@@ -300,9 +304,17 @@
     const hintText = t('(按 Enter 填入)');
     if (nameEl && nameEl.textContent !== keyword) nameEl.textContent = keyword;
     if (hintEl && hintEl.textContent !== hintText) hintEl.textContent = hintText;
-    const shouldCurrent = createOptionActive || !content.querySelector('.user-option.is-highlighted');
-    option.classList.toggle('is-current', shouldCurrent);
+    option.classList.toggle('is-current', createOptionActive);
     content.classList.toggle('is-create-option-active', createOptionActive);
+    if (createOptionActive) {
+      content.querySelectorAll('.user-option.is-highlighted').forEach((el) => {
+        el.classList.remove('is-highlighted');
+      });
+      return;
+    }
+    if (!content.querySelector('.user-option.is-highlighted')) {
+      content.querySelector('.user-option:not(.is-disabled)')?.classList.add('is-highlighted');
+    }
   };
 
   // 库的搜索有防抖，结果渲染时会清掉手动插入的节点。只跟一段时间，不再监听 DOM，避免插入后又触发回调。
@@ -324,6 +336,7 @@
         window.clearInterval(createOptionTimer);
         window.setTimeout(syncCreateOption, 0);
         window.setTimeout(syncCreateOption, 50);
+        window.setTimeout(syncCreateOption, 200);
       }
     };
     run();
@@ -354,6 +367,7 @@
       if (createOptionActive || (highlighted instanceof HTMLElement && highlighted === firstUser)) {
         event.preventDefault();
         event.stopPropagation();
+        createOptionPinned = true;
         createOptionActive = true;
         syncCreateOption();
         return;
@@ -362,6 +376,7 @@
     if (event.key === 'ArrowDown' && createOptionActive) {
       event.preventDefault();
       event.stopPropagation();
+      createOptionPinned = false;
       createOptionActive = false;
       syncCreateOption();
       return;
@@ -382,6 +397,7 @@
     if (!isSearchInput(event.target)) return;
     enterInputEl = event.target;
     searchKeyword.value = event.target.value;
+    createOptionPinned = true;
     createOptionActive = true;
     scheduleSyncCreateOption();
   };
@@ -489,32 +505,33 @@
   .bk-user-selector-popover .dropdown-content .audit-user-create-option {
     display: flex;
     align-items: center;
-    height: var(--audit-space-32);
-    padding: var(--audit-space-8) var(--audit-space-12);
+    height: var(--bk-theme-space-32);
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
     overflow: hidden;
     cursor: pointer;
-    gap: var(--audit-space-4);
+    gap: var(--bk-theme-space-8);
   }
 
-  .bk-user-selector-popover .dropdown-content.is-create-option-active .user-option.is-highlighted {
+  .bk-user-selector-popover .dropdown-content.is-create-option-active .user-option.is-highlighted,
+  .bk-user-selector-popover .dropdown-content.is-create-option-active .user-option.is-highlighted:hover {
     background-color: transparent;
   }
 
   .bk-user-selector-popover .dropdown-content .audit-user-create-option:hover,
   .bk-user-selector-popover .dropdown-content .audit-user-create-option.is-current {
-    background-color: var(--audit-neutral-bg-03);
+    background-color: var(--bk-theme-table-row-hover);
   }
 
   .bk-user-selector-popover .dropdown-content .audit-user-create-option__name {
     overflow: hidden;
-    color: var(--audit-neutral-text-01);
+    color: var(--bk-theme-text-default);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .bk-user-selector-popover .dropdown-content .audit-user-create-option__hint {
     flex: none;
-    color: var(--audit-neutral-text-03);
+    color: var(--bk-theme-text-weak);
   }
 
   .bk-user-selector-popover .dropdown-content:has(.audit-user-create-option) .no-data,
