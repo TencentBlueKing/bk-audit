@@ -14,7 +14,6 @@ from services.web.tool.exceptions import (
     BkbaseApiRequestError,
     DataSearchTablePermission,
     ToolDoesNotExist,
-    ToolNotPublished,
 )
 from services.web.tool.models import Tool
 from services.web.tool.permissions import UseToolPermission
@@ -124,10 +123,6 @@ class TestMCPUserToolViewSet(SimpleTestCase):
         self.assertIsInstance(permissions[1], UseToolPermission)
         self.assertIs(type(permissions[1]), UseToolPermission)
 
-    def test_tool_not_published_is_not_found(self):
-        self.assertEqual(ToolNotPublished.STATUS_CODE, 404)
-        self.assertEqual(str(ToolNotPublished.MESSAGE), "工具未上架")
-
     def test_detail_permission_finds_tool_by_namespace_and_name(self):
         viewset = MCPUserToolViewSet()
         viewset.request = SimpleNamespace(
@@ -156,11 +151,11 @@ class TestMCPUserToolViewSet(SimpleTestCase):
                 viewset.get_tool_uid_by_name()
 
         with mock.patch("services.web.tool.views.Tool.all_latest_tools") as all_latest_tools:
+            # 广场展示关闭（unpublished）不影响 MCP 通道：按名称查找工具不再校验上架状态
             all_latest_tools.return_value.filter.return_value.first.return_value = SimpleNamespace(
                 uid="unpublished-tool", status=PanelStatus.UNPUBLISHED
             )
-            with self.assertRaises(ToolNotPublished):
-                viewset.get_tool_uid_by_name()
+            self.assertEqual(viewset.get_tool_uid_by_name(), "unpublished-tool")
 
 
 @override_settings(ROOT_URLCONF="services.web.urls")
@@ -183,16 +178,20 @@ class TestMCPUserToolDetailViewSet(TestCase):
             status=PanelStatus.UNPUBLISHED,
         )
 
-    def test_unpublished_tool_detail_returns_not_found(self):
+    def test_unpublished_tool_detail_still_accessible(self):
+        """广场展示关闭（unpublished）的工具在 MCP 通道仍可获取详情：开关仅控制工具广场展示"""
         view = MCPUserToolViewSet.as_view({"get": "detail_by_name"})
         request = self.factory.get("/api/v1/namespaces/default/mcp_user/tool/detail_by_name/?name=unpublished-tool")
         force_authenticate(request, user=self.User())
 
-        with mock.patch("core.permissions.get_app_info"):
+        with (
+            mock.patch("core.permissions.get_app_info"),
+            mock.patch("services.web.tool.permissions.UseToolPermission.has_permission", return_value=True),
+        ):
             response = view(request, namespace="default")
 
-        self.assertEqual(response.status_code, 404)
-        self.assertIn("工具未上架", str(response.data))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["uid"], "unpublished-tool-uid")
 
     def test_tool_detail_honors_path_namespace(self):
         Tool.objects.create(

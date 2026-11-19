@@ -162,14 +162,6 @@ class ToolDoesNotExist(ToolException):
     MESSAGE = gettext_lazy("工具不存在")
 
 
-class ToolNotPublished(ToolException):
-    """工具未上架。"""
-
-    STATUS_CODE = 404
-    ERROR_CODE = "022"
-    MESSAGE = gettext_lazy("工具未上架")
-
-
 class ToolTypeNotSupport(ToolException):
     """
     工具类型不支持
