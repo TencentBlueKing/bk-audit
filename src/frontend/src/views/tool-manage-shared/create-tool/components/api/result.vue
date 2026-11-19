@@ -119,8 +119,7 @@
               <audit-user-selector-tenant
                 v-else-if="item.field_category === 'person_select'"
                 v-model="formModel[item.raw_name]"
-                allow-create
-                :placeholder="t('请输入人员进行搜索')" />
+                allow-create />
               <div
                 v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
                 @mouseenter.stop="handleMouseEnterTimeRange(item.raw_name)"

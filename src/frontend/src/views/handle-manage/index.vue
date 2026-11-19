@@ -62,8 +62,7 @@
           required>
           <audit-user-selector-tenant
             v-model="formData.new_operators"
-            allow-create
-            :placeholder="t('请输入人员')" />
+            allow-create />
         </bk-form-item>
         <bk-form-item
           :label="t('处理说明')"

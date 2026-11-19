@@ -43,6 +43,8 @@
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
   import InlineTag from '@components/edit-box/inline-tag.vue';
+
+  import { useToolManageContext } from '@views/tool-manage-shared/context';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import { formatReferencedStrategyNames } from '@views/tool-manage-shared/strategy-reference';
@@ -78,7 +80,7 @@
     favorite: boolean;
     is_bkvision: boolean;
     namespace: string;
-    status: 'published' | '';
+    status: 'published' | 'unpublished' | '';
     strategies: number[];
     tags: string[];
     visibility?: VisibilityInfo;
@@ -98,7 +100,7 @@
     (e: 'edit', row: ToolModel): void;
     (e: 'preview', row: ToolModel): void;
     (e: 'delete', row: ToolModel): void;
-    (e: 'toggle-status', row: ToolModel): void;
+    (e: 'status-changed'): void;
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
     (e: 'filter-change', filters: Record<string, any>): void;
@@ -109,8 +111,10 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const { messageSuccess } = useMessage();
   const router = useRouter();
+  const { messageSuccess } = useMessage();
+  const toolManageCtx = useToolManageContext();
+  const squareDisplayTip = t('仅控制工具是否在工具广场展示。关闭后，审计策略中配置的下钻仍可正常使用。');
 
   const listRef = ref();
   const shouldHidePlatformDisabledTool = (tool: any) => tool.visibility?.binding_type === 'platform_binding'
@@ -353,19 +357,34 @@
       },
     },
     {
-      title: t('状态'),
-      colKey: 'status',
-      width: 100,
-      ellipsis: true,
-      cell: (_h: any, { row }: { row: ToolModel }) => (
-        <span>
-          {row.status === 'published' ? (
-            <bk-tag radius="4px" theme="success">{t('启用')}</bk-tag>
-          ) : (
-            <bk-tag radius="4px" theme="default">{t('停用')}</bk-tag>
-          )}
+      title: () => (
+        <span class="square-display-title">
+          {t('是否展示')}
+          <audit-icon
+            v-bk-tooltips={{ content: squareDisplayTip }}
+            class="square-display-tip"
+            type="info-fill" />
         </span>
       ),
+      colKey: 'status',
+      width: 140,
+      cell: (_h: any, { row }: { row: ToolModel }) => {
+        const isPlatform = isPlatformTool(row);
+        return (
+          <span
+            v-bk-tooltips={{
+              content: platformToolTooltip,
+              disabled: !isPlatform,
+            }}>
+            <bk-switcher
+              before-change={(nextValue: boolean) => handleSquareDisplayChange(row, nextValue)}
+              disabled={isPlatform}
+              model-value={row.status === 'published'}
+              size="small"
+              theme="primary" />
+          </span>
+        );
+      },
     },
     {
       title: t('更新人'),
@@ -391,21 +410,12 @@
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPlatform = isPlatformTool(row);
-        const isEnabled = row.status === 'published';
         const referencedStrategyNames = formatReferencedStrategyNames(row.strategies, props.strategyList);
         const hasStrategies = Boolean(referencedStrategyNames);
-        // 被策略引用的启用工具不可停用
-        const isToggleDisabled = isPlatform || (isEnabled && hasStrategies);
-        const toggleTooltip = isPlatform
-          ? platformToolTooltip
-          : t('该工具正在被{strategies}使用，无法停用', { strategies: referencedStrategyNames });
-        // 删除按钮禁用条件：平台工具、启用状态或被策略引用
-        const isDeleteDisabled = isPlatform || isEnabled || hasStrategies;
-        // 删除按钮提示文字
+        const isDeleteDisabled = isPlatform || hasStrategies;
         const getDeleteTooltip = () => {
           if (isPlatform) return platformToolTooltip;
           if (hasStrategies) return t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames });
-          if (isEnabled) return t('请先停用后再删除');
           return '';
         };
         const deleteTooltip = getDeleteTooltip();
@@ -447,28 +457,6 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    {isToggleDisabled ? (
-                      <span
-                        v-bk-tooltips={{
-                          content: toggleTooltip,
-                          placement: 'top',
-                          extCls: 'tool-strategy-ref-tips',
-                        }}>
-                        <bk-button
-                          text
-                          disabled
-                          class="mr8 mr8-disabled">
-                          {isEnabled ? t('停用') : t('启用')}
-                        </bk-button>
-                      </span>
-                    ) : (
-                      <bk-button
-                        text
-                        class="mr8"
-                        onClick={() => emit('toggle-status', row)}>
-                        {isEnabled ? t('停用') : t('启用')}
-                      </bk-button>
-                    )}
                     {isDeleteDisabled ? (
                       <span
                         v-bk-tooltips={{
@@ -500,6 +488,20 @@
       },
     },
   ]);
+
+  const handleSquareDisplayChange = (row: ToolModel, nextValue: boolean) => {
+    if (isPlatformTool(row)) {
+      return false;
+    }
+    return toolManageCtx.toggleToolStatus({
+      uid: row.uid,
+      enable: nextValue,
+    }).then(() => {
+      row.status = nextValue ? 'published' : 'unpublished';
+      messageSuccess(t(nextValue ? '已在工具广场展示' : '已从工具广场隐藏'));
+      emit('status-changed');
+    });
+  };
 
   const handleClearSearch = () => {
     emit('clear-search');
@@ -660,6 +662,18 @@
 </style>
 
 <style lang="postcss">
+  .square-display-title {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .square-display-tip {
+    margin-left: 4px;
+    font-size: 14px;
+    color: var(--audit-neutral-text-03);
+    cursor: default;
+  }
+
   .report-config-list .platform-binding-tag.bk-tag {
     flex-shrink: 0;
     height: 18px;

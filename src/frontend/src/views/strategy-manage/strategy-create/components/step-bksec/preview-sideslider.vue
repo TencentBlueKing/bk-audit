@@ -111,8 +111,7 @@
                 <audit-user-selector-tenant
                   :key="handlerSelectorKey"
                   v-model="testForm.handler"
-                  :multiple="false"
-                  :placeholder="t('请输入用户名')" />
+                  :multiple="false" />
               </div>
             </template>
           </bk-pop-confirm>

@@ -32,16 +32,15 @@ type ToolTagItem = {
 
 /**
  * 策略字段下钻可选工具：
- * - 全局策略：全部已启用的全局工具，不受工具可见范围限制
- * - 审计策略：当前场景可见的已启用工具
+ * - 全局策略：全部全局工具，不受工具可见范围和广场展示状态限制
+ * - 审计策略：当前场景可见的全部工具，包含未在广场展示的工具
  */
 export const fetchStrategyDrillTools = (route: StrategyRoute): Promise<Array<ToolDetailModel>> => {
   if (getStrategyBindingScope(route).isPlatform) {
-    return ToolManageService.fetchToolsList({ status: ['published'] }) as unknown as Promise<Array<ToolDetailModel>>;
+    return ToolManageService.fetchToolsList() as unknown as Promise<Array<ToolDetailModel>>;
   }
   return ToolManageService.fetchAllTools({
     ...getStrategySystemScopeParams(route),
-    status: ['published'],
   });
 };
 
@@ -52,6 +51,5 @@ export const fetchStrategyDrillToolTags = (route: StrategyRoute): Promise<Array<
   }
   return ToolManageService.fetchToolTags({
     ...getStrategySystemScopeParams(route),
-    status: ['published'],
   });
 };

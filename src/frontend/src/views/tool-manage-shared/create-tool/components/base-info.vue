@@ -59,25 +59,49 @@
           </bk-loading>
         </bk-form-item>
       </div>
-      <bk-form-item
-        :label="t('工具说明')"
-        label-width="160"
-        property="description"
-        required>
-        <bk-input
-          v-model.trim="formData.description"
-          :maxlength="2000"
-          :placeholder="t('请输入说明')"
-          :resize="false"
-          show-word-limit
-          style="width: 50%;"
-          type="textarea" />
-      </bk-form-item>
+      <div class="base-info-row">
+        <bk-form-item
+          class="mr16"
+          :label="t('工具说明')"
+          label-width="160"
+          property="description"
+          required
+          style="flex: 1;">
+          <bk-input
+            v-model.trim="formData.description"
+            :maxlength="2000"
+            :placeholder="t('请输入说明')"
+            :resize="false"
+            show-word-limit
+            style="width: 100%;"
+            type="textarea" />
+        </bk-form-item>
+        <bk-form-item
+          class="square-display-item"
+          :label="t('是否展示')"
+          style="flex: 1;">
+          <template #label>
+            <span class="square-display-label">
+              {{ t('是否展示') }}
+              <audit-icon
+                v-bk-tooltips="{
+                  content: squareDisplayTip,
+                }"
+                class="square-display-tip"
+                type="info-fill" />
+            </span>
+          </template>
+          <bk-switcher
+            v-model="showInSquare"
+            theme="primary" />
+        </bk-form-item>
+      </div>
     </template>
   </card-part-vue>
 </template>
 
 <script setup lang="ts">
+  import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import type { FormData } from '../types';
@@ -96,11 +120,45 @@
 
   const { t } = useI18n();
   const namePlaceholder = t('请输入，32字符内');
+  const squareDisplayTip = t('仅控制工具是否在工具广场展示。关闭后，审计策略中配置的下钻仍可正常使用。');
+  const showInSquare = computed({
+    get: () => formData.value.status !== 'unpublished',
+    set: (value: boolean) => {
+      formData.value.status = value ? 'published' : 'unpublished';
+    },
+  });
 </script>
 
 <style lang="postcss" scoped>
   .flex-center {
     display: flex;
     align-items: center;
+  }
+
+  .base-info-row {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .square-display-item {
+    flex: 1;
+  }
+
+  .square-display-item :deep(.bk-form-content) {
+    display: flex;
+    align-items: center;
+    height: 32px;
+  }
+
+  .square-display-label {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .square-display-tip {
+    margin-left: 4px;
+    font-size: 14px;
+    color: var(--audit-neutral-text-03);
+    cursor: default;
   }
 </style>
