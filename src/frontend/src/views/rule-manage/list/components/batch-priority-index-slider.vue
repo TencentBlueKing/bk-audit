@@ -67,6 +67,8 @@
   import {
     computed,
     nextTick,
+    onBeforeUnmount,
+    onUpdated,
     ref,
     watch,
   } from 'vue';
@@ -87,6 +89,8 @@
   import getAssetsFile from '@utils/getAssetsFile';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  import { shouldRebindRowDrag } from './rule-row-drag';
 
 
   interface Emits{
@@ -110,6 +114,7 @@
       width: 40,
       render() {
         return <p
+          class="rule-drag-handle"
           style='width: 100%; height: 100%;'>
           <audit-icon
             style='font-size: 16px; cursor: pointer;'
@@ -214,9 +219,6 @@
         tmpItem.priority_index = sortPriorityIndex;
         sortPriorityIndex = sortPriorityIndex - 1;
       });
-      nextTick(() => {
-        handlerowDrop();
-      });
       setTimeout(() => {
         cloneTableData.value.forEach((item, index) => {
           const isNew = isNewData(item);
@@ -255,46 +257,61 @@
     const isNew = diff < (5 * 60 * 1000);
     return isNew;
   };
-  // 排序方法
-  const sortble = (el: any) => {
-    if (el) {
-      Sortable.create(el, {
-        //  指定父元素下可被拖拽的子元素
-        draggable: '.bk-table tr',
-        forceFallback: true,
-        animation: 100,
-        delay: 80, // 定义一个延迟时间防止误触
-        filter: '.ignore-drag', // 忽略拖拽
-        onEnd(evt: any) {
-          const { oldIndex } = evt;
-          const { newIndex } = evt;
-          if (oldIndex !== newIndex) {
-            const list = Array.from(evt.to.rows).map((item: any) => {
-              const el = (item as HTMLElement).querySelector('.show-tooltips-text')  as HTMLElement;
-              return el?.innerText;
-            });
-            sortedKey.value = list;
-            window.changeConfirm = true;
-
-            let sortPriorityIndex = list.length;
-            sortedKey.value.forEach((id) => {
-              if (tableDataMap.value[id]) {
-                tableDataMap.value[id].priority_index = sortPriorityIndex;
-                sortPriorityIndex = sortPriorityIndex - 1;
-              }
-            });
-          }
-        },
-      });
-    }
+  let rowSortable: Sortable | null = null;
+  const destroyRowSortable = () => {
+    rowSortable?.destroy();
+    rowSortable = null;
   };
-  const handlerowDrop = () => {
-    // 此时找到的元素是要拖拽元素的父容器
-    if (!batchTableRef.value) return;
-    const tbody = (batchTableRef.value.$el as HTMLElement).querySelector('.bk-table-body tbody') as HTMLElement;
-    if (tbody) {
-      sortble(tbody);
-    }
+  const dragBody = () => {
+    const root = batchTableRef.value?.$el as HTMLElement | undefined;
+    if (!root || typeof root.querySelector !== 'function') return null;
+    return root.querySelector('.bk-table-body tbody') as HTMLElement | null;
+  };
+  // 侧栏 v-if 刚打开时表格还会再排一次布局，旧 tbody 上的实例收不到拖拽。
+  const bindRowDrag = (force = false) => {
+    if (!showBatchAdjustPriorityIndexDetail.value || listLoading.value) return false;
+    const next = dragBody();
+    const current = rowSortable?.el ?? null;
+    if (!force && !shouldRebindRowDrag(current, next)) return false;
+    if (force && !shouldRebindRowDrag(null, next)) return false;
+    destroyRowSortable();
+    rowSortable = Sortable.create(next as HTMLElement, {
+      draggable: '.bk-table tr',
+      handle: '.rule-drag-handle',
+      forceFallback: true,
+      animation: 100,
+      delay: 80,
+      filter: '.ignore-drag',
+      onEnd(evt: any) {
+        const { oldIndex } = evt;
+        const { newIndex } = evt;
+        if (oldIndex !== newIndex) {
+          const list = Array.from(evt.to.rows).map((item: any) => {
+            const el = (item as HTMLElement).querySelector('.show-tooltips-text')  as HTMLElement;
+            return el?.innerText;
+          });
+          sortedKey.value = list;
+          window.changeConfirm = true;
+
+          let sortPriorityIndex = list.length;
+          sortedKey.value.forEach((id) => {
+            if (tableDataMap.value[id]) {
+              tableDataMap.value[id].priority_index = sortPriorityIndex;
+              sortPriorityIndex = sortPriorityIndex - 1;
+            }
+          });
+        }
+      },
+    });
+    return true;
+  };
+  const scheduleBindRowDrag = () => {
+    nextTick(() => {
+      bindRowDrag();
+      requestAnimationFrame(() => {
+        bindRowDrag(true);
+      });
+    });
   };
   const handleRowClass = (data: RiskRuleManageModel) => data?.rule_id;
   // 批量调整优先级
@@ -343,12 +360,35 @@
       data.is_enabled = ret.is_enabled;
     });
   };
-  watch(() => showBatchAdjustPriorityIndexDetail.value, () => {
-    if (!showBatchAdjustPriorityIndexDetail.value) {
+  watch(() => showBatchAdjustPriorityIndexDetail.value, (open) => {
+    if (!open) {
+      destroyRowSortable();
       emits('refreshList');
     }
   }, {
     immediate: true,
+  });
+  watch(cloneTableData, () => {
+    if (!showBatchAdjustPriorityIndexDetail.value) return;
+    scheduleBindRowDrag();
+    window.setTimeout(() => {
+      if (!bindRowDrag(true)) {
+        window.setTimeout(() => {
+          bindRowDrag(true);
+        }, 300);
+      }
+    }, 300);
+  });
+  watch(listLoading, (loading) => {
+    if (!loading) {
+      scheduleBindRowDrag();
+    }
+  });
+  onUpdated(() => {
+    bindRowDrag();
+  });
+  onBeforeUnmount(() => {
+    destroyRowSortable();
   });
   defineExpose<Exposes>({
     show() {
