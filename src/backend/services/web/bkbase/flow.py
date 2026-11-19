@@ -19,6 +19,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import WEIXIN_UNAVAILABLE_MESSAGE, MsgType
 from core.exceptions import LockError
 from services.web.analyze.constants import (
+    AUDIT_EVENT_TABLE_PREFIX,
     BKBASE_FLOW_CONSUMING_MODE,
     ControlTypeChoices,
     FlowDataSourceNodeType,
@@ -989,7 +990,9 @@ def build_controller_spec(controller, *, context=None):
         }
     controller.rt_node_map = {rt_id: node_name("src", rt_id) for rt_id in rt_ids}
     binding = (strategy.backend_data or {}).get("bkbase_v4", {})
-    output_name = binding.get("output_name") or stable_name("audit", strategy.namespace, strategy.strategy_id)
+    output_name = binding.get("output_name") or stable_name(
+        AUDIT_EVENT_TABLE_PREFIX, strategy.namespace, strategy.strategy_id
+    )
     output = binding.get("output_rt_id")
     if output:
         business, separator, raw_name = output.partition("_")
