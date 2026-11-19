@@ -134,6 +134,7 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import useRouterBack from '@hooks/use-router-back';
   import {
     buildStrategyCreatePayload,
     createEmptyAssignWhere,
@@ -195,6 +196,11 @@
   const router = useRouter();
   const route = useRoute();
   const strategyRoutes = getStrategyRouteNames(route);
+  useRouterBack(() => {
+    router.push({
+      name: strategyRoutes.list,
+    });
+  });
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
 
