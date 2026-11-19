@@ -32,6 +32,7 @@
       </template>
       <div class="show-more-condition-btn">
         <bk-button
+          class="more-condition-text"
           text
           theme="primary"
           @click="handleShowMore">
@@ -817,6 +818,10 @@
     .show-more-condition-btn {
       display: inline-block;
       margin-top: var(--bk-theme-space-32);
+
+      .more-condition-text {
+        font-size: var(--bk-theme-font-size-sm);
+      }
 
       .active {
         transform: rotateZ(-180deg);

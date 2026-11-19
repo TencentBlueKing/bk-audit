@@ -15,8 +15,12 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading :loading="isLoading">
+  <div class="search-field">
+    <div
+      v-show="isLoading"
+      class="audit-skeleton search-field-skeleton" />
     <bk-select
+      v-show="!isLoading"
       :class="{
         'is-selected-all': selectedAll
       }"
@@ -51,7 +55,7 @@
         </div>
       </template>
     </bk-select>
-  </bk-loading>
+  </div>
 </template>
 <script setup lang="ts">
   import {

@@ -16,9 +16,13 @@
 -->
 <template>
   <div ref="rootRef">
-    <bk-loading :loading="isLoading">
-      <bk-table
-        ref="tableRef"
+    <table-skeleton
+      v-if="isLoading"
+      :columns="skeletonColumns"
+      :row-count="skeletonRowCount" />
+    <bk-table
+      v-show="!isLoading"
+      ref="tableRef"
         :border="['outer']"
         :columns="columns"
         :data="listData.results"
@@ -64,7 +68,6 @@
           </bk-exception>
         </template>
       </bk-table>
-    </bk-loading>
   </div>
 </template>
 <script lang="ts">
@@ -81,6 +84,7 @@
   import type { Table } from 'bkui-vue';
   import _ from 'lodash';
   import {
+    computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -99,6 +103,8 @@
   } from '@utils/request';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  import TableSkeleton from '@components/table-skeleton/index.vue';
 
   interface Props {
     columns: InstanceType<typeof Table>['$props']['columns'],
@@ -138,6 +144,23 @@
     layout: ['total', 'limit', 'list'],
   });
   const tableMaxHeight = ref(0);
+  const skeletonColumns = computed(() => {
+    const source = props.columns || [];
+    const columns = source.map((column) => {
+      const width = Number.parseInt(String(column?.width ?? ''), 10);
+      if (Number.isFinite(width) && width > 0) {
+        return { width, grow: false };
+      }
+      return { width: 160, grow: true };
+    });
+    return columns.length ? columns : [{ width: 160, grow: true }];
+  });
+  const skeletonRowCount = computed(() => {
+    if (tableMaxHeight.value <= 0) {
+      return 8;
+    }
+    return Math.max(Math.floor((tableMaxHeight.value - 43) / 45), 3);
+  });
 
   const paramsMemo = ref<Record<string, any>>({});
   const params = ref<Record<string, any>>({});
