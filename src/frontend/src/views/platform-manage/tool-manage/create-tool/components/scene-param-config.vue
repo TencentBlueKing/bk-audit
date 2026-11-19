@@ -330,7 +330,6 @@
                 allow-create
                 class="override-person-select"
                 :model-value="getOverrideValue(item, row.raw_name)"
-                :placeholder="t('请输入人员进行搜索')"
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
               <!-- BKVision 等选择器：tag 输入 -->
               <bk-tag-input
