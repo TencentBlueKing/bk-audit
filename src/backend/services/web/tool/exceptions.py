@@ -41,8 +41,9 @@ class DataSearchTablePermission(ToolException):
     MESSAGE = gettext_lazy("用户{user}没有权限访问数据源{data_source}")
 
     def __init__(self, user, data_source, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(user=user, data_source=data_source)
-        super().__init__(*args, **kwargs)
+        message = kwargs.pop("message", None) or self.MESSAGE.format(user=user, data_source=data_source)
+        self.MESSAGE = message
+        super().__init__(*args, message=message, **kwargs)
 
 
 class InputVariableMissingError(ToolException):
@@ -192,8 +193,9 @@ class ApiToolExecuteError(ToolException):
     def __init__(self, status_code: int, detail: str, *args, **kwargs):
         self.status_code = status_code
         self.detail = detail
-        self.MESSAGE = self.MESSAGE.format(status_code=status_code, detail=detail)
-        super().__init__(*args, **kwargs)
+        message = kwargs.pop("message", None) or self.MESSAGE.format(status_code=status_code, detail=detail)
+        self.MESSAGE = message
+        super().__init__(*args, message=message, **kwargs)
 
 
 class SceneToolNotExist(ToolException):
