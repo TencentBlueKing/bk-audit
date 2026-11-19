@@ -114,7 +114,7 @@ def list_scoped_v4_tables(*, table_type, namespace, bkbase_namespace=None, resul
         excluded = BizRtTableHandler(table_type, namespace).get_exclude_rt_ids()
         tables = [rt for rt in tables if rt["result_table_id"] not in excluded]
     candidates = bkbase_metadata.get_result_tables_with_capabilities(
-        [rt["result_table_id"] for rt in tables], context=context, namespace=bkbase_namespace
+        [rt["result_table_id"] for rt in tables], context=context, allow_unavailable=bkbase_namespace is not None
     )
     return [
         rt
