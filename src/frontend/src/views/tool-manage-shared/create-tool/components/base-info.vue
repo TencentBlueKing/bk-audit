@@ -25,7 +25,13 @@
           property="name"
           required
           style="flex: 1; margin-right: var(--bk-theme-space-16)">
+          <audit-skeleton
+            v-if="detailLoading"
+            custom-class="tool-field-skeleton"
+            height="32"
+            width="100%" />
           <bk-input
+            v-else
             v-model.trim="formData.name"
             :maxlength="32"
             :placeholder="namePlaceholder"
@@ -37,26 +43,28 @@
           label-width="160"
           property="tags"
           style="flex: 1;">
-          <bk-loading
-            :loading="tagLoading"
-            style="width: 100%;">
-            <bk-select
-              v-model="formData.tags"
-              allow-create
-              class="bk-select"
-              filterable
-              :input-search="false"
-              multiple
-              multiple-mode="tag"
-              :placeholder="t('请选择')"
-              :search-placeholder="t('请输入关键字')">
-              <bk-option
-                v-for="(item, index) in allTagData"
-                :key="index"
-                :label="item.tag_name"
-                :value="item.tag_id" />
-            </bk-select>
-          </bk-loading>
+          <audit-skeleton
+            v-if="detailLoading || tagLoading"
+            custom-class="tool-field-skeleton"
+            height="32"
+            width="100%" />
+          <bk-select
+            v-else
+            v-model="formData.tags"
+            allow-create
+            class="bk-select"
+            filterable
+            :input-search="false"
+            multiple
+            multiple-mode="tag"
+            :placeholder="t('请选择')"
+            :search-placeholder="t('请输入关键字')">
+            <bk-option
+              v-for="(item, index) in allTagData"
+              :key="index"
+              :label="item.tag_name"
+              :value="item.tag_id" />
+          </bk-select>
         </bk-form-item>
       </div>
       <bk-form-item
@@ -64,7 +72,13 @@
         label-width="160"
         property="description"
         required>
+        <audit-skeleton
+          v-if="detailLoading"
+          custom-class="tool-field-skeleton"
+          height="76"
+          width="50%" />
         <bk-input
+          v-else
           v-model.trim="formData.description"
           :maxlength="2000"
           :placeholder="t('请输入说明')"
@@ -86,6 +100,7 @@
 
   defineProps<{
     tagLoading: boolean;
+    detailLoading?: boolean;
     allTagData: Array<{
       tag_id: string;
       tag_name: string;
@@ -102,5 +117,9 @@
   .flex-center {
     display: flex;
     align-items: center;
+  }
+
+  :deep(.tool-field-skeleton) {
+    border-radius: var(--bk-theme-control-radius);
   }
 </style>

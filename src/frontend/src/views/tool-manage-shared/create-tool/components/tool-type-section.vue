@@ -22,7 +22,14 @@
         label-width="160"
         property="tool_type"
         required>
-        <bk-radio-group v-model="formData.tool_type">
+        <audit-skeleton
+          v-if="detailLoading"
+          custom-class="tool-field-skeleton"
+          height="32"
+          width="420" />
+        <bk-radio-group
+          v-else
+          v-model="formData.tool_type">
           <template
             v-for="(item, index) in toolTypeList"
             :key="index">
@@ -53,7 +60,7 @@
       </bk-form-item>
 
       <!-- 数据查询 -->
-      <template v-if="formData.tool_type === 'data_search'">
+      <template v-if="!detailLoading && formData.tool_type === 'data_search'">
         <bk-form-item
           :label="t('配置方式')"
           label-width="160"
@@ -89,7 +96,7 @@
       </template>
 
       <!-- BKVision 图表 -->
-      <div v-else-if="formData.tool_type === 'bk_vision'">
+      <div v-else-if="!detailLoading && formData.tool_type === 'bk_vision'">
         <bk-form-item
           :label="t('选择报表')"
           label-width="160"
@@ -160,6 +167,7 @@
 
   const props = defineProps<{
     isEditMode: boolean;
+    detailLoading?: boolean;
     comRef: any;
   }>();
 
@@ -500,6 +508,10 @@
 </script>
 
 <style lang="postcss" scoped>
+:deep(.tool-field-skeleton) {
+  border-radius: var(--bk-theme-control-radius);
+}
+
 .config-type-tip {
   display: flex;
   align-items: center;

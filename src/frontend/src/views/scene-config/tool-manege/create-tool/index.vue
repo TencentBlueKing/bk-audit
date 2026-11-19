@@ -15,11 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    v-if="!isCreating && !isFailed && !isSuccessful"
-    fullscreen
-    :loading="loading || isEditDataLoading"
-    name="createTools">
+  <div v-if="!isCreating && !isFailed && !isSuccessful">
     <smart-action
       class="create-tools-page"
       :offset-target="getSmartActionOffsetTarget">
@@ -34,6 +30,7 @@
           <base-info
             v-model:form-data="formData"
             :all-tag-data="allTagData"
+            :detail-loading="showDetailSkeleton"
             :tag-loading="tagLoading" />
 
           <!-- 工具类型 -->
@@ -41,6 +38,7 @@
             ref="toolTypeSectionRef"
             v-model:form-data="formData"
             :com-ref="comRef"
+            :detail-loading="showDetailSkeleton"
             :is-edit-mode="isEditMode"
             @apply-permission="handleApplyPermission"
             @update:bk-vision-update-time="(val: string) => bkVisionUpdateTime = val"
@@ -49,9 +47,33 @@
             @update:is-update="(val: boolean) => isUpdate = val"
             @update:report-lists-panels="(val: any) => reportListsPanels = val" />
 
+          <card-part-vue
+            v-if="showDetailSkeleton"
+            :show-icon="false"
+            title="">
+            <template #title>
+              <audit-skeleton
+                height="16"
+                width="72" />
+            </template>
+            <template #content>
+              <div
+                v-for="(row, index) in detailSkeletonRows"
+                :key="index"
+                class="tool-detail-skeleton-row">
+                <audit-skeleton
+                  height="14"
+                  width="72" />
+                <audit-skeleton
+                  custom-class="tool-field-skeleton"
+                  :height="row.height"
+                  :width="row.width" />
+              </div>
+            </template>
+          </card-part-vue>
           <component
             :is="ToolTypeComMap[formData.tool_type]"
-            v-if="isShowComponent"
+            v-else-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
             :form-data-config="formData"
@@ -73,7 +95,7 @@
             content: t('请完成接口成功调试后再试')
           }"
           class="w88"
-          :disabled="isApiDoneDeBug"
+          :disabled="showDetailSkeleton || isApiDoneDeBug"
           theme="primary"
           @click="handleSubmit">
           {{ isEditMode ? t('提交') : t('创建') }}
@@ -85,7 +107,7 @@
         </bk-button>
       </template>
     </smart-action>
-  </skeleton-loading>
+  </div>
   <creating
     v-if="isCreating"
     :is-edit-mode="isEditMode" />
@@ -102,7 +124,7 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
-  import { nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
+  import { computed, nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
@@ -121,6 +143,7 @@
   } from '@views/tool-manage-shared/context';
   import Api from '@views/tool-manage-shared/create-tool/components/api/index.vue';
   import BaseInfo from '@views/tool-manage-shared/create-tool/components/base-info.vue';
+  import CardPartVue from '@views/tool-manage-shared/create-tool/components/card-part.vue';
   import BkVision from '@views/tool-manage-shared/create-tool/components/bkvision/index.vue';
   import DataSearch from '@views/tool-manage-shared/create-tool/components/data-search/index.vue';
   import Creating from '@views/tool-manage-shared/create-tool/components/tool-status/creating.vue';
@@ -155,7 +178,6 @@
   const toolTypeSectionRef = ref();
 
   const { messageWarn } = useMessage();
-  const loading = ref(false);
   const isCreating = ref(false);
   const isFailed = ref(false);
   const isSuccessful = ref(false);
@@ -275,9 +297,9 @@
   });
 
   // 编辑状态获取数据
+  const isEditDataReady = ref(!isEditMode);
   const {
     run: fetchToolsDetail,
-    loading: isEditDataLoading,
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
@@ -285,8 +307,19 @@
       nextTick(() => {
         comRef.value.setConfigs(formData.value.config);
       });
+      isEditDataReady.value = true;
+    },
+    onFinally: () => {
+      isEditDataReady.value = true;
     },
   });
+  const showDetailSkeleton = computed(() => isEditMode && !isEditDataReady.value);
+  const detailSkeletonRows = [
+    { height: 32, width: 480 },
+    { height: 32, width: 480 },
+    { height: 96, width: 480 },
+    { height: 32, width: 320 },
+  ];
 
   const handleApplyPermission = () => {
     window.open(`${configData.value.tool.vision_share_permission_url}`);
@@ -474,5 +507,19 @@
       display: flex;
       align-items: center;
     }
+  }
+
+  .tool-detail-skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: var(--bk-theme-space-16);
+
+    & + & {
+      margin-top: var(--bk-theme-form-item-gap);
+    }
+  }
+
+  :deep(.tool-field-skeleton) {
+    border-radius: var(--bk-theme-control-radius);
   }
 </style>
