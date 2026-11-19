@@ -857,6 +857,12 @@ class UpdateTool(ToolBase):
         if not tool:
             raise ToolDoesNotExist()
 
+        # tags 可选：未传时保持现有标签（部分更新语义，避免误清空；新版本/原版本路径一致生效）
+        if "tags" not in validated_request_data:
+            tag_ids = ToolTag.objects.filter(tool_uid=uid).values_list("tag_id", flat=True)
+            tag_names = Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True)
+            validated_request_data["tags"] = list(tag_names)
+
         if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
             # smart_page 工具：仅更新 default_value_overrides 和 usage_limits，不走全量 config 更新逻辑
             # serializer 已将校验后的 overrides 和 usage_limits 存入对应字段，并清除了 config

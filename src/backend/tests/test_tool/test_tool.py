@@ -514,6 +514,58 @@ class ToolResourceTestCase(TestCase):
         self.assertEqual(new_tool['version'], self.sql_tool.version + 1)
         self.assertEqual(new_tool['uid'], self.sql_tool.uid)
 
+    def test_create_tool_default_status_published(self):
+        """创建不传 status 时默认在工具广场展示（与需求创建页默认开启对齐）"""
+        data = {
+            "name": "default-status-tool",
+            "namespace": "default_ns",
+            "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+            "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
+            "config": {
+                "sql": "select * from test",
+                "referenced_tables": [],
+                "input_variable": [],
+                "output_fields": [],
+            },
+            "description": "desc",
+            "tags": [],
+        }
+
+        resp = CreateTool().request(data)
+
+        self.assertEqual(Tool.last_version_tool(resp["uid"]).status, PanelStatus.PUBLISHED)
+
+    def test_update_tool_without_tags_keeps_existing(self):
+        """编辑不传 tags 时保持现有标签（原版本路径）"""
+        UpdateTool().request(
+            {
+                "uid": self.sql_tool.uid,
+                "name": self.sql_tool.name,
+                "description": "update without tags",
+            }
+        )
+
+        self.assertTrue(ToolTag.objects.filter(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id).exists())
+
+    def test_update_tool_new_version_without_tags_keeps_existing(self):
+        """编辑不传 tags 且 config 变更（新版本路径）时保持现有标签"""
+        UpdateTool().request(
+            {
+                "uid": self.sql_tool.uid,
+                "name": self.sql_tool.name,
+                "namespace": self.sql_tool.namespace,
+                "config": {
+                    "sql": "select b from dual",
+                    "referenced_tables": [],
+                    "input_variable": [],
+                    "output_fields": [],
+                },
+                "description": "new version without tags",
+            }
+        )
+
+        self.assertTrue(ToolTag.objects.filter(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id).exists())
+
     def test_update_tool_preserve_creator_on_new_version(self):
         """创建新版本时应保持创建人与旧版本一致"""
         # 将旧版本创建人设为特定用户

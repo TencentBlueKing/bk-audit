@@ -135,7 +135,8 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(label=gettext_lazy("命名空间"), required=False, default="default")
     version = serializers.IntegerField(default=1, label=gettext_lazy("版本"))
-    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
+    # 与需求"创建页工具广场展示默认开启"对齐：API 创建默认上广场；模型层默认仍 unpublished（内部直接建库场景）
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.PUBLISHED)
     tags = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True, label=gettext_lazy("标签列表"), default=[]
     )
@@ -176,8 +177,9 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(required=False, label=gettext_lazy("命名空间"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, label=gettext_lazy("上架状态"))
+    # tags 可选：不传时保持现有标签（部分更新语义，由 UpdateTool 回填）
     tags = serializers.ListField(
-        child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
+        child=serializers.CharField(), required=False, allow_empty=True, label=gettext_lazy("标签列表")
     )
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
 
