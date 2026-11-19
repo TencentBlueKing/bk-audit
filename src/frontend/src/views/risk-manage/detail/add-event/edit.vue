@@ -16,7 +16,10 @@
 -->
 <template>
   <div class="config">
-    <card-part-vue :title="t('基础配置')">
+    <card-part-vue
+      :is-open="false"
+      :show-icon="false"
+      :title="t('基础配置')">
       <template #content>
         <div>
           <audit-form
@@ -43,13 +46,14 @@
         </div>
       </template>
     </card-part-vue>
-    <card-part-vue :title="t('事件数据')">
+    <card-part-vue
+      class="event-data-card"
+      :is-open="false"
+      :show-icon="false"
+      :title="t('事件数据')">
       <template #content>
         <div class="event-table">
           <div class="table-heard">
-            <div class="table-index border-right">
-              #
-            </div>
             <div class="table-label border-right">
               <span class="table-text">{{ t('字段名称') }}</span>
             </div>
@@ -67,9 +71,6 @@
             v-for="(item, index) in eventList"
             :key="index"
             class="table-list">
-            <div class="table-index border-right ">
-              {{ index + 1 }}
-            </div>
             <div class="table-label border-right field-type-box">
               <span
                 v-bk-tooltips="{
@@ -87,7 +88,7 @@
                   padding: 0;
                   vertical-align: middle;
                   "
-                  theme="light" />
+                  theme="event-field-tip" />
               </span>
             </div>
             <div class="table-type border-right">
@@ -301,6 +302,19 @@
       /* background-color: var(--bk-theme-surface-subtle); */
       overflow: hidden;
 
+      :deep(.card-part-title) {
+        cursor: default;
+      }
+
+      :deep(.card-part-content) {
+        border-top: none;
+      }
+
+      .event-data-card {
+        padding-bottom: var(--bk-theme-space-24);
+      }
+
+
       .base-form-item {
         display: flex;
         justify-content: space-between;
@@ -308,14 +322,24 @@
         .base-item {
           width: 48%;
         }
+
+        :deep(.bk-form-item) {
+          margin-bottom: 0;
+        }
+      }
+
+      .example {
+        padding-bottom: var(--bk-theme-space-8);
       }
     }
 
     .event-table {
-      width: 96%;
-      margin-top: var(--bk-theme-space-16);
-      margin-left: 2%;
+      width: 100%;
+      margin: 0;
+      overflow: hidden;
+      font-size: var(--bk-theme-font-size-sm);
       border: 1px solid var(--bk-theme-border-default);
+      border-radius: var(--bk-theme-radius-8);
 
       .border-right {
         border-right: 1px solid var(--bk-theme-border-default);
@@ -323,6 +347,7 @@
 
       .field-type-box {
         display: flex;
+        min-width: 0;
       }
 
       .table-text {
@@ -330,28 +355,65 @@
         line-height: 42px;
       }
 
+      .table-label .table-text {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        flex: 1;
+      }
+
+      .table-label :deep(.show-tooltips-text) {
+        width: 100%;
+      }
+
+      :deep(.bk-input),
+      :deep(.bk-input input),
+      :deep(.bk-input textarea),
+      :deep(.bk-select),
+      :deep(.bk-date-picker-editor) {
+        font-size: var(--bk-theme-font-size-sm);
+      }
+
+      :deep(.bk-input.is-disabled),
+      :deep(.bk-input.is-disabled input),
+      :deep(.bk-input.is-disabled textarea),
+      :deep(.bk-input.is-readonly),
+      :deep(.bk-input.is-readonly input),
+      :deep(.bk-textarea.is-disabled),
+      :deep(.bk-textarea.is-disabled textarea),
+      :deep(.bk-select.is-disabled),
+      :deep(.bk-date-picker.is-disabled .bk-date-picker-editor) {
+        background-color: var(--bk-theme-editable-table-disabled-bg);
+      }
+
       .table-heard {
         display: flex;
         height: 42px;
         line-height: 42px;
-        background: var(--bk-theme-surface-subtle);
+        background: var(--bk-theme-surface-page);
         border-bottom: 1px solid var(--bk-theme-border-default);
       }
 
       .table-list {
         display: flex;
-        min-height: 42px;
+        height: 42px;
         line-height: 42px;
         border-bottom: 1px solid var(--bk-theme-border-default);
-      }
 
-      .table-index {
-        width: 32px;
-        text-align: center;
+        &:last-child {
+          border-bottom: none;
+        }
       }
 
       .table-label {
-        width: 270px;
+        width: 300px;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .table-list .table-label {
+        cursor: default;
+        background: var(--bk-theme-surface-subtle);
       }
 
       .table-type {
@@ -361,11 +423,11 @@
       .table-value {
         display: flex;
         width: 300px;
-        height: auto;
+        min-width: 0;
+        padding: 0;
         line-height: normal;
         flex: 1;
-        align-items: center;
-        justify-content: center;
+        align-items: stretch;
       }
 
       .table-info-fill {
@@ -407,3 +469,18 @@
       justify-content: center;
     }
   </style>
+
+<style lang="postcss">
+.tippy-box[data-theme~='event-field-tip'] {
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
+  color: var(--bk-theme-text-inverse);
+  background-color: #333;
+  border-radius: var(--bk-theme-tooltip-radius);
+}
+
+.tippy-box[data-theme~='event-field-tip'] > .tippy-arrow {
+  color: #333;
+}
+</style>
+

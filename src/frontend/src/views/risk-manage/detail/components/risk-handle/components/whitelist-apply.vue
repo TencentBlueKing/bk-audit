@@ -283,7 +283,7 @@
 
 .whitelist-apply__card {
   padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
-  background: var(--bk-theme-surface-subtle);
+  background: var(--bk-theme-surface-page);
   border-radius: var(--bk-theme-card-radius);
 }
 

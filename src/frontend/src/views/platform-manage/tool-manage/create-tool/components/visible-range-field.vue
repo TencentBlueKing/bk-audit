@@ -133,9 +133,8 @@
                   class="checkbox-item"
                   :class="{
                     'is-checked': isAllSceneChecked,
-                    'is-disabled': viaAllVisibleButton,
                   }"
-                  @click.stop="!viaAllVisibleButton && handleToggleAllScenes()">
+                  @click.stop="handleToggleAllScenes()">
                   <img
                     alt=""
                     class="item-icon scene-icon"
@@ -152,12 +151,9 @@
                   class="checkbox-item"
                   :class="{
                     'is-checked': isSceneChecked(scene.id),
-                    'is-disabled': isAllSceneChecked || viaAllVisibleButton,
+                    'is-disabled': isAllSceneChecked,
                   }"
-                  @click.stop="
-                    !isAllSceneChecked
-                      && !viaAllVisibleButton
-                      && handleSceneToggle(scene.id)">
+                  @click.stop="!isAllSceneChecked && handleSceneToggle(scene.id)">
                   <img
                     alt=""
                     class="item-icon scene-icon"
@@ -193,9 +189,8 @@
                   class="checkbox-item"
                   :class="{
                     'is-checked': isAllSystemChecked,
-                    'is-disabled': viaAllVisibleButton,
                   }"
-                  @click.stop="!viaAllVisibleButton && handleToggleAllSystems()">
+                  @click.stop="handleToggleAllSystems()">
                   <img
                     alt=""
                     class="item-icon system-icon"
@@ -212,12 +207,9 @@
                   class="checkbox-item"
                   :class="{
                     'is-checked': isSystemChecked(system.id),
-                    'is-disabled': isAllSystemChecked || viaAllVisibleButton,
+                    'is-disabled': isAllSystemChecked,
                   }"
-                  @click.stop="
-                    !isAllSystemChecked
-                      && !viaAllVisibleButton
-                      && handleSystemToggle(system.id)">
+                  @click.stop="!isAllSystemChecked && handleSystemToggle(system.id)">
                   <img
                     alt=""
                     class="item-icon system-icon"
@@ -655,7 +647,7 @@
       const viewportPadding = 8;
       // 先按下方定位，测量实际高度后再决定是否上翻
       popoverStyle.left = `${rect.left}px`;
-      popoverStyle.width = props.matchSelectorWidth ? `${rect.width}px` : '';
+      popoverStyle.width = `${rect.width}px`;
       popoverStyle.zIndex = props.popoverZIndex;
       popoverStyle.top = `${rect.bottom + gap}px`;
       popoverStyle.maxHeight = '';
@@ -723,11 +715,13 @@
   };
 
   const handleToggleAllScenes = () => {
+    const fromAllVisible = viaAllVisibleButton.value;
+    const currentSystems = fromAllVisible ? [] : (props.formData.system_ids || []);
+    const allSystems = fromAllVisible ? false : isAllSystemChecked.value;
+    const allScenes = fromAllVisible ? false : isAllSceneChecked.value;
     viaAllVisibleButton.value = false;
-    const currentSystems = props.formData.system_ids || [];
-    const allSystems = isAllSystemChecked.value;
 
-    if (isAllSceneChecked.value) {
+    if (allScenes) {
       if (allSystems) {
         emit('update:formData', {
           ...props.formData,
@@ -767,11 +761,13 @@
   };
 
   const handleToggleAllSystems = () => {
+    const fromAllVisible = viaAllVisibleButton.value;
+    const currentScenes = fromAllVisible ? [] : (props.formData.scene_ids || []);
+    const allScenes = fromAllVisible ? false : isAllSceneChecked.value;
+    const allSystems = fromAllVisible ? false : isAllSystemChecked.value;
     viaAllVisibleButton.value = false;
-    const currentScenes = props.formData.scene_ids || [];
-    const allScenes = isAllSceneChecked.value;
 
-    if (isAllSystemChecked.value) {
+    if (allSystems) {
       if (allScenes) {
         emit('update:formData', {
           ...props.formData,
@@ -811,37 +807,47 @@
   };
 
   const handleSceneToggle = (id: number) => {
-    const currentScenes = [...(props.formData.scene_ids || [])];
+    const fromAllVisible = viaAllVisibleButton.value;
+    const allSystems = fromAllVisible ? false : isAllSystemChecked.value;
+    const currentScenes = fromAllVisible ? [] : [...(props.formData.scene_ids || [])];
+    const currentSystems = fromAllVisible ? [] : [...(props.formData.system_ids || [])];
+    viaAllVisibleButton.value = false;
     const idx = currentScenes.indexOf(id);
     if (idx > -1) {
       currentScenes.splice(idx, 1);
     } else {
       currentScenes.push(id);
     }
-    const newType = computeVisibilityType(currentScenes, props.formData.system_ids || [], {
-      allSystems: isAllSystemChecked.value,
+    const newType = computeVisibilityType(currentScenes, currentSystems, {
+      allSystems,
     });
     emit('update:formData', {
       ...props.formData,
       visibility_type: newType,
       scene_ids: currentScenes,
+      system_ids: currentSystems,
     });
   };
 
   const handleSystemToggle = (id: string) => {
-    const currentSystems = [...(props.formData.system_ids || [])];
+    const fromAllVisible = viaAllVisibleButton.value;
+    const allScenes = fromAllVisible ? false : isAllSceneChecked.value;
+    const currentScenes = fromAllVisible ? [] : [...(props.formData.scene_ids || [])];
+    const currentSystems = fromAllVisible ? [] : [...(props.formData.system_ids || [])];
+    viaAllVisibleButton.value = false;
     const idx = currentSystems.indexOf(id);
     if (idx > -1) {
       currentSystems.splice(idx, 1);
     } else {
       currentSystems.push(id);
     }
-    const newType = computeVisibilityType(props.formData.scene_ids || [], currentSystems, {
-      allScenes: isAllSceneChecked.value,
+    const newType = computeVisibilityType(currentScenes, currentSystems, {
+      allScenes,
     });
     emit('update:formData', {
       ...props.formData,
       visibility_type: newType,
+      scene_ids: currentScenes,
       system_ids: currentSystems,
     });
   };
@@ -937,7 +943,7 @@
     padding: 0 var(--bk-theme-space-32) 0 var(--bk-theme-space-12);
     cursor: pointer;
     border: 1px solid var(--bk-theme-border-strong);
-    border-radius: var(--bk-theme-tag-radius);
+    border-radius: var(--bk-theme-control-radius);
     box-sizing: border-box;
     transition: border-color .2s;
 
@@ -1130,8 +1136,18 @@
     gap: var(--bk-theme-space-8);
     align-items: center;
     padding: var(--bk-theme-space-12) var(--bk-theme-space-16);
+    position: relative;
     cursor: pointer;
-    border-bottom: 1px solid var(--bk-theme-border-default);
+
+    &::after {
+      position: absolute;
+      right: var(--bk-theme-space-12);
+      bottom: 0;
+      left: var(--bk-theme-space-12);
+      height: 1px;
+      content: '';
+      background: var(--bk-theme-border-default);
+    }
 
     &:hover {
       color: var(--bk-theme-color-brand-2);

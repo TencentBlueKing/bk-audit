@@ -16,6 +16,9 @@
 -->
 <template>
   <div class="nl-search-box bk-theme-search-card">
+    <div
+      class="nl-search-box-decor"
+      aria-hidden="true" />
     <!-- 智能搜索标题 -->
     <div class="nl-search-header">
       <img
@@ -1166,8 +1169,16 @@
     z-index: 500;
     overflow: visible;
 
-    /* 右上角下层半圆色块 */
-    &::before {
+    .nl-search-box-decor {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      border-radius: inherit;
+
+      /* 右上角下层半圆色块 */
+      &::before {
       position: absolute;
       top: -90px;
       right: 60px;
@@ -1195,6 +1206,8 @@
       opacity: 100%;
       filter: blur(16px);
       transform: rotate(307deg);
+      }
+
     }
 
     .nl-search-header {

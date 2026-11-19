@@ -513,7 +513,12 @@
 </script>
 
 <style lang="postcss" scoped>
-.create-scene-content {padding: var(--bk-theme-space-24) var(--bk-theme-space-32);
+.create-scene-content {padding: var(--bk-theme-space-24) var(--bk-theme-space-32) 0;
+
+  :deep(.bk-form > .bk-form-item:last-child) {
+    margin-bottom: 0;
+  }
+
 
   .form-item-tips {
     margin-top: var(--bk-theme-space-4);
@@ -543,5 +548,13 @@
 
 .mr8 {
   margin-right: var(--bk-theme-space-8);
+}
+
+:deep(.bk-sideslider-footer) {
+  margin-top: var(--bk-theme-space-32);
+
+  .bk-button {
+    width: 88px;
+  }
 }
 </style>

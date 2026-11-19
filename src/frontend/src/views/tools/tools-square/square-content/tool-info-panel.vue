@@ -61,11 +61,10 @@
           <span
             :ref="(el) => setTabTextRef(`${item.uid}-${index}`, el as HTMLElement)"
             class="tab-text">{{ getToolTabName(item) }}</span>
-          <img
-            alt="delete"
+          <audit-icon
             class="delete-fill"
-            src="@images/delete-circle.svg"
-            @click.stop="handleTabClose(item.uid)">
+            type="close"
+            @click.stop="handleTabClose(item.uid)" />
         </div>
         <!-- 新增工具按钮 -->
         <add-tool-popover
@@ -1397,6 +1396,8 @@
 }
 
 .panel-tab {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 50px minmax(0, 1fr);
   align-items: center;
@@ -1404,6 +1405,7 @@
   overflow: visible;
   background: var(--bk-theme-surface-default);
   border-bottom: 1px solid var(--bk-theme-border-default);
+  box-shadow: var(--bk-theme-card-shadow);
 }
 
 .tab-box {
@@ -1497,10 +1499,15 @@
 }
 
 .delete-fill {
-  display: block;
-  width: 15px;
-  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   margin-left: var(--bk-theme-space-4);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
   opacity: 0%;
   transition: all .15s;

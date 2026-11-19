@@ -1458,7 +1458,7 @@
     overflow: hidden;
     background-color: var(--bk-theme-table-header-bg);
     border: 1px solid var(--bk-theme-border-default);
-    border-radius: var(--bk-theme-tag-radius);
+    border-radius: var(--bk-theme-radius-8);
 
     &:last-child {
       margin-bottom: 0;
@@ -1704,7 +1704,7 @@
   .render-field {
     overflow: hidden;
     border: 1px solid var(--bk-theme-border-default);
-    border-radius: var(--bk-theme-tag-radius);
+    border-radius: var(--bk-theme-radius-8);
     user-select: none;
   }
 
@@ -1786,12 +1786,18 @@
     font-size: 12px;
     line-height: 42px;
     color: var(--bk-theme-text-default);
-    border-right: 1px solid var(--bk-theme-border-default);
     border-bottom: 1px solid var(--bk-theme-border-default);
     transition: background-color .2s;
 
-    &:hover {
-      color: var(--bk-theme-text-strong);background: var(--bk-theme-fill-selected);
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .field-value:hover {
+      position: relative;
+      z-index: 1;
+      outline: 1px solid var(--bk-theme-border-brand);
+      outline-offset: -1px;
     }
 
     .col-name,
@@ -1826,24 +1832,6 @@
     }
   }
 
-  :deep(.field-row:hover .field-value) {background: var(--bk-theme-fill-selected) !important;
-  }
-
-  :deep(.field-row:hover .bk-input),
-  :deep(.field-row:hover .bk-input .bk-input--text),
-  :deep(.field-row:hover .bk-input input) {
-    color: var(--bk-theme-text-strong) !important;background: var(--bk-theme-fill-selected) !important;
-    border-color: transparent !important;
-    transition: none !important;
-  }
-
-  :deep(.field-row:hover .override-time-range-picker),
-  :deep(.field-row:hover .override-time-picker),
-  :deep(.field-row:hover .bk-date-picker-editor),
-  :deep(.field-row:hover .override-tag-input .bk-tag-input-trigger) {
-    color: var(--bk-theme-text-strong) !important;background: var(--bk-theme-fill-selected) !important;
-    border-color: transparent !important;
-  }
 
   :deep(.field-row:hover .col-default.is-error .bk-input),
   :deep(.field-row:hover .col-default.is-error .bk-input .bk-input--text),
@@ -2085,10 +2073,6 @@
   .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-icon-left,
   .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-icon-right {
     flex-shrink: 0;
-  }
-
-  .scene-param-config .field-row:hover .override-person-select .tags-container,
-  .scene-param-config .field-row:hover .time-range-select-wrapper .__bk_date_picker__ {background: var(--bk-theme-fill-selected) !important;
   }
 
   .scene-param-config .field-row .col-default.is-error .override-person-select .tags-container,

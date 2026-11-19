@@ -167,9 +167,9 @@
 </script>
 <style lang="postcss" scoped>
 .detail-base-info {
-  position: relative;padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
+  position: relative;padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-8);
   background: var(--bk-theme-surface-default);
-  border-radius: var(--bk-theme-tag-radius);
+  border-radius: var(--bk-theme-card-radius);
   box-shadow: var(--bk-theme-card-shadow);
 
   &.has-expand-btn {
@@ -177,8 +177,8 @@
   }
 
   .title {
-    margin-bottom: var(--bk-theme-space-16);
-    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+    margin-bottom: var(--bk-theme-space-24);
+    font-family: 'Microsoft YaHei Bold', 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 14px;
     font-style: normal;
     font-weight: 700;
@@ -212,6 +212,7 @@
       justify-content: center;
       width: 120px;
       height: 22px;
+      font-size: var(--bk-theme-font-size-sm);
       color: var(--bk-theme-text-default);
       background: var(--bk-theme-surface-muted);
       border: 1px solid var(--bk-theme-border-default);
@@ -220,6 +221,11 @@
       &:hover {
         color: var(--bk-theme-text-default);
         background: var(--bk-theme-border-weak);
+      }
+
+      :deep(.bk-button-text) {
+        font-size: var(--bk-theme-font-size-sm);
+        line-height: 20px;
       }
     }
 

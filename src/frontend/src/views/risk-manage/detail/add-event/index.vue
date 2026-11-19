@@ -17,7 +17,7 @@
 <template>
   <bk-sideslider
     v-model:isShow="isShow"
-    background-color="#f5f7fa"
+    background-color="var(--bk-theme-surface-page)"
     :before-close="handleCancel"
     :esc-close="false"
     :quick-close="false"
@@ -106,6 +106,10 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: var(--bk-theme-space-12);
+  gap: var(--bk-theme-space-8);
+
+  :deep(.bk-button) {
+    width: 88px;
+  }
 }
 </style>

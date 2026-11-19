@@ -2,13 +2,13 @@
 .bk-button.risk-toolbar-secondary {
   color: var(--bk-theme-text-default);
   background-color: var(--bk-theme-surface-default);
-  border-color: var(--bk-theme-border-hover);
+  border-color: var(--bk-theme-control-border-color);
 }
 
 .bk-button.risk-toolbar-secondary:hover {
   color: var(--bk-theme-text-default);
-  background-color: var(--bk-theme-surface-subtle);
-  border-color: var(--bk-theme-border-hover);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--button-default-hover-border-color);
 }
 
 .bk-button.risk-toolbar-secondary.is-disabled,

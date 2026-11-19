@@ -901,7 +901,6 @@
 
 <style lang="postcss" scoped>
 .scene-manage-page {
-  min-height: 85vh;
   padding: var(--bk-theme-space-24);
 }
 
@@ -975,7 +974,6 @@
 }
 
 .scene-manage-content {
-  min-height: 400px;
 
   :deep(.audit-tdesign-list) {
     border: none;

@@ -21,12 +21,12 @@
       style="color: #c4c6cc;"
       type="filter" />
     <value-tag
-      v-for="(value, name) in modelValue"
+      v-for="name in visibleFieldNames"
       :key="name"
       ref="valueTagRef"
       :model="modelValue"
       :name="name"
-      :value="value"
+      :value="modelValue[name]"
       @change="handleChange"
       @remove="handleRemove" />
     <div
@@ -45,6 +45,8 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import fieldConfig from '../render-field-config/config';
+
   import ValueTag from './value-tag.vue';
 
   interface Props {
@@ -62,7 +64,9 @@
   const { t } = useI18n();
 
   const valueTagRef = ref();
-  const isShowClearBtn = computed(() => Object.keys(props.modelValue).length > 1);
+  // datetime_origin 只给时间组件回填，不在字段配置里。渲染它会让 ValueTag 在 setup 里读空配置并抛错，父级随之反复更新。
+  const visibleFieldNames = computed(() => Object.keys(props.modelValue || {}).filter(name => fieldConfig[name]));
+  const isShowClearBtn = computed(() => Object.keys(props.modelValue || {}).length > 1);
 
   const handleChange = (fieldName: string, fieldValue: any) => {
     const result = { ...props.modelValue };

@@ -55,12 +55,6 @@
 
     <!-- 执行套餐 - AutoProcess -->
     <template v-if="data.action === 'AutoProcess'">
-      <div class="mis-title" style="margin-top: var(--bk-theme-space-16)">
-        <span style="color: #313238">{{ t('执行套餐动作') }}</span>
-        <span
-         
-          style="color: #979ba5; margin-left: var(--bk-theme-space-8)">{{ data.process_result?.status?.update_at || data.time }}</span>
-      </div>
       <div class="mis-content">
         <render-info-item
           :label="t('任务名称')"
@@ -68,9 +62,11 @@
           <!-- 任务名称，没有默认展示 loading -->
           <a
             v-if="data.process_result?.status?.name"
+            class="task-name-link"
             :href="data.process_result?.task?.task_url"
             target="_blank">
             {{ data.process_result?.status.name }}
+            <audit-icon type="jump-link" />
           </a>
           <audit-icon
             v-else
@@ -325,12 +321,23 @@
   >.mis-content {
     padding: var(--bk-theme-space-12) 0;
     margin-top: var(--bk-theme-space-8);
-    background: var(--bk-theme-surface-subtle);
-    border-radius: var(--bk-theme-tag-radius);
+    background: var(--bk-theme-surface-page);
+    border-radius: var(--bk-theme-card-radius);
 
     .render-info-item {
       align-items: flex-start;
     }
+  }
+}
+
+.task-name-link {
+  display: inline-flex;
+  gap: var(--bk-theme-space-8);
+  align-items: center;
+  color: var(--bk-theme-text-strong);
+
+  :deep(.audit-icon) {
+    color: var(--bk-theme-color-brand-2);
   }
 }
 

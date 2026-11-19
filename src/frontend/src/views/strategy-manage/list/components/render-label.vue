@@ -287,21 +287,20 @@
     .active {
       color: var(--bk-theme-color-brand-2) !important;
       background: var(--bk-theme-fill-selected);
+      border-radius: var(--bk-theme-radius-8);
 
       &:hover {
         background: var(--bk-theme-fill-selected) !important;
       }
     }
 
-    .label-item.final {
-      border-bottom: 1px solid var(--bk-theme-border-weak);
-    }
-
     .label-item {
       display: flex;
-      width: 240px;
+      box-sizing: border-box;
+      width: calc(100% - var(--bk-theme-space-16));
       height: 40px;
       padding: 0 var(--bk-theme-space-16);
+      margin-left: var(--bk-theme-space-16);
       font-size: 14px;
       line-height: 40px;
       cursor: pointer;
@@ -321,6 +320,7 @@
 
       &:hover {
         background: var(--bk-theme-border-weak);
+        border-radius: var(--bk-theme-radius-8);
       }
 
       .tag-icon {

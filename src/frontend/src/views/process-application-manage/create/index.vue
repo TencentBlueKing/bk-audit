@@ -113,9 +113,6 @@
               </div>
               <bk-loading :loading="detailLoading">
                 <template v-if="detailData && Object.keys(formData.approve_config).length">
-                  <p style="padding-left: 6px;margin-top: -4px;">
-                    {{ t('审批单信息') }}
-                  </p>
                   <bk-form-item
                     v-for="item in filterDetailDataFields"
                     :key="item.id"
@@ -430,8 +427,10 @@
 </script>
 
 <style scoped lang="postcss">
-.process-create-wrap {padding: var(--bk-theme-space-32) var(--bk-theme-space-24);
+.process-create-wrap {
+  padding: var(--bk-theme-space-32) var(--bk-theme-space-24);
   background-color: var(--bk-theme-surface-default);
+  border-radius: var(--bk-theme-card-radius);
 
   .approve-config-wrap {
     padding: var(--bk-theme-space-16) var(--bk-theme-space-24);

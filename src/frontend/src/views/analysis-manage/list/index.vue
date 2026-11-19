@@ -23,7 +23,7 @@
         :popover-width="400"
         scene-permission="view_scene"
         system-permission="view_system"
-        :width="400"
+        width="208px"
         @change="handleSceneChange" />
     </div>
     <skeleton-loading
@@ -162,21 +162,28 @@
   width: 100vw;
   height: 100%;
   overflow-y: auto;
-  background-color: var(--bk-theme-surface-subtle);
+  background-color: var(--bk-theme-surface-muted);
 
   .page-header {
     display: flex;
     align-items: center;
-    height: 52px;
+    height: var(--bk-theme-page-title-height);
     padding: 0 var(--bk-theme-space-24);
-    background-color: var(--bk-theme-surface-default);
-    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 5%);
+    margin-top: var(--bk-theme-space-16);
+    background: transparent;
+    box-shadow: none;
+    gap: var(--bk-theme-space-16);
 
     .header-title {
-      margin-right: var(--bk-theme-space-16);
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--bk-theme-text-strong);
+      font-size: var(--bk-theme-page-title-size);
+      font-weight: var(--bk-theme-page-title-weight);
+      line-height: var(--bk-theme-line-height-xl);
+      color: var(--bk-theme-page-title-color);
+    }
+
+    .scene-system-selector {
+      background: var(--bk-theme-surface-default);
+      box-shadow: var(--bk-theme-card-shadow);
     }
   }
 

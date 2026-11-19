@@ -60,6 +60,7 @@
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
+        follow-content
         is-need-scene-id
         scene-id-key="scene_id"
         :settings="settings"
@@ -755,38 +756,24 @@
 }
 
 .application-list-anchor {
-  /* 落在内容区内边距之内，不再盖住页面四周留白 */
+  /* 卡片跟着表格内容，不把空白撑到页面底部 */
   position: absolute;
   top: var(--bk-theme-space-16);
   right: var(--bk-theme-space-24);
-  bottom: var(--bk-theme-space-24);
   left: var(--bk-theme-space-24);
-  overflow: hidden;
+  height: auto;
 }
 
 .application-list-wrap {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto;
   padding: var(--bk-theme-space-24);
-  overflow: hidden;
   box-sizing: border-box;
 
   :deep(.audit-render-list) {
     display: flex;
-    flex: 1;
     flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  :deep(.audit-table-skeleton) {
-    flex: 1;
-    min-height: 0;
-  }
-
-  :deep(.audit-table-skeleton__body) {
-    flex: 1 1 auto;
     min-height: 0;
   }
 

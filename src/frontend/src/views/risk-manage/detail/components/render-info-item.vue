@@ -131,7 +131,8 @@
 
 .fields-section-divider {
   height: 1px;
-  margin: var(--bk-theme-space-4) 0;
-  background: var(--bk-theme-border-default);
+  /* 行间距 12，再加 12，字段到分割线上下各 24 */
+  margin: var(--bk-theme-space-12) 0;
+  background: var(--bk-theme-color-neutral-8);
 }
 </style>

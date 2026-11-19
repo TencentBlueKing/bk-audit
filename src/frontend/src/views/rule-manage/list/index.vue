@@ -698,7 +698,7 @@
     if (domList) {
       domList.forEach((dom) => {
         const el = dom as HTMLElement;
-        el.style.background = isNew ? '#f2fff4' : '#fff';
+        el.style.background = isNew ? '#f2fff4' : '';
       });
     }
   };
@@ -891,6 +891,12 @@
 }
 
 .rule-manage-wrap {
+  position: absolute;
+  top: var(--bk-theme-space-16);
+  right: var(--bk-theme-space-24);
+  left: var(--bk-theme-space-24);
+  box-sizing: border-box;
+  height: auto;
   padding: var(--bk-theme-space-24);
 
   .action-header {

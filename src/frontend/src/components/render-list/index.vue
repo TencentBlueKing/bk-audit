@@ -37,7 +37,7 @@
         :data="listData.results"
         :height="tableHeight"
         :max-height="tableMaxHeight"
-        :min-height="isLayoutMaxHeight ? 0 : 300"
+        :min-height="0"
         :pagination="pagination"
         remote-pagination
         :scrollbar="false"
@@ -147,6 +147,8 @@
     useSkeleton?: boolean,
     /** 表格最大高度（含表头和分页）。传入后按内容收缩，超出部分只在表体内滚动 */
     layoutHeight?: number,
+    /** 表体按行数收缩，分页紧跟内容；超出最大高度时只在表体内滚动 */
+    followContent?: boolean,
     /** 骨架最短展示毫秒。请求快于淡入时避免停在透明帧，默认不额外等待 */
     skeletonMinDuration?: number,
     /** 是否把分页和筛选写回路由。嵌套在侧滑里的表格应关闭，避免污染外层列表 */
@@ -190,6 +192,7 @@
     useSkeleton: false,
     skeletonMinDuration: 0,
     layoutHeight: undefined,
+    followContent: false,
     syncUrl: true,
   }) ;
   const emits = defineEmits<Emits>();
@@ -679,8 +682,25 @@
     const { top } = getOffset(rootRef.value);
     const windowInnerHeight = window.innerHeight;
     const pageOffsetBottom = 20;
-
-    const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
+    const boxSlack = 8;
+    let tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
+    // 父级 overflow 会裁切时，窗口只扣 20px 会让表格高出卡片内容盒，分页底部被挡住
+    const parent = rootRef.value.parentElement;
+    if (parent) {
+      const parentStyle = window.getComputedStyle(parent);
+      if (parentStyle.overflowY === 'hidden' || parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll') {
+        const rootRect = rootRef.value.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+        const paddingBottom = Number.parseFloat(parentStyle.paddingBottom) || 0;
+        const borderBottom = Number.parseFloat(parentStyle.borderBottomWidth) || 0;
+        const parentAvailable = parentRect.bottom - paddingBottom - borderBottom - rootRect.top;
+        const windowLimit = windowInnerHeight - rootRect.top - pageOffsetBottom + boxSlack;
+        const limit = Math.min(windowLimit, parentAvailable);
+        if (limit > 0) {
+          tableRowTotalHeight = limit - tableHeaderHeight - paginationHeight - boxSlack;
+        }
+      }
+    }
 
     const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight);
     return {
@@ -692,14 +712,14 @@
   };
 
   const applyTableBoxHeight = (nextHeight: number) => {
-    // 侧滑的最大高度由外层加在表体上，这里保持 auto，分页才能紧跟内容
+    // 分页跟着内容。侧滑和普通列表都不把表体撑满，超出可视高度时才限制表体
     if (isLayoutMaxHeight.value) {
       tableMaxHeight.value = 'auto';
       tableHeight.value = 'auto';
       return;
     }
     tableMaxHeight.value = nextHeight;
-    tableHeight.value = nextHeight;
+    tableHeight.value = 'auto';
   };
 
   // 初始化表格高度

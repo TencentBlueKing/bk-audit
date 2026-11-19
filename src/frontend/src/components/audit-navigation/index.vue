@@ -81,7 +81,8 @@
     <div
       class="audit-navigation-main"
       :class="{
-        'show-notice-navigation-main': showNotice.enabled && showAlert
+        'show-notice-navigation-main': showNotice.enabled && showAlert,
+        'is-statement-page': route.meta?.navName === 'auditStatement'
       }"
       :style="mainStyles">
       <div
@@ -364,12 +365,16 @@
 
     .audit-side-menu {
       width: 100%;
-      padding-top: var(--bk-theme-space-16);
       overflow: hidden;
       flex: 1 1 auto;
 
       .scroll-faker-content {
         overflow-x: hidden;
+      }
+
+      .scene-system-selector {
+        background: var(--bk-theme-surface-muted);
+        box-shadow: none;
       }
     }
 
@@ -546,6 +551,10 @@
 .audit-navigation-main {
   padding-top: var(--bk-theme-nav-height);
   background: var(--bk-theme-surface-page);
+}
+
+.audit-navigation-main.is-statement-page {
+  background: var(--bk-theme-surface-muted);
 }
 
 .none-side {

@@ -287,7 +287,7 @@
       text-align: center;
       cursor: pointer;
       background: var(--bk-theme-border-default);
-      border-radius: 0 0 var(--bk-theme-table-frame-radius) var(--bk-theme-table-frame-radius);
+      border-radius: 0 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius);
       transform: translate(-50%, 100%);
       transition: all .15s;
 

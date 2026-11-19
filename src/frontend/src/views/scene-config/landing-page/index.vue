@@ -193,7 +193,7 @@
 }
 
 .feature-list {
-  padding-left: var(--bk-theme-space-16);
+  padding-left: 0;
   margin: 0 0 var(--bk-theme-space-16);
   list-style: none;
 

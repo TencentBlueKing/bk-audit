@@ -229,8 +229,14 @@
       align-items: center;
 
       .title-right {
-        color: var(--bk-theme-color-brand-2);
+        font-size: var(--bk-theme-font-size-sm);
+        color: var(--bk-theme-text-default);
         cursor: pointer;
+
+        :deep(.bk-checkbox-label) {
+          font-size: var(--bk-theme-font-size-sm);
+          color: var(--bk-theme-text-default);
+        }
       }
     }
   }

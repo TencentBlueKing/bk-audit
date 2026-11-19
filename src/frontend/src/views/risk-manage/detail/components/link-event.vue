@@ -1332,7 +1332,7 @@
     width: 100%;
 
     /* 有 Tab 时，页签到内容 24px（设计稿）；底部与容器留 16px */
-    padding: var(--bk-theme-space-24) var(--bk-theme-space-16) var(--bk-theme-space-16);
+    padding: var(--bk-theme-space-24) var(--bk-theme-space-24) var(--bk-theme-space-16);
     box-sizing: border-box;
 
     /* 无调查报告仅展示区块标题时，标题上下为 16px */
@@ -1350,7 +1350,7 @@
 
   .link-event-section-title {
     margin-bottom: var(--bk-theme-space-16);
-    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+    font-family: 'Microsoft YaHei Bold', 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 14px;
     font-style: normal;
     font-weight: 700;
@@ -1361,7 +1361,7 @@
 
   .link-event-block-title {
     margin-bottom: var(--bk-theme-space-16);
-    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+    font-family: 'Microsoft YaHei Bold', 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 12px;
     font-style: normal;
     font-weight: 700;
@@ -1391,7 +1391,7 @@
 
       /* 「基本信息」内容与「事件详情」之间上下各 24px */
       margin: var(--bk-theme-space-24) 0;
-      background: var(--bk-theme-border-default);
+      background: var(--bk-theme-color-neutral-8);
     }
 
     .exception-part {

@@ -122,8 +122,8 @@
 
   > .mis-content {
     padding: var(--bk-theme-space-12) var(--bk-theme-space-8) var(--bk-theme-space-12) var(--bk-theme-space-12);
-    background: var(--bk-theme-surface-subtle);
-    border-radius: var(--bk-theme-tag-radius);
+    background: var(--bk-theme-surface-page);
+    border-radius: var(--bk-theme-card-radius);
 
     .render-info-item {
       align-items: flex-start;

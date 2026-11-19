@@ -778,11 +778,10 @@
   width: 100%;
   max-width: 100%;
   padding: var(--bk-theme-space-16);
-  margin: 0;
+  margin: var(--bk-theme-space-8) 0 0;
   font-size: 12px;
-  background: var(--bk-theme-surface-subtle);
-  border: 1px solid var(--bk-theme-border-weak);
-  border-radius: var(--bk-theme-tag-radius);
+  background: var(--bk-theme-surface-page);
+  border-radius: var(--bk-theme-card-radius);
   box-sizing: border-box;
 }
 
@@ -825,6 +824,10 @@
   color: var(--bk-theme-text-default);
 }
 
+.risk-await-deal-method__group :deep(.bk-radio ~ .bk-radio) {
+  margin-left: 0;
+}
+
 .risk-await-deal-method__group :deep(.bk-radio .bk-radio-label) {
   font-size: 12px;
   font-weight: 400;
@@ -864,11 +867,13 @@
   padding: var(--bk-theme-space-8) !important;
   border: 1px solid var(--bk-theme-border-strong);
   border-bottom: 0;
+  border-radius: var(--bk-theme-radius-8) var(--bk-theme-radius-8) 0 0;
 }
 
 :deep(.await-deal-rich-editor .ql-container.ql-snow) {
   box-sizing: border-box;
   border: 1px solid var(--bk-theme-border-strong);
+  border-radius: 0 0 var(--bk-theme-radius-8) var(--bk-theme-radius-8);
 }
 
 .misreport-alert,
@@ -918,9 +923,9 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--bk-theme-space-16);
   padding: var(--bk-theme-space-16) var(--bk-theme-space-12);
-  background: var(--bk-theme-surface-muted);
+  background: var(--bk-theme-surface-page);
   border: 1px solid var(--bk-theme-border-default);
-  border-radius: var(--bk-theme-tag-radius);
+  border-radius: var(--bk-theme-card-radius);
 
   /* 套餐参数组件统一高度 32px */
   :deep(.bk-select),

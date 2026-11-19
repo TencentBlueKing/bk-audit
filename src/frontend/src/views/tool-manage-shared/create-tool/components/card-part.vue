@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-create-card-part bk-theme-card bk-theme-card--flush">
+  <div
+    class="strategy-create-card-part bk-theme-card bk-theme-card--flush"
+    :class="{ 'is-collapsed': isCollapse }">
     <div
       class="card-part-title"
       @click="handleChangeCollapse">
@@ -75,7 +77,11 @@
 
 <style scoped lang="postcss">
 .strategy-create-card-part {
-  padding-bottom: var(--bk-theme-space-12);
+  padding-bottom: var(--bk-theme-space-24);
+
+  &.is-collapsed {
+    padding-bottom: 0;
+  }
 
   /* width: 82%; */
   margin-bottom: var(--bk-theme-space-16);
@@ -125,9 +131,14 @@
     }
   }
 
-  >.card-part-content {padding: var(--bk-theme-space-8) var(--bk-theme-space-16) 0;
+  >.card-part-content {
+    padding: var(--bk-theme-space-8) var(--bk-theme-space-16) 0;
     overflow: hidden;
-    border-top: 1px solid var(--bk-theme-border-weak);
+
+    :deep(> .bk-form-item:last-child),
+    :deep(> :last-child > .bk-form-item:last-child) {
+      margin-bottom: 0;
+    }
   }
 }
 </style>

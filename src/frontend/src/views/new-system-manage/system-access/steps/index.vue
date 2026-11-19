@@ -435,7 +435,7 @@
   &.with-sidebar {
     width: 100%;
     height: auto;
-    min-height: calc(100vh - 104px);
+    background-color: transparent;
   }
 
   .step-head {
@@ -543,7 +543,7 @@
   display: flex;
   width: 60%;
   height: auto;
-  padding-bottom: var(--bk-theme-space-12);
+  padding-bottom: var(--bk-theme-space-16);
   margin: 0 auto;
   align-items: center;
   justify-content: center;

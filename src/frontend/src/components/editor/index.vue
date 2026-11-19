@@ -160,11 +160,8 @@
     mediaTools.push('image');
   }
   mediaTools.push('video', 'table');
-  if (props.supportFullscreen) {
+  if (props.supportFullscreen && !props.supportVariable) {
     mediaTools.push('fullscreen');
-  }
-  if (props.supportVariable) {
-    mediaTools.push('variable');
   }
 
   const container = [
@@ -180,6 +177,13 @@
     mediaTools,
     ['clean'],
   ];
+  if (props.supportVariable) {
+    const variableGroup = ['variable'];
+    if (props.supportFullscreen) {
+      variableGroup.push('fullscreen');
+    }
+    container.push(variableGroup);
+  }
   const isFullscreen = ref(false);
   const isExpanded = computed(() => isFullscreen.value);
 
@@ -1333,6 +1337,10 @@
   background: var(--bk-theme-surface-subtle);
 }
 
+.editor-wrap--report .ql-toolbar .ql-formats:has(.editor-variable-btn) {
+  margin-left: auto;
+}
+
 .editor-wrap--report .ql-toolbar .editor-variable-btn,
 .editor-wrap--report .ql-toolbar .editor-table-btn {
   width: auto !important;
@@ -1348,8 +1356,16 @@
   box-shadow: none !important;
 }
 
-.editor-wrap--report .ql-toolbar .editor-variable-btn:hover,
-.editor-wrap--report .ql-toolbar .editor-table-btn:hover {
+.editor-wrap--report .ql-toolbar .editor-table-btn {
+  color: var(--bk-theme-text-default) !important;
+}
+
+.editor-wrap--report .ql-toolbar .editor-variable-btn:hover {
   opacity: 80%;
+}
+
+.editor-wrap--report .ql-toolbar .editor-table-btn:hover {
+  background-color: #f3f4f6 !important;
+  opacity: 1;
 }
 </style>

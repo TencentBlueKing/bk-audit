@@ -176,6 +176,9 @@
                 ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
                 : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
             }}>
+            <audit-icon
+              style="margin-right: 6px;"
+              type={row.risk_label === 'normal' ? 'biaojiwubao' : 'jiechuwubao'} />
             {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
           </bk-button>
           : <MarkRiskLabel
@@ -597,7 +600,6 @@
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
   position: relative;
-  overflow-x: hidden;
 
   .risk-manage-list {
     padding: var(--bk-theme-space-24);

@@ -329,7 +329,7 @@
     if (domList) {
       domList.forEach((dom) => {
         const el = dom as HTMLElement;
-        el.style.background = isNew ? '#f2fff4' : '#fff';
+        el.style.background = isNew ? '#f2fff4' : '';
       });
     }
   };

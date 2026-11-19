@@ -59,6 +59,15 @@
     white-space: nowrap;
   }
 
+  .audit-menu > .audit-menu-item:first-child,
+  .audit-menu > .audit-menu-item-group:first-child {
+    margin-top: var(--bk-theme-space-8);
+  }
+
+  .audit-menu > .scene-sidebar:not(:has(.scene-selector-wrapper)) {
+    padding-top: var(--bk-theme-space-8);
+  }
+
   .audit-menu-item-group {
     .audit-menu-group-title {
       height: 40px;

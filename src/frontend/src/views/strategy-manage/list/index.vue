@@ -650,8 +650,9 @@
   const currentDetailTab = ref<
     'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'bksecTicket' | 'riskOther'
   >('riskDetection');
-  const styles = shallowRef({ left: '240px' });
+  const styles = shallowRef({ left: 'calc(240px + var(--bk-theme-space-16))' });
   // 侧栏分类用 strategy_tags；行内/详情编辑用全量 meta tag（与页内编辑一致）
+  // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
   const strategyLabelList = ref<any[]>([]);
   const allTagList = ref<Array<{ tag_id: string | number; tag_name: string }>>([]);
   const showLabelSkeleton = computed(() => (
@@ -2243,7 +2244,7 @@
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
-    styles.value = showLabel ? { left: '240px' } : { left: '0' };
+    styles.value = showLabel ? { left: 'calc(240px + var(--bk-theme-space-16))' } : { left: '0' };
   };
 
 
@@ -2669,9 +2670,9 @@
 }
 
 .strategy-manage-anchor {
-  /* 铺满导航内容区（含被抵消的内边距），不再用 100vh 硬算，避免高出滚动容器 */
+  /* 顶上留出标题到内容的 16px，左右和底仍贴内容区，避免再高出滚动容器 */
   position: absolute;
-  inset: 0;
+  inset: var(--bk-theme-space-16) 0 0;
   overflow: hidden;
 }
 
@@ -2730,8 +2731,8 @@
   .strategy-manage-list {
     position: absolute;
     top: 0;
-    right: 0;
-    bottom: 0;
+    right: var(--bk-theme-space-24);
+    bottom: var(--bk-theme-space-24);
     display: flex;
     flex-direction: column;
     padding: var(--bk-theme-space-24);

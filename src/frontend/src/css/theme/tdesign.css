@@ -83,6 +83,10 @@
   border-bottom-color: var(--bk-theme-table-border);
 }
 
+.t-table--striped tbody > tr:nth-child(even):not(.t-table__empty-row) > td {
+  background-color: var(--table-strip-color);
+}
+
 .t-table thead th {
   border-bottom-color: var(--bk-theme-table-header-divider);
 }

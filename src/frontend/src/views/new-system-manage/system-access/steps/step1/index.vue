@@ -713,9 +713,18 @@
       }
     }
 
+    > .step1-card:first-child {
+      margin-top: 0;
+    }
+
     .step1-card {
       margin-top: var(--bk-theme-space-12);
       overflow: auto;
+      border: none;
+
+      &:hover {
+        box-shadow: var(--bk-theme-card-shadow);
+      }
 
       .card-header {
         height: 22px;
@@ -793,6 +802,7 @@
   .step1-box-with-sidebar {
     width: 100%;
     padding-bottom: var(--bk-theme-space-16);
+    margin-top: 0;
   }
 
   .step1-select-model-type {

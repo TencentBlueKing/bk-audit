@@ -440,7 +440,7 @@
     background: linear-gradient(90deg, var(--bk-theme-surface-muted) 0%, var(--bk-theme-table-header-bg) 100%);
     background-color: var(--bk-theme-surface-default);
     border: 1px solid var(--bk-theme-border-default);
-    border-radius: var(--bk-theme-tag-radius);
+    border-radius: var(--bk-theme-card-radius);
     transition: all .2s;
 
     &:hover {background: linear-gradient(90deg, var(--bk-theme-fill-selected) 0%, #fafdff 100%);
@@ -480,7 +480,16 @@
     }
 
     &.recommend {
+      background: linear-gradient(90deg, var(--bk-theme-fill-selected) 0%, #fafdff 100%);
       border-color: var(--bk-theme-color-brand-4);
+      transition: none;
+
+      &:hover {
+        border-color: var(--bk-theme-color-brand-4);
+        box-shadow: none;
+        outline: 2px solid var(--bk-theme-color-brand-2);
+        outline-offset: -2px;
+      }
 
       .report-title {
         font-weight: bold;
@@ -574,7 +583,7 @@
         align-items: flex-end; /* 改为底部对齐 */
         width: 100%;
         border: 1px solid var(--bk-theme-border-default);
-        border-radius: var(--bk-theme-tag-radius);
+        border-radius: var(--bk-theme-control-radius);
         transition: all .2s;
 
         &:focus-within {
@@ -614,6 +623,10 @@
 
 <style lang="postcss">
 .ai-analyzes-dialog {
+  .bk-dialog-title {
+    color: var(--bk-theme-text-strong);
+  }
+
   .bk-dialog-footer {
     display: none;
   }

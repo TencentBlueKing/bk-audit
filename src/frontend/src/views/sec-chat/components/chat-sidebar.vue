@@ -15,7 +15,7 @@
           v-model="selectedScene"
           :is-all-secen="false"
           :is-all-system="false"
-          :popover-width="237"
+          :popover-width="400"
           scene-permission="view_scene"
           system-permission="view_system"
           width="100%"

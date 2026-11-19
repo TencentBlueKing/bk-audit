@@ -314,7 +314,7 @@
     color: var(--bk-theme-text-strong);
     letter-spacing: 0;
     border: 1px solid var(--bk-theme-border-strong);
-    border-radius: var(--bk-theme-tag-radius);
+    border-radius: var(--bk-theme-control-radius);
     background: var(--bk-theme-surface-default);
     box-shadow: none;
     box-sizing: border-box;

@@ -18,7 +18,7 @@
   <bk-popover
     ref="popoverRef"
     :arrow="false"
-    :ext-cls="dark ? 'scene-system-selector-popover-dark' : ''"
+    :ext-cls="dark ? 'scene-system-selector-popover scene-system-selector-popover-dark' : 'scene-system-selector-popover'"
     :is-show="isPopoverShow"
     placement="bottom-start"
     :theme="dark ? 'dark' : 'light'"
@@ -62,16 +62,15 @@
         :class="{ 'is-dark': dark }"
         @click.stop>
         <div class="group-search">
-          <span class="search-prefix-wrap">
-            <audit-icon
-              class="search-prefix"
-              type="search1" />
-          </span>
-          <bk-input
+          <search-icon
+            class="icon-search"
+            height="16"
+            width="16" />
+          <input
             v-model="sceneSearchKey"
-            behavior="simplicity"
-            :placeholder="t('请输入关键字搜索')"
-            size="small" />
+            class="bk-select-search-input"
+            :placeholder="t('搜索')"
+            type="text">
         </div>
         <!-- 审计场景分组 -->
         <div
@@ -152,6 +151,7 @@
 
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
+  import { Search as SearchIcon } from 'bkui-vue/lib/icon';
   import {
     computed,
     nextTick,
@@ -990,6 +990,7 @@
   cursor: pointer;
   background: var(--bk-theme-surface-default);
   border-radius: var(--bk-theme-title-select-radius);
+  box-shadow: var(--bk-theme-card-shadow);
   transition: all .3s;
 
   &:hover {
@@ -1233,9 +1234,32 @@
     top: 0;
     z-index: 1;
     display: flex;
-    padding: 0 var(--bk-theme-space-12) var(--bk-theme-space-8);
+    margin: 0 var(--bk-theme-space-8);
     background: var(--bk-theme-surface-default);
+    border-bottom: 1px solid var(--input-block-hover-color);
     align-items: center;
+
+    .icon-search {
+      flex-shrink: 0;
+      margin-left: 2px;
+      color: var(--gray-color);
+    }
+
+    .bk-select-search-input {
+      width: 100%;
+      height: 32px;
+      padding: 0 var(--bk-theme-space-8);
+      font-size: var(--bk-theme-font-size-sm);
+      line-height: normal;
+      color: var(--default-color);
+      background-color: var(--white-color);
+      border: none;
+      outline: none;
+
+      &::placeholder {
+        color: var(--light-gray);
+      }
+    }
   }
 
   .dropdown-empty {
@@ -1282,14 +1306,14 @@
 
         .type-tag {
           flex-shrink: 0;
-          height: 26px;
-          padding: 0 var(--bk-theme-space-8);
-          margin-right: var(--bk-theme-space-16);
-          font-size: 12px;
-          line-height: 24px;
+          height: 18px;
+          padding: 0 var(--bk-theme-space-4);
+          margin-right: var(--bk-theme-space-8);
+          font-size: var(--bk-theme-font-size-sm);
+          line-height: 18px;
           color: var(--bk-theme-surface-default);
           border: none;
-          border-radius: var(--bk-theme-tag-radius);
+          border-radius: var(--bk-theme-title-select-tag-radius) !important;
 
           &.type-aggregate {
             background-color: #ba69f4;
@@ -1340,122 +1364,32 @@
   }
 }
 
-.search-prefix-wrap {
-  display: inline-block;
-  align-items: center;
-  justify-content: center;
-  margin-top: var(--bk-theme-space-2);
-
-  .search-prefix {
-    font-size: 14px;
-    line-height: 1;
-    color: var(--bk-theme-text-weak);
-  }
-}
-
 </style>
 
 <style lang="postcss">
+.scene-system-selector-popover.bk-popover.bk-pop2-content {
+  padding: var(--bk-theme-space-4) 0;
+}
+
 /* 深色主题弹出层样式 */
 .scene-system-selector-popover-dark.bk-popover.bk-pop2-content {background: var(--bk-theme-text-strong) !important;
   box-shadow: 0 3px 9px 0 rgb(0 0 0 / 50%) !important;
 
-  /* 搜索框：深色主题，仅保留底部边框 */
-  .group-search .bk-input {
-    border: none !important;
+  .group-search {
+    background: var(--bk-theme-text-strong);
+    border-bottom-color: var(--bk-theme-text-default);
 
-    .bk-form-control,
-    .bk-form-control *,
-    .bk-form-control[style],
-    .bk-form-content,
-    input[type='text'],
-    input[type='text'][style] {background-color: var(--bk-theme-text-strong) !important;
-      background-image: none !important;
-      border: none !important;border-bottom: 1px solid var(--bk-theme-text-default) !important;
-      outline: none !important;
-      box-shadow: none !important;
-      caret-color: var(--bk-theme-border-strong);
-    }
-
-    input {
+    .bk-select-search-input {
       color: var(--bk-theme-text-weak);
+      background: transparent;
 
       &::placeholder {
         color: var(--bk-theme-text-default);
       }
     }
 
-    .input-icon-left,
-    [class*='icon'],
-    .bk-icon,
-    /* 自定义 prefix 插槽中的图标：去除白底、对齐 */
-    .input-prefix,
-    .input-prefix *,
-    .audit-icon {
-      display: flex;
+    .icon-search {
       color: var(--bk-theme-text-default);
-      background: transparent !important;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* 去除前缀区域白底（组件内部 .bk-input--prefix 设置了 var(--bk-theme-surface-default) !important） */
-    .input-prefix,
-    [class*='prefix'],
-    .bk-input--prefix,
-    .bk-input--prefix *,
-    .input-left-icon,
-    .input-left-icon * {
-      background: transparent !important;
-      background-color: transparent !important;
-      background-image: none !important;
-    }
-
-    /* 自定义 prefix 包装：彻底覆盖白底 */
-
-    &:hover {
-      .input-prefix,
-      .input-prefix *,
-      .audit-icon,
-      .bk-icon,
-      .input-icon-left,
-      [class*='icon'],
-      [class*='prefix'],
-      .input-left-icon,
-      .bk-input--prefix,
-      .bk-input--prefix *,
-      .search-prefix-wrap,
-      .search-prefix-wrap * {
-        color: var(--bk-theme-text-default);background-color: var(--bk-theme-text-strong) !important;
-        border-radius: 0;
-      }
-    }
-
-    /* 聚焦状态：保持样式不变 */
-    .group-search .bk-input.is-focused:not(.is-readonly):is-simplicity,
-    .group-search .bk-input.is-focus,
-    .group-search .bk-input.is-focused,
-    .group-search .bk-input:focus-within,
-    .group-search .bk-input:focus,
-    .group-search .is-focus .bk-input {
-      .bk-form-control,
-      .bk-form-control *,
-      .bk-form-control[style],
-      .bk-form-content,
-      input[type='text'],
-      input[type='text'][style],
-      input[type='text']:focus,
-      input[type='text']:active {
-        background-color: transparent !important;
-        background-image: none !important;
-        border: none !important;border-bottom: 1px solid var(--bk-theme-text-default) !important;
-        outline: none !important;
-        box-shadow: none !important;
-      }
-
-      input {
-        color: var(--bk-theme-text-weak);
-      }
     }
   }
 }
