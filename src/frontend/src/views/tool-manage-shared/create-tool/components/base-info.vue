@@ -168,7 +168,7 @@
   .square-display-item :deep(.bk-form-content) {
     display: flex;
     align-items: center;
-    height: 32px;
+    height: var(--bk-theme-space-32);
   }
 
   .square-display-label {
@@ -177,9 +177,9 @@
   }
 
   .square-display-tip {
-    margin-left: 4px;
-    font-size: 14px;
-    color: var(--audit-neutral-text-03);
+    margin-left: var(--bk-theme-space-4);
+    font-size: var(--bk-theme-font-size-base);
+    color: var(--bk-theme-text-weak);
     cursor: default;
   }
 
