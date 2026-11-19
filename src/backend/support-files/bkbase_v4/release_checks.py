@@ -17,6 +17,9 @@ from urllib.parse import quote, urlsplit
 
 MAX_BYTES = 512 * 1024 * 1024
 APPROVED_CONFIG_KEYS = {"bkbase_v4_storage_clusters", "bkbase_v4_flow_config"}
+# OperateRecordModel and the exact GlobalMetaConfig.set scope used by init_fields.
+OPERATE_RECORD_FIELDS = {"created_at", "created_by", "updated_at", "updated_by"}
+INIT_FIELDS_CONFIG_SCOPE = ("global", "global", "init_fields_finished_check")
 REF_KEYS = {"kind", "tenant", "namespace", "name"}
 KINDS = {"data_source": "DataSource", "data_id": "DataId", "clean": "Clean", "result_table": "ResultTable"}
 ROUTES = {
@@ -461,7 +464,8 @@ class Inspector:
         candidates = [b for b in related if b.get("kind") == kind and b.get("spec", {}).get("storage") == cluster]
         self.require(len(candidates) == 1, "TABLE_BINDING_IDENTITY")
         binding = candidates[0]
-        self.ref({"kind": kind, **{k: binding["metadata"][k] for k in ("tenant", "namespace", "name")}}, kind)
+        binding_ref = {"kind": kind, **{k: binding["metadata"][k] for k in ("tenant", "namespace", "name")}}
+        self.ref(binding_ref, kind)
         self.require(
             binding.get("spec", {}).get("data") == table and binding.get("status", {}).get("phase") == "Ok",
             "TABLE_BINDING_IDENTITY",
@@ -489,6 +493,7 @@ class Inspector:
                 self.add("HDFS_DIMENSION_MISSING", scope, "NOT_CHECKED")
             else:
                 self.require(all(value is True for value in dimensions), "HDFS_DIMENSION")
+        return binding_ref
 
     def local_resource_identity(self, item, row, rows, scope):
         """Check old owner, audit namespace and retained V3 identities."""
@@ -696,7 +701,25 @@ class Inspector:
             if scenario in {"snapshot", "iam"}:
                 table_info = self.resource(mapping["result_table"], scope, "result_table_info")
                 if table_info is not None:
-                    self.table_binding(table_info, mapping["result_table"], entry["cluster"], purpose, scope)
+                    binding_ref = self.table_binding(
+                        table_info, mapping["result_table"], entry["cluster"], purpose, scope
+                    )
+                    if scenario == "iam" and binding_ref is not None:
+                        self.require(binding_ref == item["expected_binding"].get("redis_binding"), "IAM_REDIS_BINDING")
+                if scenario == "iam" and body is not None:
+                    keys = body.get("spec", {}).get("taskFieldSetting", {}).get("key_fields")
+                    expected = (
+                        {"id"} if item["expected_binding"].get("snapshot_type") == "user" else {"id", "system_id"}
+                    )
+                    self.require(
+                        body.get("spec", {}).get("tableInfo", {}).get("storage_type") in (None, "join")
+                        and isinstance(keys, list)
+                        and len(keys) == len(expected)
+                        and all(isinstance(key, str) and key in expected for key in keys)
+                        and set(keys) == expected
+                        and keys == item["expected_binding"].get("redis_key_fields"),
+                        "IAM_REDIS_TASK",
+                    )
             if physical is None and purpose in {"main", "replica"}:
                 self.add("PHYSICAL_TARGET_UNDECLARED", scope, "NOT_CHECKED")
         if storages:
@@ -743,6 +766,9 @@ class Inspector:
                 "redis",
                 "redis_binding",
                 "redis_key_fields",
+                "ready",
+                "verification_started",
+                "verification_applied",
             }
             self.require(isinstance(explicit, dict) and not set(explicit) - allowed_keys, "LOCAL_BINDING_PLAN")
             self.require(
@@ -752,7 +778,12 @@ class Inspector:
                 ),
                 "LOCAL_BINDING_PLAN",
             )
-            patch = explicit
+            self.require(explicit.get("ready", True) is True, "IAM_READY")
+            self.iam_sequence(explicit, complete=True)
+            patch = {
+                k: deepcopy(v) for k, v in explicit.items() if k not in {"verification_started", "verification_applied"}
+            }
+            patch["ready"] = True
         if scenario == "iam":
             self.require(
                 item["config_key"] == fields.get("config_key") and isinstance(fields.get("config_value"), dict),
@@ -766,6 +797,8 @@ class Inspector:
             }
             self.require(
                 fields["config_key"] == keys[patch["snapshot_type"]]
+                and fields.get("config_level") == "global"
+                and fields.get("instance_key") == "global"
                 and item["binding_namespace"] in self.context["namespaces"]
                 and set(storages) == {"redis"}
                 and patch.get("redis") == storages["redis"]["cluster"],
@@ -791,6 +824,73 @@ class Inspector:
             )
             return {"config_value": {"bkbase_v4": {self.context["tenant"]: {item["binding_namespace"]: patch}}}}
         return {"bkbase_v4_resources": patch}
+
+    def iam_sequence(self, binding, *, complete):
+        """Accept absent first-import counters or typed, ordered verification counters."""
+        if not {"verification_started", "verification_applied"} & binding.keys():
+            return 0
+        started = binding.get("verification_started")
+        applied = binding.get("verification_applied", None if complete else 0)
+        self.require(
+            type(started) is int
+            and type(applied) is int
+            and 0 <= applied <= started
+            and started > 0
+            and (not complete or applied == started),
+            "IAM_VERIFICATION_SEQUENCE",
+        )
+        return started
+
+    def iam_postflight(self, item, row, actual_fields, patch):
+        """Validate successful observation before masking only its own runtime/audit leaves."""
+        tenant, namespace = self.context["tenant"], item["binding_namespace"]
+        before = row["fields"]["config_value"].get("bkbase_v4", {}).get(tenant, {}).get(namespace)
+        self.require(before is None or isinstance(before, dict), "IAM_VERIFICATION_SEQUENCE")
+        actual = actual_fields["config_value"]["bkbase_v4"][tenant][namespace]
+        self.require(actual.get("ready") is True and "waiting_for" not in actual, "IAM_READY")
+        floor = max(
+            self.iam_sequence({} if before is None else before, complete=False),
+            self.iam_sequence(item["expected_binding"], complete=True),
+        )
+        self.require(self.iam_sequence(actual, complete=True) >= floor, "IAM_VERIFICATION_SEQUENCE")
+        patch["config_value"]["bkbase_v4"][tenant][namespace].update(
+            verification_started=None, verification_applied=None, waiting_for=None
+        )
+        patch.update(updated_at=None, updated_by=None)
+        if not row["fields"].get("created_by"):
+            patch["created_by"] = None
+
+    def init_fields_patches(self, rows, after_rows):
+        """Only the global init_fields marker may be created by the normal deployment hook."""
+
+        def matching(inventory):
+            return [
+                key
+                for key, row in inventory.items()
+                if row["model"] == "meta.globalmetaconfig"
+                and tuple(row["fields"].get(k) for k in ("config_level", "instance_key", "config_key"))
+                == INIT_FIELDS_CONFIG_SCOPE
+            ]
+
+        previous, current = matching(rows), matching(after_rows)
+        if not previous and not current:
+            return {}
+        self.require(len(current) == 1 and (not previous or previous == current), "INIT_FIELDS_IDENTITY")
+        key = current[0]
+        row = after_rows[key]
+        self.require(type(row["pk"]) is int and row["pk"] > 0, "INIT_FIELDS_IDENTITY")
+        self.require(row["fields"].get("config_value") is True, "INIT_FIELDS_VALUE")
+        if not previous:
+            self.require(key not in rows, "INIT_FIELDS_IDENTITY")
+            self.require(
+                set(row["fields"])
+                == OPERATE_RECORD_FIELDS | {"config_level", "instance_key", "config_key", "config_value"},
+                "INIT_FIELDS_STRUCTURE",
+            )
+        allowed = {"config_value": None, "updated_at": None, "updated_by": None}
+        if previous and not rows[key]["fields"].get("created_by"):
+            allowed["created_by"] = None
+        return {key: allowed}
 
     def approved_configs(self, plan):
         """Read exact expected V4 setup values from the approved plan."""
@@ -889,6 +989,7 @@ class Inspector:
             after_rows = {identity(row): row for row in after["rows"]}
             self.require(len(after_rows) == len(after["rows"]), "POST_SCOPE")
             config_patches = self.approved_config_patches(approved, rows, after_rows)
+            config_patches.update(self.init_fields_patches(rows, after_rows))
             approved_additions = config_patches.keys() - rows.keys()
             self.require(after_rows.keys() == rows.keys() | approved_additions, "POST_SCOPE")
         seen, writers, old_flows = set(), set(), set()
@@ -944,6 +1045,8 @@ class Inspector:
                 self.contracts(item, scope)
                 if after is not None:
                     self.require(contains(after_rows[key]["fields"], patch), "LOCAL_BINDING")
+                    if item["scenario"] == "iam":
+                        self.iam_postflight(item, row, after_rows[key]["fields"], patch)
                 self.add("OBJECT_CHECKED", scope, "PASS")
             except Invalid as error:
                 self.add(str(error), scope)
@@ -958,6 +1061,13 @@ class Inspector:
                 if "bkbase_v4_resources" in allowed:
                     allowed["bkbase_v4_resources"].update(ready=None, clean_ready=None)
                 actual_fields = deepcopy(after_rows[key]["fields"])
+                if (
+                    row["model"] == "meta.field"
+                    and row["fields"].get("is_built_in") is True
+                    and actual_fields.get("is_built_in") is True
+                ):
+                    # init_standard_fields deletes/recreates built-ins, including their created metadata.
+                    allowed.update({name: None for name in OPERATE_RECORD_FIELDS})
                 if "bkbase_v4_resources" not in row["fields"] and actual_fields.get("bkbase_v4_resources") == {}:
                     actual_fields.pop("bkbase_v4_resources")
                 if digest(prune(row["fields"], allowed)) != digest(prune(actual_fields, allowed)):

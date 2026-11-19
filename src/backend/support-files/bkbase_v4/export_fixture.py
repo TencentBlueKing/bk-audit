@@ -35,7 +35,15 @@ EXCLUDE = {
 
 def database_identity(value):
     """Compare actual endpoint/database without passwords or driver options."""
-    return {key: str(value[key]) for key in ("host", "port", "name")}
+    port = value["port"]
+    # Django's MySQL backend omits an empty PORT; the driver then uses 3306.
+    if port is None or port == "":
+        port = 3306
+    elif isinstance(port, str) and re.fullmatch(r"[0-9]+", port):
+        port = int(port)
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError("invalid database port")
+    return {"host": str(value["host"]), "port": str(port), "name": str(value["name"])}
 
 
 def capture(connection, context, root, counters, dump, *, version, stage="before", tables=(), deployment_evidence=None):

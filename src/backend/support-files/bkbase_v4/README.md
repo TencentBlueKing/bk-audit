@@ -61,6 +61,8 @@ AUDIT_RELEASE_EXPORT_DIR=/private/release/before-new-directory \
 
 目标父目录须已存在且私有；输出目录须不存在。入口核 `APP_CODE`、连接配置及 `SELECT DATABASE()` 的真实库名。旧 `BKBASE_PROJECT_ID` 的规范数字字符串和正整数均可，拒绝 bool、前导零和非法文本。读取选定已部署配置模型及其自动 M2M 表的引擎，拒绝非 InnoDB；在同一 `REPEATABLE READ / READ ONLY` 事务内取得各模型行数和原生 `dumpdata --all` 内容，包含软删除；最终 `ROLLBACK`，之后才在本机新建文件。
 
+MySQL连接的 `PORT` 未配置、为空字符串或 `None` 时按驱动默认 `3306` 核对；显式端口只接受1–65535的整数或十进制字符串，bool、非法文本、越界值直接拒绝。显式非默认端口仍须与context匹配，不会被折回3306。host、库名及实际库名检查保持。
+
 输出 `business.json` 和 `manifest.json`，文件 0600、目录 0700，独占创建不覆盖。**原生业务 fixture 是私有配置快照，可能含敏感配置，必须留在受控位置，不粘贴到聊天、工单或公开仓库**；校验报告只输出白名单摘要。导出范围沿已有业务导出：meta/databus/strategy_v2 的已管理配置模型，排除 storage 操作日志、snapshot statistic、策略/联表审计日志及 tag sync trash；不包含风险明细、数据库结构或其他应用。
 
 这是“指定配置模型同一 DB 快照的行数与内容一致”，不是整库完整性。既有 `business.json + manifest.json` 包也可直接作为输入；`read_bundle` 沿原格式核完成标记、字节 SHA、每模型行数、模型/主键唯一性。旧包没有版本/旧来源证据时报告 `NOT_CHECKED`，不要改写原始 manifest 补造证明。`01_inventory.py` 的精简库存可帮助人工分范围，但缺少完整保留字段，不能单独充当本工具基线。旧 `export_business_backup.py` 的 export 分支硬编码了 BKOP，正式环境不要照跑它。
@@ -108,6 +110,8 @@ Flow 对象形状如下；`mapping` **原样使用**既有 `flow_migration` sche
 普通/事件插件及采集项分别用 `scenario=plugin/event_plugin/collector`；`model` 分别为 `databus.collectorplugin/collectorconfig`。`mapping` 原样取已有 `resource_migration` 详细清单单行（owner/owner_pk/audit_namespace/legacy/data_source〔可选〕/data_id/clean/result_table/storages）。保留旧字段、节点 ID；不会改 Ref、补建资源或推断类型。事件插件必须是本地 `plugin_scene=event`、唯一主 Doris，并核既有 namespace 级事件 GlobalMeta 逻辑表/物理目标；普通插件沿主 ES、副 Doris 标记；采集项不认领父插件 Storage。
 
 快照/IAM 可做有限身份及后置绑定对账。`scenario=snapshot` 使用明确旧 `legacy` 和实际所需的 Redis、HDFS、Doris 存储，`mapping.storages` 每项填 `{resource, cluster}`。`expected_binding` 填 `raw_data_id`、`data_source`、`data_id`、`clean`、`clean_role`、`result_table_id`、`result_table`、`storages`，存储值为 DataStorage Ref。`scenario=iam` 使用现有 IAM 绑定形状（`source_raw_data_id` 和 Redis 绑定），另提供 `config_key` 和 `binding_namespace`，在 `config_value.bkbase_v4[tenant][namespace]` 核对。两类仍需要人工签收完整契约。
+
+IAM后置绑定必须实际 `ready=true`；清单可省略ready但不能声明false。首次成功可没有验证序列；重验成功的 `verification_started` / `verification_applied` 必须是相等的正整数，不能小于旧记录或清单声明的序列。旧pending状态的 `waiting_for` 可随成功移除，成功结果不能仍带该键。只在当前tenant及声明的binding_namespace下核这几个运行态叶子，不放行其他scope或业务字段变化。正式ResultTableInfo中的RedisBinding身份必须匹配本地绑定，Redis Join任务的键既按user或action/resource_type核合法字段集合，也必须与签收的 `expected_binding.redis_key_fields` 逐项同序；资源/任务状态、逻辑RT与Redis目标关系继续核验，不能拿ready代替GET。完整IAM契约和非空数据仍按人工项处理。
 
 `checks` 仅作额外字面比较：`topic=fields` 的 `/spec/fields` 或原生 Flow `/spec/nodes/<index>/fields`；`topic=rules` 的 Clean `/spec/rules`、StreamNode `/spec/nodes/<index>/config/sql`、BatchSqlNode `/spec/nodes/<index>/processing_info`；提供 `ref`、`pointer` 和 `equals` 或 `sha256` 二选一。Ref 必须是当前对象的主 Flow/Clean/RT 或实际 Flow 源/输出 RT，禁止 decoy 资源替代；不能为空。主身份、旧输入/输出、任务关联和存储用途由内置逻辑校验，不接受自选 pointer 充数。即使字面比较相同，**V3/V4字段类型/规则语义等价仍 NOT_CHECKED**，需人工依据旧规则和正式模型补查。
 
@@ -164,7 +168,13 @@ ResultTableInfo 与原生 ResultTable 可分别保留各一份；所用 Ref 仍�
   --receipts /private/release/receipts-after.json --output /private/release/postflight-new.json
 ```
 
-后置逐对象核**实际**保存的 Ref、tenant、namespace、输出、存储用途及已声明物理目标；compare 整份前后配置，仅允许明确绑定叶子和导入会清除的 ready/clean_ready 变化，旧 backend_data、节点 ID、停用态、V3字段和无关配置变化报 `PRESERVATION`。不使用 apply 日志或 ready 布尔替代配置。未知新增/缺失记录严格报 `POST_SCOPE`；有意新增配置行、其他版本新增非绑定字段等超出当前比较能力，应单独人工核验并保全证据，不能原地重写基线掩盖差异。报告对象摘要可用 `digest([model, pk])[:16]` 在私有库存定位。
+后置逐对象核**实际**保存的 Ref、tenant、namespace、输出、存储用途及已声明物理目标；compare 整份前后配置，保留明确绑定叶子和导入清除ready/clean_ready的原有规则。旧backend_data、节点ID、停用态、V3字段和无关配置变化仍报 `PRESERVATION`，不使用apply日志或ready布尔替代资源核验。另按正常发布Hook限定以下审计元数据例外：
+
+- `init_fields` 独立于 `BKAPP_INIT_SYSTEM=False`，会删建内置字段。仅 `meta.field` 同一PK、前后 `is_built_in` 均为JSON true时，允许 `created_at/created_by/updated_at/updated_by` 变化；字段定义、属性、类型及用户字段不豁免。动态索引版本字段也按相同PK规则核对，不猜新PK或放行缺行。
+- `meta.globalmetaconfig` 中只有精确的 `(config_level=global, instance_key=global, config_key=init_fields_finished_check)` 可以收敛到JSON true，数字1、字符串true、false均不接受。已有行保留PK及created_at，允许正常save的updated_at/updated_by、以及原created_by为空时的补写；之前不存在时只允许这一条正常模型字段形状、正整数新PK的新增。替换已有PK、重复scope、其他全局标记或额外字段仍失败。前后都没有该标记时不凭空制造行，本工具也不据此证明Hook执行成功。
+- IAM通过 `config.save()` 回写时，只对已核验的那条global/global配置及上述精确V4 scope允许updated_at/updated_by和原created_by为空时的补写；created_at、已有非空created_by、旧V3配置及其他tenant/project不变。验证序列须先满足前述成功条件才可作为运行态比较例外，不是一律忽略。
+
+除上述初始化完成标记、以及清单已批准的两项V4运行配置新增外，新增/缺失记录严格报 `POST_SCOPE`。有意新增内置字段、其他版本新增非绑定字段等超出当前范围，须单独核验并保全证据，不能原地重写基线。报告对象摘要可用 `digest([model, pk])[:16]` 在私有库存定位。
 
 当前自动结果与人工项须分别记录：自动 `FAIL` 先定位处理；自动 `NOT_CHECKED` 不等于已批准忽略。脚本不提供把未知一键转 PASS 的参数。
 
