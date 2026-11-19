@@ -614,6 +614,30 @@ class ToolResourceTestCase(TestCase):
         # 补充：tag 自动删除
         self.assertFalse(ToolTag.objects.filter(tool_uid=uid).exists())
 
+    def test_delete_tool_referenced_by_strategy(self):
+        """被策略引用的工具禁止删除（与广场展示解耦）；解除引用后可删除"""
+        from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+        from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.exceptions import ToolReferencedByStrategy
+
+        strategy = Strategy.objects.create(namespace=self.namespace, strategy_name="ref-strategy")
+        StrategyTool.objects.create(
+            strategy=strategy,
+            tool_uid=self.sql_tool.uid,
+            tool_version=self.sql_tool.version,
+            field_name="operator",
+            field_source=StrategyFieldSourceEnum.BASIC.value,
+        )
+
+        with self.assertRaises(ToolReferencedByStrategy):
+            DeleteTool()({"uid": self.sql_tool.uid})
+        self.assertIsNotNone(Tool.last_version_tool(self.sql_tool.uid))
+
+        # 解除引用后可删除
+        StrategyTool.objects.filter(strategy=strategy).delete()
+        DeleteTool()({"uid": self.sql_tool.uid})
+        self.assertIsNone(Tool.last_version_tool(self.sql_tool.uid))
+
     def test_list_tool_filter_only_created_by_me(self):
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
