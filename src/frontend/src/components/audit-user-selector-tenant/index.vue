@@ -23,8 +23,10 @@
     :api-base-url="apiBaseUrl"
     :auto-focus="autoFocus"
     :disabled="isDisabled"
+    :empty-text="emptyText"
     :free-paste="freePasteEnabled"
     :multiple="multiple"
+    :placeholder="resolvedPlaceholder"
     :render-list-item="renderListItem"
     :render-tag="renderTag"
     :tenant-id="tenantId"
@@ -43,6 +45,7 @@
     onMounted,
     watch,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import BkUserSelector from '@blueking/bk-user-selector';
 
@@ -51,6 +54,8 @@
   interface Props {
     modelValue: Array<string> | string;
     allowCreate?: boolean;
+    /** 未传入时使用人员选择器默认占位；调用方传入的文案保持不变 */
+    placeholder?: string;
     /** 粘贴未命中用户中心的人员时是否创建（离职人员等）；默认跟随 allowCreate */
     freePaste?: boolean;
     multiple?: boolean;
@@ -70,7 +75,8 @@
 
   const props = withDefaults(defineProps<Props>(), {
     modelValue: () => [],
-    allowCreate: false,
+    allowCreate: true,
+    placeholder: '',
     freePaste: undefined,
     multiple: true,
     // collapseTags: true,
@@ -82,7 +88,16 @@
   });
 
   const emit = defineEmits<Emits>();
+  const { t } = useI18n();
   const userSelectorRef = ref();
+  const searchKeyword = ref('');
+  const resolvedPlaceholder = computed(() => props.placeholder || t('可搜索在职人员，离职人员请输入企微 ID后按回车键'));
+  const emptyText = computed(() => {
+    if (!props.allowCreate) return '';
+    const name = searchKeyword.value.trim();
+    if (!name) return '';
+    return t('暂未匹配到人员({name})，可按enter填入', { name });
+  });
 
   // allowCreate 开启时默认同步开启 freePaste，否则粘贴离职/不存在人员会被丢弃
   const freePasteEnabled = computed(() => (
@@ -207,42 +222,115 @@
   });
 
   const handleValueChange = (v: string | string[]) => {
+    searchKeyword.value = '';
     emit('update:modelValue', v);
     emit('change', v);
   };
 
+  const commitKeyword = (keyword: string) => {
+    const name = keyword.trim();
+    if (!name || !props.allowCreate) return;
+    if (props.multiple) {
+      const current = Array.isArray(localValue.value) ? [...localValue.value] : [];
+      if (current.includes(name)) return;
+      current.push(name);
+      localValue.value = current;
+      handleValueChange(current);
+      return;
+    }
+    if (localValue.value === name) return;
+    localValue.value = name;
+    handleValueChange(name);
+  };
+
+  const getVisiblePopover = () => {
+    const nodes = document.querySelectorAll('.bk-user-selector-popover');
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement)) continue;
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      if (node.getClientRects().length === 0) continue;
+      return node;
+    }
+    return null;
+  };
+
+  const clearSearchInput = () => {
+    if (!enterInputEl) return;
+    enterInputEl.value = '';
+    enterInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    searchKeyword.value = '';
+  };
+
   const handleBlur = () => {
+    const keyword = searchKeyword.value.trim();
+    const showUnmatched = Boolean(getVisiblePopover()?.querySelector('.no-data'));
+    if (keyword && showUnmatched) {
+      commitKeyword(keyword);
+    }
+    searchKeyword.value = '';
     emit('blur');
   };
 
-  // bk-form 等外层表单可能会截获 Enter 触发提交/失焦，导致 allowCreate 无法按键创建自定义用户。
-  // 这里仅在 allowCreate 开启时，拦截 Enter 的冒泡/默认行为，确保 bk-user-selector 自己能处理 Enter 创建逻辑。
+  // 库在 allowCreate 且输入框有文字时，Enter 会直接创建输入值，盖过高亮项。
+  // 有高亮人员时先选中该项；无匹配时仍把输入值交给库。外层表单不再收到这次 Enter。
+  let rootEl: HTMLElement | null = null;
   let enterInputEl: HTMLInputElement | null = null;
-  const handleUserSelectorEnterKeydown = (e: KeyboardEvent) => {
-    if (!props.allowCreate) return;
-    if (e.key !== 'Enter') return;
-    e.stopPropagation();
-    e.stopImmediatePropagation?.();
-    e.preventDefault();
+  const isSearchInput = (target: EventTarget | null): target is HTMLInputElement => (
+    target instanceof HTMLInputElement && target.classList.contains('search-input')
+  );
+  const handleKeydownCapture = (event: KeyboardEvent) => {
+    if (event.isComposing || event.key === 'Process' || event.keyCode === 229) return;
+    if (event.key !== 'Enter' || !isSearchInput(event.target)) return;
+    const highlighted = getVisiblePopover()
+      ?.querySelector('.user-option.is-highlighted:not(.is-disabled)');
+    if (!(highlighted instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    highlighted.click();
+  };
+  const handleKeydownBubble = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || !isSearchInput(event.target)) return;
+    event.stopPropagation();
+  };
+  const handleSearchInput = (event: Event) => {
+    if (!isSearchInput(event.target)) return;
+    enterInputEl = event.target;
+    searchKeyword.value = event.target.value;
+  };
+  const handleFocusIn = (event: FocusEvent) => {
+    if (!isSearchInput(event.target)) return;
+    enterInputEl = event.target;
+  };
+  const handleDocumentMouseDown = (event: MouseEvent) => {
+    if (document.activeElement !== enterInputEl) return;
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest('.bk-user-selector-popover .no-data')) return;
+    const keyword = searchKeyword.value.trim();
+    if (!keyword) return;
+    event.preventDefault();
+    commitKeyword(keyword);
+    clearSearchInput();
   };
 
   onMounted(async () => {
     await nextTick();
-    const rootEl = userSelectorRef.value?.$el as HTMLElement | null | undefined;
+    rootEl = userSelectorRef.value?.$el as HTMLElement | null | undefined ?? null;
     if (!rootEl) return;
-
-    // bk-user-selector 内部的搜索输入框 class 在不同场景可能略有差异，这里按优先级挑选。
-    const candidate = rootEl.querySelector('input.user-selector-input')
-      || rootEl.querySelector('input.search-input')
-      || rootEl.querySelector('input');
-    if (candidate && candidate instanceof HTMLInputElement) {
-      enterInputEl = candidate;
-      enterInputEl.addEventListener('keydown', handleUserSelectorEnterKeydown);
-    }
+    rootEl.addEventListener('keydown', handleKeydownCapture, true);
+    rootEl.addEventListener('keydown', handleKeydownBubble);
+    rootEl.addEventListener('input', handleSearchInput);
+    rootEl.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('mousedown', handleDocumentMouseDown, true);
   });
 
   onBeforeUnmount(() => {
-    enterInputEl?.removeEventListener('keydown', handleUserSelectorEnterKeydown);
+    rootEl?.removeEventListener('keydown', handleKeydownCapture, true);
+    rootEl?.removeEventListener('keydown', handleKeydownBubble);
+    rootEl?.removeEventListener('input', handleSearchInput);
+    rootEl?.removeEventListener('focusin', handleFocusIn);
+    document.removeEventListener('mousedown', handleDocumentMouseDown, true);
+    rootEl = null;
     enterInputEl = null;
   });
 
@@ -322,5 +410,26 @@
       margin-right: 4px;
       border-radius: 50%;
     }
+  }
+
+  .bk-user-selector-popover .dropdown-content .no-data {
+    display: flex;
+    align-items: center;
+    height: var(--audit-space-32);
+    padding: var(--audit-space-8) var(--audit-space-12);
+    color: var(--audit-neutral-text-02);
+    text-align: left;
+    cursor: pointer;
+    background-color: var(--audit-neutral-bg-03);
+  }
+
+  .bk-user-selector-popover .dropdown-content .no-data span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bk-user-selector-popover .dropdown-content:has(.bk-loading-indicator) .no-data {
+    display: none;
   }
 </style>

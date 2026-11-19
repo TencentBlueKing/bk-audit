@@ -52,7 +52,7 @@
                 class="mr4"
                 svg
                 type="normal" />
-              {{ t('启用') }}
+              {{ t('展示') }}
               <bk-tag
                 class="status-count"
                 theme="info">
@@ -64,7 +64,7 @@
                 class="mr4"
                 svg
                 type="unknown" />
-              {{ t('停用') }}
+              {{ t('不展示') }}
               <bk-tag
                 class="status-count"
                 theme="info">
@@ -103,7 +103,7 @@
           @edit-visibility="handleEditVisibility"
           @preview="handlePreview"
           @request-success="handleRequestSuccess"
-          @toggle-status="handleToggleStatus" />
+          @status-changed="handleStatusChanged" />
       </div>
     </div>
   </skeleton-loading>
@@ -115,7 +115,7 @@
     :all-tools-data="allToolsData"
     :tags-enums="tagsEnums" />
 
-  <!-- 确认操作弹窗（删除/启用/停用） -->
+  <!-- 确认操作弹窗（删除） -->
   <confirm-action-dialog
     ref="confirmDialogRef"
     :action-type="confirmActionType"
@@ -554,11 +554,10 @@
   };
 
   const confirmDialogRef = ref();
-  const handleToggleStatus = (row: ToolItem) => {
-    confirmTarget.value = row;
-    const actionType = row.status === 'published' ? 'disable' : 'enable';
-    confirmActionType.value = actionType;
-    confirmDialogRef.value?.showToggleStatusInfoBox(row, actionType);
+
+  const handleStatusChanged = () => {
+    refreshList();
+    fetchStatusCounts();
   };
 
   const handleActionSuccess = () => {

@@ -407,8 +407,8 @@ export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: b
   }
   data.namespace = data.namespace || data.source || 'default';
 
+  data.status = data.status === 'unpublished' ? 'unpublished' : 'published';
   if (!isEditMode) {
-    data.status = data.status || 'published';
     data.version = data.version || 1;
   }
 

@@ -20,7 +20,6 @@
     :model-value="defaultValue"
     :multiple="multiple"
     need-record
-    :placeholder="t(`请选择${config.label}`)"
     @change="(value: any) => handleChange(value)" />
 </template>
 <script lang="ts">
@@ -29,8 +28,6 @@
   };
 </script>
 <script setup lang="ts">
-  import { useI18n } from 'vue-i18n';
-
   import type { IFieldConfig } from '../config';
 
   interface Props {
@@ -47,7 +44,6 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const { t } = useI18n();
   const multiple = true;
 
   const handleChange = (value: Props['defaultValue']) => {

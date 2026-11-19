@@ -234,7 +234,6 @@
 
   const buildToolListParams = () => ({
     ...getStrategySystemScopeParams(route),
-    status: 'published',
   });
 
   // 获取所有工具
