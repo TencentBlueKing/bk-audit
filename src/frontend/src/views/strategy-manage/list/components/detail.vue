@@ -141,7 +141,7 @@
   min-height: 0;
   padding-top: var(--bk-theme-space-24);
   overflow: hidden;
-  background-color: var(--bk-theme-surface-subtle);
+  background-color: var(--bk-theme-surface-muted);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;

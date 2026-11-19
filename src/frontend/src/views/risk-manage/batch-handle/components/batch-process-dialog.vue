@@ -802,6 +802,20 @@
     min-height: 180px;
   }
 
+  :deep(.await-deal-rich-editor .ql-toolbar.ql-snow),
+  :deep(.await-deal-rich-editor .ql-container.ql-snow) {
+    border-color: var(--bk-theme-border-default);
+  }
+
+  :deep(.await-deal-rich-editor .ql-toolbar.ql-snow) {
+    height: 64px;
+    border-radius: var(--bk-theme-radius-8) var(--bk-theme-radius-8) 0 0;
+  }
+
+  :deep(.await-deal-rich-editor .ql-container.ql-snow) {
+    border-radius: 0 0 var(--bk-theme-radius-8) var(--bk-theme-radius-8);
+  }
+
   .process-package-select-item {
     margin-bottom: 0 !important;
   }

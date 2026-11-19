@@ -148,7 +148,7 @@
     manual: allSelectTypeKeyList.includes(props.name),
   });
 
-  if (config.service) {
+  if (config?.service) {
     isRemoteOriginLoading.value = true;
     config.service()
       .then((data) => {
@@ -159,7 +159,7 @@
       });
   }
 
-  const isRender = computed(() => !_.isEmpty(props.value));
+  const isRender = computed(() => Boolean(config) && !_.isEmpty(props.value));
 
   const renderValueText = computed(() => {
     if (_.isEmpty(props.value)) {
@@ -221,6 +221,9 @@
   };
 
   onMounted(() => {
+    if (!rootRef.value) {
+      return;
+    }
     tippyIns = tippy(rootRef.value as SingleTarget, {
       content: popRef.value,
       placement: 'bottom-start',
@@ -243,6 +246,9 @@
   });
 
   onBeforeUnmount(() => {
+    if (!tippyIns) {
+      return;
+    }
     tippyIns.hide();
     tippyIns.unmount();
     tippyIns.destroy();

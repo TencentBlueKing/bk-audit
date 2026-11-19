@@ -163,7 +163,7 @@
 
     .condition-key {
       padding: var(--bk-theme-space-2) var(--bk-theme-space-8);
-      color: #788779;background: var(--bk-theme-status-success-bg);
+      color: var(--bk-theme-text-default);background: var(--bk-theme-surface-muted);
       border-radius: var(--bk-theme-tag-radius);
     }
 

@@ -364,7 +364,7 @@
         measureText.value = currentDisplayText || editorInput.value || '';
         nextTick(() => {
           if (measureRef.value) {
-            const textWidth = measureRef.value.scrollWidth + 16; // 加上内边距余量
+            const textWidth = measureRef.value.scrollWidth;
             const finalWidth = `${Math.max(40, textWidth)}px`;
             if (valueWrapperEl) {
               valueWrapperEl.style.width = finalWidth;
@@ -444,13 +444,13 @@
       .tag-date-display-text-editing {
         position: absolute;
         top: 50%;
-        left: 8px;
+        left: var(--bk-theme-space-4);
         z-index: 1;
-        max-width: calc(100% - 16px);
+        max-width: calc(100% - var(--bk-theme-space-8));
         overflow: hidden;
         font-size: 12px;
         font-weight: 700;
-        line-height: 22px;
+        line-height: inherit;
         color: var(--bk-theme-text-default);
         white-space: nowrap;
         pointer-events: none;
@@ -460,19 +460,22 @@
       :deep(.nl-tag-date-picker),
       :deep(.bk-date-picker) {
         display: inline-flex;
-        width: auto !important;
-        max-width: fit-content;
-        min-width: auto !important;
+        width: 100% !important;
+        max-width: 100%;
+        min-width: 0 !important;
+        height: auto;
+        line-height: inherit;
         background: transparent;
         border: none;
-        flex: 0 0 auto;
+        flex: 1 1 auto;
 
         .bk-date-picker-rel {
           display: inline-flex;
-          width: auto !important;
-          max-width: fit-content;
-          min-width: auto !important;
-          flex: 0 0 auto;
+          width: 100% !important;
+          max-width: 100%;
+          min-width: 0 !important;
+          line-height: inherit;
+          flex: 1 1 auto;
 
           /* 隐藏日历图标容器 */
           .icon-wrapper {
@@ -481,14 +484,14 @@
 
           /* 去掉为图标预留的左侧空间，调整尺寸，宽度根据内容自适应 */
           .bk-date-picker-editor {
-            display: inline-block;
-            width: auto !important;
-            height: 22px;
-            min-width: 40px;
-            padding: var(--bk-theme-space-4);
+            display: block;
+            width: 100% !important;
+            height: 1lh;
+            min-width: 0 !important;
+            padding: 0;
             font-size: 12px;
             font-weight: 700;
-            line-height: 22px;
+            line-height: inherit;
             color: transparent;
             text-overflow: clip;
             white-space: nowrap;
@@ -545,7 +548,7 @@
       font-family: inherit;
       font-size: 12px;
       font-weight: 700;
-      line-height: 22px;
+      line-height: inherit;
       white-space: pre;
       pointer-events: none;
       visibility: hidden;

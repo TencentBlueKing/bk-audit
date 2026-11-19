@@ -155,8 +155,8 @@
   line-height: 1.6;
   word-break: break-word;
   white-space: normal;
-  background: var(--bk-theme-surface-subtle);
-  border-radius: var(--bk-theme-tag-radius);
+  background: var(--bk-theme-surface-page);
+  border-radius: var(--bk-theme-card-radius);
 
   :deep(p) {
     margin: 0 0 var(--bk-theme-space-8);

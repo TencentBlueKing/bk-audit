@@ -1917,31 +1917,40 @@
 }
 
 /* 跨页全选提示行：主表体 + 左右固定列单元格背景，并禁止该行响应点击 */
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row) {
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row {
+  height: 32px !important;
   pointer-events: none;
 }
 
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row > td),
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__row--full.t-table__first-full-row > td),
-.tdesign-list-table-area.has-select-banner :deep(.t-table--column-fixed tr.t-table__first-full-row > td),
-.tdesign-list-table-area.has-select-banner :deep(.t-table__content tr.t-table__first-full-row > td) {
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row > td,
+.tdesign-list-table-area.has-select-banner tr.t-table__row--full.t-table__first-full-row > td,
+.tdesign-list-table-area.has-select-banner .t-table--column-fixed tr.t-table__first-full-row > td,
+.tdesign-list-table-area.has-select-banner .t-table__content tr.t-table__first-full-row > td {
   height: 32px !important;
   padding: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  vertical-align: top !important;
   background-color: var(--bk-theme-table-select-banner-bg) !important;
-  border-bottom-color: var(--bk-theme-table-select-banner-bg) !important;
+  border-width: 0 !important;
 }
 
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-left),
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-right),
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-left-last),
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-right-first) {
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row .t-table__cell--fixed-left,
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row .t-table__cell--fixed-right,
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row .t-table__cell--fixed-left-last,
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row .t-table__cell--fixed-right-first {
   background-color: var(--bk-theme-table-select-banner-bg) !important;
 }
 
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__row-full-inner),
-.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__row-full-element) {
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row .t-table__row-full-inner,
+.tdesign-list-table-area.has-select-banner tr.t-table__first-full-row .t-table__row-full-element {
+  position: static;
+  display: block;
   height: 32px;
   min-height: 32px;
+  max-height: 32px;
+  padding: 0;
+  margin: 0;
   background-color: var(--bk-theme-table-select-banner-bg);
 }
 
@@ -1959,6 +1968,7 @@
   background: var(--bk-theme-table-select-banner-bg);
   align-items: center;
   justify-content: center;
+  height: 32px !important;
   box-sizing: border-box;
   gap: var(--bk-theme-space-4);
 }
@@ -2026,7 +2036,7 @@
   gap: var(--bk-theme-space-6);
 }
 
-:deep(.tdesign-list-select-banner-placeholder) {
+.tdesign-list-select-banner-placeholder {
   height: 32px;
 }
 

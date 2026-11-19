@@ -320,8 +320,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       top += filterRow.offsetHeight;
     }
 
-    const fullRow = scrollContent.querySelector('.t-table__body tr.t-table__first-full-row') as HTMLElement | null;
-    const height = fullRow?.offsetHeight || 32;
+    const height = 32;
 
     return { top, height };
   };

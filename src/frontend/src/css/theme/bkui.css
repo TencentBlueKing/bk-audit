@@ -112,6 +112,10 @@
   --slider-disable-bar-bg: var(--bk-theme-text-weak);
 }
 
+.bk-button {
+  border-color: var(--bk-theme-control-border-color);
+}
+
 .bk-button,
 .bk-input,
 .bk-textarea,
@@ -164,6 +168,20 @@
   border-radius: var(--bk-theme-control-radius);
 }
 
+/* 分段按钮未选中描边是中灰（线条中）。选中态仍用品牌色。 */
+.bk-button-group .bk-button:not(.is-disabled):not(.is-selected) {
+  border-color: var(--bk-theme-border-default);
+}
+
+.bk-radio-tab .bk-radio-button:not(.is-checked):not(.is-disabled) .bk-radio-button-label,
+.bk-radio-card .bk-radio-button:not(.is-checked):not(.is-disabled) .bk-radio-button-label {
+  border-color: var(--bk-theme-border-default);
+}
+
+.bk-radio-capsule .bk-radio-button:before {
+  background: var(--bk-theme-border-default);
+}
+
 .bk-tag-input .bk-tag-input-trigger {
   border-color: var(--bk-theme-control-border-color);
 }
@@ -186,9 +204,18 @@
   border-radius: var(--bk-theme-tag-radius) !important;
 }
 
-/* 线框 Select 的禁用底。下划线 is-simplicity 不铺这块底。库内写死 #fafbfd。 */
-.bk-select .bk-select-trigger .bk-select-tag.is-disabled:not(.is-simplicity) {
-  background-color: var(--bk-theme-surface-muted);
+/* 线框表单禁用：底用 input-disabled-bg，边用 input-disabled-border。下划线 is-simplicity 不铺这块底。 */
+.bk-input.is-disabled:not(.is-simplicity),
+.bk-textarea.is-disabled:not(.is-simplicity),
+.bk-select .bk-select-trigger .bk-select-tag.is-disabled:not(.is-simplicity),
+.bk-date-picker-rel .bk-date-picker-editor[disabled],
+.bk-date-picker-editor[disabled],
+.bk-tag-input.is-disabled .bk-tag-input-trigger,
+.bk-cascader.is-disabled .bk-cascader-tag-item,
+.bk-cascader.is-disabled .bk-input {
+  color: var(--bk-theme-text-disabled);
+  background-color: var(--input-disabled-bg);
+  border-color: var(--input-disabled-border);
 }
 
 .bk-tag-input .bk-tag-input-trigger .tag-list > li,
@@ -296,7 +323,18 @@
 
 /* 色块大：card-grid 头和内容区跟 tab 圆角 8。下划线根仍是 0。 */
 .bk-tab--card-grid .bk-tab-header-item {
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-surface-soft);
   border-radius: var(--bk-theme-tab-radius) var(--bk-theme-tab-radius) 0 0;
+}
+
+.bk-tab--card-grid .bk-tab-header-item:hover {
+  color: var(--bk-theme-color-brand-2);
+}
+
+.bk-tab--card-grid .bk-tab-header--active {
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-surface-default);
 }
 
 .bk-tab--card-grid .bk-tab-content {
@@ -340,11 +378,182 @@
 /* bk-user-selector 用 scoped 属性选择器写死 2px，优先级高于普通类选择器 */
 .bk-user-selector .tags-container {
   border-radius: var(--bk-theme-control-radius) !important;
-  border-color: var(--bk-theme-border-strong);
+  border-color: var(--bk-theme-control-border-color) !important;
+}
+
+.bk-user-selector .tags-container:hover:not(.focused) {
+  border-color: var(--bk-theme-border-hover) !important;
+}
+
+/* Select 库边框走 --light-gray（深灰），输入框走控件边框（线条深）。常态和 hover 都跟输入框。 */
+.bk-select .bk-select-trigger .bk-select-tag:not(.is-disabled):not(.is-simplicity) {
+  border-color: var(--bk-theme-control-border-color);
+}
+
+.bk-select:not(.is-focus) .bk-select-trigger .bk-select-tag:not(.is-disabled):not(.is-simplicity):hover,
+.bk-input:hover:not(.is-disabled):not(.is-simplicity):not(.is-focused),
+.bk-textarea:hover:not(.is-disabled):not(.is-simplicity):not(.is-focused),
+.__bk_date_picker__:hover:not(.is-focus),
+.bk-date-picker-editor:hover {
+  border-color: var(--bk-theme-border-hover);
 }
 
 .bk-user-selector .tags-container.focused {
-  border-color: var(--bk-theme-color-brand-2);
+  border-color: var(--bk-theme-color-brand-2) !important;
+  box-shadow: 0 0 3px 0 var(--input-shadow-color) !important;
+}
+
+.bk-date-picker-rel .bk-date-picker-editor {
+  border-color: var(--bk-theme-control-border-color);
+}
+
+/* 日期面板：分割线用浅灰 Neutral/8，文字/选中/悬停走现行语义色。只改下拉面板，不改触发器。 */
+.bk-date-picker-dropdown {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border-color: var(--bk-theme-border-weak);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-header,
+.bk-date-picker-dropdown .bk-time-picker-header,
+.bk-date-picker-dropdown .bk-picker-confirm,
+.bk-date-picker-dropdown .bk-picker-panel-sidebar,
+.bk-date-picker-dropdown .bk-date-picker-footer-wrapper {
+  border-color: var(--bk-theme-border-weak);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-header,
+.bk-date-picker-dropdown .bk-time-picker-header,
+.bk-date-picker-dropdown .bk-date-picker-cells,
+.bk-date-picker-dropdown .bk-date-picker-cells-header span,
+.bk-date-picker-dropdown .bk-picker-panel-sidebar,
+.bk-date-picker-dropdown .bk-picker-panel-shortcuts > div,
+.bk-date-picker-dropdown .bk-time-picker-cells-title,
+.bk-date-picker-dropdown .bk-time-picker-cells-cell {
+  color: var(--bk-theme-text-default);
+}
+
+.bk-date-picker-dropdown .bk-picker-panel-icon-btn,
+.bk-date-picker-dropdown .bk-date-picker-footer-wrapper,
+.bk-date-picker-dropdown .bk-picker-confirm a,
+.bk-date-picker-dropdown .bk-picker-confirm-time {
+  color: var(--bk-theme-text-weak);
+}
+
+.bk-date-picker-dropdown .bk-picker-panel-icon-btn:hover,
+.bk-date-picker-dropdown .bk-date-picker-header-label:hover,
+.bk-date-picker-dropdown .bk-time-picker-cells-cell:hover,
+.bk-date-picker-dropdown .bk-time-picker-cells-title.active {
+  color: var(--bk-theme-color-brand-3);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-prev-month em,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-next-month em,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-week-label,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-disabled,
+.bk-date-picker-dropdown .bk-date-picker-header .up-to-now.disabled,
+.bk-date-picker-dropdown .bk-time-picker-cells-cell-disabled,
+.bk-date-picker-dropdown .bk-time-picker-cells-cell-disabled:hover,
+.bk-date-picker-dropdown .bk-picker-confirm a[disabled],
+.bk-date-picker-dropdown .bk-picker-confirm-time.is-disabled {
+  color: var(--bk-theme-text-disabled);
+}
+
+.bk-date-picker-dropdown .bk-picker-panel-sidebar,
+.bk-date-picker-dropdown .bk-picker-confirm,
+.bk-date-picker-dropdown .bk-date-picker-footer-wrapper {
+  background-color: var(--bk-theme-surface-subtle);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell:hover em,
+.bk-date-picker-dropdown .bk-picker-panel-shortcuts > div:hover,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-disabled,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-disabled:hover {
+  background-color: var(--bk-theme-surface-subtle);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-prev-month:hover em,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-next-month:hover em {
+  background-color: transparent;
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-today em,
+.bk-date-picker-dropdown .bk-date-picker-cells-focused em {
+  color: var(--bk-theme-color-brand-2);
+  box-shadow: 0 0 0 1px var(--bk-theme-border-brand) inset;
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-range::before {
+  background: var(--bk-theme-fill-selected);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-selected em,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-selected:hover em,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-today.bk-date-picker-cells-cell-selected em,
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-today.bk-date-picker-cells-cell-selected em:hover {
+  color: var(--bk-theme-text-inverse);
+  background-color: var(--bk-theme-color-brand-2);
+  box-shadow: 0 0 0 1px var(--bk-theme-color-brand-2) inset;
+}
+
+.bk-date-picker-dropdown .bk-date-picker-cells-cell-disabled.bk-date-picker-cells-cell-selected em {
+  color: var(--bk-theme-surface-subtle);
+  background: var(--bk-theme-text-disabled);
+}
+
+.bk-date-picker-dropdown .bk-picker-panel-shortcuts > div.shortcuts-item-active,
+.bk-date-picker-dropdown .bk-picker-panel-shortcuts > div.shortcuts-item-active:hover {
+  color: var(--bk-theme-color-brand-2);
+  background-color: var(--bk-theme-fill-selected);
+}
+
+.bk-date-picker-dropdown .bk-picker-confirm a.confirm {
+  color: var(--bk-theme-color-brand-2);
+  background-color: transparent;
+}
+
+
+.bk-date-picker-dropdown .bk-time-picker-cells-cell-selected,
+.bk-date-picker-dropdown .bk-time-picker-cells-cell-selected:hover {
+  color: var(--bk-theme-color-brand-2);
+}
+
+.bk-date-picker-dropdown .bk-time-picker-cells-title::before,
+.bk-date-picker-dropdown .bk-time-picker-cells-title::after {
+  background-color: var(--bk-theme-color-brand-2);
+}
+
+.bk-date-picker-dropdown .bk-time-picker-cells::after {
+  color: var(--bk-theme-color-brand-2);
+  background-color: color-mix(in srgb, var(--bk-theme-color-brand-2) 16%, transparent);
+}
+
+/* 区间起止：开始日期只圆左侧，结束日期只圆右侧 */
+.bk-date-picker-dropdown .bk-date-picker-with-range .bk-date-picker-cells > .bk-date-picker-cells-cell-selected em {
+  border-top-left-radius: var(--bk-theme-radius-8);
+  border-bottom-left-radius: var(--bk-theme-radius-8);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-with-range .bk-date-picker-cells > .bk-date-picker-cells-cell-range ~ .bk-date-picker-cells-cell-selected em,
+.bk-date-picker-dropdown .bk-date-picker-with-range .bk-date-picker-cells > .bk-date-picker-cells-cell-selected ~ .bk-date-picker-cells-cell-selected em {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.bk-date-picker-dropdown .bk-date-picker-with-range .bk-date-picker-cells > .bk-date-picker-cells-cell-selected:not(:has(~ .bk-date-picker-cells-cell-range)):not(:has(~ .bk-date-picker-cells-cell-selected)) em {
+  border-top-right-radius: var(--bk-theme-radius-8);
+  border-bottom-right-radius: var(--bk-theme-radius-8);
+}
+
+.bk-date-picker-dropdown .bk-date-picker-with-range:has(.bk-picker-panel-content-right .bk-date-picker-cells-cell-selected) .bk-picker-panel-content-left .bk-date-picker-cells-cell-selected em,
+.bk-date-picker-dropdown .bk-date-picker-with-range:has(.bk-picker-panel-content-right .bk-date-picker-cells-cell-range) .bk-picker-panel-content-left .bk-date-picker-cells-cell-selected em {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.bk-date-picker-dropdown .bk-date-picker-with-range:has(.bk-picker-panel-content-left .bk-date-picker-cells-cell-selected) .bk-picker-panel-content-right .bk-date-picker-cells-cell-selected em {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .__bk_date_picker__ {
@@ -400,6 +609,12 @@
 .bk-dialog-content {
   padding-right: var(--bk-theme-dialog-padding-x);
   padding-left: var(--bk-theme-dialog-padding-x);
+}
+
+/* 库把弹窗标题写成 --table-head-font-color，表头是弱显示。标题统一强显示。 */
+.bk-dialog .bk-dialog-title,
+.bk-infobox .bk-infobox-title {
+  color: var(--bk-theme-text-strong);
 }
 
 .bk-dialog-footer {
@@ -533,11 +748,21 @@
   line-height: calc(var(--bk-theme-table-row-height) - 2px - var(--bk-theme-space-8) - var(--bk-theme-space-8));
 }
 
-.bk-table .bk-table-head table th *,
-.bk-table thead th * {
+/* 筛选漏斗、排序箭头不吃表头字色。它们的 svg 用 fill: currentColor，
+   字色写到 svg 上就会盖住选中态。弹层打开时库还会把图标改成 color: inherit。 */
+.bk-table .bk-table-head table th *:not(.bk-table-head-action):not(.bk-table-head-action *):not(.bk-head-cell-sort):not(.bk-head-cell-sort *):not(.sort-action):not(.sort-action *),
+.bk-table thead th *:not(.bk-table-head-action):not(.bk-table-head-action *):not(.bk-head-cell-sort):not(.bk-head-cell-sort *):not(.sort-action):not(.sort-action *) {
   font-size: var(--bk-theme-font-size-sm);
   font-weight: var(--bk-theme-font-weight-regular);
   color: var(--bk-theme-table-header-text);
+}
+
+.bk-table .bk-table-head table th .bk-table-head-action.active,
+.bk-table .bk-table-head table th .bk-table-head-action.active svg,
+.bk-table .bk-table-head table th .bk-head-cell-sort .sort-action.active,
+.bk-table .bk-table-head table th .bk-head-cell-sort .sort-action.active svg {
+  color: var(--bk-theme-color-brand-2) !important;
+  fill: currentColor;
 }
 
 .bk-table .bk-table-body table tbody tr.hover-highlight:hover td:not(.empty-cell) {
@@ -566,6 +791,26 @@
   background-color: var(--bk-theme-surface-default);
 }
 
+
+/* 策略列表把 col、右边框设成透明后，滚到冻结列下面的内容会透出来。
+   阴影仍用库的 .bk-table-fixed 遮罩（z-index 高于单元格），不要改它的 transform。 */
+.bk-table th.column_fixed,
+.bk-table td.column_fixed {
+  background-clip: border-box;
+  background-color: var(--bk-theme-table-row-bg);
+}
+
+.bk-table thead th.column_fixed,
+.bk-table .bk-table-head table thead th.column_fixed {
+  background-color: var(--bk-theme-table-header-bg);
+}
+
 .bk-table .bk-exception {
-  border-bottom: 1px solid var(--bk-theme-table-border);
+  border-bottom: none;
+}
+
+.bk-popover.bk-pop2-content.bk-select-popover .bk-select-content-wrapper .bk-select-search-wrapper {
+  margin-right: 0;
+  margin-left: 0;
+  border-bottom-color: var(--bk-theme-border-weak);
 }

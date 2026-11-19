@@ -239,17 +239,15 @@
     parseURL();
     calcTableHeight();
     window.addEventListener('resize', calcTableHeight);
-    const observer = new MutationObserver(() => {
-      calcTableHeight();
-    });
-    observer.observe(document.querySelector('body') as Node, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-    });
+    const searchBox = document.querySelector('.analysis-search-box');
+    const resizeObserver = searchBox
+      ? new ResizeObserver(() => {
+        calcTableHeight();
+      })
+      : null;
+    resizeObserver?.observe(searchBox as Element);
     onBeforeUnmount(() => {
-      observer.takeRecords();
-      observer.disconnect();
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', calcTableHeight);
     });
   });

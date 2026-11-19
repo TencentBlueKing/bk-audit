@@ -1158,14 +1158,15 @@
 .report-create-content {
   min-height: 100%;
   padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-24);
-  background: var(--bk-theme-surface-subtle);
+  background: var(--bk-theme-surface-muted);
 }
 
 .report-card {
   margin-bottom: var(--bk-theme-space-16);
+  overflow: hidden;
   background: var(--bk-theme-surface-default);
-  border-radius: var(--bk-theme-tag-radius);
-  box-shadow: 0 1px 2px 0 #00000029;
+  border-radius: var(--bk-theme-card-radius);
+  box-shadow: var(--bk-theme-card-shadow);
 }
 
 .report-card-title {
@@ -1179,7 +1180,11 @@
 }
 
 .report-card-body {
-  padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-16);
+  padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-24);
+
+  :deep(.bk-form > .bk-form-item:last-child) {
+    margin-bottom: 0;
+  }
 }
 
 .report-card-body--visibility {
@@ -1205,6 +1210,7 @@
 
   .preview-btn {
     flex-shrink: 0;
+    font-size: var(--bk-theme-font-size-sm);
     color: var(--bk-theme-color-brand-2);
 
     &:hover {
@@ -1291,6 +1297,7 @@
   /* 仅侧滑可见范围内去掉场景参数块外边框，不影响工具管理等其他场景 */
   :deep(.param-config-block) {
     border: none;
+    border-radius: var(--bk-theme-radius-8);
   }
 }
 

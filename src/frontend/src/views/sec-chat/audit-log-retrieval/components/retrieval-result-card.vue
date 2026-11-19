@@ -2572,7 +2572,8 @@
       height: 32px;
       padding: 0 var(--bk-theme-space-8) 0 var(--bk-theme-space-12);
       background: var(--bk-theme-surface-muted);
-      border: 1px solid var(--bk-theme-border-default);
+      border: none;
+      border-radius: var(--bk-theme-control-radius);
       box-sizing: border-box;
 
       &:hover {
@@ -2590,6 +2591,7 @@
     .nl-add-condition-trigger {
       height: 32px;
       padding: 0 var(--bk-theme-space-12);
+      border-radius: var(--bk-theme-control-radius);
       box-sizing: border-box;
 
       &.is-accent {

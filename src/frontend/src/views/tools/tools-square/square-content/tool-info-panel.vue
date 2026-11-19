@@ -61,23 +61,20 @@
           <span
             :ref="(el) => setTabTextRef(`${item.uid}-${index}`, el as HTMLElement)"
             class="tab-text">{{ getToolTabName(item) }}</span>
-          <img
-            alt="delete"
+          <audit-icon
             class="delete-fill"
-            src="@images/delete-circle.svg"
-            @click.stop="handleTabClose(item.uid)">
+            type="close"
+            @click.stop="handleTabClose(item.uid)" />
         </div>
-        <div
+        <add-tool-popover
           v-if="toolList.length > 0"
-          v-bk-tooltips="{ content: '返回工具广场', delay: [300, 0] }"
-          class="tab-add-btn"
-          role="button"
-          tabindex="0"
-          @click="handleGoHome"
-          @keydown.enter.prevent="handleGoHome"
-          @keydown.space.prevent="handleGoHome">
-          <audit-icon type="add" />
-        </div>
+          :scene-name-map="props.sceneNameMap"
+          :scope-params="props.scopeParams"
+          :system-name-map="props.systemNameMap"
+          :tags-enums="props.tagsEnums"
+          :tool-list="toolList"
+          @add-tool="(tool, ctx) => emit('addTool', tool, ctx)"
+          @switch-tool="(tool) => emit('switchTab', tool.uid)" />
       </div>
     </div>
     <!-- 右键菜单 -->
@@ -185,6 +182,8 @@
   import AuditUserProfile from '../components/audit-profile/audit-user-profile.vue';
   import GameDetail from '../components/game/game-detail.vue';
   import ToolContent from '../components/tool-content.vue';
+
+  import AddToolPopover from './add-tool-popover.vue';
 
   import {
     fetchGameDetailNameByOpenid,
@@ -1391,6 +1390,8 @@
 }
 
 .panel-tab {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 50px minmax(0, 1fr);
   align-items: center;
@@ -1398,6 +1399,7 @@
   overflow: visible;
   background: var(--bk-theme-surface-default);
   border-bottom: 1px solid var(--bk-theme-border-default);
+  box-shadow: var(--bk-theme-card-shadow);
 }
 
 .tab-box {
@@ -1516,10 +1518,15 @@
 }
 
 .delete-fill {
-  display: block;
-  width: 15px;
-  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   margin-left: var(--bk-theme-space-4);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--bk-theme-text-weak);
   cursor: pointer;
   opacity: 0%;
   transition: all .15s;

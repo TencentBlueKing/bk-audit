@@ -29,7 +29,7 @@
           v-model="selectedScene"
           class="page-scene-selector"
           :list-scope="['scene','system']"
-          :popover-width="208"
+          :popover-width="400"
           scene-permission="view_scene"
           system-permission="view_system"
           width="208px"
@@ -103,7 +103,6 @@
           :recent-used="tagId === '-5'"
           :scene-name-map="sceneNameMap"
           :scope-params="scopeParams"
-          :single-scope-group="singleScopeGroup"
           :system-name-map="systemNameMap"
           :tag-id="tagId"
           :tags-enums="tagsEnums"
@@ -312,16 +311,6 @@
     };
   });
 
-  const singleScopeGroup = computed(() => {
-    const item = selectedScene.value;
-    if (!item || item.type === 'aggregate') return null;
-    return {
-      groupKey: String(item.id),
-      groupName: item.name,
-      groupId: item.id,
-    };
-  });
-
   const {
     openedTools,
     activeToolUid,
@@ -417,11 +406,13 @@
         syncRouteToUrl();
       }
     }
-    // 无论是初始化还是切换，都重新拉取标签和工具列表
-    // 切换场景时，重置选中的标签为"全部工具"，并清空列表搜索条件
+    // 切换场景时回到「全部工具」并清空搜索。首次进入没有记住的标签时也落到「全部工具」，
+    // 这样列表只在场景确定时拉一次，标签接口回来不再补拉。
     if (isActualChange) {
       tagId.value = '-3';
       ContentCardRef.value?.clearSearch();
+    } else if (!tagId.value) {
+      tagId.value = '-3';
     }
     refreshTagsList();
     ContentCardRef.value?.getToolsList(tagId.value);
@@ -556,14 +547,12 @@
         ...dynamicTags.map(item => toLabelItem(item, 'tag')),
       ];
       tagsEnums.value = strategyLabelList.value;
-      // 工具已打开时，仅更新标签数据，不重置标签选中状态（侧边栏已收起，避免触发 goHome）
+      // 工具已打开时，仅更新标签数量，不改选中项
       if (hasOpenedTools.value) return;
-      // 初始化阶段才按当前标签拉列表；从详情返回时只更新数量，避免滚动回到顶部
-      if (isInitialSceneSetup.value || lastSceneKey.value === null || !tagId.value) {
-        if ((isInitialSceneSetup.value || lastSceneKey.value === null) && tagId.value) {
-          ContentCardRef.value?.getToolsList(tagId.value);
-        } else {
-          safeResetLabels();
+      // 列表由场景切换拉取。标签接口若再调 getToolsList，列表先回来时会先出卡片再被骨架盖住。
+      if (isInitialSceneSetup.value || lastSceneKey.value === null) {
+        if (!tagId.value) {
+          tagId.value = '-3';
         }
         isInitialSceneSetup.value = false;
       }

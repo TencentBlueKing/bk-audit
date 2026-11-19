@@ -17,6 +17,7 @@
 <template>
   <card-part-vue
     v-if="inputVariable.length > 0"
+    class="param-config-card"
     :title="t('参数配置')"
     :title-description="t('设置仪表盘组件和变量的值，替代BKVision仪表盘的默认值')">
     <template #content>
@@ -447,10 +448,33 @@
   }
 }
 
+.bk-collapse-demo {
+  :deep(.bk-collapse-header) {
+    height: 32px;
+    line-height: 32px;
+  }
+
+  :deep(.bk-collapse-header:hover) {
+    border-radius: var(--bk-theme-radius-8);
+  }
+}
+
+.bk-collapse-demo + .bk-collapse-demo {
+  margin-top: var(--bk-theme-space-24);
+}
+
 .collapse-title {
   position: absolute;
+  top: 0;
   left: 10px;
+  display: flex;
   width: 100%;
+  height: 32px;
+  align-items: center;
+
+  .full-screen-img {
+    color: var(--bk-theme-text-weak);
+  }
 }
 
 .title-text {
@@ -464,11 +488,17 @@
 .info-fill {
   margin-left: var(--bk-theme-space-4);
   font-size: 14px;
-  color: var(--bk-theme-color-brand-4);
+  color: var(--bk-theme-border-strong);
+}
+
+.param-config-card {
+  :deep(.card-part-content) {
+    padding-top: 0;
+  }
 }
 
 :deep(.bk-collapse-content) {
-  padding: 0;
+  padding: var(--bk-theme-space-12) 0 0;
 }
 
 .variables-title {
@@ -476,8 +506,14 @@
   justify-content: space-between;
 
   .title-right {
-    color: var(--bk-theme-color-brand-2);
-    cursor: pointer
+    font-size: var(--bk-theme-font-size-sm);
+    color: var(--bk-theme-text-default);
+    cursor: pointer;
+
+    :deep(.bk-checkbox-label) {
+      font-size: var(--bk-theme-font-size-sm);
+      color: var(--bk-theme-text-default);
+    }
   }
 }
 

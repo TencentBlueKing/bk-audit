@@ -19,11 +19,32 @@
   <teleport
     v-if="isHeaderSlotActive"
     to="#teleport-nav-step">
-    <bk-steps
-      v-model:cur-step="currentStep"
-      class="tool-create-step"
-      :line-type="isEditMode ? 'solid' : 'dashed'"
-      :steps="steps" />
+    <div class="tool-create-step">
+      <template
+        v-for="(step, index) in steps"
+        :key="step.title">
+        <div
+          class="tool-step-item"
+          @click="handleStepClick(index + 1)">
+          <span
+            class="tool-step-index"
+            :class="{
+              'is-current': index + 1 === currentStep,
+              'is-done': index + 1 < currentStep,
+            }">
+            <audit-icon
+              v-if="index + 1 < currentStep"
+              type="check-line" />
+            <template v-else>{{ index + 1 }}</template>
+          </span>
+          <span class="tool-step-title">{{ step.title }}</span>
+        </div>
+        <span
+          v-if="index < steps.length - 1"
+          class="tool-step-line"
+          :class="{ 'is-done': index + 1 < currentStep }" />
+      </template>
+    </div>
   </teleport>
 
   <skeleton-loading
@@ -544,6 +565,14 @@
   };
 
   // 下一步：校验步骤1表单后进入步骤2
+  const handleStepClick = (step: number) => {
+    const nextStep = step as 1 | 2;
+    if (nextStep === currentStep.value) {
+      return;
+    }
+    currentStep.value = nextStep;
+  };
+
   const handleNextStep = async () => {
     const isValid = await validateStep1();
     if (!isValid) {
@@ -907,26 +936,67 @@
 
 <style lang="postcss" scoped>
   .tool-create-step {
-    width: 450px;
-    margin: 0 auto;
-    transform: translateX(-86px);
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bk-theme-space-16);
+  }
 
-    :deep(.bk-step) {
-      display: flex;
+  .tool-step-item {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: var(--bk-theme-space-8);
+    cursor: pointer;
+  }
 
-      .bk-step-content {
-        display: flex;
-      }
+  .tool-step-index {
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    font-size: var(--bk-theme-font-size-base);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-default);
+    background: var(--bk-theme-border-weak);
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+
+    &.is-current {
+      color: var(--bk-theme-text-inverse);
+      background: var(--bk-theme-color-brand-2);
+    }
+
+    &.is-done {
+      font-size: var(--bk-theme-font-size-lg);
+      color: var(--bk-theme-color-brand-2);
+      background: var(--bk-theme-color-brand-6);
     }
   }
 
-  .step-content {
-    padding-top: var(--bk-theme-space-16);
+  .tool-step-title {
+    font-size: var(--bk-theme-font-size-base);
+    font-weight: var(--bk-theme-font-weight-regular);
+    line-height: var(--bk-theme-line-height-base);
+    color: var(--bk-theme-text-default);
+    white-space: nowrap;
+  }
+
+  .tool-step-line {
+    width: 130px;
+    height: 1px;
+    background: var(--bk-theme-border-default);
+    flex: none;
+
+    &.is-done {
+      background: var(--bk-theme-color-brand-2);
+    }
   }
 
   .step2-content {
-    padding-top: var(--bk-theme-space-16);
-
     :deep(.card-part-content) {
       background-color: var(--bk-theme-table-header-bg);
     }

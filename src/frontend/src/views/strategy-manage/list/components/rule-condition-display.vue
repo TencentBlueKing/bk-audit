@@ -20,7 +20,7 @@
         class="condition-item"
         :style="{ marginTop: index ? '12px' : '0' }">
         <div
-          v-if="row.showInnerConnector"
+          v-if="row.showInnerConnector && row.innerConnector !== groupConnector"
           class="condition-equation mr4 mb4">
           {{ row.innerConnector }}
         </div>
@@ -120,7 +120,7 @@
       padding: 0 var(--bk-theme-space-8);
       font-size: var(--bk-theme-font-size-sm);
       line-height: 22px;
-      color: #326746;background: var(--bk-theme-status-success-bg);
+      color: var(--bk-theme-text-default);background: var(--bk-theme-surface-muted);
       border-radius: var(--bk-theme-tag-radius);
     }
 

@@ -52,11 +52,19 @@
             class="history-btn risk-toolbar-secondary"
             outline
             @click="handleHistory">
-            <img
+            <svg
+              aria-hidden="true"
               class="ai-agent-history"
+              fill="none"
               height="14"
-              src="@images/history.svg"
+              viewBox="0 0 14 12"
               width="24">
+              <path
+                clip-rule="evenodd"
+                d="M7.83455 0C11.2342 0 14 2.6916 14 6C14 9.3084 11.2342 12 7.83455 12V11.04C10.6901 11.04 13.0135 8.7792 13.0135 6C13.0135 3.2208 10.6901 0.96 7.83455 0.96C5.06232 0.96 2.79813 3.09264 2.66816 5.76H4.43912L2.21956 8.25408L0 5.76H1.67527C1.80549 2.56248 4.51755 0 7.83455 0ZM8.04635 3.27273V6.13636H11.3539V7.09091H7.02863V3.27273H8.04635Z"
+                fill="currentColor"
+                fill-rule="evenodd" />
+            </svg>
             {{ t('历史分析报告') }}
           </bk-button>
         </div>

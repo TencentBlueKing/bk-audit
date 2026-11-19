@@ -636,6 +636,10 @@
 
 <style lang="postcss" scoped>
 .history-report-drawer-content {
+  /* 白底抽屉里的表不再套外框，和卡片内表格同一条。表头底色交给 tdesign 主题。 */
+  --bk-theme-table-frame-radius: 0;
+  --bk-theme-table-frame-border: none;
+
   max-height: calc(100vh - 150px);
   margin-top: var(--bk-theme-space-16);
   margin-right: var(--bk-theme-space-32);
@@ -646,16 +650,6 @@
 
     .show-tooltips-text {
       max-width: 100%;
-    }
-
-    .t-table,
-    .t-table__content,
-    .t-table__header,
-    .t-table__body,
-    .t-table__header--fixed > tr > th,
-    .t-table th,
-    .t-table td {
-      background-color: var(--bk-theme-surface-default) !important;
     }
   }
 }

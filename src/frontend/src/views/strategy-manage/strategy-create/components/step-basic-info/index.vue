@@ -33,7 +33,7 @@
                     class="is-required"
                     :label="t('策略名称')"
                     property="strategy_name"
-                    style="flex: 1; margin-right: var(--bk-theme-space-16)">
+                    style="flex: 1;">
                     <bk-input
                       v-model.trim="formData.strategy_name"
                       :maxlength="32"
@@ -745,6 +745,9 @@
   }
 
   .basic-info-fields {
+    /* 页面挂了行内表单，表单项间距是 0。基础信息这里按 16 排 */
+    --bk-theme-form-item-gap: var(--bk-theme-space-16);
+
     :deep(.bk-form-item),
     :deep(.bk-form-content) {
       width: 100%;
@@ -752,7 +755,7 @@
     }
 
     .basic-info-desc {
-      width: 624px;
+      width: calc((100% - var(--bk-theme-space-16)) / 2);
       max-width: 100%;
       margin-bottom: 0;
     }

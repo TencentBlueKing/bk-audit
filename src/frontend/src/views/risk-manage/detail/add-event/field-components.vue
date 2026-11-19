@@ -21,20 +21,17 @@
       v-if="type === 'textarea'"
       v-model="textareaValue"
       :resize="false"
-      style="width: 248px;height: 40px;border: none"
       type="textarea"
       @update:modelValue="handleChange('textarea')" />
     <bk-input
       v-if="type === 'number-input'"
       v-model="numberValue"
       :precision="999"
-      style="width: 248px;height: 40px"
       type="number"
       @update:modelValue="handleChange('number-input')" />
     <bk-input
       v-if="type === 'input'"
       v-model="inputValue"
-      style="width: 248px;height: 40px"
       type="input"
       @update:modelValue="handleChange('input')" />
     <audit-user-selector-tenant
@@ -43,7 +40,6 @@
       allow-create
       :auto-focus="false"
       class="add-event-com-user-selector"
-      style="width: 248px;height: 40px"
       @update:modelValue="handleChange('user-selector')" />
     <bk-date-picker
       v-if="type === 'date-picker'"
@@ -51,7 +47,6 @@
       append-to-body
       class="add-event-com-date-picker"
       clearable
-      style="width: 248px;height: 40px"
       type="datetime"
       @update:modelValue="handleChange('date-picker')" />
   </div>
@@ -110,29 +105,49 @@
 }
 
 .add-event-com {
-  :deep(.bk-input) {
+  width: 100%;
+  height: 100%;
+
+  :deep(.bk-input),
+  :deep(.bk-textarea),
+  :deep(.bk-date-picker),
+  :deep(.bk-date-picker-rel) {
+    width: 100%;
+    height: 100%;
+  }
+
+  :deep(.bk-input),
+  :deep(.bk-textarea) {
     border: none !important;
+    border-radius: 0;
+  }
+
+  :deep(.bk-input--text),
+  :deep(.bk-textarea > textarea) {
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: 0 var(--bk-theme-space-12);
+    overflow: hidden;
+    line-height: 40px;
   }
 }
 
 .add-event-com-date-picker {
   :deep(.bk-date-picker-rel .bk-date-picker-editor) {
-    height: 40px;
+    height: 100%;
     border: none !important;
   }
 }
 </style>
 <style lang="postcss">
 .add-event-com-user-selector {
-  height: 42px;
+  width: 100%;
+  height: 100%;
 
-  .bk-select-trigger {
-    height: 40px !important;
-
-    .bk-select-tag {
-      height: 40px !important;
-      border: none !important;
-    }
+  .bk-select-trigger,
+  .bk-select-tag {
+    height: 100% !important;
+    border: none !important;
   }
 }
 </style>

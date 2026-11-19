@@ -63,16 +63,6 @@
         </div>
       </transition>
     </scroll-faker>
-    <span
-      class="operation-box"
-      :class="{
-        'is-show-label': showLabel
-      }"
-      @click="handleShowLabelToggle">
-      <audit-icon
-        class="operation-icon"
-        type="angle-line-up" />
-    </span>
   </div>
 </template>
 <script setup lang="ts">
@@ -134,10 +124,6 @@
     emits('checked', id === 'all' ? '' : id);
   };
 
-  const handleShowLabelToggle = () => {
-    showLabel.value = !showLabel.value;
-    emits('change', showLabel.value);
-  };
 
   // 如果省略号就hover展示tips
   const handleShowTips = (data: Array<Record<string, any>>) => {
@@ -182,7 +168,6 @@
   position: relative;
   height: 100%;
   min-height: 0;
-  background-color: var(--bk-theme-surface-subtle);
 
   .render-label {
     position: relative;
@@ -194,21 +179,20 @@
     .active {
       color: var(--bk-theme-color-brand-2) !important;
       background: var(--bk-theme-fill-selected);
+      border-radius: var(--bk-theme-radius-8);
 
       &:hover {
         background: var(--bk-theme-fill-selected) !important;
       }
     }
 
-    .label-item.final {
-      border-bottom: 1px solid var(--bk-theme-border-weak);
-    }
-
     .label-item {
       display: flex;
-      width: 240px;
+      box-sizing: border-box;
+      width: calc(100% - var(--bk-theme-space-16));
       height: 40px;
       padding: 0 var(--bk-theme-space-16);
+      margin-left: var(--bk-theme-space-16);
       font-size: 14px;
       line-height: 40px;
       cursor: pointer;
@@ -228,6 +212,7 @@
 
       &:hover {
         background: var(--bk-theme-border-weak);
+        border-radius: var(--bk-theme-radius-8);
       }
 
       .tag-icon {
@@ -249,31 +234,5 @@
     opacity: 0%;
   }
 
-  .operation-box {
-    position: absolute;
-    top: 50%;
-    right: 0;
-    right: -16px;
-    z-index: 1;
-    width: 16px;
-    height: 64px;
-    font-size: 14px;
-    line-height: 61px;
-    color: white;
-    cursor: pointer;
-    background: var(--bk-theme-border-default);
-    border-radius: 0 4px 4px 0;
-
-    .operation-icon {
-      display: inline-block;
-      transform: rotate(90deg);
-    }
-  }
-
-  .is-show-label {
-    .operation-icon {
-      transform: rotate(-90deg);
-    }
-  }
 }
 </style>

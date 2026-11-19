@@ -980,7 +980,6 @@
 <style lang="postcss" scoped>
   .report-config {
     position: relative;
-    min-height: 85vh;
     padding: var(--bk-theme-space-24);
   }
 
@@ -1046,7 +1045,6 @@
   }
 
   .report-config-content {
-    min-height: 400px;
 
     :deep(.audit-tdesign-list) {
       border: none;

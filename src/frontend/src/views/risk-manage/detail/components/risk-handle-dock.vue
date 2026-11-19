@@ -212,6 +212,41 @@
     return Math.max(MIN_EXPANDED_HEIGHT, maxHeight);
   };
 
+  const fitPanelToContent = () => {
+    if (!isExpanded.value || isResizing.value || isEditorBoosted.value || !dockRootRef.value) {
+      return;
+    }
+    const body = dockRootRef.value.querySelector('.risk-handle-dock__body') as HTMLElement | null;
+    if (!body) {
+      return;
+    }
+    let contentHeight = 0;
+    Array.from(body.children).forEach((child) => {
+      const el = child as HTMLElement;
+      const style = getComputedStyle(el);
+      contentHeight += el.getBoundingClientRect().height
+        + (parseFloat(style.marginTop) || 0)
+        + (parseFloat(style.marginBottom) || 0);
+    });
+    if (contentHeight <= 0) {
+      return;
+    }
+    const bodyStyle = getComputedStyle(body);
+    const dockBox = getComputedStyle(dockRootRef.value);
+    const border = dockBox.boxSizing === 'border-box'
+      ? (parseFloat(dockBox.borderTopWidth) || 0) + (parseFloat(dockBox.borderBottomWidth) || 0)
+      : 0;
+    const fitted = HEADER_HEIGHT
+      + (parseFloat(bodyStyle.paddingTop) || 0)
+      + contentHeight
+      + (parseFloat(bodyStyle.paddingBottom) || 0)
+      + border;
+    const nextHeight = Math.min(Math.max(Math.round(fitted), MIN_EXPANDED_HEIGHT), getMaxPanelHeight());
+    if (panelHeight.value !== nextHeight) {
+      panelHeight.value = nextHeight;
+    }
+  };
+
   const handleEditorExpandChange = (expanded: boolean) => {
     if (expanded) {
       if (!isExpanded.value) {
@@ -230,6 +265,7 @@
       panelHeight.value = panelHeightBeforeBoost.value;
       panelHeightBeforeBoost.value = null;
     }
+    nextTick(() => fitPanelToContent());
   };
 
   const collapseDock = () => {
@@ -316,7 +352,7 @@
     isExpanded.value = !isExpanded.value;
 
     if (!wasExpanded && isExpanded.value) {
-      panelHeight.value = getDefaultExpandedHeight();
+      nextTick(() => fitPanelToContent());
       return;
     }
 
@@ -411,10 +447,28 @@
   }, 50);
 
 
+  let contentResizeObserver: ResizeObserver | null = null;
+
+  const observeDockContent = () => {
+    const body = dockRootRef.value?.querySelector('.risk-handle-dock__body');
+    if (!body || !contentResizeObserver) {
+      return;
+    }
+    contentResizeObserver.disconnect();
+    Array.from(body.children).forEach(child => contentResizeObserver?.observe(child));
+  };
+
   onMounted(() => {
     isDockActive.value = true;
     updateDockPosition();
-    nextTick(hideInactiveDocks);
+    contentResizeObserver = new ResizeObserver(() => {
+      fitPanelToContent();
+    });
+    nextTick(() => {
+      hideInactiveDocks();
+      observeDockContent();
+      fitPanelToContent();
+    });
 
     window.addEventListener('resize', handleResize);
 
@@ -457,6 +511,9 @@
 
     window.removeEventListener('resize', handleResize);
 
+    contentResizeObserver?.disconnect();
+    contentResizeObserver = null;
+
     layoutObserver?.disconnect();
 
     layoutObserver = null;
@@ -494,8 +551,7 @@
   overflow: hidden;
   flex-direction: column;
   background: var(--bk-theme-surface-default);
-  border-top: 1px solid var(--bk-theme-border-default);
-  box-shadow: var(--bk-theme-card-shadow);
+  box-shadow: 0 -4px 8px 0 rgb(0 0 0 / 10%);
   transition: height .2s ease, left .2s ease, width .2s ease;
 
 
@@ -511,11 +567,6 @@
 
   }
 
-
-  &.is-expanded.is-resize-hover {
-    border-top-color: var(--bk-theme-color-brand-4);
-
-  }
 
 }
 
@@ -581,6 +632,12 @@
   flex-shrink: 0;
   align-items: center;
 
+  :deep(.is-dock-actions) {
+    margin-left: auto;
+    padding-bottom: 0;
+    flex-shrink: 0;
+  }
+
 
   &:hover {
     background: var(--bk-theme-surface-subtle);
@@ -620,7 +677,7 @@
   display: flex;
   margin-left: var(--bk-theme-space-4);
   align-items: center;
-  gap: var(--bk-theme-space-2);
+  gap: var(--bk-theme-space-8);
 }
 
 
@@ -637,7 +694,7 @@
   font-size: 12px;
   line-height: 20px;
   color: var(--bk-theme-color-brand-2);
-  background: var(--bk-theme-color-brand-5);
+  background: var(--bk-theme-color-brand-6);
   border-radius: var(--bk-theme-tag-radius);
 }
 

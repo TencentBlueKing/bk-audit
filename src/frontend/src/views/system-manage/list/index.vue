@@ -92,7 +92,7 @@
   const tableColumn = [
     {
       label: () => '',
-      width: '65px',
+      width: '80px',
       render: ({ data }: {data: SyetemModel}) => (
         <img
         src={data.logo_url}
@@ -519,7 +519,7 @@
     if (domList) {
       domList.forEach((dom) => {
         const el = dom as HTMLElement;
-        el.style.background = isNew ? '#f2fff4' : '#fff';
+        el.style.background = isNew ? '#f2fff4' : '';
       });
     }
   };

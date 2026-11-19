@@ -455,7 +455,6 @@
 .risk-manage-list-page-wrap {
   position: relative;
   padding-bottom: var(--bk-theme-space-32);
-  overflow-x: hidden;
 
   .risk-manage-list {
     padding: var(--bk-theme-space-24);

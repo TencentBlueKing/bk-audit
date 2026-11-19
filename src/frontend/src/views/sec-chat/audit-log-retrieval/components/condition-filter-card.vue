@@ -383,7 +383,7 @@
       font-size: 14px;
       font-weight: 400;
       line-height: 32px;
-      border-radius: var(--bk-theme-tag-radius);
+      border-radius: var(--bk-theme-control-radius);
       align-items: center;
       justify-content: center;
       box-sizing: border-box;
@@ -482,7 +482,8 @@
       height: 32px;
       padding: 0 var(--bk-theme-space-8) 0 var(--bk-theme-space-12);
       background: var(--bk-theme-surface-muted);
-      border: 1px solid var(--bk-theme-border-default);
+      border: none;
+      border-radius: var(--bk-theme-control-radius);
       box-sizing: border-box;
 
       &:hover {
@@ -495,6 +496,7 @@
         cursor: default;
         padding-right: var(--bk-theme-space-12);
       }
+
     }
 
     .nl-tag-input-item.is-editing {
@@ -505,6 +507,7 @@
     .nl-add-condition-trigger {
       height: 32px;
       padding: 0 var(--bk-theme-space-12);
+      border-radius: var(--bk-theme-control-radius);
       box-sizing: border-box;
 
       &.is-accent {

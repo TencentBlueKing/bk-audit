@@ -38,14 +38,6 @@
       <div
         v-if="loading"
         class="card-list">
-        <div
-          v-if="singleScopeGroup"
-          class="scene-group">
-          <div class="scene-group-header">
-            <span class="scene-group-arrow" />
-            <span class="scene-group-title">{{ singleScopeGroup.groupName }}({{ singleScopeGroup.groupId }})</span>
-          </div>
-        </div>
         <div class="card-list-box">
           <div
             v-for="item in skeletonCount"
@@ -435,11 +427,6 @@
     sceneNameMap: Record<number, string>,
     systemNameMap: Record<string, string>,
     accessibleSceneIds: number[] | null,
-    singleScopeGroup?: {
-      groupKey: string,
-      groupName: string,
-      groupId: string | number,
-    } | null,
   }
 
 
@@ -652,18 +639,9 @@
     return buildSystemGroups(dataList.value);
   });
 
-  const displayGroups = computed<ToolGroup[]>(() => {
-    if (isGroupedMode.value) return groupedTools.value;
-    if (props.singleScopeGroup && dataList.value.length > 0) {
-      return [{
-        groupKey: props.singleScopeGroup.groupKey,
-        groupName: props.singleScopeGroup.groupName,
-        groupId: props.singleScopeGroup.groupId,
-        tools: dataList.value,
-      }];
-    }
-    return [];
-  });
+  const displayGroups = computed<ToolGroup[]>(() => (
+    isGroupedMode.value ? groupedTools.value : []
+  ));
 
   const searchAnchorReady = ref(false);
   const clearSearchAnchor = () => {
@@ -1271,13 +1249,13 @@
   }
 
   .scene-group {
-    margin-bottom: var(--bk-theme-space-8);
+    margin-bottom: var(--bk-theme-space-16);
 
     .scene-group-header {
       display: flex;
       height: var(--bk-theme-space-32);
       padding: 0 var(--bk-theme-space-16);
-      margin-bottom: var(--bk-theme-space-16);
+      margin-bottom: var(--bk-theme-space-12);
       cursor: pointer;
       background-color: var(--bk-theme-collapse-bg);
       border-radius: var(--bk-theme-collapse-radius);

@@ -438,15 +438,34 @@
   /* 基础信息表格 */
   .info-table {
     width: 100%;
+    overflow: hidden;
     border: 1px solid var(--bk-theme-border-default);
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--bk-theme-radius-8);
 
-    tr {
+    td {
       border-bottom: 1px solid var(--bk-theme-border-default);
+    }
 
-      &:last-child {
-        border-bottom: none;
-      }
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:first-child .info-label {
+      border-top-left-radius: var(--bk-theme-radius-8);
+    }
+
+    tr:first-child .info-value {
+      border-top-right-radius: var(--bk-theme-radius-8);
+    }
+
+    tr:last-child .info-label {
+      border-bottom-left-radius: var(--bk-theme-radius-8);
+    }
+
+    tr:last-child .info-value {
+      border-bottom-right-radius: var(--bk-theme-radius-8);
     }
 
     .info-label {

@@ -20,7 +20,7 @@
     :style="contentStyle">
     <template
       v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
-      <div>
+      <div class="tool-query-card">
         <div
           v-if="showQueryInput"
           class="top-search">
@@ -350,6 +350,17 @@
 </script>
 
 <style scoped lang="postcss">
+.tool-query-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bk-theme-space-16);
+
+  > .top-search {
+    border-radius: var(--bk-theme-card-radius);
+    box-shadow: var(--bk-theme-card-shadow);
+  }
+}
+
 .top-search {
   padding: var(--bk-theme-space-16);
   background: var(--bk-theme-surface-default);

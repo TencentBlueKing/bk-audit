@@ -249,7 +249,7 @@
     overflow: hidden;
     background: var(--bk-theme-table-header-bg);
     border: 1px solid var(--bk-theme-border-weak);
-    border-radius: var(--bk-theme-control-radius);
+    border-radius: var(--bk-theme-radius-8);
 
     &:last-child {
       margin-bottom: 0;

@@ -377,14 +377,14 @@
 
 .landing-illustration {
   display: flex;
-  width: 540px;
-  height: 540px;
+  width: 500px;
+  height: 500px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
 
   img {
-    width: 420px;
+    width: 380px;
     height: auto;
     object-fit: contain;
   }
@@ -434,7 +434,7 @@
 }
 
 .feature-list {
-  padding-left: var(--bk-theme-space-24);
+  padding-left: 0;
   margin: 0 0 var(--bk-theme-space-16);
   list-style: none;
 
@@ -524,25 +524,22 @@
 
 .existing-card {
   position: relative;
-
-  &.card-open {border-color: var(--bk-theme-color-brand-2);
-    box-shadow: 0 4px 20px rgb(59 126 255 / 14%);
-  }
 }
 
 .access-card {
   display: flex;padding: var(--bk-theme-space-32) var(--bk-theme-space-24);
   cursor: pointer;
   background: var(--bk-theme-surface-default);
-  border: 1px solid var(--bk-theme-border-weak);
+  border: 1px solid transparent;
   border-radius: var(--bk-theme-card-radius);
-  box-shadow: 0 1px 8px rgb(59 126 255 / 6%);
-  transition: all .25s;
+  box-shadow: var(--bk-theme-card-shadow);
+  transition: box-shadow .25s, border-color .25s;
   align-items: flex-start;
   gap: var(--bk-theme-space-16);
 
-  &:hover {border-color: var(--bk-theme-color-brand-2);
-    box-shadow: 0 4px 20px rgb(59 126 255 / 14%);
+  &:hover {
+    border-color: var(--bk-theme-color-brand-2);
+    box-shadow: 0 8px 24px rgb(31 41 69 / 12%);
   }
 }
 

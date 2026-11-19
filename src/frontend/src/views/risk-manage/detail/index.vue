@@ -477,6 +477,7 @@
         min-height: 0;
         padding: 0;
         overflow: visible;
+        border-radius: 0 var(--bk-theme-card-radius) var(--bk-theme-card-radius) var(--bk-theme-card-radius);
       }
 
       /* 无调查报告时隐藏 bk-tab-panel 页签头，避免与内容区「关联事件列表」标题重复 */
@@ -490,6 +491,7 @@
 
         :deep(.bk-tab-content) {
           padding: 0;
+          border-radius: var(--bk-theme-card-radius);
         }
       }
     }

@@ -988,9 +988,7 @@
 </script>
 
 <style lang="postcss" scoped>
-.report-group-list {
-  min-height: 400px;
-}
+.report-group-list {}
 
 .mr4 {
   margin-right: var(--bk-theme-space-4);
@@ -1012,7 +1010,8 @@
 
 .group-collapse-item {
   :deep(.bk-collapse-item) {
-    border-radius: var(--bk-theme-tag-radius);
+    overflow: hidden;
+    border-radius: var(--bk-theme-radius-8) var(--bk-theme-radius-8) var(--bk-theme-tag-radius) var(--bk-theme-tag-radius);
     box-shadow: none;
 
     .bk-collapse-header {
@@ -1304,6 +1303,10 @@
 .action-column {
   display: flex;
   align-items: center;
+
+  :deep(.bk-dropdown .bk-button.bk-button-primary.is-text) {
+    color: var(--bk-theme-text-default);
+  }
 }
 
 /* BKVision 报表单元格 */

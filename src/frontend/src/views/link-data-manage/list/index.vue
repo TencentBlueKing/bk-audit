@@ -270,7 +270,7 @@
       ),
     }]) as Ref<Column[]>;
 
-  const styles = shallowRef({ left: '240px' });
+  const styles = shallowRef({ left: 'calc(240px + var(--bk-theme-space-16))' });
   const disabledMap: Record<string, string> = {
     name: 'name',
     tags: 'tags',
@@ -380,7 +380,7 @@
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
-    styles.value = showLabel ? { left: '240px' } : { left: '0' };
+    styles.value = showLabel ? { left: 'calc(240px + var(--bk-theme-space-16))' } : { left: 'var(--bk-theme-space-24)' };
   };
 
   // 选中左侧label 过滤表格
@@ -580,7 +580,7 @@
 <style scoped lang="postcss">
 .link-data-manage-anchor {
   position: absolute;
-  inset: 0;
+  inset: var(--bk-theme-space-16) 0 0;
   overflow: hidden;
 }
 
@@ -597,8 +597,8 @@
   .link-data-manage-list {
     position: absolute;
     top: 0;
-    right: 0;
-    bottom: 0;
+    right: var(--bk-theme-space-24);
+    bottom: var(--bk-theme-space-24);
     display: flex;
     flex-direction: column;
     padding: var(--bk-theme-space-24);

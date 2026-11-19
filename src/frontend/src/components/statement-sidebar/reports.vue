@@ -24,7 +24,7 @@
           ref="sceneSystemSelectorRef"
           v-model="selectedScene"
           :list-scope="['scene', 'system']"
-          :popover-width="250"
+          :popover-width="400"
           scene-permission="view_scene"
           system-permission="view_system"
           width="100%"
@@ -32,11 +32,9 @@
       </div>
 
       <!-- 我的收藏分组 -->
-      <div
-        class="side-group">
+      <div class="side-group is-favorite">
         <div
           class="side-group-header"
-          style="background-color: var(--bk-theme-surface-subtle);"
           @click="toggleFavoritesGroup">
           <img
             class="side-pentagram-title"
@@ -378,7 +376,6 @@
   const sidebarWidth = ref(0);
   // 侧边栏是否收起（根据宽度判断）
   const collapsed = computed(() => sidebarWidth.value < COLLAPSED_WIDTH_THRESHOLD);
-
   // ResizeObserver 实例
   let resizeObserver: ResizeObserver | null = null;
 
@@ -918,7 +915,7 @@
 
   .sidebar-header {
     flex-shrink: 0;
-    background-color: var(--bk-theme-surface-subtle);
+    background-color: var(--bk-theme-surface-default);
   }
 
   .sidebar-list {
@@ -928,38 +925,43 @@
   }
 
   .scene-selector-wrapper {
-    width: calc(100%);padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+    width: calc(100%);padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
+
+    :deep(.scene-system-selector) {
+      background: var(--bk-theme-surface-muted);
+      box-shadow: none;
+    }
   }
 
   .search-wrapper {
-    width: calc(100%);padding: var(--bk-theme-space-8) var(--bk-theme-space-8);
+    width: calc(100%);padding: var(--bk-theme-space-8) var(--bk-theme-space-12);
 
     :deep(.bk-input) {
-      background-color: var(--bk-theme-surface-subtle) !important;
-      border: 1px solid var(--bk-theme-surface-subtle) !important;
-      border-radius: var(--bk-theme-tag-radius);
+      background-color: var(--bk-theme-surface-muted) !important;
+      border: none !important;
+      border-radius: var(--bk-theme-title-select-radius);
+      box-shadow: none !important;
 
       &.is-focused,
       &.is-focused:not(.is-readonly),
       &:focus,
       &:active,
       &:focus-within {
-        border: 1px solid var(--bk-theme-surface-subtle) !important;
-        border-color: var(--bk-theme-surface-subtle) !important;
+        border: none !important;
         outline: none !important;
         box-shadow: none !important;
       }
     }
 
     :deep(.bk-input--text) {
-      color: var(--bk-theme-text-disabled) !important;
+      color: var(--bk-theme-text-default) !important;
       background-color: transparent !important;
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
 
       &::placeholder {
-        color: var(--bk-theme-text-default);
+        color: var(--bk-theme-text-disabled);
       }
 
       &:focus,
@@ -977,11 +979,12 @@
 
     :deep(.search-input) {
       .bk-input {
-        background-color: var(--bk-theme-surface-subtle) !important;
-        border: 1px solid var(--bk-theme-surface-subtle) !important;
+        background-color: var(--bk-theme-surface-muted) !important;
+        border: none !important;
+        box-shadow: none !important;
 
         &.is-focused {
-          border-color: var(--bk-theme-surface-subtle) !important;
+          border: none !important;
           box-shadow: none !important;
         }
       }
@@ -990,18 +993,30 @@
 
   .side-group {
     margin-bottom: var(--bk-theme-space-2);
+
+    &.is-favorite {
+      background: var(--bk-theme-surface-subtle);
+
+      .side-group-header,
+      .side-group-header:hover {
+        background: var(--bk-theme-surface-subtle);
+      }
+    }
   }
 
   .side-group-header {
     display: flex;
     align-items: center;
     height: 40px;
-    padding: 0 var(--bk-theme-space-16);
+    padding: 0 var(--bk-theme-space-4);
+    margin: 0 var(--bk-theme-space-12);
     font-size: 14px;
     color: var(--bk-theme-nav-side-text);
     cursor: pointer;
+    border-radius: var(--bk-theme-nav-side-active-radius);
 
     &:hover {
+      color: var(--bk-theme-nav-side-text);
       background: var(--bk-theme-surface-subtle);
     }
   }
@@ -1025,9 +1040,10 @@
   .side-pentagram-close {
     position: absolute;
     top: 50%;
-    right: -10px;
+    right: var(--bk-theme-space-8);
     width: 16px;
     height: 16px;
+    margin-right: 0;
     cursor: pointer;
     transform: translateY(-50%);
   }
@@ -1104,7 +1120,7 @@
   /* 我的收藏 - 激活/悬停背景色 */
   :deep(.audit-menu-item.favorite-item) {
     color: var(--bk-theme-nav-side-text);
-    background: var(--bk-theme-surface-subtle);
+    background: transparent;
   }
 
   :deep(.audit-menu-item.favorite-item.active) {
@@ -1118,7 +1134,7 @@
   }
 
   :deep(.audit-menu-item.favorite-item:hover) {
-    background: var(--bk-theme-surface-subtle);
+    background: var(--bk-theme-surface-soft);
   }
 
   /* 其他分组 - 激活/悬停背景色 */

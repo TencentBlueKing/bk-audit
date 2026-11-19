@@ -37,17 +37,17 @@
           @start-edit="handleDateStartEdit"
           @update="handleUpdate" />
 
-        <!-- 其余可编辑条件标签 -->
+        <!-- 普通字段和事件字段按添加顺序排，新 tag 追加在已有 tag 后面 -->
         <template
-          v-for="tag in otherConditionTags"
-          :key="tag.fieldName">
+          v-for="entry in orderedConditionTags"
+          :key="entry.key">
           <tag-select
-            v-if="tag.type === 'select'"
+            v-if="entry.kind === 'field' && entry.tag.type === 'select'"
             :compact="compactSelectPopover"
-            :is-editing="editingField === tag.fieldName"
+            :is-editing="editingField === entry.tag.fieldName"
             :options-cache="optionsCache"
             :search-model="searchModel"
-            :tag="tag"
+            :tag="entry.tag"
             @finish-edit="handleFinishEdit"
             @remove="handleRemove"
             @start-edit="handleStartEdit"
@@ -55,47 +55,45 @@
             @update-cache="handleUpdateCache" />
 
           <tag-user-selector
-            v-else-if="tag.type === 'user-selector'"
-            :is-editing="editingField === tag.fieldName"
+            v-else-if="entry.kind === 'field' && entry.tag.type === 'user-selector'"
+            :is-editing="editingField === entry.tag.fieldName"
             :search-model="searchModel"
-            :tag="tag"
+            :tag="entry.tag"
             @finish-edit="handleFinishEdit"
             @remove="handleRemove"
             @start-edit="handleStartEdit"
             @update="handleUpdate" />
 
           <tag-log-field
-            v-else-if="tag.type === 'log-field'"
-            :is-editing="editingField === tag.fieldName"
-            :tag="tag"
+            v-else-if="entry.kind === 'field' && entry.tag.type === 'log-field'"
+            :is-editing="editingField === entry.tag.fieldName"
+            :tag="entry.tag"
             @finish-edit="handleFinishEdit"
             @remove="handleRemove"
             @start-edit="handleStartEdit"
             @update="handleUpdate" />
 
           <tag-input
-            v-else
-            :is-editing="editingField === tag.fieldName"
+            v-else-if="entry.kind === 'field'"
+            :is-editing="editingField === entry.tag.fieldName"
             :search-model="searchModel"
-            :tag="tag"
+            :tag="entry.tag"
             @finish-edit="handleFinishEdit"
             @remove="handleRemove"
             @start-edit="handleStartEdit"
             @update="handleUpdate" />
-        </template>
 
-        <!-- 事件字段条件标签 -->
-        <tag-event-field
-          v-for="item in eventFieldItems"
-          :key="item.id"
-          :ref="(el: any) => { if (el) eventFieldRefs[item.id] = el }"
-          :condition-list="conditionList || []"
-          :item="item"
-          @finish-edit="handleEventFieldFinishEdit"
-          @remove="handleRemoveEventField"
-          @start-edit="handleEventFieldStartEdit"
-          @update-operator="handleUpdateEventOperator"
-          @update-value="handleUpdateEventValue" />
+          <tag-event-field
+            v-else
+            :ref="(el: any) => { if (el) eventFieldRefs[entry.item.id] = el }"
+            :condition-list="conditionList || []"
+            :item="entry.item"
+            @finish-edit="handleEventFieldFinishEdit"
+            @remove="handleRemoveEventField"
+            @start-edit="handleEventFieldStartEdit"
+            @update-operator="handleUpdateEventOperator"
+            @update-value="handleUpdateEventValue" />
+        </template>
 
         <!-- 添加条件（slot） -->
         <slot />
@@ -223,6 +221,41 @@
   const otherConditionTags = computed(() => (
     conditionTags.value.filter(tag => tag.type !== 'datetimerange')
   ));
+
+  // 普通字段和事件字段共用一条添加顺序。已有 key 保持原位，新 key 追加到末尾。
+  const tagOrder = ref<string[]>([]);
+  const syncTagOrder = () => {
+    const fieldKeys = otherConditionTags.value.map(tag => `field:${tag.fieldName}`);
+    const eventKeys = (props.eventFieldItems || []).map(item => `event:${String(item.id)}`);
+    const present = new Set([...fieldKeys, ...eventKeys]);
+    const kept = tagOrder.value.filter(key => present.has(key));
+    const known = new Set(kept);
+    const newFields = fieldKeys.filter(key => !known.has(key));
+    const newEvents = eventKeys.filter(key => !known.has(key));
+    tagOrder.value = [...kept, ...newEvents, ...newFields];
+  };
+  watch(
+    () => [
+      otherConditionTags.value.map(tag => tag.fieldName).join(""),
+      (props.eventFieldItems || []).map(item => String(item.id)).join(""),
+    ],
+    () => {
+      syncTagOrder();
+    },
+    { immediate: true },
+  );
+  const orderedConditionTags = computed(() => {
+    const fieldMap = new Map(otherConditionTags.value.map(tag => [`field:${tag.fieldName}`, tag]));
+    const eventMap = new Map((props.eventFieldItems || []).map(item => [`event:${String(item.id)}`, item]));
+    return tagOrder.value.flatMap((key) => {
+      if (key.startsWith('field:')) {
+        const tag = fieldMap.get(key);
+        return tag ? [{ key, kind: 'field' as const, tag }] : [];
+      }
+      const item = eventMap.get(key);
+      return item ? [{ key, kind: 'event' as const, item }] : [];
+    });
+  });
 
   // 有条件才显示
   const hasConditions = computed(() => conditionTags.value.length > 0);

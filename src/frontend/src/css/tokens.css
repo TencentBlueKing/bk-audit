@@ -13,7 +13,8 @@
   --bk-theme-color-brand-6: #e4efff;
   --bk-theme-color-brand-7: #f3f7ff;
 
-  /* 原始层 · Neutral */
+  /* 原始层 · Neutral。中文名见 .cursor/rules/neutral-color-names.mdc。
+     CSS 序号比 Figma Neutral-N 大 1：neutral-1 黑色，neutral-2 深黑，neutral-7 中灰（线条中）。 */
   --bk-theme-color-neutral-1: #000;
   --bk-theme-color-neutral-2: #2e3440;
   --bk-theme-color-neutral-3: #4a5160;
@@ -127,7 +128,7 @@
   /* 语义层 · 表格颜色 */
   --bk-theme-table-header-bg: var(--bk-theme-color-ext-table-header);
   --bk-theme-table-header-text: var(--bk-theme-text-weak);
-  --bk-theme-table-header-divider: var(--bk-theme-border-weak);
+  --bk-theme-table-header-divider: var(--bk-theme-border-default);
   --bk-theme-table-row-bg: var(--bk-theme-surface-default);
   --bk-theme-table-row-hover: var(--bk-theme-color-ext-table-hover);
   --bk-theme-table-row-selected-bg: var(--bk-theme-surface-default);
@@ -214,7 +215,7 @@
   --bk-theme-page-title-weight: var(--bk-theme-font-weight-bold);
   --bk-theme-page-title-color: var(--bk-theme-text-strong);
   --bk-theme-title-select-radius: var(--bk-theme-radius-6);
-  --bk-theme-title-select-tag-radius: 2px;
+  --bk-theme-title-select-tag-radius: var(--bk-theme-radius-4);
   --bk-theme-title-select-tag-bg: var(--bk-theme-color-ext-scene-tag);
 
   /* @scene card | 主内容白卡片 | doc: §1 主内容卡片 / §3.3 圆角12 / §3.4 页面编组 | class: .bk-theme-card | detect: white-container | status: active */

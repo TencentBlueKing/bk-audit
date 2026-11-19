@@ -69,13 +69,11 @@
               {{ item.label }}
             </bk-button>
           </bk-button-group>
-          <div>
-            <bk-tag v-if="formData.data_search_config_type === 'simple'">
-              {{ t('用于复杂的 SQL 查询，先编写 SQL，再根据 SQL 内的结果与变量配置前端样式') }}
-            </bk-tag>
-            <bk-tag v-else>
-              {{ t('用于单一数据表，先配置的输入与输出字段，默认生成查询语句') }}
-            </bk-tag>
+          <div
+            class="config-type-tip">
+            {{ formData.data_search_config_type === 'simple'
+              ? t('用于复杂的 SQL 查询，先编写 SQL，再根据 SQL 内的结果与变量配置前端样式')
+              : t('用于单一数据表，先配置的输入与输出字段，默认生成查询语句') }}
           </div>
         </bk-form-item>
         <bk-form-item
@@ -502,6 +500,20 @@
 </script>
 
 <style lang="postcss" scoped>
+.config-type-tip {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  margin-top: var(--bk-theme-space-8);
+  padding: 0 var(--bk-theme-space-12);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: 20px;
+  color: var(--bk-theme-text-default);
+  background: var(--bk-theme-border-strong);
+  border-radius: var(--bk-theme-tag-radius);
+}
+
   .tool-type-icon-img {
     flex-shrink: 0;
     width: 16px;

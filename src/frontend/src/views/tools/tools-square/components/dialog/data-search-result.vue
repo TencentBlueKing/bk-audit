@@ -453,6 +453,47 @@
 
     /* 分页样式由底部非 scoped style 块统一处理 */
   }
+
+  /* 与检索引导字段表同一套。36 没有间距 token，不改全局行高 42。 */
+  :deep(.t-table__content) {
+    border: none;
+    border-radius: 0;
+  }
+
+  :deep(.t-table th),
+  :deep(.t-table.t-size-m th) {
+    height: 36px !important;
+    padding: 0 var(--bk-theme-space-16) !important;
+    font-weight: var(--bk-theme-font-weight-regular);
+    color: var(--bk-theme-table-header-text) !important;
+    background-color: var(--bk-theme-surface-soft) !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--bk-theme-table-header-divider) !important;
+    border-left: none !important;
+    box-shadow: none;
+  }
+
+  :deep(.t-table td) {
+    border-right: none !important;
+    border-left: none !important;
+  }
+
+  :deep(.t-table tbody tr:not(.t-table__empty-row) > td) {
+    box-sizing: border-box;
+    height: 36px !important;
+    padding: 0 var(--bk-theme-space-16) !important;
+    color: var(--bk-theme-text-default);
+    background-color: var(--bk-theme-table-row-bg);
+    border-bottom: none !important;
+  }
+
+  :deep(.t-table tbody tr:nth-child(even):not(.t-table__empty-row) > td) {
+    background-color: var(--table-strip-color);
+  }
+
+  :deep(.t-table--hoverable tbody tr:hover:not(.t-table__empty-row) > td) {
+    background-color: var(--bk-theme-table-row-hover) !important;
+  }
 }
 
 .tips {

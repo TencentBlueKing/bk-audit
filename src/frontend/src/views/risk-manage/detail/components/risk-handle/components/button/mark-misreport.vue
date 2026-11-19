@@ -18,6 +18,11 @@
   <div v-if="showDirectButton">
     <bk-button
       v-if="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
+      v-bk-tooltips="{
+        content: t('加白审批中，无法同时手工处理'),
+        disabled: data.status !== 'whitelist_approving',
+      }"
+      :disabled="data.status === 'whitelist_approving'"
       style="font-size: 12px;"
       text
       theme="primary"
@@ -100,8 +105,8 @@
     <div>
       <bk-button
         v-if="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
-        style="font-size: 12px;"
-        text
+        outline
+        size="small"
         theme="primary">
         <audit-icon
           style="margin-right: 6px;"
@@ -113,8 +118,8 @@
         action-id="process_risk"
         :permission="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
         :resource="data.risk_id"
-        style="font-size: 12px;"
-        text
+        outline
+        size="small"
         theme="primary">
         <audit-icon
           style="margin-right: 6px;"

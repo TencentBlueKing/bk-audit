@@ -1043,6 +1043,7 @@
     padding: var(--bk-theme-space-16) var(--bk-theme-space-24) var(--bk-theme-space-16) var(--bk-theme-space-16);
     margin-bottom: var(--bk-theme-space-12);
     background: var(--bk-theme-surface-subtle);
+    border-radius: var(--bk-theme-radius-8);
   }
 
   .risk-whitelist-form.is-embedded .scope-group {
@@ -1167,6 +1168,7 @@
     cursor: pointer;
     background: var(--bk-theme-surface-subtle);
     border: 1px dashed var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-radius-8);
   }
 
   .add-group-icon {
@@ -1193,7 +1195,11 @@
     color: var(--bk-theme-text-strong);
     cursor: pointer;
     background: var(--bk-theme-surface-default);
-    border: 1px solid var(--bk-theme-text-disabled);
+    border: 1px solid var(--bk-theme-border-default);
+  }
+
+  .duration-item + .duration-item {
+    margin-left: -1px;
   }
 
   .duration-item + .duration-item {

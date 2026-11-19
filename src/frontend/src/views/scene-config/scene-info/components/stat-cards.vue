@@ -133,7 +133,7 @@
     flex: 1;
     flex-direction: column;
     min-width: 0;padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
-    border: 1px solid var(--bk-theme-border-default);
+    border: none;
   }
 
   .stat-card-content {

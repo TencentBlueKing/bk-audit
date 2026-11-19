@@ -774,7 +774,9 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   min-width: 640px;
   border-top: 1px solid var(--bk-theme-border-default);
   border-right: 1px solid var(--bk-theme-border-default);
-  border-bottom: 1px solid var(--bk-theme-border-default);border-radius: var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0 0;
+  border-bottom: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-radius-8);
+  overflow: hidden;
   user-select: none;
   flex-direction: column;
   flex: 1;
