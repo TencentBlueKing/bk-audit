@@ -23,7 +23,7 @@
     :api-base-url="apiBaseUrl"
     :auto-focus="autoFocus"
     :disabled="isDisabled"
-    :empty-text="emptyText"
+    empty-text=""
     :free-paste="freePasteEnabled"
     :multiple="multiple"
     :placeholder="resolvedPlaceholder"
@@ -91,13 +91,31 @@
   const { t } = useI18n();
   const userSelectorRef = ref();
   const searchKeyword = ref('');
-  const resolvedPlaceholder = computed(() => props.placeholder || t('可搜索在职人员，离职人员请输入企微 ID后按回车键'));
-  const emptyText = computed(() => {
-    if (!props.allowCreate) return '';
-    const name = searchKeyword.value.trim();
-    if (!name) return '';
-    return t('暂未匹配到人员({name})，可按enter填入', { name });
-  });
+  const resolvedPlaceholder = computed(() => props.placeholder || t('搜索在职人员，未匹配人员可按 Enter 填入'));
+  const normalizeMatchText = (value: unknown) => String(value ?? '').trim().toLowerCase();
+  const readExposed = <T>(value: unknown, fallback: T): T => {
+    if (value === undefined || value === null) return fallback;
+    if (typeof value === 'object' && 'value' in value && !Array.isArray(value)) {
+      return (value as { value: T }).value;
+    }
+    return value as T;
+  };
+  const hasExactMatch = (keyword: string) => {
+    const target = normalizeMatchText(keyword);
+    if (!target) return false;
+    const popover = getVisiblePopover();
+    const matchedUser = Array.from(popover?.querySelectorAll('.audit-user-render-item') ?? []).some(node => (
+      (node.getAttribute('data-match-values') || '').split('\u001f').includes(target)
+    ));
+    if (matchedUser) return true;
+    return (props.userGroup ?? []).some(group => (
+      normalizeMatchText(group.id) === target || normalizeMatchText(group.name) === target
+    ));
+  };
+  const isSearchLoading = () => {
+    const selectorState = userSelectorRef.value as { searchLoading?: boolean | { value: boolean } } | undefined;
+    return Boolean(readExposed(selectorState?.searchLoading, false));
+  };
 
   // allowCreate 开启时默认同步开启 freePaste，否则粘贴离职/不存在人员会被丢弃
   const freePasteEnabled = computed(() => (
@@ -185,8 +203,18 @@
       || userInfo.bk_username
       || userInfo.id
       || '';
+    const matchValues = [
+      userInfo.id,
+      userInfo.name,
+      userInfo.bk_username,
+      userInfo.username,
+      userInfo.login_name,
+      userInfo.display_name,
+      userInfo.full_name,
+    ].map(value => normalizeMatchText(value)).filter(Boolean);
     return createElement('div', {
       class: 'audit-user-render-item',
+      'data-match-values': Array.from(new Set(matchValues)).join('\u001f'),
     }, [
       createElement('span', { class: 'audit-user-render-item__name' }, displayText),
     ]);
@@ -227,22 +255,6 @@
     emit('change', v);
   };
 
-  const commitKeyword = (keyword: string) => {
-    const name = keyword.trim();
-    if (!name || !props.allowCreate) return;
-    if (props.multiple) {
-      const current = Array.isArray(localValue.value) ? [...localValue.value] : [];
-      if (current.includes(name)) return;
-      current.push(name);
-      localValue.value = current;
-      handleValueChange(current);
-      return;
-    }
-    if (localValue.value === name) return;
-    localValue.value = name;
-    handleValueChange(name);
-  };
-
   const getVisiblePopover = () => {
     const nodes = Array.from(document.querySelectorAll('.bk-user-selector-popover'));
     for (const node of nodes) {
@@ -255,25 +267,76 @@
     return null;
   };
 
-  const clearSearchInput = () => {
-    if (!enterInputEl) return;
-    enterInputEl.value = '';
-    enterInputEl.dispatchEvent(new Event('input', { bubbles: true }));
-    searchKeyword.value = '';
+  const CREATE_OPTION_SELECTOR = '.audit-user-create-option';
+  let createOptionTimer = 0;
+  let createOptionActive = false;
+
+  const syncCreateOption = () => {
+    const popover = getVisiblePopover();
+    const content = popover?.querySelector('.dropdown-content');
+    if (!content) return;
+    const keyword = searchKeyword.value.trim();
+    const canCreate = props.allowCreate && Boolean(keyword) && !isSearchLoading() && !hasExactMatch(keyword);
+    const current = content.querySelector(CREATE_OPTION_SELECTOR);
+    if (!canCreate) {
+      current?.remove();
+      createOptionActive = false;
+      content.classList.remove('is-create-option-active');
+      return;
+    }
+    let option = current;
+    if (!(option instanceof HTMLElement)) {
+      option = document.createElement('div');
+      option.className = 'audit-user-create-option';
+      const name = document.createElement('span');
+      name.className = 'audit-user-create-option__name';
+      const hint = document.createElement('span');
+      hint.className = 'audit-user-create-option__hint';
+      option.append(name, hint);
+      content.insertBefore(option, content.firstChild);
+    }
+    const nameEl = option.querySelector('.audit-user-create-option__name');
+    const hintEl = option.querySelector('.audit-user-create-option__hint');
+    const hintText = t('(按 Enter 填入)');
+    if (nameEl && nameEl.textContent !== keyword) nameEl.textContent = keyword;
+    if (hintEl && hintEl.textContent !== hintText) hintEl.textContent = hintText;
+    const shouldCurrent = createOptionActive || !content.querySelector('.user-option.is-highlighted');
+    option.classList.toggle('is-current', shouldCurrent);
+    content.classList.toggle('is-create-option-active', createOptionActive);
+  };
+
+  // 库的搜索有防抖，结果渲染时会清掉手动插入的节点。只跟一段时间，不再监听 DOM，避免插入后又触发回调。
+  const scheduleSyncCreateOption = () => {
+    window.clearInterval(createOptionTimer);
+    let ticks = 0;
+    let sawLoading = false;
+    const run = () => {
+      const loading = isSearchLoading();
+      if (loading) sawLoading = true;
+      syncCreateOption();
+      ticks += 1;
+      const settled = sawLoading && !loading;
+      if (!searchKeyword.value.trim() || ticks >= 30) {
+        window.clearInterval(createOptionTimer);
+        return;
+      }
+      if (settled) {
+        window.clearInterval(createOptionTimer);
+        window.setTimeout(syncCreateOption, 0);
+        window.setTimeout(syncCreateOption, 50);
+      }
+    };
+    run();
+    createOptionTimer = window.setInterval(run, 100);
   };
 
   const handleBlur = () => {
-    const keyword = searchKeyword.value.trim();
-    const showUnmatched = Boolean(getVisiblePopover()?.querySelector('.no-data'));
-    if (keyword && showUnmatched) {
-      commitKeyword(keyword);
-    }
     searchKeyword.value = '';
     emit('blur');
   };
 
-  // 库在 allowCreate 且输入框有文字时，Enter 会直接创建输入值，盖过高亮项。
-  // 有高亮人员时先选中该项；无匹配时仍把输入值交给库。外层表单不再收到这次 Enter。
+  // 库会把高亮停在第一个人员上。只要「按 Enter 填入」还在，默认就停在这一行；
+  // 这时 Enter 不拦截，交给库自己创建，光标会立刻落到标签后面。移到人员上再按 Enter 才选中那个人。
   let rootEl: HTMLElement | null = null;
   let enterInputEl: HTMLInputElement | null = null;
   const isSearchInput = (target: EventTarget | null): target is HTMLInputElement => (
@@ -281,9 +344,31 @@
   );
   const handleKeydownCapture = (event: KeyboardEvent) => {
     if (event.isComposing || event.key === 'Process' || event.keyCode === 229) return;
-    if (event.key !== 'Enter' || !isSearchInput(event.target)) return;
-    const highlighted = getVisiblePopover()
-      ?.querySelector('.user-option.is-highlighted:not(.is-disabled)');
+    if (!isSearchInput(event.target)) return;
+    const popover = getVisiblePopover();
+    const content = popover?.querySelector('.dropdown-content');
+    const createOption = content?.querySelector(CREATE_OPTION_SELECTOR);
+    if (event.key === 'ArrowUp' && createOption instanceof HTMLElement) {
+      const highlighted = content?.querySelector('.user-option.is-highlighted');
+      const firstUser = content?.querySelector('.user-option');
+      if (createOptionActive || (highlighted instanceof HTMLElement && highlighted === firstUser)) {
+        event.preventDefault();
+        event.stopPropagation();
+        createOptionActive = true;
+        syncCreateOption();
+        return;
+      }
+    }
+    if (event.key === 'ArrowDown' && createOptionActive) {
+      event.preventDefault();
+      event.stopPropagation();
+      createOptionActive = false;
+      syncCreateOption();
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    if (createOptionActive) return;
+    const highlighted = popover?.querySelector('.user-option.is-highlighted:not(.is-disabled)');
     if (!(highlighted instanceof HTMLElement)) return;
     event.preventDefault();
     event.stopPropagation();
@@ -297,20 +382,27 @@
     if (!isSearchInput(event.target)) return;
     enterInputEl = event.target;
     searchKeyword.value = event.target.value;
+    createOptionActive = true;
+    scheduleSyncCreateOption();
   };
   const handleFocusIn = (event: FocusEvent) => {
     if (!isSearchInput(event.target)) return;
     enterInputEl = event.target;
   };
   const handleDocumentMouseDown = (event: MouseEvent) => {
-    if (document.activeElement !== enterInputEl) return;
+    if (!enterInputEl || document.activeElement !== enterInputEl) return;
     const target = event.target;
-    if (!(target instanceof Element) || !target.closest('.bk-user-selector-popover .no-data')) return;
+    if (!(target instanceof Element) || !target.closest('.bk-user-selector-popover .no-data, .audit-user-create-option')) return;
     const keyword = searchKeyword.value.trim();
     if (!keyword) return;
     event.preventDefault();
-    commitKeyword(keyword);
-    clearSearchInput();
+    createOptionActive = true;
+    enterInputEl.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    }));
   };
 
   onMounted(async () => {
@@ -322,6 +414,7 @@
     rootEl.addEventListener('input', handleSearchInput);
     rootEl.addEventListener('focusin', handleFocusIn);
     document.addEventListener('mousedown', handleDocumentMouseDown, true);
+    rootEl.addEventListener('keyup', syncCreateOption);
   });
 
   onBeforeUnmount(() => {
@@ -330,6 +423,8 @@
     rootEl?.removeEventListener('input', handleSearchInput);
     rootEl?.removeEventListener('focusin', handleFocusIn);
     document.removeEventListener('mousedown', handleDocumentMouseDown, true);
+    rootEl?.removeEventListener('keyup', syncCreateOption);
+    window.clearInterval(createOptionTimer);
     rootEl = null;
     enterInputEl = null;
   });
@@ -412,23 +507,38 @@
     }
   }
 
-  .bk-user-selector-popover .dropdown-content .no-data {
+  .bk-user-selector-popover .dropdown-content .audit-user-create-option {
     display: flex;
     align-items: center;
     height: var(--audit-space-32);
     padding: var(--audit-space-8) var(--audit-space-12);
-    color: var(--audit-neutral-text-02);
-    text-align: left;
+    overflow: hidden;
     cursor: pointer;
+    gap: var(--audit-space-4);
+  }
+
+  .bk-user-selector-popover .dropdown-content.is-create-option-active .user-option.is-highlighted {
+    background-color: transparent;
+  }
+
+  .bk-user-selector-popover .dropdown-content .audit-user-create-option:hover,
+  .bk-user-selector-popover .dropdown-content .audit-user-create-option.is-current {
     background-color: var(--audit-neutral-bg-03);
   }
 
-  .bk-user-selector-popover .dropdown-content .no-data span {
+  .bk-user-selector-popover .dropdown-content .audit-user-create-option__name {
     overflow: hidden;
+    color: var(--audit-neutral-text-01);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .bk-user-selector-popover .dropdown-content .audit-user-create-option__hint {
+    flex: none;
+    color: var(--audit-neutral-text-03);
+  }
+
+  .bk-user-selector-popover .dropdown-content:has(.audit-user-create-option) .no-data,
   .bk-user-selector-popover .dropdown-content:has(.bk-loading-indicator) .no-data {
     display: none;
   }
