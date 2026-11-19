@@ -93,7 +93,7 @@ class OwnerQueryPermissionTests(SimpleTestCase):
                 payload = {"result": False, "code": "1558025" if mode != "denied" else "1500001", "data": None}
         else:
             self.assertEqual(method, "POST")
-            self.assertTrue(url.endswith("/v4/queryengine/user/query_sync/"), url)
+            self.assertTrue(url.endswith("/v3/queryengine/query_sync/"), url)
             is_count = "COUNT(" in kwargs["json"]["sql"].upper()
             payload = {"result": True, "code": "00", "data": {"list": [{"count": 1}] if is_count else [{"id": 1}]}}
         response = requests.Response()
