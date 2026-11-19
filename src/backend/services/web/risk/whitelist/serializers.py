@@ -32,11 +32,13 @@ class DurationDaysField(serializers.Field):
 
         try:
             value = coerce_duration_days(data)
-        except Exception as exc:
-            detail = getattr(exc, "detail", None)
+        except serializers.ValidationError as exc:
+            detail = exc.detail
             if isinstance(detail, list):
-                detail = detail[0]
-            raise serializers.ValidationError(detail or str(exc))
+                detail = detail[0] if detail else None
+            if not detail:
+                detail = gettext_lazy("有效天数必须是大于 0 的整数或到期时间")
+            raise serializers.ValidationError(detail)
         if value is None:
             raise serializers.ValidationError(gettext_lazy("有效天数必须是大于 0 的整数或到期时间"))
         return value
