@@ -31,10 +31,9 @@
       }"
       @search-change="handleSearch">
       <template #trigger>
-        <span
-          style="color: #3884ff; cursor: pointer;">
+        <span class="add-other-condition">
           <audit-icon
-            style="margin-right: 5px;"
+            class="add-other-condition-icon"
             type="add" />
           <span>{{ t('添加其他条件') }}</span>
         </span>
@@ -377,6 +376,18 @@
   );
 </script>
 <style lang="postcss">
+  .add-search-tree .add-other-condition {
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--bk-theme-font-size-sm);
+    color: var(--bk-theme-color-brand-2);
+    cursor: pointer;
+  }
+
+  .add-search-tree .add-other-condition-icon {
+    margin-right: var(--bk-theme-space-4);
+  }
+
   .add-search-tree-pop {
     .bk-node-row {
       font-size: 12px;

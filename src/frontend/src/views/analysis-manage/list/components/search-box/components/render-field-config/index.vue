@@ -78,6 +78,8 @@
   import useListeners from '@hooks/use-listeners';
   import useProps from '@hooks/use-props';
 
+  import '@components/skeleton/skeleton.css';
+
   import type { IFieldConfig } from './config';
   import RenderActionId from './strategy/action-id.vue';
   import RenderCascader from './strategy/cascader.vue';
@@ -177,6 +179,16 @@
           display: none !important;
         }
       }
+    }
+
+    .search-field {
+      min-height: 32px;
+    }
+
+    .search-field-skeleton {
+      width: 100%;
+      height: 32px;
+      border-radius: var(--bk-theme-control-radius);
     }
   }
 

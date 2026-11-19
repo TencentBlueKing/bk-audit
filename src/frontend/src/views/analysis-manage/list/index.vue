@@ -26,40 +26,39 @@
         width="208px"
         @change="handleSceneChange" />
     </div>
-    <skeleton-loading
-      fullscreen
-      :loading="isLoading"
-      name="analysisList"
-      style="width: 98%; margin-top: 20px;margin-left: 1%;">
-      <div>
-        <div class="search-box">
-          <search-box
-            ref="searchBoxRef"
-            :loading="isLoading"
-            @change="handleSearchChange"
-            @change-table-height="handleTableHeightChange" />
-          <div class="search-result-action">
-            <render-type-tab
-              v-if="false"
-              v-model="renderType" />
-          </div>
-        </div>
-        <component
-          :is="searchResultCom"
-          v-if="isInit"
-          ref="resultRef"
-          :data-source="dataSource"
-          :filter="searchModel"
-          :is-doris="isDoris"
-          @clear-search="handleClearSearch"
-          @update-total="handleUpdateTotal" />
-        <div
-          v-if="false"
-          style="height: 52px; margin-top: 24px;">
-          <search-page-footer />
+    <div class="analysis-page-content">
+      <div class="search-box">
+        <search-box
+          ref="searchBoxRef"
+          :loading="isLoading"
+          @change="handleSearchChange"
+          @change-table-height="handleTableHeightChange" />
+        <div class="search-result-action">
+          <render-type-tab
+            v-if="false"
+            v-model="renderType" />
         </div>
       </div>
-    </skeleton-loading>
+      <component
+        :is="searchResultCom"
+        v-if="isInit"
+        ref="resultRef"
+        :data-source="dataSource"
+        :filter="searchModel"
+        :is-doris="isDoris"
+        @clear-search="handleClearSearch"
+        @update-total="handleUpdateTotal" />
+      <div
+        v-else
+        class="search-result-list bk-theme-card">
+        <table-skeleton :row-count="8" />
+      </div>
+      <div
+        v-if="false"
+        style="height: 52px; margin-top: 24px;">
+        <search-page-footer />
+      </div>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -74,6 +73,7 @@
   import EsQueryService from '@service/es-query';
 
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+  import TableSkeleton from '@components/table-skeleton/index.vue';
 
   import RenderTypeTab from './components/render-type-tab.vue';
   import SearchBox from './components/search-box/index.vue';
@@ -185,6 +185,12 @@
       background: var(--bk-theme-surface-default);
       box-shadow: var(--bk-theme-card-shadow);
     }
+  }
+
+  .analysis-page-content {
+    width: 98%;
+    margin-top: var(--bk-theme-space-16);
+    margin-left: 1%;
   }
 
   .search-result-action {
