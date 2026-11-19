@@ -19,6 +19,10 @@ class FlowTests(SimpleTestCase):
         self.context = {"version": "v4", "tenant": "tenant_a", "namespace": "audit", "mcp_project_id": 7}
         self.ref = {"kind": "Flow", "tenant": "tenant_a", "namespace": "audit", "name": "flow_a"}
 
+    @override_settings(
+        BKPAAS_MULTI_TENANT_MODE=False,
+        BK_RESOURCE={"PLATFORM_AUTH_ACCESS_USERNAME": "legacy_platform"},
+    )
     def test_compile_realtime_graph(self):
         strategy = SimpleNamespace(
             strategy_id=7, strategy_name="test rule", namespace="audit", sql="SELECT * FROM rt_a", backend_data={}
@@ -44,7 +48,16 @@ class FlowTests(SimpleTestCase):
         self.assertEqual(source_node["data"]["namespace"], "inputs")
         self.assertEqual(sql_node["inputs"], [source_node["name"]])
         self.assertEqual(sql_node["output"], "1_audit_rule_7")
+        self.assertEqual(result["maintainers"], ["legacy_platform"])
         self.assertEqual(result, flow.build_rule_flow(strategy, rt_metadata=[rt], binding_map=bindings))
+        with (
+            override_settings(BKPAAS_MULTI_TENANT_MODE=True, BK_TENANT_ID="tenant_a", BKBASE_V4_TENANT="tenant_a"),
+            mock.patch("api.bk_base_v4.tenant.get_admin_username", return_value="tenant_admin"),
+        ):
+            self.assertEqual(
+                flow.build_rule_flow(strategy, rt_metadata=[rt], binding_map=bindings)["maintainers"],
+                ["tenant_admin"],
+            )
 
     def test_phase_ok_projects_applied_configuration(self):
         strategy = SimpleNamespace(backend_data={"bkbase_v4": {"flow": self.ref}})

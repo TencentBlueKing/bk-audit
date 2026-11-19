@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.db import transaction
 
+from api.bk_base_v4.tenant import get_bkbase_v4_tenant
 from core.exceptions import LockError
 from core.utils.lock import RedisLock
 from services.web.bkbase.constants import BKBaseVersion, TaskState
@@ -54,7 +55,7 @@ def get_bkbase_context(*, user=None):
     return {
         "version": version,
         "rt_namespaces": namespaces,
-        "tenant": getattr(settings, "BKBASE_V4_TENANT", ""),
+        "tenant": get_bkbase_v4_tenant() if version == BKBaseVersion.V4 else getattr(settings, "BKBASE_V4_TENANT", ""),
         "namespace": getattr(settings, "BKBASE_V4_NAMESPACE", ""),
         "mcp_project_id": getattr(settings, "BKBASE_V4_MCP_PROJECT_ID", ""),
         "user": user,

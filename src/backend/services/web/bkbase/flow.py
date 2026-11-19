@@ -10,10 +10,10 @@ from uuid import uuid4
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
-from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.db import transaction
 
+from api.bk_base_v4.tenant import get_bkbase_v4_platform_username
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import WEIXIN_UNAVAILABLE_MESSAGE, MsgType
@@ -112,7 +112,7 @@ def build_rule_flow(strategy, *, rt_metadata, binding_map):
     return {
         "alias": ("Audit " + strategy.strategy_name)[:100],
         "description": "",
-        "maintainers": [bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME],
+        "maintainers": [get_bkbase_v4_platform_username()],
         "operation_config": deepcopy(binding_map.get("operation_config", {"start_position": "continue"})),
         "nodes": nodes,
     }

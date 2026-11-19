@@ -420,7 +420,14 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         token.get.assert_called_once()
         token.set.assert_called_once()
 
-    @override_settings(BKPAAS_MULTI_TENANT_MODE=True, BK_TENANT_ID="tencent")
+    @override_settings(
+        BKPAAS_MULTI_TENANT_MODE=True,
+        BK_TENANT_ID="tencent",
+        BKBASE_V4_TENANT="tencent",
+        BKBASE_V4_SYSTEM_SNAPSHOT_CREATE={
+            "action": {"redis": {"kind": "Redis", "tenant": "tencent", "namespace": "clusters", "name": "iam_redis"}}
+        },
+    )
     def test_multitenant_data_conn_registers_internal_callback_tenant_header(self):
         self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
         kind, registration = self.posts[0]

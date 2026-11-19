@@ -15,8 +15,10 @@ from blueapps.utils.logger import logger
 from django.db import IntegrityError, connection, transaction
 
 from api.bk_base_v4.serializers import RedisAssetCreateRequestSerializer
+from api.bk_base_v4.tenant import get_bkbase_v4_platform_username
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, System
+from core.tenant import use_multi_tenant_mode
 from services.web.bkbase.common import (
     get_bkbase_context,
     get_bkbase_version,
@@ -354,8 +356,9 @@ def _redis_registration_params(params):
     """仅映射已明确的直连Redis；项目、租户和IAM管理员来自可信平台上下文。"""
     context = get_bkbase_context()
     resource_params(context)
-    actor = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
-    if not bk_resource_settings.PLATFORM_AUTH_ENABLED or not isinstance(actor, str) or not actor:
+    actor = get_bkbase_v4_platform_username()
+    legacy_auth_disabled = not use_multi_tenant_mode() and not bk_resource_settings.PLATFORM_AUTH_ENABLED
+    if legacy_auth_disabled or not isinstance(actor, str) or not actor:
         raise BKBaseResourceMappingError(message="Redis registration requires the configured platform user identity")
     info = params.get("connection_info")
     if not isinstance(info, dict):

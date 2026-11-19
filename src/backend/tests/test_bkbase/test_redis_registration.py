@@ -48,6 +48,24 @@ class RedisRegistrationParamsTests(SimpleTestCase):
             {"resource_set_id": "synthetic_redis", "resource_set_name": "Synthetic Redis", "connection_info": info}
         )[2]
 
+    @override_settings(
+        BKPAAS_MULTI_TENANT_MODE=True,
+        BK_TENANT_ID="tenant_a",
+        BKBASE_API_VERSION="v4",
+        BK_RESOURCE={"PLATFORM_AUTH_ENABLED": True, "PLATFORM_AUTH_ACCESS_USERNAME": ""},
+    )
+    def test_multitenant_redis_registration_does_not_require_legacy_platform_username(self):
+        with mock.patch("api.bk_base_v4.tenant.get_admin_username", return_value="tenant_admin"):
+            _, actor, payload = storage._redis_registration_params(
+                {
+                    "resource_set_id": "synthetic_redis",
+                    "resource_set_name": "Synthetic Redis",
+                    "connection_info": self.info,
+                }
+            )
+        self.assertEqual(actor, "tenant_admin")
+        self.assertEqual(payload["tenant"], "tenant_a")
+
     @override_settings(BKBASE_API_VERSION="v3")
     def test_v3_redis_registration_uses_configured_region(self):
         data = {

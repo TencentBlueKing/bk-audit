@@ -7,7 +7,6 @@ import abc
 from contextvars import ContextVar
 from time import monotonic
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.request_provider import get_local_request
@@ -45,23 +44,59 @@ from api.bk_base_v4.serializers import (
     UserScopesRequestSerializer,
     UserTablesRequestSerializer,
 )
+from api.bk_base_v4.tenant import get_bkbase_v4_tenant
+from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
+from core.tenant import TENANT_ID_HEADER
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
 READ_MAX_TIMEOUT = 30.0
 
 
-class BkBaseV4Resource(BkApiResource, abc.ABC):
-    """平台操作默认使用当前配置的平台身份。"""
+class BkBaseV4Resource(AuditBkApiResource, abc.ABC):
+    """多租户按实例调用 V4，单租户保留原平台认证协议。"""
 
     module_name = "bkbase_v4"
-    base_url = BK_BASE_API_URL
     platform_authorization = True
     requires_platform_auth = False
     IS_STANDARD_FORMAT = False
 
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_BASE_API_URL
+
+    @property
+    def use_admin_username(self):
+        return self.platform_authorization
+
+    def build_request_data(self, validated_request_data):
+        """在构造 URL 之前校验路径租户和资源体中的显式租户引用。"""
+        if self.use_multi_tenant_mode():
+            tenant = get_bkbase_v4_tenant()
+            if validated_request_data.get("tenant") not in (None, tenant):
+                raise PermissionDenied("BKBase V4 request does not belong to this tenant")
+            metadata = validated_request_data.get("metadata")
+            if isinstance(metadata, dict) and "tenant" in metadata and metadata["tenant"] != tenant:
+                raise PermissionDenied("BKBase V4 resource metadata does not belong to this tenant")
+            refs = [validated_request_data.get("spec"), validated_request_data.get("target")]
+            while refs:
+                item = refs.pop()
+                if isinstance(item, dict):
+                    if {"tenant", "namespace", "name"} <= item.keys() and item["tenant"] != tenant:
+                        raise PermissionDenied("BKBase V4 resource reference does not belong to this tenant")
+                    refs.extend(item.values())
+                elif isinstance(item, list):
+                    refs.extend(item)
+        return super().build_request_data(validated_request_data)
+
     def add_esb_info_before_request(self, params):
-        """平台列表只从配置构造身份，缺配置时不得回退到操作者。"""
+        """多租户平台身份由审计基类补齐；单租户平台列表保持原校验。"""
+        if self.use_multi_tenant_mode() and self.platform_authorization:
+            return {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
         if self.platform_authorization and self.requires_platform_auth:
             username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
             token = bk_resource_settings.PLATFORM_AUTH_ACCESS_TOKEN
@@ -137,6 +172,12 @@ class DirectAuthByResources(BkBaseV4Resource):
     RequestSerializer = DirectAuthByResourcesRequestSerializer
     ResponseSerializer = DirectAuthByResourcesResponseSerializer
 
+    def build_request_data(self, validated_request_data):
+        data = super().build_request_data(validated_request_data)
+        if self.use_multi_tenant_mode():
+            data["tenant"] = get_bkbase_v4_tenant()
+        return data
+
     def add_esb_info_before_request(self, params):
         """该接口不做用户认证，前后台均只使用审计应用凭据。"""
         return {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
@@ -205,7 +246,8 @@ class DatasetResource(BkBaseV4Resource, abc.ABC):
         """把校验后的tenant移入请求头，避免落入业务查询参数。"""
         tenant = validated_request_data.pop("tenant")
         headers = super().build_header(validated_request_data)
-        headers["X-Bk-Tenant-Id"] = tenant
+        if not self.use_multi_tenant_mode():
+            headers[TENANT_ID_HEADER] = tenant
         return headers
 
 
@@ -300,7 +342,8 @@ class NamespacesList(BkBaseV4Resource):
     def build_header(self, validated_request_data):
         """项目列表路径及租户头采用同一校验上下文。"""
         headers = super().build_header(validated_request_data)
-        headers["X-Bk-Tenant-Id"] = validated_request_data["tenant"]
+        if not self.use_multi_tenant_mode():
+            headers[TENANT_ID_HEADER] = validated_request_data["tenant"]
         return headers
 
 
@@ -316,6 +359,9 @@ class UserBkBaseV4Resource(BkBaseV4Resource, abc.ABC):
         username = getattr(user, "bk_username", None) or getattr(user, "username", None)
         if not username or not getattr(user, "is_authenticated", False):
             raise PermissionDenied("Authenticated BKBase user required")
+        user_tenant = getattr(user, "tenant_id", "")
+        if self.use_multi_tenant_mode() and user_tenant and user_tenant != get_bkbase_v4_tenant():
+            raise PermissionDenied("BKBase V4 user does not belong to this tenant")
         params.update(bk_app_code=settings.APP_CODE, bk_app_secret=settings.SECRET_KEY, bk_username=username)
         params.update(self.build_auth_args(request))
         return params
