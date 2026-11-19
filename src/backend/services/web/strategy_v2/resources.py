@@ -1917,7 +1917,7 @@ class ListTableProjects(StrategyV2Base, CacheResource):
 
     def __init__(self, *args, **kwargs):
         self.cache_type = CacheTypeItem(
-            key=f"ListTableProjects:{bkbase_metadata.metadata_cache_scope()}", timeout=60, user_related=True
+            key=f"{type(self).__name__}:{bkbase_metadata.metadata_cache_scope()}", timeout=60, user_related=True
         )
         super().__init__(*args, **kwargs)
 
@@ -1929,10 +1929,23 @@ class ListTableProjects(StrategyV2Base, CacheResource):
 
 
 class ListProjectTables(ListTableProjects):
-    """完整返回一个项目中的候选表；失败向上抛出，不缓存部分成功。"""
+    """返回项目可见且输入能力有效的表；未确认的单表不阻断其他候选，也不写完整缓存。"""
 
     name = gettext_lazy("BKBase项目数据表")
     RequestSerializer = ListProjectTablesRequestSerializer
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 标记必须覆盖UsingCache写入阶段，不能在perform_request返回时提前复位。
+        request = self.request
+        self.request = bkbase_metadata.candidate_read_scope()(request)
+        for mode in ("cached", "refresh", "cacheless"):
+            if hasattr(request, mode):
+                setattr(self.request, mode, bkbase_metadata.candidate_read_scope()(getattr(request, mode)))
+
+    def cache_write_trigger(self, res):
+        """只有所有候选身份和能力读取均可确认时才复用项目结果。"""
+        return bkbase_metadata.candidates_complete() and super().cache_write_trigger(res)
 
     class ResponseSerializer(serializers.Serializer):
         label = serializers.CharField()
