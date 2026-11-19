@@ -42,6 +42,7 @@
         disabled: !disabledList.includes(localEventItem.field_name),
       }"
       :disabled="disabledList.includes(localEventItem.field_name)"
+      size="small"
       style="margin-left: 8px;"
       theme="primary" />
 

@@ -268,10 +268,12 @@
 
     .rule-item {
       position: relative;
+      box-sizing: border-box;
+      width: 100%;
       padding: var(--bk-theme-space-16);
-      padding-right: var(--bk-theme-space-24);
-      margin-bottom: var(--bk-theme-space-16);
+      margin-bottom: var(--bk-theme-space-12);
       background: var(--bk-theme-surface-subtle);
+      border-radius: var(--bk-theme-radius-8);
       flex: 1;
 
       .row-line {

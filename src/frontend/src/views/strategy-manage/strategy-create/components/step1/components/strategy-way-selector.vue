@@ -79,7 +79,7 @@
   cursor: pointer;
   background: var(--bk-theme-surface-default);
   border: 1px solid var(--bk-theme-border-default);
-  border-radius: var(--bk-theme-card-radius);
+  border-radius: var(--bk-theme-control-radius);
   transition: border-color .2s ease, background-color .2s ease;
   align-items: center;
   gap: var(--bk-theme-space-8);

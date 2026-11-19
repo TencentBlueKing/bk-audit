@@ -334,12 +334,12 @@
   .head {
     display: flex;
     height: 42px;
-    background-color: var(--bk-theme-surface-subtle);
+    background-color: var(--bk-theme-editable-table-header-bg);
 
     .header-cell {
       @include cell-base;
 
-      background-color: var(--bk-theme-surface-subtle);
+      background-color: var(--bk-theme-editable-table-header-bg);
       font-weight: 500;
       color: var(--bk-theme-text-strong);
 

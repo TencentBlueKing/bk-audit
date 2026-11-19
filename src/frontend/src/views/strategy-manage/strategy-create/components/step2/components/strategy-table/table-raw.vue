@@ -18,8 +18,7 @@
   <div
     v-for="(eventItem, eventItemIndex) in eventItemArr"
     :key="eventItemIndex"
-    class="table-row"
-    :class="{ 'is-even': eventItemIndex % 2 === 1 }">
+    class="table-row">
     <template
       v-for="(value, valueKey) in eventItem"
       :key="valueKey">
@@ -123,10 +122,6 @@
   display: flex;
   background: var(--bk-theme-surface-default);
 
-  &.is-even {
-    background: var(--bk-theme-table-header-bg);
-  }
-
   .cell {
     display: flex;
     height: 42px;
@@ -134,6 +129,12 @@
     border-right: 1px solid var(--bk-theme-border-default);
     border-bottom: 1px solid var(--bk-theme-border-default);
     align-items: center;
+
+    &.field-name,
+    &.display-name {
+      cursor: default;
+      background: var(--bk-theme-editable-table-disabled-bg);
+    }
 
     &.field-name {
       width: 250px;

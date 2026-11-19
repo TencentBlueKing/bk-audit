@@ -26,7 +26,7 @@
               svg
               :type="data.spec_field_type" />
             <span v-if="props.configType === 'LinkTable'">
-              <span style="color: #3a84ff">{{ data.table }}.</span>
+              <span style="color: var(--bk-theme-color-brand-2)">{{ data.table }}.</span>
               <span class="field-type-span">{{ data.display_name
                                             }}{{ data.raw_name ? `(${data.raw_name})` : `` }}
                 <span
@@ -86,7 +86,7 @@
                       style="margin-top: 6px; margin-right: 4px; font-size: 14px"
                       svg
                       type="string" />
-                    <span style="color: #3a84ff">b.</span>
+                    <span style="color: var(--bk-theme-color-brand-2)">b.</span>
                     <span> one</span>
                     <span class="field-type-span">/</span>
                     <span>two</span>
@@ -96,7 +96,7 @@
                 </div>
               </template>
               <audit-icon
-                style="margin-right: 4px; font-size: 14px; color: #3a84ff"
+                style="margin-right: 4px; font-size: 14px; color: var(--bk-theme-color-brand-2)"
                 svg
                 type="plus-circle"
                 @click.stop="handleAddNode(data)" />
@@ -114,7 +114,7 @@
                   svg
                   :type="data.spec_field_type" />
                 <span v-if="props.configType === 'LinkTable'">
-                  <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
+                  <span style=" color: var(--bk-theme-color-brand-2);">{{ data.parent_table }}.</span>
                   <span class="field-type-span">{{ data.parent_raw_name ?
                     `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
                   <span class="field-type-span">/</span>
@@ -155,7 +155,7 @@
 
                 <audit-icon
                   v-bk-tooltips="{ content: '添加下级字段', placement: 'top' }"
-                  style="margin-left: 4px; font-size: 14px; color: #c4c6cc"
+                  style="margin-left: 4px; font-size: 14px; color: var(--bk-theme-text-disabled)"
                   svg
                   type="add-fill"
                   @click.stop="handleAddField(data)" />
@@ -165,13 +165,13 @@
               <audit-icon
                 v-if="data.spec_field_type !== ''"
                 v-bk-tooltips="{ content: '确认', placement: 'top' }"
-                style="margin-right: 4px; font-size: 18px; color: #7bbe8a"
+                style="margin-right: 4px; font-size: 18px; color: var(--bk-theme-color-success-2)"
                 svg
                 type="check-line"
                 @click.stop="handleAddFieldSubmit(data)" />
               <audit-icon
                 v-bk-tooltips="{ content: '取消添加', placement: 'top' }"
-                style="margin-right: 4px; font-size: 18px; color: #c1c3c9"
+                style="margin-right: 4px; font-size: 18px; color: var(--bk-theme-text-disabled)"
                 svg
                 type="close"
                 @click.stop="handleAddFieldClose(data)" />
