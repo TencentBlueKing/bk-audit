@@ -867,6 +867,438 @@ class ReleaseChecksTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "report.json").read_text())["status"], "NOT_CHECKED")
 
 
+class InitFieldsHookTests(unittest.TestCase):
+    """Only the actual init_fields effects may differ in an otherwise frozen inventory."""
+
+    setUp = ReleaseChecksTests.setUp
+    run_check = ReleaseChecksTests.run_check
+    assert_code = ReleaseChecksTests.assert_code
+    after = ReleaseChecksTests.after
+
+    @staticmethod
+    def audit_fields():
+        return {
+            "created_at": "2026-11-16T08:00:00Z",
+            "created_by": "",
+            "updated_at": "2026-11-16T08:00:00Z",
+            "updated_by": "old-operator",
+        }
+
+    def field(self, pk="event_id", *, built_in=True, model="meta.field"):
+        return {
+            "model": model,
+            "pk": pk,
+            "fields": {
+                **self.audit_fields(),
+                "field_type": "string",
+                "alias_name": "event_id",
+                "is_text": False,
+                "is_time": False,
+                "is_json": False,
+                "is_analyzed": False,
+                "is_zh_analyzed": False,
+                "is_index": False,
+                "is_dimension": True,
+                "is_delete": False,
+                "is_required": True,
+                "is_display": True,
+                "is_built_in": built_in,
+                "option": {},
+                "description": "synthetic field",
+                "priority_index": 0,
+                "property": {},
+            },
+        }
+
+    def marker(self, pk=901, value=True, **fields):
+        return {
+            "model": "meta.globalmetaconfig",
+            "pk": pk,
+            "fields": {
+                **self.audit_fields(),
+                "config_level": "global",
+                "instance_key": "global",
+                "config_key": "init_fields_finished_check",
+                "config_value": value,
+                **fields,
+            },
+        }
+
+    def add_before(self, row):
+        self.before["rows"].append(copy.deepcopy(row))
+        counts = self.before["manifest"]["model_counts"]
+        counts[row["model"]] = counts.get(row["model"], 0) + 1
+        self.plan["objects"].append(
+            {"model": row["model"], "pk": row["pk"], "action": "exclude", "reason": "preserve definitions"}
+        )
+
+    def test_builtin_same_primary_key_may_regenerate_all_four_audit_fields(self):
+        for pk in ("event_id", "version_v1", "version_custom-index"):
+            self.add_before(self.field(pk))
+        after = self.after()
+        for row in after["rows"][1:]:
+            row["fields"].update(
+                created_at="2026-11-17T09:20:00Z",
+                created_by="admin",
+                updated_at="2026-11-17T09:21:00Z",
+                updated_by="admin",
+            )
+        self.assertEqual(self.run_check(after)["status"], "NOT_CHECKED")
+
+    def test_builtin_definitions_user_fields_and_other_models_remain_frozen(self):
+        self.add_before(self.field())
+        for key, value in (
+            ("field_type", "long"),
+            ("is_required", False),
+            ("is_built_in", False),
+            ("alias_name", "renamed"),
+            ("option", {"path": "other"}),
+            ("property", {"sensitive": True}),
+            ("extra_definition", "unexpected"),
+        ):
+            with self.subTest(field=key):
+                after = self.after()
+                after["rows"][1]["fields"].update(updated_at="2026-11-17T09:20:00Z", **{key: value})
+                self.assert_code(self.run_check(after), "PRESERVATION")
+        for model, built_in in (("meta.field", False), ("meta.field", 1), ("meta.customfield", True)):
+            with self.subTest(model=model, built_in=built_in):
+                self.setUp()
+                self.add_before(self.field(built_in=built_in, model=model))
+                after = self.after()
+                after["rows"][1]["fields"]["updated_at"] = "2026-11-17T09:20:00Z"
+                self.assert_code(self.run_check(after), "PRESERVATION")
+
+    def test_removed_or_new_builtin_primary_keys_are_not_normalized_away(self):
+        self.add_before(self.field())
+        for mode in ("missing", "new", "replacement"):
+            with self.subTest(mode=mode):
+                after = self.after()
+                if mode != "new":
+                    after["rows"].pop()
+                if mode != "missing":
+                    after["rows"].append(self.field("unexpected_builtin"))
+                self.assert_code(self.run_check(after), "POST_SCOPE")
+
+    def test_existing_exact_global_marker_converges_to_json_true_only(self):
+        self.add_before(self.marker(value=False))
+        after = self.after()
+        after["rows"][1]["fields"].update(
+            config_value=True, updated_at="2026-11-17T09:20:00Z", updated_by="admin", created_by="admin"
+        )
+        self.assertEqual(self.run_check(after)["status"], "NOT_CHECKED")
+        for value in (False, 1, "true", None, {}):
+            with self.subTest(value=value):
+                changed = copy.deepcopy(after)
+                changed["rows"][1]["fields"]["config_value"] = value
+                self.assertEqual(self.run_check(changed)["status"], "FAIL")
+        self.assertEqual(self.run_check()["status"], "NOT_CHECKED")
+
+    def test_exact_marker_can_be_the_only_new_postflight_row(self):
+        after = self.after()
+        after["rows"].append(self.marker())
+        after["manifest"]["model_counts"]["meta.globalmetaconfig"] = 1
+        self.assertEqual(self.run_check(after)["status"], "NOT_CHECKED")
+        for change in (
+            {"config_level": "namespace"},
+            {"instance_key": "audit-a"},
+            {"config_key": "other_init_marker"},
+            {"config_value": False},
+            {"config_value": 1},
+            {"unexpected_payload": "not_hook_metadata"},
+        ):
+            with self.subTest(change=change):
+                changed = copy.deepcopy(after)
+                changed["rows"][-1]["fields"].update(change)
+                self.assertEqual(self.run_check(changed)["status"], "FAIL")
+        for pk in (0, -1, True, "901"):
+            with self.subTest(pk=pk):
+                changed = copy.deepcopy(after)
+                changed["rows"][-1]["pk"] = pk
+                self.assertEqual(self.run_check(changed)["status"], "FAIL")
+
+    def test_marker_identity_created_time_and_nonempty_creator_are_preserved(self):
+        self.add_before(self.marker(value=True, created_by="original"))
+        for field, value in (
+            ("created_at", "2026-11-17T09:20:00Z"),
+            ("created_by", "other"),
+            ("config_level", "namespace"),
+            ("instance_key", "audit-a"),
+            ("config_key", "other_init_marker"),
+            ("extra", True),
+        ):
+            with self.subTest(field=field):
+                after = self.after()
+                after["rows"][1]["fields"][field] = value
+                self.assertEqual(self.run_check(after)["status"], "FAIL")
+        for mode in ("delete", "replace_pk", "duplicate_scope"):
+            with self.subTest(mode=mode):
+                after = self.after()
+                if mode == "delete":
+                    after["rows"].pop()
+                elif mode == "replace_pk":
+                    after["rows"][1]["pk"] = 902
+                else:
+                    after["rows"].append(self.marker(pk=902))
+                self.assertEqual(self.run_check(after)["status"], "FAIL")
+
+    def test_unrelated_global_scope_and_reused_primary_key_are_never_hook_exceptions(self):
+        self.add_before(self.marker(config_key="unrelated", value=False))
+        after = self.after()
+        after["rows"][1] = self.marker()
+        self.assertEqual(self.run_check(after)["status"], "FAIL")
+        after = self.after()
+        after["rows"][1]["fields"]["updated_by"] = "admin"
+        self.assert_code(self.run_check(after), "PRESERVATION")
+        self.setUp()
+        self.add_before(self.marker(config_level="namespace", instance_key="audit-a", value=False))
+        after = self.after()
+        after["rows"][1]["fields"].update(config_value=True, updated_by="admin")
+        self.assert_code(self.run_check(after), "PRESERVATION")
+
+
+class IamPostflightTests(unittest.TestCase):
+    """Successful IAM persistence may update only its own runtime/audit leaves."""
+
+    run_check = ReleaseChecksTests.run_check
+    assert_code = ReleaseChecksTests.assert_code
+
+    def setUp(self):
+        self.checks = load("release_checks")
+        self.context, self.plan, self.before, self.receipts = resource_fixtures()
+        self.now = datetime(2026, 11, 17, 10, tzinfo=timezone.utc)
+        item, row = self.plan["objects"][0], self.before["rows"][0]
+        row.update(model="meta.globalmetaconfig")
+        row["fields"] = {
+            **InitFieldsHookTests.audit_fields(),
+            "config_level": "global",
+            "instance_key": "global",
+            "config_key": "bkaudit_action_config_data",
+            "config_value": {
+                "bkbase_data_id": 99,
+                "clean_resp": {"processing_id": "22_clean", "result_table_id": "22_logs"},
+                "retain": "original",
+            },
+        }
+        self.before["manifest"]["model_counts"].update({"databus.collectorplugin": 0, "meta.globalmetaconfig": 1})
+        item.update(
+            model="meta.globalmetaconfig",
+            scenario="iam",
+            config_key="bkaudit_action_config_data",
+            binding_namespace="legacy_project",
+        )
+        mapping = item["mapping"]
+        mapping["data_source"] = ref("DataSource", "source")
+        storage = mapping["storages"]["main"]["resource"]
+        cluster = ref("Redis", "redis-cluster")
+        mapping["storages"] = {"redis": {"resource": storage, "cluster": cluster}}
+        self.receipts["items"] = self.receipts["items"][:4]
+        for receipt in self.receipts["items"]:
+            body = receipt["body"]
+            if body["kind"] == "Clean":
+                body["metadata"]["labels"] = {"processing_id": "22_clean"}
+            if body["kind"] == "DataStorage":
+                body["spec"] = {
+                    "tableInfo": {"source": mapping["result_table"], "storage": cluster, "storage_type": "join"},
+                    "taskFieldSetting": {"key_fields": ["id", "system_id"]},
+                }
+        binding_ref = ref("RedisBinding", "join-binding")
+        table_info = copy.deepcopy(self.receipts["items"][2])
+        table_info.update(
+            operation="result_table_info",
+            logical_id="22_logs",
+            url="https://platform.example/v4/result_tables/22_logs/",
+        )
+        table_info["body"]["status"]["related"] = [
+            {
+                "kind": "RedisBinding",
+                "metadata": {k: binding_ref[k] for k in ("tenant", "namespace", "name")},
+                "spec": {"data": mapping["result_table"], "storage": cluster},
+                "status": {
+                    "phase": "Ok",
+                    "related": [
+                        {
+                            "kind": "Redis",
+                            "metadata": {k: cluster[k] for k in ("tenant", "namespace", "name")},
+                            "status": {"phase": "Ok"},
+                        }
+                    ],
+                },
+            }
+        ]
+        self.receipts["items"].append(table_info)
+        self.receipts["items"].append(
+            {
+                "ref": mapping["data_source"],
+                "method": "GET",
+                "http_status": 200,
+                "url": "https://platform.example/v4/tenants/tenant/namespaces/legacy_project/datasources/source/",
+                "collected_at": "2026-11-17T09:00:00+00:00",
+                "body": {
+                    "kind": "DataSource",
+                    "metadata": {
+                        "tenant": "tenant",
+                        "namespace": "legacy_project",
+                        "name": "source",
+                        "labels": {"raw_data_id": "99"},
+                    },
+                    "spec": {
+                        "data_id": mapping["data_id"],
+                        "report_config": {"type": "rest_api", "http_mode": "PULL"},
+                        "current_status": "Running",
+                        "desired_status": "Running",
+                    },
+                    "status": {"phase": "Ok"},
+                },
+            }
+        )
+        self.binding = {
+            **{k: mapping[k] for k in ("data_source", "data_id", "clean", "result_table")},
+            "snapshot_type": "action",
+            "source_raw_data_id": 99,
+            "result_table_id": "22_logs",
+            "storages": {"redis": storage},
+            "redis": cluster,
+            "ready": True,
+            "clean_role": "owner",
+            "redis_binding": binding_ref,
+            "redis_key_fields": ["id", "system_id"],
+        }
+        item["expected_binding"] = copy.deepcopy(self.binding)
+
+    def after(self, **runtime):
+        after = copy.deepcopy(self.before)
+        after["manifest"].update(version="release-2", created_at="2026-11-17T09:30:00+00:00")
+        fields = after["rows"][0]["fields"]
+        fields.update(
+            updated_at="2026-11-17T09:20:00Z", updated_by="admin", created_by=fields.get("created_by") or "admin"
+        )
+        fields["config_value"].setdefault("bkbase_v4", {}).setdefault("tenant", {})["legacy_project"] = {
+            **copy.deepcopy(self.binding),
+            **runtime,
+        }
+        return after
+
+    @staticmethod
+    def scoped(bundle):
+        return bundle["rows"][0]["fields"]["config_value"]["bkbase_v4"]["tenant"]["legacy_project"]
+
+    def test_first_import_and_successful_reverification_allow_exact_audit_and_runtime_fields(self):
+        self.assertEqual(self.run_check(self.after())["status"], "NOT_CHECKED")
+        original = self.before["rows"][0]["fields"]["config_value"]
+        original["bkbase_v4"] = {
+            "tenant": {
+                "legacy_project": {
+                    **self.binding,
+                    "ready": False,
+                    "waiting_for": "DataSource",
+                    "verification_started": 3,
+                    "verification_applied": 2,
+                }
+            }
+        }
+        self.plan["objects"][0]["expected_binding"].update(verification_started=3, verification_applied=3)
+        self.assertEqual(
+            self.run_check(self.after(verification_started=4, verification_applied=4))["status"], "NOT_CHECKED"
+        )
+
+    def test_old_plan_without_runtime_leaves_still_requires_actual_ready_true(self):
+        self.plan["objects"][0]["expected_binding"].pop("ready")
+        self.assertEqual(self.run_check(self.after())["status"], "NOT_CHECKED")
+        self.assertEqual(self.run_check(self.after(ready=False))["status"], "FAIL")
+
+    def test_pending_invalid_or_backwards_verification_never_passes(self):
+        for runtime in (
+            {"ready": False},
+            {"ready": 1},
+            {"ready": "true"},
+            {"waiting_for": "DataSource"},
+            {"verification_started": 3, "verification_applied": 2},
+            {"verification_started": 1},
+            {"verification_applied": 1},
+            {"verification_started": True, "verification_applied": True},
+            {"verification_started": 0, "verification_applied": 0},
+            {"verification_started": "1", "verification_applied": "1"},
+        ):
+            with self.subTest(runtime=runtime):
+                self.assertEqual(self.run_check(self.after(**runtime))["status"], "FAIL")
+        root = self.before["rows"][0]["fields"]["config_value"]
+        root["bkbase_v4"] = {
+            "tenant": {"legacy_project": {**self.binding, "verification_started": 5, "verification_applied": 5}}
+        }
+        for runtime in ({}, {"verification_started": 4, "verification_applied": 4}):
+            with self.subTest(backwards=runtime):
+                self.assertEqual(self.run_check(self.after(**runtime))["status"], "FAIL")
+
+    def test_legacy_business_other_scopes_unknown_leaves_and_created_metadata_stay_strict(self):
+        mutations = (
+            lambda a: a["rows"][0]["fields"].update(created_at="2026-11-17T09:20:00Z"),
+            lambda a: a["rows"][0]["fields"].update(config_level="namespace"),
+            lambda a: a["rows"][0]["fields"]["config_value"].update(retain="changed"),
+            lambda a: self.scoped(a).update(result_table_id="22_other"),
+            lambda a: self.scoped(a).update(redis_binding=ref("RedisBinding", "wrong")),
+            lambda a: self.scoped(a).update(extra="unknown"),
+            lambda a: a["rows"][0]["fields"]["config_value"]["bkbase_v4"]["tenant"].update(
+                other_project={"ready": True}
+            ),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                after = self.after()
+                mutate(after)
+                self.assertEqual(self.run_check(after)["status"], "FAIL")
+        self.before["rows"][0]["fields"]["created_by"] = "original"
+        after = self.after()
+        after["rows"][0]["fields"]["created_by"] = "other"
+        self.assertEqual(self.run_check(after)["status"], "FAIL")
+
+    def test_iam_ready_still_requires_exact_observed_redis_binding(self):
+        self.plan["objects"][0]["expected_binding"]["redis_binding"] = ref("RedisBinding", "decoy")
+        self.binding["redis_binding"] = ref("RedisBinding", "decoy")
+        self.assertEqual(self.run_check(self.after())["status"], "FAIL")
+
+    def test_iam_ready_still_requires_valid_actual_join_keys_and_storage_type(self):
+        for keys in (["id"], ["id", "id"], ["id", "system_id", "extra"], None):
+            with self.subTest(keys=keys):
+                self.receipts["items"][3]["body"]["spec"]["taskFieldSetting"]["key_fields"] = keys
+                self.assertEqual(self.run_check(self.after())["status"], "FAIL")
+        self.receipts["items"][3]["body"]["spec"]["taskFieldSetting"]["key_fields"] = ["id", "system_id"]
+        self.receipts["items"][3]["body"]["spec"]["tableInfo"]["storage_type"] = "write"
+        self.assertEqual(self.run_check(self.after())["status"], "FAIL")
+
+    def test_iam_join_key_order_must_match_signed_binding(self):
+        self.receipts["items"][3]["body"]["spec"]["taskFieldSetting"]["key_fields"] = ["system_id", "id"]
+        self.assertEqual(self.run_check(self.after())["status"], "FAIL")
+
+    def test_all_iam_snapshot_types_use_their_real_config_and_redis_key_contract(self):
+        for kind, key, keys in (
+            ("action", "bkaudit_action_config_data", ["id", "system_id"]),
+            ("resource_type", "bkaudit_resource_type_config_data", ["id", "system_id"]),
+            ("user", "bkaudit_user_info_config_data", ["id"]),
+        ):
+            with self.subTest(kind=kind):
+                self.setUp()
+                self.before["rows"][0]["fields"]["config_key"] = key
+                self.plan["objects"][0]["config_key"] = key
+                self.binding.update(snapshot_type=kind, redis_key_fields=keys)
+                self.plan["objects"][0]["expected_binding"].update(snapshot_type=kind, redis_key_fields=keys)
+                self.receipts["items"][3]["body"]["spec"]["taskFieldSetting"]["key_fields"] = list(keys)
+                self.assertEqual(self.run_check(self.after())["status"], "NOT_CHECKED")
+
+    def test_runtime_ready_does_not_replace_actual_redis_task_or_logical_identity_checks(self):
+        for target, mutate in (
+            (1, lambda b: b["spec"].update(current_status="Stopped")),
+            (2, lambda b: b["spec"].update(predefiendResultTableId="22_other")),
+            (3, lambda b: b["spec"]["tableInfo"].update(storage=ref("Redis", "wrong"))),
+            (3, lambda b: b["status"].update(phase="Pending")),
+            (4, lambda b: b["status"]["related"][0]["spec"].update(data=ref("ResultTable", "wrong"))),
+        ):
+            with self.subTest(target=target):
+                original = copy.deepcopy(self.receipts["items"][target]["body"])
+                mutate(self.receipts["items"][target]["body"])
+                self.assertEqual(self.run_check(self.after())["status"], "FAIL")
+                self.receipts["items"][target]["body"] = original
+
+
 class ExportTests(unittest.TestCase):
     def test_export_entry_accepts_real_string_project_settings_and_external_version_evidence(self):
         from types import SimpleNamespace
@@ -934,6 +1366,47 @@ class ExportTests(unittest.TestCase):
         self.assertFalse(
             any(q.startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER")) for q in connection.queries)
         )
+
+    def test_mysql_empty_port_uses_driver_default_but_explicit_wrong_port_never_passes(self):
+        export = load("export_fixture")
+        context = fixtures()[0]
+        with tempfile.TemporaryDirectory() as directory:
+            for index, port in enumerate(("", None, 3306, "3306", "omitted")):
+                with self.subTest(port=port):
+                    connection = FakeConnection(context["database"])
+                    if port == "omitted":
+                        connection.settings_dict.pop("PORT")
+                    else:
+                        connection.settings_dict["PORT"] = port
+                    root = Path(directory) / f"valid-{index}"
+                    export.capture(
+                        connection, context, root, {"strategy_v2.strategy": lambda: 0}, lambda: [], version="old-1"
+                    )
+                    self.assertEqual(connection.queries[-1], "ROLLBACK")
+                    self.assertTrue(root.joinpath("manifest.json").is_file())
+            for index, port in enumerate((3307, "3307", 0, False, True, -1, "bad", "3306.0", 3306.0, 65536, " 3306")):
+                with self.subTest(port=port):
+                    connection = FakeConnection(context["database"])
+                    connection.settings_dict["PORT"] = port
+                    root = Path(directory) / f"invalid-{index}"
+                    with self.assertRaises(ValueError):
+                        export.capture(connection, context, root, {}, lambda: [], version="old-1")
+                    self.assertEqual(connection.queries, [])
+                    self.assertFalse(root.exists())
+            for index, port in enumerate((0, True, "bad", "65536")):
+                with self.subTest(matching_invalid=port):
+                    wrong = {**context, "database": {**context["database"], "port": port}}
+                    connection = FakeConnection(wrong["database"])
+                    with self.assertRaises(ValueError):
+                        export.capture(
+                            connection,
+                            wrong,
+                            Path(directory) / f"matching-invalid-{index}",
+                            {},
+                            lambda: [],
+                            version="old-1",
+                        )
+                    self.assertEqual(connection.queries, [])
 
     def test_wrong_database_and_inconsistent_counts_leave_no_completed_bundle(self):
         export = load("export_fixture")
