@@ -21,11 +21,14 @@
   "tenant": "actual-v4-tenant",
   "namespaces": ["actual-default-project", "actual-migrated-project"],
   "api_origin": "https://actual-api-gateway.example/stage",
+  "max_baseline_age_seconds": 604800,
   "max_evidence_age_seconds": 14400
 }
 ```
 
 `api_origin` 是真实 API base URL（可包含网关前缀），不允许用户信息、查询参数或 fragment。旧 tenant 是明确的旧来源范围标识，工具不会向 V3 查询其真实性；旧项目号必须为正整数。context 的本地 SHA 同时写入导出 manifest 和校验报告，以识别使用了哪份声明。
+
+迁移前 `before` 的有效期取 `max_baseline_age_seconds`，未设置时沿用 `max_evidence_age_seconds`。V4 GET、部署回执和 `after` 仍使用 `max_evidence_age_seconds`。在首次导出前按发布窗口确定上下文。
 
 另存独立的 `deployment-before.json`/`deployment-after.json`：从发布平台、Helm 工作负载或容器实际镜像回读得到，不要把 context 的候选值直接复制后称已核实。工具只验证给定回读与声明的一致性、镜像 digest 格式及采集时间，**无法认证回读来源或证明正在运行该版本**，manifest 中 `deployed_version_authenticity=NOT_CHECKED`。
 
@@ -68,6 +71,8 @@ AUDIT_RELEASE_EXPORT_DIR=/private/release/before-new-directory \
 
 `plan.json` 是只读核验的范围封套，`context` 原样放固定声明，`objects` 对输入 fixture 的**每条配置记录**列一次：需要迁移的写 `action=migrate`；无关、删除、无 Flow 等对象写 `action=exclude` 并说明 `reason`。排除仍会参加后置保留字段比较。遗漏、重复、未知对象都失败。不要默认将所有未识别对象排除。
 
+发布需要新增或修改两项 V4 运行配置时，在顶层 `approved_config_changes` 按 `instance_key`、`config_key`、`config_value` 填入签收后的完整目标值。仅支持审计 namespace 下的 `bkbase_v4_storage_clusters` 和 `bkbase_v4_flow_config`。后置校验逐项核对目标值，已有记录继续校验主键和保留字段，新建按相同配置键和审计 namespace 定位。
+
 结构合法的空库存/空计划，或全部为 `exclude` 的清单，没有任何迁移对象得到核验，预检及后置均报告 `NO_MIGRATION_OBJECTS: NOT_CHECKED`，CLI 退出 1。非空库存被空计划遗漏、重复或非法输入仍是 `FAIL`；正常混合清单保留原迁移及保留字段检查。这是自动检查范围缺项，不要求启动原停用资源，也不增加排除审批或把人工确认改写为自动通过。
 
 可离线生成待审核骨架（从后端目录执行；这只创建本机文件）：
@@ -102,7 +107,7 @@ Flow 对象形状如下；`mapping` **原样使用**既有 `flow_migration` sche
 
 普通/事件插件及采集项分别用 `scenario=plugin/event_plugin/collector`；`model` 分别为 `databus.collectorplugin/collectorconfig`。`mapping` 原样取已有 `resource_migration` 详细清单单行（owner/owner_pk/audit_namespace/legacy/data_source〔可选〕/data_id/clean/result_table/storages）。保留旧字段、节点 ID；不会改 Ref、补建资源或推断类型。事件插件必须是本地 `plugin_scene=event`、唯一主 Doris，并核既有 namespace 级事件 GlobalMeta 逻辑表/物理目标；普通插件沿主 ES、副 Doris 标记；采集项不认领父插件 Storage。
 
-快照/IAM 可做有限身份及后置绑定对账：`scenario=snapshot/iam`，使用明确旧 `legacy`、所需 Ref 和 `storages.redis/hdfs={resource,cluster}`。另提供 `expected_binding` 为实际需要存入的窄白名单绑定；IAM 再提供 `config_key`、`binding_namespace`，其绑定以 `config_value.bkbase_v4[tenant][namespace]` 核对，旧 `bkbase_data_id/clean_resp` 仍保留。**这两类始终标整体契约 NOT_CHECKED**，不能因资源/RedisBinding 的部分校验成功就全局放行。
+快照/IAM 可做有限身份及后置绑定对账。`scenario=snapshot` 使用明确旧 `legacy` 和实际所需的 Redis、HDFS、Doris 存储，`mapping.storages` 每项填 `{resource, cluster}`。`expected_binding` 填 `raw_data_id`、`data_source`、`data_id`、`clean`、`clean_role`、`result_table_id`、`result_table`、`storages`，存储值为 DataStorage Ref。`scenario=iam` 使用现有 IAM 绑定形状（`source_raw_data_id` 和 Redis 绑定），另提供 `config_key` 和 `binding_namespace`，在 `config_value.bkbase_v4[tenant][namespace]` 核对。两类仍需要人工签收完整契约。
 
 `checks` 仅作额外字面比较：`topic=fields` 的 `/spec/fields` 或原生 Flow `/spec/nodes/<index>/fields`；`topic=rules` 的 Clean `/spec/rules`、StreamNode `/spec/nodes/<index>/config/sql`、BatchSqlNode `/spec/nodes/<index>/processing_info`；提供 `ref`、`pointer` 和 `equals` 或 `sha256` 二选一。Ref 必须是当前对象的主 Flow/Clean/RT 或实际 Flow 源/输出 RT，禁止 decoy 资源替代；不能为空。主身份、旧输入/输出、任务关联和存储用途由内置逻辑校验，不接受自选 pointer 充数。即使字面比较相同，**V3/V4字段类型/规则语义等价仍 NOT_CHECKED**，需人工依据旧规则和正式模型补查。
 

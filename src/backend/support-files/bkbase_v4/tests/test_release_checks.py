@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -511,6 +511,68 @@ class ReleaseChecksTests(unittest.TestCase):
         after["rows"] = []
         self.assert_code(self.run_check(after=after), "POST_SCOPE")
 
+    def config_change(self, key, value, pk):
+        self.plan.setdefault("approved_config_changes", []).append(
+            {"instance_key": "audit-a", "config_key": key, "config_value": value}
+        )
+        return {
+            "model": "meta.globalmetaconfig",
+            "pk": pk,
+            "fields": {
+                "config_level": "namespace",
+                "instance_key": "audit-a",
+                "config_key": key,
+                "config_value": value,
+            },
+        }
+
+    def test_postflight_allows_approved_v4_configuration_creation_and_update(self):
+        storage = self.config_change("bkbase_v4_storage_clusters", {"es": {}}, 8)
+        profile = self.config_change("bkbase_v4_flow_config", {"operation_config": {}}, 9)
+        old = copy.deepcopy(storage)
+        old["fields"].update(config_value={}, created_by="", updated_by="operator-1")
+        self.before["rows"].append(old)
+        self.before["manifest"]["model_counts"][old["model"]] = 1
+        self.plan["objects"].append({"model": old["model"], "pk": 8, "action": "exclude", "reason": "V4 setup"})
+        after = self.after()
+        storage["fields"].update(created_by="operator-2", updated_by="operator-2", updated_at="2026-11-17T09:30:00Z")
+        after["rows"][1:] = [storage, profile]
+        self.assertEqual(self.run_check(after=after)["status"], "NOT_CHECKED")
+
+    def test_postflight_rejects_wrong_or_missing_approved_configuration(self):
+        profile = self.config_change("bkbase_v4_flow_config", {"operation_config": {"slots": 1}}, 9)
+        after = self.after()
+        self.assert_code(self.run_check(after=after), "APPROVED_CONFIG_IDENTITY")
+        profile["fields"]["config_value"] = {"operation_config": {"slots": True}}
+        after["rows"].append(profile)
+        self.assert_code(self.run_check(after=after), "APPROVED_CONFIG_VALUE")
+
+    def test_only_declared_v4_config_keys_are_eligible_for_changes(self):
+        unrelated = self.config_change("unrelated", {}, 9)
+        self.assert_code(self.run_check(), "APPROVED_CONFIG_STRUCTURE")
+        self.plan.pop("approved_config_changes")
+        after = self.after()
+        after["rows"].append(unrelated)
+        self.assert_code(self.run_check(after=after), "POST_SCOPE")
+
+    def test_baseline_window_is_independent_of_fresh_receipts_and_after_export(self):
+        self.context.update(max_baseline_age_seconds=86400, max_evidence_age_seconds=14400)
+        self.plan["context"].update(self.context)
+        self.before["manifest"]["created_at"] = (self.now - timedelta(hours=8)).isoformat()
+        self.assertEqual(self.run_check()["status"], "NOT_CHECKED")
+        self.assertEqual(self.run_check(after=self.after())["status"], "NOT_CHECKED")
+        after = self.after()
+        after["manifest"]["created_at"] = (self.now - timedelta(hours=5)).isoformat()
+        self.assert_code(self.run_check(after=after), "SNAPSHOT_TIME")
+        self.receipts["items"][0]["collected_at"] = (self.now - timedelta(hours=5)).isoformat()
+        self.assert_code(self.run_check(), "RECEIPT_TIME")
+
+    def test_even_a_configured_baseline_window_rejects_expired_evidence(self):
+        self.context["max_baseline_age_seconds"] = 86400
+        self.plan["context"].update(self.context)
+        self.before["manifest"]["created_at"] = (self.now - timedelta(days=2)).isoformat()
+        self.assert_code(self.run_check(), "SNAPSHOT_TIME")
+
     def test_reports_are_private_exclusive_and_only_contain_summaries(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "report.json"
@@ -641,6 +703,68 @@ class ReleaseChecksTests(unittest.TestCase):
         binding["spec"]["data"] = ref("ResultTable", "other")
         with self.assertRaises(self.checks.Invalid):
             inspector.table_binding(body, table, cluster, "redis", "snapshot")
+
+    def test_snapshot_postflight_uses_actual_binding_shape_and_storage_kinds(self):
+        for data_type, role in (("asset", "owner"), ("basic", "existing")):
+            with self.subTest(data_type=data_type):
+                self.context, self.plan, self.before, self.receipts = resource_fixtures()
+                item, row = self.plan["objects"][0], self.before["rows"][0]
+                item.update(model="databus.snapshot", scenario="snapshot")
+                row.update(model="databus.snapshot")
+                row["fields"].update(bkbase_data_id=99, status="running", join_data_type=data_type)
+                for model in ("databus.collectorplugin", "databus.snapshot"):
+                    self.before["manifest"]["model_counts"][model] = int(model == "databus.snapshot")
+                mapping = item["mapping"]
+                data_source = ref("DataSource", "source")
+                mapping["data_source"] = data_source
+                self.receipts["items"].append(
+                    {
+                        "ref": data_source,
+                        "method": "GET",
+                        "http_status": 200,
+                        "url": self.context["api_origin"]
+                        + "/v4/tenants/tenant/namespaces/legacy_project/datasources/source/",
+                        "collected_at": "2026-11-17T09:00:00+00:00",
+                        "body": {
+                            "kind": "DataSource",
+                            "metadata": {
+                                "tenant": "tenant",
+                                "namespace": "legacy_project",
+                                "name": "source",
+                                "labels": {"raw_data_id": "99"},
+                            },
+                            "spec": {
+                                "data_id": mapping["data_id"],
+                                "current_status": "Running",
+                                "desired_status": "Running",
+                            },
+                            "status": {"phase": "Ok"},
+                        },
+                    }
+                )
+                main, replica = mapping["storages"].values()
+                mapping["storages"] = {
+                    "hdfs": {"resource": main["resource"], "cluster": ref("Hdfs", "hdfs-cluster")},
+                    "doris": {"resource": replica["resource"], "cluster": replica["cluster"]},
+                }
+                for body, info in zip(self.receipts["items"][3:5], mapping["storages"].values(), strict=True):
+                    body["body"]["spec"]["tableInfo"]["storage"] = info["cluster"]
+                self.receipts["items"][1]["body"]["metadata"]["labels"] = {"processing_id": "22_clean"}
+                self.receipts["items"][1]["body"]["spec"]["result_table_source"] = (
+                    "new" if role == "owner" else "existing"
+                )
+                item["expected_binding"] = {
+                    **{k: mapping[k] for k in ("data_source", "data_id", "clean", "result_table")},
+                    "raw_data_id": 99,
+                    "result_table_id": "22_logs",
+                    "clean_role": role,
+                    "storages": {k: v["resource"] for k, v in mapping["storages"].items()},
+                }
+                after = copy.deepcopy(self.before)
+                after["manifest"]["version"] = "release-2"
+                after["rows"][0]["fields"]["bkbase_v4_resources"] = item["expected_binding"]
+                result = self.run_check(after=after)
+                self.assertEqual(result["status"], "NOT_CHECKED", result["checks"])
 
     def test_plugin_scene_cannot_be_relabelled_and_snapshot_scope_cannot_hide_unknown_binding_fields(self):
         self.context, self.plan, self.before, self.receipts = resource_fixtures()
