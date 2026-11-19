@@ -8,6 +8,7 @@ from unittest import mock
 from django.test import SimpleTestCase, override_settings
 
 from services.web.analyze import utils as analyze_utils
+from services.web.analyze.constants import AUDIT_EVENT_QUEUE_TOPIC_PATTERN
 from services.web.analyze.constants import FlowDataSourceNodeType as NodeType
 from services.web.analyze.controls.rule_audit import RuleAuditController
 from services.web.analyze.storage_node import HDFSStorageNode
@@ -392,6 +393,16 @@ class InitialBatchScheduleTests(SimpleTestCase):
         self.assertEqual(sink["input"], self.sql_node(graph)["name"])
         self.assertEqual(sink["storage_config"], {"other": {"dataType": "parquet"}})
         self.assertNotIn("node_deploy_configs", self.profile["operation_config"]["batch_sql_deploy_config"])
+
+    def test_new_flow_output_matches_the_audit_event_queue_subscription(self):
+        output = self.sql_node(self.graph())["output"]
+        self.assertRegex(f"queue_{output}", AUDIT_EVENT_QUEUE_TOPIC_PATTERN)
+
+    def test_existing_v4_output_identity_is_preserved_on_edit(self):
+        output_name = "audit_default_390_e27200372086"
+        output = f"47_{output_name}"
+        self.strategy.backend_data = {"bkbase_v4": {"output_name": output_name, "output_rt_id": output}}
+        self.assertEqual(self.sql_node(self.graph())["output"], output)
 
     def test_batch_cluster_and_node_options_must_be_explicit_valid_configuration(self):
         for config in (
