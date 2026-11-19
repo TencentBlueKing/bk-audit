@@ -404,11 +404,17 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
-        from services.web.risk.handlers.ticket import MisReport, ReOpenMisReport
+        from services.web.risk.handlers.ticket import (
+            MisReport,
+            ReOpenMisReport,
+            RiskExperienceRecord,
+        )
 
+        # 记经验节点纯留痕（无 ticket/task），不能当流转节点用：
+        # 否则 load_task_id / load_approve_sn 会取空，导致重复建单/建任务。
         nodes = TicketNode.objects.filter(risk_id=self.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
-            if node.action not in [MisReport.__name__, ReOpenMisReport.__name__]:
+            if node.action not in [MisReport.__name__, ReOpenMisReport.__name__, RiskExperienceRecord.__name__]:
                 return node
         return TicketNode()
 

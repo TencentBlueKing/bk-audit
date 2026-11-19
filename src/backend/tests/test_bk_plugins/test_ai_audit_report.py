@@ -401,6 +401,10 @@ class TestAIAuditReportStream(TestCase):
 
     def setUp(self):
         self.resource = ChatCompletion()
+        # 流式解析不走 Redis 限流，避免单测被限流拖住
+        throttle = mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire")
+        throttle.start()
+        self.addCleanup(throttle.stop)
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -1317,3 +1321,26 @@ class TestAIAuditReportAPIGWConfig(TestCase):
         yaml_path = BACKEND_DIR / "support-files/apigw/definition.yaml"
         with self.assertRaises(UnicodeDecodeError):
             yaml_path.read_text()  # 不传 encoding, Windows 默认 GBK
+
+
+class TestAIAuditReportRateLimit(TestCase):
+    """报告智能体按请求启用全局 Agent 限流。"""
+
+    def test_global_rate_limit_enabled(self):
+        self.assertTrue(ChatCompletion.enable_agent_rate_limit)
+
+    @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire")
+    @mock.patch("bk_resource.contrib.api.APIResource.perform_request", mock.Mock(return_value="ok"))
+    def test_perform_request_acquires_global_quota(self, mock_acquire):
+        resource = ChatCompletion()
+        result = resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": False},
+            }
+        )
+
+        self.assertEqual(result, "ok")
+        mock_acquire.assert_called_once_with(AIAgentCode.AUDIT_REPORT)

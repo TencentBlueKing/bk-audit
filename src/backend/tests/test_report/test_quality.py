@@ -4,9 +4,10 @@ from unittest.mock import patch
 from django.test import override_settings
 
 from core.exceptions import ApiRequestError
-from services.web.risk.constants import ContentQualityIssueType
+from services.web.risk.constants import ContentQualityError, ContentQualityIssueType
 from services.web.risk.report.quality import (
     ContentQualityChecker,
+    ContentQualityIssue,
     check_and_report_quality,
 )
 
@@ -226,3 +227,38 @@ class TestCheckAndReportQuality:
             assert data["target"] == "risk_R005"
             assert data["dimension"]["risk_id"] == "R005"
             assert data["dimension"]["issue_type"] == ContentQualityIssueType.RENDER_ERROR
+
+
+class TestContentQualityRetryable:
+    """报告级是否重试由内容质量问题类型决定。"""
+
+    @staticmethod
+    def _error(issue_type: str) -> ContentQualityError:
+        return ContentQualityError([ContentQualityIssue(issue_type=issue_type, detail="test")])
+
+    def test_content_generation_issues_are_retryable(self):
+        for issue_type in (
+            ContentQualityIssueType.EMPTY,
+            ContentQualityIssueType.TOO_SHORT,
+            ContentQualityIssueType.AI_THINKING,
+        ):
+            assert self._error(issue_type).retryable is True, issue_type
+
+    def test_template_and_provider_issues_are_not_retryable(self):
+        for issue_type in (
+            ContentQualityIssueType.AI_ERROR,
+            ContentQualityIssueType.PROVIDER_ERROR,
+            ContentQualityIssueType.RENDER_ERROR,
+            ContentQualityIssueType.EVENT_QUERY_FAILED,
+        ):
+            assert self._error(issue_type).retryable is False, issue_type
+
+    def test_mixed_permanent_issue_makes_report_non_retryable(self):
+        error = ContentQualityError(
+            [
+                ContentQualityIssue(issue_type=ContentQualityIssueType.TOO_SHORT, detail="short"),
+                ContentQualityIssue(issue_type=ContentQualityIssueType.RENDER_ERROR, detail="template"),
+            ]
+        )
+
+        assert error.retryable is False
