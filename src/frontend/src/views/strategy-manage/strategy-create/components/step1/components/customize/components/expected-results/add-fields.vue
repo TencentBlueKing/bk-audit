@@ -70,7 +70,7 @@
                               :type="item.spec_field_type" />
                             <span
                               v-if="configType === 'LinkTable'"
-                              style=" color: #3a84ff;">{{ item.table }}.</span>
+                              style="color: var(--bk-theme-color-brand-2);">{{ item.table }}.</span>
                             <span>{{ item?.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
                           </div>
                         </bk-checkbox>
@@ -102,10 +102,10 @@
                 style="height: 200px;padding-top: 40px;"
                 type="search-empty">
                 <div>
-                  <div style="color: #63656e;">
+                  <div class="field-pop-empty-title">
                     {{ t('搜索结果为空') }}
                   </div>
-                  <div style="margin-top: 8px; color: #979ba5;">
+                  <div class="field-pop-empty-desc">
                     {{ t('可以尝试调整关键词') }} {{ t('或') }}
                     <bk-button
                       text
@@ -126,7 +126,7 @@
             </div>
           </div>
           <div class="field-pop-radio">
-            <div style=" margin-bottom: 12px;font-weight: 700">
+            <div class="field-pop-title">
               {{ t('预期结果') }}
             </div>
             <table class="field-pop-radio-table-head">
@@ -140,7 +140,7 @@
                       v-bk-tooltips="{
                         content: t('指合并同类数据，计算总和、平均等统计值；同时选择多个字段时，可用聚合算法是最小公集。')
                       }"
-                      style="border-bottom: 1px dashed #979ba5;">
+                      class="field-pop-dashed">
                       {{ t('聚合算法') }}
                     </span>
                     <bk-popover
@@ -157,7 +157,7 @@
                         v-bk-tooltips="{
                           content: t('批量设置聚合算法')
                         }"
-                        style="margin-left: 4px;color: #3a84ff;"
+                        style="margin-left: var(--bk-theme-space-4); color: var(--bk-theme-color-brand-2);"
                         type="edit-fill" />
                     </bk-popover>
                     <div style="display: none">
@@ -178,7 +178,7 @@
                       v-bk-tooltips="{
                         content: t('字段别名类似 SQL 中的 `字段名 AS 字段别名`，设置后将改变数据入库后的原始字段名，请谨慎使用')
                       }"
-                      style="border-bottom: 1px dashed #979ba5;">
+                      class="field-pop-dashed">
                       {{ t('字段别名') }}
                     </span>
                   </th>
@@ -194,7 +194,7 @@
                     <tr
                       v-for="(item, index) in tableData"
                       :key="index">
-                      <td style="background-color: #fafbfd;">
+                      <td class="field-name-cell">
                         <div class="table-field">
                           <tool-tip-text :data="item.raw_name" />
                           <span v-if="item?.keys && item?.keys.length > 0">
@@ -207,7 +207,7 @@
                           </span>
                         </div>
                       </td>
-                      <td style="background-color: #fff;">
+                      <td class="field-edit-cell">
                         <bk-select
                           v-model="item.aggregate"
                           :allow-empty-values="allowEmptyAggregateValues"
@@ -221,7 +221,7 @@
                             :value="aggItem.value" />
                         </bk-select>
                       </td>
-                      <td style=" width: 250px;background-color: #fff;">
+                      <td class="field-edit-cell" style="width: 250px;">
                         <bk-input
                           v-model="item.display_name"
                           behavior="simplicity"
@@ -255,9 +255,7 @@
                 </table>
               </scroll-faker>
             </div>
-            <div
-              v-else
-              style="border: 1px solid #ddd; border-top: 0;">
+            <div v-else>
               <bk-exception
                 class="exception-part"
                 scene="part"
@@ -710,7 +708,8 @@
   .add-field-pop-content {
     display: flex;
     height: 100%;
-    box-shadow: 0 2px 6px #0000001a !important;
+    overflow: hidden;
+    border-radius: var(--bk-theme-card-radius);
     flex-direction: column;
 
     .field-pop-select {
@@ -727,6 +726,34 @@
         color: var(--bk-theme-border-strong);
         align-items: center;
         justify-content: center;
+      }
+
+      .field-pop-select-search {
+        padding-top: var(--bk-theme-space-8);
+
+        :deep(.bk-input.is-simplicity),
+        :deep(.bk-input.is-simplicity:hover:not(.is-disabled)),
+        :deep(.bk-input.is-focused:not(.is-readonly).is-simplicity) {
+          position: relative;
+          border-right-width: 0;
+          border-bottom-color: transparent;
+          border-left-width: 0;
+        }
+
+        :deep(.bk-input.is-simplicity)::after {
+          position: absolute;
+          right: var(--bk-theme-space-12);
+          bottom: 0;
+          left: var(--bk-theme-space-12);
+          height: 1px;
+          pointer-events: none;
+          content: '';
+          background: var(--bk-theme-border-weak);
+        }
+
+        :deep(.bk-input.is-focused:not(.is-readonly).is-simplicity)::after {
+          background: var(--bk-theme-color-brand-2);
+        }
       }
 
       .field-pop-select-list {
@@ -750,8 +777,17 @@
           background: var(--bk-theme-fill-selected);
         }
 
+        .field-pop-empty-title {
+          color: var(--bk-theme-text-default);
+        }
+
+        .field-pop-empty-desc {
+          margin-top: var(--bk-theme-space-8);
+          color: var(--bk-theme-text-weak);
+        }
+
         .select-item-disabled {
-          color: var(--bk-theme-border-strong);
+          color: var(--bk-theme-text-disabled);
           cursor: not-allowed;
         }
       }
@@ -762,18 +798,39 @@
       padding: var(--bk-theme-space-16);
       background: var(--bk-theme-surface-subtle);
 
+      .field-pop-title {
+        margin-bottom: var(--bk-theme-space-12);
+        font-weight: 700;
+        color: var(--bk-theme-text-strong);
+      }
+
+      .field-pop-dashed {
+        border-bottom: var(--bk-theme-cell-tip-underline);
+      }
+
+      .field-name-cell {
+        background-color: var(--bk-theme-surface-soft);
+      }
+
+      .field-edit-cell {
+        background-color: var(--bk-theme-surface-default);
+      }
+
       :deep(.field-pop-radio-table-head) {
         width: 100%;
         border-collapse: collapse;
 
         th,
         td {
-          padding: var(--bk-theme-space-8);border: 1px solid var(--bk-theme-border-default);
+          padding: var(--bk-theme-space-8);
+          border: none;
+          border-bottom: 1px solid var(--bk-theme-border-default);
         }
 
         th {
+          color: var(--bk-theme-table-header-text);
           text-align: left;
-          background-color: var(--bk-theme-surface-muted);
+          background-color: var(--bk-theme-surface-soft);
         }
       }
 
@@ -789,13 +846,25 @@
 
         th,
         td {
-          padding: 0;border: 1px solid var(--bk-theme-border-default);
+          padding: 0;
+          border: none;
+          border-bottom: 1px solid var(--bk-theme-border-default);
+        }
+
+        th:not(:last-child),
+        td:not(:last-child) {
+          border-right: 1px solid var(--bk-theme-border-default);
+        }
+
+        tr:last-child td {
+          border-bottom: none;
         }
 
         .is-duplicate {
           position: relative;
 
-          input {background-color: var(--bk-theme-fill-danger);;
+          input {
+            background-color: var(--bk-theme-fill-danger);
           }
 
           .duplicate-icon {
@@ -804,7 +873,8 @@
             right: 10px;
             padding: var(--bk-theme-space-2);
             font-size: 10px;
-            background: red;
+            color: var(--bk-theme-status-danger-text);
+            background: var(--bk-theme-status-danger-bg);
             border-radius: var(--bk-theme-tag-radius);
           }
         }
@@ -813,8 +883,8 @@
           position: relative;
 
           input {
-            background-color: #fff3cd;
-            border-color: #ffc107;
+            background-color: var(--bk-theme-fill-warn);
+            border-color: var(--bk-theme-color-warn-2);
           }
 
           .invalid-icon {
@@ -823,8 +893,8 @@
             right: 10px;
             padding: var(--bk-theme-space-2);
             font-size: 10px;
-            color: #856404;
-            background: #ffc107;
+            color: var(--bk-theme-status-warn-text);
+            background: var(--bk-theme-color-warn-5);
             border-radius: var(--bk-theme-tag-radius);
           }
         }
@@ -850,8 +920,9 @@
       display: flex;
       height: 42px;
       padding: 0 var(--bk-theme-space-16);
-      background: var(--bk-theme-table-header-bg);
-      box-shadow: inset 0 1px #0000001f;
+      background: var(--bk-theme-surface-subtle);
+      border-top: 1px solid var(--bk-theme-border-default);
+      box-shadow: none;
       align-items: center;
       justify-content: flex-end;
     }
@@ -885,7 +956,7 @@
   }
 
   .is-disabled {
-    color: var(--bk-theme-border-strong);
+    color: var(--bk-theme-text-disabled);
     cursor: not-allowed;
     background-color: transparent;
   }
@@ -895,7 +966,27 @@
   margin-right: var(--bk-theme-space-4);
   margin-left: var(--bk-theme-space-4);
   font-weight: 700;
-  color: black;
+  color: var(--bk-theme-text-strong);
   text-align: center;
+}
+</style>
+
+<style lang="postcss">
+/* 浮层挂到 body，scoped 选择器带不上 data-v。外壳按气泡：中灰描边 + 气泡阴影，不用卡片阴影。 */
+.bk-popover.bk-pop2-content.field-custom-popover[data-theme^='light'] {
+  padding: 0 !important;
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-overlay-radius);
+  box-shadow: var(--bk-theme-shadow-popover) !important;
+}
+
+.bk-popover.bk-pop2-content.comm-agg-pop[data-theme^='light'] {
+  color: var(--bk-theme-text-default);
+  background-color: var(--bk-theme-surface-default);
+  border: 1px solid var(--bk-theme-border-default);
+  border-radius: var(--bk-theme-overlay-radius);
+  box-shadow: var(--bk-theme-shadow-popover) !important;
 }
 </style>

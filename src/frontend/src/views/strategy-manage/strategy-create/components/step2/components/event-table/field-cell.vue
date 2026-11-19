@@ -34,6 +34,7 @@
     <bk-switcher
       v-else-if="fieldKey === 'is_show'"
       v-model="localEventItem.is_show"
+      size="small"
       style="margin-left: 8px;"
       theme="primary"
       @change="handleUpdateIsShow" />
@@ -47,6 +48,7 @@
         disabled: localEventItem.prefix,
       }"
       :disabled="!localEventItem.is_show || !localEventItem.prefix"
+      size="small"
       style="margin-left: 8px;"
       theme="primary" />
 
@@ -54,6 +56,7 @@
     <bk-switcher
       v-else-if="fieldKey === 'duplicate_field'"
       v-model="localEventItem.duplicate_field"
+      size="small"
       style="margin-left: 8px;"
       theme="primary" />
 

@@ -1376,10 +1376,15 @@
       }
     }
 
+    :deep(.strategy-customize-rules .rule-item) {
+      background: var(--bk-theme-surface-muted);
+      border-radius: var(--bk-theme-radius-8);
+    }
+
     .rule-list {
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
+      align-items: stretch;
       gap: 0;
       padding: 0 var(--bk-theme-space-24) var(--bk-theme-space-24);
     }
@@ -1391,9 +1396,9 @@
   }
 
   .rule-item-card {
-    align-self: flex-start;
+    align-self: stretch;
     box-sizing: border-box;
-    width: 1264px;
+    width: 100%;
     max-width: 100%;
     margin-bottom: var(--bk-theme-space-16);
     overflow: hidden;
@@ -1563,13 +1568,13 @@
         display: flex;
         gap: var(--bk-theme-space-16);
         align-items: flex-start;
-        width: 1232px;
+        width: 100%;
         max-width: 100%;
 
         .rule-section-col {
-          flex: 1 1 608px;
-          width: 608px;
-          max-width: 608px;
+          flex: 1 1 0;
+          width: auto;
+          max-width: none;
           min-width: 0;
         }
 
@@ -1638,15 +1643,22 @@
         cursor: pointer;
         background: var(--bk-theme-surface-page);
         border: 1px dashed var(--bk-theme-border-strong);
-        border-radius: 0;
+        border-radius: var(--bk-theme-control-radius);
         box-sizing: border-box;
         align-items: center;
         gap: var(--bk-theme-space-4);
       }
 
       :deep(.add-rule-icon) {
+        display: inline-flex;
+        width: 16px;
+        height: 16px;
         margin: 0;
         font-size: 16px;
+        line-height: 16px;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
       }
 
       /* 风险单标题输入 */

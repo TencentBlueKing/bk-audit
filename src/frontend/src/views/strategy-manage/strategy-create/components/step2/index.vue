@@ -212,13 +212,14 @@
   :deep(.strategy-table),
   :deep(.event-table) {
     margin-bottom: 0;
-    border-radius: var(--bk-theme-tag-radius);
-    overflow-x: auto;
+    overflow: hidden;
+    border-radius: var(--bk-theme-radius-8);
   }
 
   :deep(.strategy-table > .head),
   :deep(.event-table > .head) {
-    overflow: hidden;border-radius: var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0 0;
+    overflow: hidden;
+    border-radius: var(--bk-theme-radius-8) var(--bk-theme-radius-8) 0 0;
   }
 }
 </style>
