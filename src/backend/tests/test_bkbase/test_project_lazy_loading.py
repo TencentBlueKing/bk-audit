@@ -106,21 +106,20 @@ class ProjectLazyLoadingTests(SimpleTestCase):
         self.assertEqual(len(details), 1)
         self.assertIn(self.rt_id(0), details[0])
 
-    def test_later_page_and_binding_failure_never_return_partial_success(self):
-        for boundary in ("page", "binding"):
-            with self.subTest(boundary=boundary):
-                target = metadata._dataset_page if boundary == "page" else metadata.get_source_capabilities
+    def test_later_page_failure_never_returns_partial_success(self):
+        original = metadata._dataset_page
 
-                def fail(*args, **kwargs):
-                    if boundary == "binding" or args[1] == 2:
-                        raise BKBaseResourceMappingError(message="synthetic failure")
-                    return target(*args, **kwargs)
+        def fail(*args, **kwargs):
+            if args[1] == 2:
+                raise BKBaseResourceMappingError(message="synthetic failure")
+            return original(*args, **kwargs)
 
-                name = "_dataset_page" if boundary == "page" else "get_source_capabilities"
-                with mock.patch.object(metadata, name, side_effect=fail), self.assertRaises(BKBaseResourceMappingError):
-                    self.request_resource(
-                        "ListProjectTables", namespace="default", table_type="BizRt", bkbase_namespace="project_999"
-                    )
+        with mock.patch.object(metadata, "_dataset_page", side_effect=fail), self.assertRaises(
+            BKBaseResourceMappingError
+        ):
+            self.request_resource(
+                "ListProjectTables", namespace="default", table_type="BizRt", bkbase_namespace="project_999"
+            )
 
     def test_scene_intersection_is_applied_before_binding_reads(self):
         with mock.patch("services.web.scene.data_filter.SceneDataFilter.get_table_ids", return_value=[self.rt_id(1)]):
@@ -168,16 +167,11 @@ class ProjectLazyLoadingTests(SimpleTestCase):
             self.request_resource("ListTableProjects", namespace="default")
         self.assertEqual(self.calls, [])
 
-    def test_buildin_uses_asset_bindings_and_rejects_wrong_formal_project(self):
+    def test_buildin_uses_asset_bindings(self):
         data = self.request_resource(
             "ListProjectTables", namespace="default", table_type="BuildIn", bkbase_namespace="project_999"
         )
         self.assertEqual([rt["value"] for rt in data], [self.rt_id(i) for i in range(0, 101, 2)])
-        with mock.patch.object(metadata, "get_result_table_ref", return_value={"namespace": "unexpected"}):
-            with self.assertRaises(BKBaseResourceMappingError):
-                self.request_resource(
-                    "ListProjectTables", namespace="default", table_type="BizRt", bkbase_namespace="project_999"
-                )
 
     def test_scene_query_denied_table_is_not_expanded_to_binding(self):
         with mock.patch(

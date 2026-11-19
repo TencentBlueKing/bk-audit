@@ -3,6 +3,7 @@
 逻辑 ID 从正式 ResultTable 查询解析实际项目，再读取 Dataset 业务字段。
 不共享缓存带个人收藏状态的完整Dataset。
 """
+import hashlib
 import re
 from concurrent.futures import FIRST_COMPLETED, CancelledError, ThreadPoolExecutor, wait
 from contextlib import contextmanager
@@ -11,6 +12,7 @@ from threading import Event
 from time import monotonic
 
 from bk_resource import api
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from requests.exceptions import ConnectionError as RequestConnectionError
@@ -19,7 +21,7 @@ from urllib3.exceptions import ReadTimeoutError
 
 from api.bk_base_v4.default import READ_DEADLINE
 from services.web.bkbase import table_capabilities
-from services.web.bkbase.common import get_bkbase_context
+from services.web.bkbase.common import get_bkbase_context, get_resource_or_none
 from services.web.bkbase.constants import (
     BKBaseVersion,
     TableBindingKind,
@@ -30,6 +32,33 @@ from services.web.bkbase.exceptions import BKBaseReadTimeout, BKBaseResourceMapp
 LIST_READ_BUDGET_SECONDS = 50.0
 DATASET_PAGE_SIZE = 100
 _READ_CANCELLED = ContextVar("bkbase_list_read_cancelled", default=None)
+_INCOMPLETE_CANDIDATES = ContextVar("bkbase_incomplete_candidates", default=None)
+
+
+@contextmanager
+def candidate_read_scope():
+    """覆盖缓存写入阶段；工作线程共享本次候选不完整标记，不污染其他请求。"""
+    token = _INCOMPLETE_CANDIDATES.set(Event())
+    try:
+        yield
+    finally:
+        _INCOMPLETE_CANDIDATES.reset(token)
+
+
+def candidates_complete():
+    """未确认的单表被排除时，禁止将剩余候选缓存成完整项目。"""
+    incomplete = _INCOMPLETE_CANDIDATES.get()
+    return incomplete is None or not incomplete.is_set()
+
+
+def _unavailable_candidate(rt_id, reason, *, incomplete=True):
+    """只记录逻辑表摘要和固定原因，不将业务表名或上游异常内容写入日志。"""
+    marker = _INCOMPLETE_CANDIDATES.get()
+    if incomplete and marker is not None:
+        marker.set()
+    logger.warning(
+        "BKBase candidate unavailable: rt_hash=%s reason=%s", hashlib.sha256(rt_id.encode()).hexdigest()[:16], reason
+    )
 
 
 def _remaining_read_time():
@@ -209,12 +238,15 @@ def get_source_capabilities(result_table_id, *, context=None):
     capabilities = table_capabilities.parse_bindings(result, ref)
     if not capabilities["channel"]:
         # Dataset 允许存储视角匹配不到时回退，须同时确认逻辑表、kind 和 storage_type。
-        channel = api.bk_base_v4.dataset_detail(
+        channel = get_resource_or_none(
+            api.bk_base_v4.dataset_detail,
             tenant=context["tenant"],
             namespace=ref["namespace"],
             dataset_name=result_table_id,
             storage_type="channel",
         )
+        if channel is None:
+            return capabilities
         if not isinstance(channel, dict) or channel.get("dataset_name") != result_table_id:
             raise BKBaseResourceMappingError(message="Channel Dataset logical identity mismatch")
         capabilities["channel"] = (
@@ -223,22 +255,36 @@ def get_source_capabilities(result_table_id, *, context=None):
     return capabilities
 
 
-def get_result_tables_with_capabilities(result_table_ids, *, context=None, namespace=None):
-    """候选只读取需要的正式详情/能力，共用RT身份且不展开未消费的存储列表。"""
+def get_result_tables_with_capabilities(result_table_ids, *, context=None, allow_unavailable=False):
+    """候选按正式RT归属读取；按项目选表可排除无效单表，整体读取故障仍向上抛出。"""
     context = {**_context(context), "_result_table_info": {}}
     identifiers = list(dict.fromkeys(result_table_ids))
 
     def read(rt_id):
-        if namespace is not None:
-            ref = get_result_table_ref(context, rt_id)
-            if ref["namespace"] != namespace:
-                raise BKBaseResourceMappingError(message="Dataset project differs from formal ResultTable")
-            selected = {**context, "rt_namespaces": {rt_id: namespace}}
-        else:
-            selected = context
-        return get_result_table(rt_id, related=[], context=selected), get_source_capabilities(rt_id, context=selected)
+        if not allow_unavailable:
+            return get_result_table(rt_id, related=[], context=context), get_source_capabilities(rt_id, context=context)
+        try:
+            ref = get_resource_or_none(get_result_table_ref, context=context, result_table_id=rt_id)
+            if ref is None:
+                _unavailable_candidate(rt_id, "formal_not_found")
+                return None
+            selected = {**context, "rt_namespaces": {rt_id: ref["namespace"]}}
+            table = get_resource_or_none(get_result_table, result_table_id=rt_id, related=[], context=selected)
+            if table is None:
+                _unavailable_candidate(rt_id, "dataset_not_found")
+                return None
+            capabilities = get_source_capabilities(rt_id, context=selected)
+        except BKBaseResourceMappingError:
+            # 仅候选投影隔离身份/Binding不相符；直接能力读取及构图仍严格校验。
+            _unavailable_candidate(rt_id, "invalid_identity_or_binding")
+            return None
+        if capabilities["hdfs_unknown"]:
+            _unavailable_candidate(rt_id, "unconfirmed_hdfs")
+        elif not (capabilities["channel"] or capabilities["redis"] or capabilities["hdfs_dimensions"]):
+            _unavailable_candidate(rt_id, "unsupported_input", incomplete=False)
+        return table, capabilities
 
-    return bounded_read_map(read, identifiers)
+    return [result for result in bounded_read_map(read, identifiers) if result is not None]
 
 
 def _dataset_namespace(context, result_table_id):
