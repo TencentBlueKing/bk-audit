@@ -67,7 +67,7 @@
     </bk-form-item>
     <!-- 值 -->
     <bk-form-item
-      v-if="!['', 'notnull', 'isnull'].includes(condition.condition.operator)"
+      v-if="!['notnull', 'isnull'].includes(condition.condition.operator)"
       error-display-type="tooltips"
       label=""
       label-width="0"
@@ -140,8 +140,8 @@
         type="add-fill"
         @click="handleAdd" />
       <audit-icon
-        v-if="localConditions.conditions.length > 1"
         class="expr-action-icon"
+        :class="{ 'is-disabled': localConditions.conditions.length <= 1 }"
         type="reduce-fill"
         @click="() => handleDelete(index)" />
     </div>
@@ -580,7 +580,8 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 300px 180px 1fr minmax(65px, auto);
+  width: 100%;
+  grid-template-columns: 300px 180px minmax(0, 1fr) auto;
   gap: var(--bk-theme-space-8);
   align-items: center;
 
@@ -636,13 +637,18 @@
     height: 32px;
     font-size: 14px;
     line-height: 1;
-    color: var(--bk-theme-border-strong);
+    color: var(--bk-theme-text-weak);
 
     .expr-action-icon {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+
+      &.is-disabled {
+        color: var(--bk-theme-text-disabled);
+        cursor: not-allowed;
+      }
     }
   }
 }
