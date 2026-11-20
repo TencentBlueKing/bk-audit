@@ -497,6 +497,10 @@
   };
 
   const goWhitelistList = () => {
+    // 与侧栏一致：仅平台管理员 / 场景管理员可进风险白名单；无权限不跳转
+    if (!roleText.isAdmin.value) {
+      return;
+    }
     const sceneId = String(props.detailData.scene_id || getSceneSystemParams().scope_id || '');
     router.push({
       name: 'riskWhitelistList',
