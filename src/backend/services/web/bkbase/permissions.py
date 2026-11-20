@@ -43,12 +43,12 @@ def _rows(payload):
     return payload
 
 
-def _projects(context, request):
-    """按固定调用主体枚举租户项目，不能用固定namespace代替项目集合。"""
+def _projects(context, request, *, include_alias=False):
+    """按固定身份枚举项目，可从同一次响应保留别名；标识始终为真实namespace。"""
     tenant = context.get("tenant")
     if not isinstance(tenant, str) or not tenant:
         raise BKBaseResourceMappingError(message="Missing project tenant")
-    projects = set()
+    projects = {}
     rows = (
         api.bk_base_v4.user_namespaces_list(tenant=tenant, _request=request)
         if request is not None
@@ -71,7 +71,12 @@ def _projects(context, request):
         if status is not None and not isinstance(status, dict):
             raise BKBaseResourceMappingError(message="Invalid Namespace status")
         if (status or {}).get("phase") != "Terminating":
-            projects.add(meta["name"])
+            name = meta["name"]
+            alias = spec.get("alias")
+            alias = alias.strip() if isinstance(alias, str) else ""
+            projects[name] = f"{alias}（{name}）" if alias and alias != name else name
+    if include_alias:
+        return [{"namespace": name, "label": projects[name]} for name in sorted(projects)]
     return sorted(projects)
 
 
@@ -122,21 +127,21 @@ def _queryable_tables(batches, *, selected_biz=None):
 
 
 @metadata.list_read_scope()
-def list_projects(context=None):
+def list_projects(context=None, *, include_alias=False):
     """平台身份仅枚举项目目录，不读取任何 Dataset 或 Binding。"""
     context = context or get_bkbase_context()
     if context["version"] != BKBaseVersion.V4:
         raise BKBaseResourceMappingError(message="Project lazy loading requires BKBase V4")
-    return _projects(context, None)
+    return _projects(context, None, include_alias=include_alias)
 
 
 @metadata.list_read_scope()
-def list_user_projects(context=None):
+def list_user_projects(context=None, *, include_alias=False):
     """只用当前认证用户读取个人项目目录，不扫描 Dataset 或 Binding。"""
     context = context or get_bkbase_context(user=get_request_username() or "")
     if context["version"] != BKBaseVersion.V4:
         raise BKBaseResourceMappingError(message="Project lazy loading requires BKBase V4")
-    return _projects(context, require_user(context))
+    return _projects(context, require_user(context), include_alias=include_alias)
 
 
 @metadata.list_read_scope()
