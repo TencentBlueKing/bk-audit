@@ -460,8 +460,8 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
 
 @periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:create_or_update_plugin_etl")
-def create_or_update_plugin_etl(collector_plugin_id: int = None):
-    """创建或更新采集插件清洗入库"""
+def create_or_update_plugin_etl(collector_plugin_id: int = None, *, retry_failed: bool | None = None):
+    """推进插件清洗入库。按 ID 时，缺省续原流程，True 显式恢复，False 应用新配置。"""
 
     if collector_plugin_id:
         plugins = CollectorPlugin.objects.filter(collector_plugin_id=collector_plugin_id)
@@ -484,7 +484,7 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
             continue
         try:
             if collector_plugin_id:
-                bkbase_clean.reset_plugin_operation(plugin)
+                bkbase_clean.reset_plugin_operation(plugin, retry_failed=retry_failed)
             handler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
         except bkbase_clean.PLUGIN_OPERATION_EXCEPTIONS as error:
             if bkbase_clean.get_bkbase_version() != bkbase_clean.BKBaseVersion.V4:
