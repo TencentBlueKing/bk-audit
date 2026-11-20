@@ -305,6 +305,20 @@ def check_owner_result_tables(context, **params):
     ]
 
 
+def check_current_user_result_tables(rt_ids):
+    """只核验当前登录用户提交的 RT，复用 B11 的批查及正式身份校验。"""
+    username = get_request_username() or ""
+    context = get_bkbase_context(user=username)
+    require_user(context)
+    return check_owner_result_tables(
+        context,
+        permissions=[
+            {"user_id": username, "object_id": rt_id, "action_id": UserAuthActionEnum.RT_QUERY}
+            for rt_id in dict.fromkeys(rt_ids)
+        ],
+    )
+
+
 def get_project_data(request_data=None, **params):
     """V4使用配置平台账号的可查询集合承接项目授权，V3按旧项目读取。"""
     params = dict(request_data or params)
