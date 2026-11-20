@@ -205,7 +205,9 @@ class StrategyTableViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action == "scene_permission_tables" or (
-            self.action in ("projects", "project_tables") and self.get_scene_id()
+            self.action in ("projects", "project_tables")
+            and self.get_scene_id()
+            and get_value_by_request(self.request, "table_type") != "MineBizRt"
         ):
             return [
                 InstanceActionPermission(

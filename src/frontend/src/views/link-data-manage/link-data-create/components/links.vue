@@ -550,7 +550,8 @@
 
   const getNodeError = (node: Record<string, any>) => {
     const type = node.level === 1 ? node.id : node.parent?.id;
-    const kind = node.level === 1 ? 'directory' : (type === MINE_BIZ_RT_TYPE ? 'business' : 'project');
+    const kind = node.level === 1 ? 'directory'
+      : (type === MINE_BIZ_RT_TYPE && !isProjectTableType(type) ? 'business' : 'project');
     const namespace = node.level === 1 ? '' : (node.data?.namespace || decodeTypeBizId(type, node.id));
     return projectTables.states[projectTables.key(kind, type, getSceneSystemParams().scope_id, namespace)]?.error;
   };
