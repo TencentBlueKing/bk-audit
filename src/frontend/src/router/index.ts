@@ -51,6 +51,7 @@ import SystemManage from '@views/system-manage/routes'; // 系统列表
 import Tools from '@views/tools/routes'; // 工具广场
 
 import { changeConfirm } from '@utils/assist';
+import { filterAiRoutes } from '@utils/feature-toggle';
 
 import { isSystemScopedContextQuery, setActiveSceneSelection } from '@/utils/assist/scene-system-params';
 
@@ -270,7 +271,7 @@ export default (config: ConfigModel) => {
       redirect: {
         name: 'handleManage',
       },
-      children: [
+      children: filterAiRoutes<RouteRecordRaw>([
         AttentionManage,
         AnalysisManage,
         SystemManage,
@@ -291,7 +292,7 @@ export default (config: ConfigModel) => {
         SceneRiskManage,
         SecChat,
         ConfirmManage,
-      ],
+      ], config),
     },
     {
       path: '/:pathMatch(.*)*',

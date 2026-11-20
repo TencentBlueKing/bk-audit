@@ -55,6 +55,7 @@
   import { useRoute } from 'vue-router';
 
   import BksecManageService from '@service/bksec-manage';
+  import { isBksecCapabilityVisible } from '@utils/feature-toggle';
 
   import type StrategyModel from '@model/strategy/strategy';
 
@@ -90,7 +91,8 @@
     riskOther: RiskOther,
   };
 
-  const bksecFeatureEnabled = ref(!isPlatformStrategyRoute(route.name));
+  const bksecFeatureEnabled = ref(false);
+  const bksecFeatureLoaded = ref(false);
   const panels = computed(() => {
     const list = [
       { name: 'riskDetection', label: t('基础信息') },
@@ -98,7 +100,8 @@
       { name: 'riskDisplay', label: t('单据展示') },
       { name: 'eventReport', label: t('事件调查报告') },
     ];
-    if (!isPlatformStrategyRoute(route.name) && bksecFeatureEnabled.value) {
+    if (!isPlatformStrategyRoute(route.name)
+      && isBksecCapabilityVisible(bksecFeatureLoaded.value, bksecFeatureEnabled.value)) {
       list.push({ name: 'bksecTicket', label: t('BKSEC安全工单') });
     }
     if (isPlatformStrategyRoute(route.name)) {
@@ -116,6 +119,9 @@
       })
       .catch(() => {
         bksecFeatureEnabled.value = false;
+      })
+      .finally(() => {
+        bksecFeatureLoaded.value = true;
       });
   });
 

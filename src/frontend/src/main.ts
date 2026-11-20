@@ -128,7 +128,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
         });
       }
       // 登录后预热 agents（地址来自 Entry.agent_auth，失败不阻断业务）
-      if (config.agent_auth?.agents?.length) {
+      if (config.feature_toggle?.ai_capability !== false && config.agent_auth?.agents?.length) {
         warmAgents(config.agent_auth.agents);
       }
     });

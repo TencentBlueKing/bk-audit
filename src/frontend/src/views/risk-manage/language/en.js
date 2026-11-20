@@ -275,6 +275,7 @@ export default {
     '条风险数据进行深度分析，请稍等片刻': ' risk data in depth, please wait a moment',
     共搜索出: 'Total searched',
     当前共有: 'Currently there are',
+    条风险单: ' risk tickets',
     共搜索到: 'Found',
     '条风险单，可选择目标风险单进行智能分析，或查看历史分析报告': ' risk tickets. Select target risk tickets for AI analysis, or view historical analysis reports',
     '条风险单，请勾选目标风险单后进行智能分析，或查看历史分析报告': ' risk tickets. Check target risk tickets for AI analysis, or view historical analysis reports',

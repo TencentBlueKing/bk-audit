@@ -29,6 +29,7 @@
         <div class="action-left">
           <slot name="toolbar-before-analyze" />
           <span
+            v-if="aiCapabilityEnabled"
             v-bk-tooltips="analyzeTooltip"
             class="analyze-btn-wrapper"
             :class="{ 'is-analyze-disabled': !isAnalyzeEnabled }">
@@ -49,6 +50,7 @@
         </div>
         <div class="action-right">
           <bk-button
+            v-if="aiCapabilityEnabled"
             class="history-btn"
             outline
             @click="handleHistory">
@@ -67,6 +69,7 @@
     </div>
   </div>
   <analyze-dialog
+    v-if="aiCapabilityEnabled"
     ref="analyzeDialogRef"
     :analyze-count="analyzeCount"
     :condition-tags="conditionTags"
@@ -96,6 +99,7 @@
   import RiskManageService from '@service/risk-manage';
 
   import useRequest from '@hooks/use-request';
+  import { isAiCapabilityEnabled, readStoredAuditConfig } from '@utils/feature-toggle';
 
   import AnalyzeDialog from './dialog.vue';
   import type { AnalyzeStartPayload } from './dialog.vue';
@@ -139,6 +143,7 @@
   );
 
   const ANALYZE_RISK_ID_LIMIT = 100;
+  const aiCapabilityEnabled = isAiCapabilityEnabled(readStoredAuditConfig());
 
   const analyzeCount = computed(() => props.selectionMeta.count);
 
@@ -170,6 +175,12 @@
   const itemInfo = ref<string>('');
 
   const tipContent = computed(() => {
+    if (!aiCapabilityEnabled) {
+      return {
+        prefix: t('当前共有'),
+        suffix: t('条风险单'),
+      };
+    }
     if (!hasUserSearchConditions.value) {
       return {
         prefix: t('当前共有'),
@@ -217,7 +228,7 @@
   });
 
   const handleAnalyze = () => {
-    if (isAnalyzeEnabled.value) {
+    if (aiCapabilityEnabled && isAnalyzeEnabled.value) {
       analyzeDialogRef.value?.show();
     }
   };
@@ -279,7 +290,9 @@
   };
 
   const handleHistory = () => {
-    showHistoryDrawer.value = true;
+    if (aiCapabilityEnabled) {
+      showHistoryDrawer.value = true;
+    }
   };
   defineExpose<Exposes>({
     changeIsSearch() {
