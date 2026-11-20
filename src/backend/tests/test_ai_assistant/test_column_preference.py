@@ -95,7 +95,7 @@ class ColumnPreferenceServiceTest(AIAssistantPlatformTestCase):
 
 
 @mock.patch(f"{LOG_SEARCH_MODULE}.resource.meta.system_list")
-@mock.patch(f"{LOG_SEARCH_MODULE}.api.bk_base.query_sync")
+@mock.patch("bk_resource.api.bk_base.query_sync")
 @mock.patch(f"{LOG_SEARCH_MODULE}.SearchLogPermission.get_scope_auth_systems")
 @mock.patch(f"{LOG_SEARCH_MODULE}.CollectorPlugin.build_collector_rt")
 class ColumnPreferenceSearchTest(AIAssistantTestCase):

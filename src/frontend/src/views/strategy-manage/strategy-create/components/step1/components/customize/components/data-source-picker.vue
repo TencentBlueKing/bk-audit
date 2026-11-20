@@ -57,8 +57,16 @@
           </span>
         </div>
 
+        <div v-if="directoryLoading || directoryError" class="dsp-empty">
+          <bk-loading :loading="directoryLoading" mode="spin" size="small">
+            <span v-if="directoryLoading">{{ t('加载中') }}</span>
+            <bk-button v-if="directoryError" text theme="primary" @click="ensureDirectory">
+              {{ t('加载失败，点击重试') }}
+            </bk-button>
+          </bk-loading>
+        </div>
         <div
-          v-if="isSourceEmpty"
+          v-else-if="isSourceEmpty"
           class="dsp-empty">
           <img
             class="dsp-empty-img"
@@ -145,7 +153,10 @@
               mode="spin"
               size="small">
               <div class="dsp-list">
-                <template v-if="showRightPane">
+                <bk-button v-if="rightError" text theme="primary" @click="retryChildren">
+                  {{ t('加载失败，点击重试') }}
+                </bk-button>
+                <template v-else-if="showRightPane">
                   <template v-if="isEventLogTab">
                     <div
                       class="dsp-list-item"
@@ -226,6 +237,9 @@
   interface PickerNode {
     label: string;
     value: string;
+    node_type?: string;
+    namespace?: string;
+    loaded?: boolean;
     version?: number;
     leaf?: boolean;
     disabled?: boolean;
@@ -241,6 +255,8 @@
     label: string;
     value: string;
     children: PickerNode[];
+    lazyDirectory?: boolean;
+    directoryLoaded?: boolean;
   }
 
   interface Props {
@@ -256,6 +272,10 @@
     }>>;
     decodeTypeBizId?: (tableType: string, value: string | number) => string;
     disabled?: boolean;
+    projectMode?: boolean;
+    rtLabels?: Record<string, string>;
+    loadDirectory?: (tableType: string) => Promise<void>;
+    cancelLoading?: () => void;
   }
 
   interface Emits {
@@ -272,6 +292,10 @@
     loadChildren: undefined,
     decodeTypeBizId: undefined,
     disabled: false,
+    projectMode: false,
+    rtLabels: () => ({}),
+    loadDirectory: undefined,
+    cancelLoading: undefined,
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -295,13 +319,22 @@
   const selectedLeftValue = ref('');
   const leftKeyword = ref('');
   const rightKeyword = ref('');
-  const rightLoading = ref(false);
+  const loadingMap = ref<Record<string, boolean>>({});
+  const errorMap = ref<Record<string, boolean>>({});
+  const currentRightKey = computed(() => `${activeTab.value}_${selectedLeftValue.value}`);
+  const rightLoading = computed(() => !!loadingMap.value[currentRightKey.value]);
+  const rightError = computed(() => !!errorMap.value[currentRightKey.value]);
+  const directoryLoading = computed(() => !!loadingMap.value[`directory_${activeTab.value}`]);
+  const directoryError = computed(() => !!errorMap.value[`directory_${activeTab.value}`]);
+  let requestGeneration = 0;
   const lazyChildrenMap = ref<Record<string, PickerNode[]>>({});
   const selectedSystemIds = ref<string[]>([]);
   /** 最近一次成功提交的系统选择，防止关面板后被空 props 冲掉展示 */
   const lastCommittedSystemIds = ref<string[]>([]);
 
   const decodeId = (tableType: string, value: string | number) => {
+    const projectPrefix = `__project__${tableType}__`;
+    if (props.projectMode && String(value).startsWith(projectPrefix)) return String(value).slice(projectPrefix.length);
     if (props.decodeTypeBizId) {
       return props.decodeTypeBizId(tableType, value);
     }
@@ -320,6 +353,7 @@
       return t('搜索 联表数据名称');
     }
     // 资产数据后端枚举值为 BuildIn
+    if (activeTypeItem.value?.lazyDirectory) return t('搜索项目 namespace');
     if (activeTab.value === 'BuildIn') {
       return t('搜索 系统名称、系统ID');
     }
@@ -339,7 +373,8 @@
   const rightEmptyHint = computed(() => (
     activeTab.value === 'EventLog'
       ? t('请先选择左侧插件')
-      : t('请先选择左侧业务')
+      : (activeTypeItem.value?.lazyDirectory
+        ? t('请先选择项目') : t('请先选择左侧业务'))
   ));
 
   const leftList = computed(() => activeTypeItem.value?.children || []);
@@ -376,6 +411,7 @@
     if (!item) return false;
     // 操作日志插件需点选后再拉系统，不当叶子
     if (isEventLogTab.value) return false;
+    if (item.node_type === 'project' || item.leaf === false) return false;
     if (item.leaf) return true;
     return !(item.children && item.children.length > 0)
       && !needsLazyLoad(item);
@@ -388,6 +424,7 @@
       if (item.children && item.children.length > 0) return false;
       return true;
     }
+    if (item.node_type === 'project') return item.loaded !== true;
     if (activeTab.value !== props.mineBizRtType) return false;
     if (item.leaf) return false;
     if (item.children && item.children.length > 0) return false;
@@ -407,6 +444,7 @@
     if (!left || isLeafNode(left)) {
       return [];
     }
+    if (left.node_type === 'project' && left.loaded !== true) return [];
     if (left.children?.length) {
       return left.children;
     }
@@ -421,7 +459,7 @@
 
   // 操作日志、我的授权结果表等：始终展示右栏；联表等纯叶子类型仅单列
   const hasThirdLevel = computed(() => {
-    if (isEventLogTab.value || activeTab.value === props.mineBizRtType) {
+    if (activeTypeItem.value?.lazyDirectory || isEventLogTab.value || activeTab.value === props.mineBizRtType) {
       return true;
     }
     return leftList.value.some(item => !isLeafNode(item) || needsLazyLoad(item));
@@ -502,6 +540,7 @@
     const formatRtName = (raw: string) => {
       const real = decodeId(path[0], raw);
       if (!real) return '';
+      if (props.projectMode) return real;
       const bizId = real.split('_')[0];
       if (/^\d+$/.test(bizId) && real.length > bizId.length + 1) {
         return real.slice(bizId.length + 1);
@@ -512,7 +551,7 @@
     // 两级：联表等 → 联表数据 / 名称
     if (path.length === 2) {
       const leaf = typeItem.children?.find(item => item.value === path[1]);
-      return joinDisplayPath([tabLabel, leaf?.label || formatRtName(path[1])]);
+      return joinDisplayPath([tabLabel, leaf?.label || props.rtLabels[decodeId(path[0], path[1])] || formatRtName(path[1])]);
     }
 
     // 三级：资产数据 / 系统(id) / 资产；其他数据 / 业务(id) / 表 …
@@ -525,17 +564,18 @@
           item.value === path[1]
           || decodeId(tab.value, item.value) === leftId
         ))?.item;
-    const leftLabel = left
-      ? formatNodeNameId(left.label, decodeId(path[0], left.value) || leftId)
-      : leftId;
+    const leftLabel = left && left.node_type !== 'project'
+      ? formatNodeNameId(left.label, left.namespace || decodeId(path[0], left.value) || leftId)
+      : left?.label || leftId;
     const right = left?.children?.find(item => item.value === path[2])
       || left?.children?.find(item => decodeId(path[0], item.value) === decodeId(path[0], path[2]))
       || lazyChildrenMap.value[`${path[0]}_${path[1]}`]?.find(item => item.value === path[2]);
-    const rightLabel = right?.label || formatRtName(path[2]);
+    const rightLabel = right?.label || props.rtLabels[decodeId(path[0], path[2])] || formatRtName(path[2]);
     return joinDisplayPath([tabLabel, leftLabel, rightLabel]);
   });
 
   const formatLeftLabel = (item: PickerNode) => {
+    if (item.node_type === 'project') return item.label;
     const realId = decodeId(activeTab.value, item.value);
     // 业务名后展示 ID，贴近图二「SaaS测试 ( 1000003 )」
     if (activeTab.value !== 'LinkTable' && activeTab.value !== 'EventLog' && realId && realId !== item.label) {
@@ -672,6 +712,28 @@
     }
   };
 
+  const ensureDirectory = async () => {
+    const type = activeTab.value;
+    const item = activeTypeItem.value;
+    const key = `directory_${type}`;
+    if (!item?.lazyDirectory || item.directoryLoaded || !props.loadDirectory || loadingMap.value[key]) return;
+    const generation = requestGeneration;
+    loadingMap.value[key] = true;
+    errorMap.value[key] = false;
+    try {
+      await props.loadDirectory(type);
+    } catch {
+      if (generation === requestGeneration) errorMap.value[key] = true;
+    } finally {
+      if (generation === requestGeneration) loadingMap.value[key] = false;
+    }
+  };
+
+  const retryChildren = () => {
+    const left = selectedLeftNode.value;
+    if (left) ensureLazyChildren(left);
+  };
+
   const ensureLazyChildren = async (leftItem: PickerNode) => {
     if (!needsLazyLoad(leftItem) || !props.loadChildren) {
       return;
@@ -680,19 +742,23 @@
     if (Object.prototype.hasOwnProperty.call(lazyChildrenMap.value, cacheKey)) {
       return;
     }
-    rightLoading.value = true;
+    if (loadingMap.value[cacheKey]) return;
+    const type = activeTab.value;
+    const generation = requestGeneration;
+    loadingMap.value[cacheKey] = true;
+    errorMap.value[cacheKey] = false;
     try {
-      const bizId = decodeId(activeTab.value, leftItem.value);
-      const children = await props.loadChildren(activeTab.value, bizId);
+      const bizId = leftItem.namespace || decodeId(type, leftItem.value);
+      const children = await props.loadChildren(type, bizId);
+      if (generation !== requestGeneration) return;
       lazyChildrenMap.value = {
         ...lazyChildrenMap.value,
-        [cacheKey]: children.map(child => ({
-          ...child,
-          leaf: true,
-        })),
+        [cacheKey]: children.map(child => ({ ...child, leaf: true })),
       };
+    } catch {
+      if (generation === requestGeneration) errorMap.value[cacheKey] = true;
     } finally {
-      rightLoading.value = false;
+      if (generation === requestGeneration) loadingMap.value[cacheKey] = false;
     }
   };
 
@@ -707,6 +773,8 @@
     } else {
       selectedSystemIds.value = [];
     }
+    ensureDirectory();
+    if (activeTypeItem.value?.lazyDirectory) return;
     const first = leftList.value[0];
     if (first && !isLeafNode(first)) {
       selectedLeftValue.value = first.value;
@@ -725,7 +793,9 @@
       emitPath([activeTab.value, item.value]);
       return;
     }
+    const type = activeTab.value;
     await ensureLazyChildren(item);
+    if (activeTab.value !== type || selectedLeftValue.value !== item.value || !panelVisible.value) return;
     // 操作日志：仅本地选中插件并加载系统，关闭面板时再统一提交
     if (isEventLogTab.value && pluginChanged) {
       setLocalSystemIds([]);
@@ -808,7 +878,7 @@
     if (path.length >= 2) {
       selectedLeftValue.value = leftValue;
       const left = leftList.value.find(item => item.value === leftValue);
-      if (left && !isLeafNode(left)) {
+      if (left && !isLeafNode(left) && panelVisible.value && !props.projectMode) {
         await ensureLazyChildren(left);
       }
     }
@@ -850,10 +920,16 @@
   }, { deep: true });
 
   watch(panelVisible, async (visible) => {
-    if (!visible) return;
+    if (!visible) {
+      requestGeneration += 1;
+      loadingMap.value = {};
+      props.cancelLoading?.();
+      return;
+    }
     await nextTick();
     updatePanelPosition();
     await syncFromModelValue();
+    await ensureDirectory();
   });
 
   const handleWindowChange = () => {

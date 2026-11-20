@@ -27,7 +27,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
-from apps.notice.constants import MemberVariable, MsgType
+from apps.notice.constants import MemberVariable, get_supported_msg_types
 from apps.notice.models import NoticeGroup, NoticeLogV2
 from apps.notice.serializers import (
     CreateNoticeGroupRequestSerializer,
@@ -65,7 +65,7 @@ class GetMsgType(NoticeMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        local_msg_type = MsgType.values
+        local_msg_type = get_supported_msg_types()
         cc_msg_type = api.bk_cmsi.get_msg_type()["data"]
         return [
             _msg_type for _msg_type in cc_msg_type if _msg_type["type"] in local_msg_type and _msg_type["is_active"]

@@ -78,6 +78,13 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
 from services.web.analyze.utils import is_asset
+from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase import metadata as bkbase_metadata
+from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase import query as bkbase_query
+from services.web.bkbase.common import get_bkbase_context, get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseFlowOperationPending
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
@@ -190,6 +197,7 @@ from services.web.strategy_v2.serializers import (
     ListLinkTableResponseSerializer,
     ListLinkTableTagsRequestSerializer,
     ListLinkTableTagsResponseSerializer,
+    ListProjectTablesRequestSerializer,
     ListStrategyAllRequestSerializer,
     ListStrategyFieldsRequestSerializer,
     ListStrategyFieldsResponseSerializer,
@@ -197,6 +205,7 @@ from services.web.strategy_v2.serializers import (
     ListStrategyResponseSerializer,
     ListStrategyTagsRequestSerializer,
     ListStrategyTagsResponseSerializer,
+    ListTableProjectsRequestSerializer,
     ListTablesRequestSerializer,
     PreviewReportRequestSerializer,
     PreviewReportResponseSerializer,
@@ -220,6 +229,7 @@ from services.web.strategy_v2.utils.table import (
     RuleAuditSourceTypeChecker,
     TableHandler,
     enhance_rt_fields,
+    list_scoped_v4_tables,
 )
 
 
@@ -802,7 +812,10 @@ class CreateStrategy(StrategyV2Base):
         if not is_draft:
             try:
                 call_controller(
-                    BaseControl.create.__name__, strategy.strategy_id, self.get_base_control_type(strategy_type)
+                    BaseControl.create.__name__,
+                    strategy.strategy_id,
+                    self.get_base_control_type(strategy_type),
+                    bkbase_version=get_bkbase_version(),
                 )
             except Exception as err:
                 strategy.status = StrategyStatusChoices.START_FAILED
@@ -890,6 +903,7 @@ class UpdateStrategy(StrategyV2Base):
                         BaseControl.create.__name__,
                         strategy.strategy_id,
                         self.get_base_control_type(strategy.strategy_type),
+                        bkbase_version=get_bkbase_version(),
                     )
                 except Exception as err:
                     strategy.status = StrategyStatusChoices.START_FAILED
@@ -960,6 +974,7 @@ class UpdateStrategy(StrategyV2Base):
 
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict, draft_save: bool = False) -> bool:
+        bkbase_flow.lock_strategy_configuration(strategy)
         # 用于控制是否更新真实的监控策略或计算平台Flow
         need_update_remote = False
         has_manual_sql = self.has_sql_override(validated_request_data)
@@ -1054,16 +1069,23 @@ class UpdateStrategy(StrategyV2Base):
                         field_config.get('field_name'),
                         field_category,
                     )
+        bkbase_flow.reserve_configuration_update(strategy, need_update_remote, draft_save)
         # return
         return need_update_remote
 
     def update_remote(self, strategy: Strategy) -> None:
-        strategy.status = StrategyStatusChoices.UPDATING
-        strategy.save(update_fields=["status"])
+        if not bkbase_flow.prepare_controller_update(strategy, StrategyStatusChoices.UPDATING):
+            strategy.status = StrategyStatusChoices.UPDATING
+            strategy.save(update_fields=["status"])
         try:
             call_controller(
-                BaseControl.update.__name__, strategy.strategy_id, self.get_base_control_type(strategy.strategy_type)
+                BaseControl.update.__name__,
+                strategy.strategy_id,
+                self.get_base_control_type(strategy.strategy_type),
+                bkbase_version=get_bkbase_version(),
             )
+        except BKBaseFlowOperationPending:
+            raise
         except Exception as err:
             strategy.status = StrategyStatusChoices.UPDATE_FAILED
             strategy.status_msg = str(err)
@@ -1075,8 +1097,46 @@ class DeleteStrategy(StrategyV2Base):
     name = gettext_lazy("Delete Strategy")
     audit_action = ActionEnum.DELETE_STRATEGY
 
-    @transaction.atomic()
     def perform_request(self, validated_request_data):
+        if not bkbase_flow.uses_v4_delete():
+            return self._perform_request_legacy(validated_request_data)
+        strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        if not bkbase_flow.uses_v4_delete(strategy):
+            return self._perform_request_legacy(validated_request_data)
+        self.ensure_active_scene_binding_or_404(
+            strategy.strategy_id, allow_draft=(strategy.status == StrategyStatusChoices.DRAFT)
+        )
+        operation_id = bkbase_flow.reserve_strategy_delete(strategy)
+        operation = strategy.backend_data["bkbase_v4"]["delete_operation"]
+        if not operation.get("local_only"):
+            call_controller(
+                BaseControl.delete.__name__,
+                strategy.strategy_id,
+                self.get_base_control_type(strategy.strategy_type),
+                bkbase_version=get_bkbase_version(),
+            )
+        with bkbase_flow.finish_strategy_delete(strategy, operation_id) as current:
+            self.ensure_active_scene_binding_or_404(
+                current.strategy_id, allow_draft=(current.status == StrategyStatusChoices.DRAFT)
+            )
+            self._delete_local(current)
+
+    def _delete_local(self, strategy):
+        """已确认停止声明的V4策略沿原顺序级联本地数据。"""
+        StrategyTag.objects.filter(strategy_id=strategy.strategy_id).delete()
+        StrategyTool.objects.filter(strategy=strategy).delete()
+        self._soft_delete_rules(list(strategy.rules.filter(is_deleted=False)))
+        self._soft_delete_rules(list(strategy.dispatch_rules.filter(is_deleted=False)))
+        self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
+        strategy.delete()
+        BindingMetadataHelper.delete_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+        )
+        self.delete_enum_mappings(strategy_id=strategy.strategy_id)
+
+    @transaction.atomic()
+    def _perform_request_legacy(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         # 草稿策略可能无平台绑定（草稿期不创建），放行 404
         self.ensure_active_scene_binding_or_404(
@@ -1096,6 +1156,7 @@ class DeleteStrategy(StrategyV2Base):
                     BaseControl.delete.__name__,
                     validated_request_data["strategy_id"],
                     self.get_base_control_type(strategy.strategy_type),
+                    bkbase_version=get_bkbase_version(),
                 )
             except Exception as err:
                 strategy.status = StrategyStatusChoices.DELETE_FAILED
@@ -1457,7 +1518,12 @@ class ToggleStrategy(StrategyV2Base):
                 )
                 raise serializers.ValidationError(gettext("策略未启用，BKSEC 工单配置同步失败：%s") % err)
             try:
-                call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
+                call_controller(
+                    BaseControl.enable.__name__,
+                    strategy.strategy_id,
+                    controller_cls,
+                    bkbase_version=get_bkbase_version(),
+                )
             except Exception:
                 # 控制器启用失败（如 get_flow_deploy_data 超时）：规则尚未激活，仍补偿关闭，
                 # 兜住策略原本已有启用规则的场景。补偿失败只记日志，不遮蔽原异常。
@@ -1469,7 +1535,9 @@ class ToggleStrategy(StrategyV2Base):
                     )
                 raise
         else:
-            call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
+            call_controller(
+                BaseControl.disabled.__name__, strategy.strategy_id, controller_cls, bkbase_version=get_bkbase_version()
+            )
             sync_bksec_rule(strategy, strategy_alive=False)
 
 
@@ -1487,17 +1555,24 @@ class RetryStrategy(StrategyV2Base):
         # 草稿未部署无远端资源，无重试语义
         if strategy.status == StrategyStatusChoices.DRAFT:
             raise serializers.ValidationError(gettext("草稿策略未部署，无需重试；请在编辑页提交部署"))
+        if bkbase_flow.retry_failed_pure(strategy):
+            strategy.updated_by = get_request_username()
+            strategy.save(update_fields=["updated_by"])
+            return
         # try update
         controller_cls = self.get_base_control_type(strategy.strategy_type)
-        need_update = strategy.backend_data and (
-            strategy.backend_data.get("id") or strategy.backend_data.get("flow_id")
+        need_update = strategy.backend_data and (strategy.backend_data.get("id") or bkbase_flow.has_flow(strategy))
+        bkbase_flow.prepare_controller_update(
+            strategy, StrategyStatusChoices.UPDATING if need_update else StrategyStatusChoices.STARTING
         )
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
         func_name = BaseControl.update.__name__ if need_update else BaseControl.create.__name__
         try:
-            call_controller(func_name, strategy.strategy_id, controller_cls)
+            call_controller(func_name, strategy.strategy_id, controller_cls, bkbase_version=get_bkbase_version())
+        except BKBaseFlowOperationPending:
+            raise
         except Exception as err:
             strategy.status = StrategyStatusChoices.FAILED
             strategy.status_msg = str(err)
@@ -1859,6 +1934,86 @@ class ListTables(StrategyV2Base, CacheResource):
         return TableHandler(**validated_request_data).list_tables()
 
 
+class ListTableProjects(StrategyV2Base, CacheResource):
+    """懒加载的项目目录；缓存按版本、租户、请求空间、场景和用户隔离。"""
+
+    name = gettext_lazy("BKBase项目目录")
+    RequestSerializer = ListTableProjectsRequestSerializer
+    many_response_data = True
+
+    class ResponseSerializer(serializers.Serializer):
+        label = serializers.CharField()
+        value = serializers.CharField()
+        namespace = serializers.CharField()
+        node_type = serializers.ChoiceField(choices=["project"])
+        leaf = serializers.BooleanField()
+
+    def __init__(self, *args, **kwargs):
+        self.cache_type = CacheTypeItem(
+            key=f"{type(self).__name__}:{bkbase_metadata.metadata_cache_scope()}", timeout=60, user_related=True
+        )
+        super().__init__(*args, **kwargs)
+
+    def perform_request(self, validated_request_data):
+        projects = (
+            bkbase_permissions.list_user_projects(include_alias=True)
+            if validated_request_data["table_type"] == "MineBizRt"
+            else bkbase_permissions.list_projects(include_alias=True)
+        )
+        return [
+            {
+                "label": project["label"],
+                "value": project["namespace"],
+                "namespace": project["namespace"],
+                "node_type": "project",
+                "leaf": False,
+            }
+            for project in projects
+        ]
+
+
+class ListProjectTables(ListTableProjects):
+    """返回项目可见且输入能力有效的表；未确认的单表不阻断其他候选，也不写完整缓存。"""
+
+    name = gettext_lazy("BKBase项目数据表")
+    RequestSerializer = ListProjectTablesRequestSerializer
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 标记必须覆盖UsingCache写入阶段，不能在perform_request返回时提前复位。
+        request = self.request
+        self.request = bkbase_metadata.candidate_read_scope()(request)
+        for mode in ("cached", "refresh", "cacheless"):
+            if hasattr(request, mode):
+                setattr(self.request, mode, bkbase_metadata.candidate_read_scope()(getattr(request, mode)))
+
+    def cache_write_trigger(self, res):
+        """只有所有候选身份和能力读取均可确认时才复用项目结果。"""
+        return bkbase_metadata.candidates_complete() and super().cache_write_trigger(res)
+
+    class ResponseSerializer(serializers.Serializer):
+        label = serializers.CharField()
+        value = serializers.CharField()
+        table_id = serializers.CharField()
+        namespace = serializers.CharField()
+        node_type = serializers.ChoiceField(choices=["table"])
+        leaf = serializers.BooleanField()
+
+    def perform_request(self, validated_request_data):
+        tables = list_scoped_v4_tables(**validated_request_data)
+        return [
+            {
+                "label": rt["result_table_name"],
+                "value": rt["result_table_id"],
+                "table_id": rt["result_table_id"],
+                "namespace": validated_request_data["bkbase_namespace"],
+                "node_type": "table",
+                "leaf": True,
+            }
+            for rt in tables
+        ]
+
+
 class GetScenePermissionTables(StrategyV2Base):
     """获取场景下有权限的数据表"""
 
@@ -1894,6 +2049,20 @@ class GetScenePermissionTables(StrategyV2Base):
         if not scene_table_ids:
             return []
 
+        if get_bkbase_version() == BKBaseVersion.V4:
+            tables = list_scoped_v4_tables(
+                table_type=table_type,
+                namespace=settings.DEFAULT_NAMESPACE,
+                result_table_ids=scene_table_ids,
+                skip_missing=True,
+            )
+            if not tables:
+                return []
+            groups = TableHandler(table_type=table_type, namespace=settings.DEFAULT_NAMESPACE).format_result_tables(
+                tables
+            )
+            return [group for group in groups if group["children"]]
+
         scene_table_ids_set = set(scene_table_ids)
 
         # 调用 TableHandler 获取数据的完整表结构
@@ -1928,7 +2097,7 @@ class GetRTFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        fields = api.bk_base.get_rt_fields(result_table_id=validated_request_data["table_id"])
+        fields = bkbase_metadata.get_rt_fields(result_table_id=validated_request_data["table_id"])
         result = enhance_rt_fields(fields, validated_request_data["table_id"])
         return result
 
@@ -1957,6 +2126,13 @@ class GetRTMeta(StrategyV2Base, CacheResource):
     RequestSerializer = GetRTMetaRequestSerializer
     cache_type = CacheTypeItem(key="GetRTMeta", timeout=10 * 60, user_related=False)
 
+    def __init__(self, *args, **kwargs):
+        """版本和租户改变后不能复用旧元数据，V3保留原缓存键。"""
+        scope = bkbase_metadata.metadata_cache_scope()
+        if scope:
+            self.cache_type = CacheTypeItem(key=f"GetRTMeta:{scope}:project-ref", timeout=10 * 60, user_related=False)
+        super().__init__(*args, **kwargs)
+
     def perform_request(self, validated_request_data):
         """获取数据表完整元信息"""
         result_table_id = validated_request_data["table_id"]
@@ -1982,18 +2158,26 @@ class GetRTMeta(StrategyV2Base, CacheResource):
 
     def get_meta(self, result_table_id):
         """获取数据表的元信息。"""
-        return api.bk_base.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
+        if get_bkbase_version() == BKBaseVersion.V4:
+            context = {**get_bkbase_context(), "_result_table_info": {}}
+            ref = bkbase_metadata.get_result_table_ref(context, result_table_id)
+            context["rt_namespaces"] = {result_table_id: ref["namespace"]}
+            result = bkbase_metadata.get_result_table(
+                result_table_id=result_table_id, related=["storages", "fields"], context=context
+            )
+            return {**result, "bkbase_namespace": ref["namespace"]}
+        return bkbase_metadata.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
 
     def get_data_manager(self, result_table_id):
         """获取数据表的维护者。"""
         result = {
             'managers': FuncRunner(
-                func=api.bk_base.get_role_users_list,
+                func=bkbase_permissions.get_role_users_list,
                 kwargs={"role_id": "result_table.manager", "scope_id": result_table_id},
                 max_retry=2,
             ).run(),
             'viewers': FuncRunner(
-                func=api.bk_base.get_role_users_list,
+                func=bkbase_permissions.get_role_users_list,
                 kwargs={"role_id": "result_table.viewer", "scope_id": result_table_id},
                 max_retry=2,
             ).run(),
@@ -2002,7 +2186,7 @@ class GetRTMeta(StrategyV2Base, CacheResource):
 
     def get_sensitivity_info(self, result_table_id):
         return {
-            "sensitivity_info": api.bk_base.get_sensitivity_info_via_dataset(
+            "sensitivity_info": bkbase_metadata.get_sensitivity_info_via_dataset(
                 data_set_type="result_table", data_set_id=result_table_id
             )
         }
@@ -2023,7 +2207,7 @@ class GetRTLastData(StrategyV2Base):
     def get_last_data(self, result_table_id, limit):
         """获取数据表的最新数据"""
         today = datetime.datetime.now().strftime('%Y%m%d')
-        rt_info = api.bk_base.get_result_table(result_table_id=result_table_id)
+        rt_info = bkbase_metadata.get_result_table(result_table_id=result_table_id)
         if not is_asset(rt_info):
             # 非维表，添加过滤条件 thedate = current_date
             sql = (
@@ -2033,7 +2217,7 @@ class GetRTLastData(StrategyV2Base):
             # 维表，直接查询
             sql = f"SELECT * FROM {result_table_id} LIMIT {limit}"
 
-        resp = api.bk_base.query_sync(sql=sql)
+        resp = bkbase_query.query_sync(sql=sql)
         return {"last_data": resp.get("list", [{}])}
 
 

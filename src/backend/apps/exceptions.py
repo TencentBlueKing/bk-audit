@@ -33,6 +33,7 @@ class CoreException(BlueException):
         TOOL = "05"
         RISK = "06"
         LOG_SUBSCRIPTION = "07"
+        BKBASE = "08"
         IAM = "99"
 
 

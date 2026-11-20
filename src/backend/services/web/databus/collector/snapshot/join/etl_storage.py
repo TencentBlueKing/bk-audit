@@ -21,13 +21,18 @@ import json
 from functools import cached_property
 from typing import List
 
-from bk_resource import api, resource
+from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import storage as bkbase_storage
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     CLEAN_CONFIG_JSON_CONF_KEY,
@@ -51,6 +56,8 @@ class JoinDataEtlStorageHandler:
         resource_type: ResourceType,
         storage_type: str,
         snapshot: Snapshot = None,
+        *,
+        pull_report_config=None,
     ):
         self.data_id = data_id
         self.system = system
@@ -59,6 +66,7 @@ class JoinDataEtlStorageHandler:
         self.resource_type_id = resource_type.resource_type_id
         self.storage_type = storage_type
         self.snapshot = snapshot
+        self.pull_report_config = pull_report_config
 
     def create_clean(self, update: bool = False):
         """创建或更新清洗"""
@@ -66,27 +74,34 @@ class JoinDataEtlStorageHandler:
             # 更新清洗链路
             clean_config = self.clean_config.copy()
             clean_config["processing_id"] = self.snapshot.bkbase_processing_id
-            api.bk_base.databus_cleans_put(
+            bkbase_clean.databus_cleans_put(
                 clean_config,
             )
             restart_bkbase_clean(self.snapshot.bkbase_table_id, self.snapshot.bkbase_processing_id)
             return self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id
         else:
-            result = api.bk_base.databus_cleans_post(self.clean_config)
+            result = bkbase_clean.databus_cleans_post(self.clean_config)
             start_bkbase_clean(result["result_table_id"], result["processing_id"])
             processing_id = result["processing_id"]
             bkbase_table_id = result["result_table_id"]
             return processing_id, bkbase_table_id
 
-    def create_storage(self, update=False):
-        """创建入库"""
+    def create_storage(self, update=False, **intent):
+        """创建入库；V4 Doris按快照所有者和可信引用配置，V3保持旧流程。"""
+        if get_bkbase_version() == BKBaseVersion.V4 and self.storage_type in (
+            StorageType.DORIS,
+            SnapShotStorageChoices.REDIS,
+        ):
+            return bkbase_storage.configure_storage(
+                self.snapshot, self.v4_storage_config, purpose=self.storage_type, update=update, **intent
+            )
         if update:
             # 更新入库
             storage_config = self.storage_config.copy()
             storage_config["result_table_id"] = self.snapshot.bkbase_table_id
-            api.bk_base.databus_storages_put(storage_config)
+            bkbase_storage.databus_storages_put(storage_config)
         else:
-            api.bk_base.databus_storages_post(self.storage_config)
+            bkbase_storage.databus_storages_post(self.storage_config)
 
     @property
     def storage_result_table_id(self):
@@ -118,6 +133,11 @@ class JoinDataEtlStorageHandler:
             "result_table_name": self.config_name,
             "result_table_name_alias": self.config_name,
         }
+
+    @property
+    def v4_storage_config(self):
+        """提供初始声明和实际写入共用的审计存储参数。"""
+        return self.storage_config
 
     @property
     def storage_config(self):
@@ -428,10 +448,31 @@ class JoinDataEtlStorageHandler:
                 "encoding": "UTF-8",
             },
         }
-        return json.dumps(config)
+        return json.dumps(bkbase_clean.adapt_pull_clean_config(config, report_config=self.pull_report_config))
 
 
 class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
+    @property
+    def v4_storage_config(self):
+        """资产 HDFS 不生成检索索引；Redis 尚须单独接通本地集群选择。"""
+        if self.storage_type == SnapShotStorageChoices.REDIS:
+            raise BKBaseResourceMappingError(message="V4 asset storage maintenance is not implemented")
+        config = self.storage_config
+        if self.storage_type == SnapShotStorageChoices.HDFS:
+            for field in config["fields"]:
+                field.pop("is_index", None)
+        return config
+
+    def create_storage(self, update=False, **intent):
+        """按已绑定结果表和集群配置资产的 V4 独立入库。"""
+        if get_bkbase_version() == BKBaseVersion.V4 and self.storage_type == SnapShotStorageChoices.HDFS:
+            return bkbase_storage.configure_storage(
+                self.snapshot, self.v4_storage_config, purpose=self.storage_type, update=update, **intent
+            )
+        if get_bkbase_version() == BKBaseVersion.V4 and self.storage_type == SnapShotStorageChoices.REDIS:
+            self.v4_storage_config
+        return super().create_storage(update=update, **intent)
+
     KEY_BUILTIN_FIELDS = {
         "utctime",
         "system_id",
@@ -527,6 +568,13 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
         )
         if self.storage_type == StorageType.DORIS:
             config["config"] = {"data_model": "primary_table", "is_profiling": False}
+        if get_bkbase_version() == BKBaseVersion.V4 and self.storage_type in (
+            StorageType.DORIS,
+            SnapShotStorageChoices.REDIS,
+            SnapShotStorageChoices.HDFS,
+        ):
+            config["key_fields"] = ["id", "resource_type_id", "system_id"]
+            config.pop("index_fields", None)
         return config
 
     def get_storage_cluster(self):
@@ -764,7 +812,9 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 "encoding": "UTF-8",
             },
         }
-        return json.dumps(self.update_json_conf(config))
+        return json.dumps(
+            bkbase_clean.adapt_pull_clean_config(self.update_json_conf(config), report_config=self.pull_report_config)
+        )
 
     def update_json_conf(self, config: dict) -> dict:
         """

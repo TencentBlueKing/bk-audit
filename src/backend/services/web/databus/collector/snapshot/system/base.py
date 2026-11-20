@@ -23,16 +23,17 @@ from django.conf import settings
 from apps.itsm.constants import ITSM_V4_MIGRATION_MAP_KEY
 from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE, ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.collector.snapshot.system.clean import PullCleanHandler
+from services.web.databus.collector.snapshot.system.provision import (
+    ensure_system_snapshot,
+)
 from services.web.databus.collector.snapshot.system.pull import HttpPullHandler
 from services.web.databus.collector.snapshot.system.storage import PullStorageHandler
-from services.web.databus.constants import (
-    ACTION_DATA_CONFIG_KEY,
-    ACTION_DATA_RT_KEY,
-    RESOURCE_TYPE_DATA_CONFIG_KEY,
-    RESOURCE_TYPE_DATA_RT_KEY,
-    USER_INFO_DATA_CONFIG_KEY,
-    USER_INFO_DATA_RT_KEY,
+from services.web.databus.collector.snapshot.system.v4 import (
+    SYSTEM_SNAPSHOT_KEYS,
+    save_v3_config,
 )
 from services.web.risk.models import ProcessApplication
 
@@ -90,24 +91,19 @@ def init_itsm_v4() -> bool:
     return True
 
 
-def create_iam_data_link(resource_type):
-    if resource_type == "resource_type":
-        config_key = RESOURCE_TYPE_DATA_CONFIG_KEY
-        rt_key = RESOURCE_TYPE_DATA_RT_KEY
-    elif resource_type == "action":
-        config_key = ACTION_DATA_CONFIG_KEY
-        rt_key = ACTION_DATA_RT_KEY
-    elif resource_type == "user":
-        config_key = USER_INFO_DATA_CONFIG_KEY
-        rt_key = USER_INFO_DATA_RT_KEY
-    else:
+def create_iam_data_link(resource_type, migration_binding=None):
+    """Initialize the legacy chain or verify the explicitly mapped V4 chain."""
+    if resource_type not in SYSTEM_SNAPSHOT_KEYS:
         raise Exception(f"ResourceType Does Not Support => {resource_type}")
+    if get_bkbase_version() == BKBaseVersion.V4:
+        return ensure_system_snapshot(resource_type, migration_binding)
+    config_key, rt_key = SYSTEM_SNAPSHOT_KEYS[resource_type]
     print(f"[CreateIAMDataLink] ConfigKey => {config_key}; RTKey => {rt_key}")
     config_name, bkbase_data_id = HttpPullHandler(resource_type).create_data_id()
     print(f"[CreateIAMDataLink] ConfigName => {config_name}; DataID => {bkbase_data_id}")
     clean_resp = PullCleanHandler(bkbase_data_id, config_name, resource_type).create_clean()
     storage_resp = PullStorageHandler(bkbase_data_id, config_name, resource_type).create_storage()
-    GlobalMetaConfig.set(
+    save_v3_config(
         config_key,
         {
             "config_name": config_name,

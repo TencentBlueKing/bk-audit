@@ -8,12 +8,12 @@ MCP 仅探索下一层；Web 可在同一批样本上返回全部后代叶子的
 import json
 from typing import Any, Dict, Iterable, List, Tuple
 
-from bk_resource import api
 from django.conf import settings
 from pydantic import ValidationError as PydanticValidationError
 
 from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import START_TIME, SubKey
+from services.web.bkbase import query as bkbase_query
 from services.web.query.ai_assistant.constants import EXTENSION_FIELD_DEFAULT_OPERATORS
 from services.web.query.ai_assistant.exceptions import LogQueryResponseTooLarge
 from services.web.query.ai_assistant.log_tools.context import (
@@ -183,9 +183,10 @@ class LogFieldMetadataService:
             if parent_field.raw_name in builder.JSON_TYPE_FIELDS
             else builder.build_data_sql(query_fields)
         )
-        records = api.bk_base.safe_query_sync(
+        records = bkbase_query.query_sync(
             sql=sql,
             prefer_storage=StorageType.DORIS.value,
+            safe=True,
         )
         return records.get("list") or []
 

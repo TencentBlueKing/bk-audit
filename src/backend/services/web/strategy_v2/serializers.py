@@ -19,7 +19,6 @@ import json
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-from bk_resource import api
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
@@ -46,6 +45,10 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
+from services.web.bkbase import metadata as bkbase_metadata
+from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.common.constants import ScopeType
 from services.web.risk.bksec.config import BkSecConfig
@@ -219,6 +222,22 @@ class EventFieldSerializer(serializers.Serializer):
 
 class EventBasicFieldSerializer(EventFieldSerializer):
     map_config = MapFieldSerializer(label=gettext_lazy("Map Field"), required=False, allow_null=True)
+
+
+def _check_v4_personal_table_permission(rt_ids, *, error_field):
+    """保存时只批查需要个人授权的结果表，沿用调用方的校验错误字段。"""
+    ids = list(dict.fromkeys(rt_id for rt_id in rt_ids if rt_id))
+    if not ids:
+        return
+    try:
+        rows = bkbase_permissions.check_current_user_result_tables(ids)
+    except Exception as error:
+        logger.warning("BKBase personal RT permission check failed: %s", type(error).__name__)
+        raise serializers.ValidationError({error_field: gettext("校验用户权限失败，无法验证数据表[%s]的权限") % ",".join(ids)}) from error
+    allowed = {row["object_id"] for row in rows if row["result"] is True}
+    denied = [rt_id for rt_id in ids if rt_id not in allowed]
+    if denied:
+        raise serializers.ValidationError({error_field: gettext("当前用户没有权限使用数据表[%s]") % ",".join(denied)})
 
 
 class StrategySerializer(serializers.Serializer):
@@ -655,6 +674,8 @@ class StrategySerializer(serializers.Serializer):
         if not links:
             return
 
+        v4_personal = get_bkbase_version() == BKBaseVersion.V4
+        personal_ids = []
         for link in links:
             for table_key in ("left_table", "right_table"):
                 table = link.get(table_key, {})
@@ -669,6 +690,9 @@ class StrategySerializer(serializers.Serializer):
                     # MINE_BIZ_RT 类型：优先检查场景授权范围，不在范围内才校验用户权限
                     rt_id = table.get("rt_id")
                     if rt_id:
+                        if v4_personal:
+                            personal_ids.append(rt_id)
+                            continue
                         # 先检查是否在场景授权范围内
                         scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
                         if rt_id not in set(scene_table_ids):
@@ -676,6 +700,11 @@ class StrategySerializer(serializers.Serializer):
                             self._check_user_table_permission([rt_id])
                         # 用户有权限使用此表，确保项目也有权限
                         self._ensure_project_permission([rt_id])
+        if personal_ids:
+            scene_tables = set(SceneDataFilter.get_table_ids(scene_id))
+            unchecked = [rt_id for rt_id in personal_ids if rt_id not in scene_tables]
+            if unchecked:
+                self._check_user_table_permission(unchecked)
 
     def _check_systems_permission(self, system_ids: list, scene_id: int):
         """校验系统是否在场景授权范围内"""
@@ -723,6 +752,8 @@ class StrategySerializer(serializers.Serializer):
         """
         校验当前用户是否有权限查询结果表
         """
+        if get_bkbase_version() == BKBaseVersion.V4:
+            return _check_v4_personal_table_permission(rt_ids, error_field="rt_id")
         username = get_request_username()
         if not username or not rt_ids:
             return
@@ -734,7 +765,7 @@ class StrategySerializer(serializers.Serializer):
             return
         for rt_id in rt_ids:
             try:
-                result = api.bk_base.user_auth_check(
+                result = bkbase_permissions.user_auth_check(
                     user_id=username,
                     action_id=UserAuthActionEnum.RT_QUERY.value,
                     object_id=rt_id,
@@ -751,12 +782,12 @@ class StrategySerializer(serializers.Serializer):
         确保项目对结果表有权限，如果没有则进行授权
         注意：需要从结果表元数据获取 bk_biz_id，按业务分组调用 project_data_batch_add
         """
-        if not result_table_ids:
+        if not result_table_ids or get_bkbase_version() == BKBaseVersion.V4:
             return
 
         # 1. 批量检查项目是否对这些结果表有权限
         try:
-            check_result = api.bk_base.project_data_batch_check(
+            check_result = bkbase_permissions.project_data_batch_check(
                 project_id=settings.BKBASE_PROJECT_ID,
                 action_id=UserAuthActionEnum.RT_QUERY.value,
                 object_ids=result_table_ids,
@@ -775,7 +806,7 @@ class StrategySerializer(serializers.Serializer):
 
             # 使用批量接口获取结果表元数据
             try:
-                rts = api.bk_base.get_result_tables(result_table_ids=list(no_permission_rt_ids))
+                rts = bkbase_metadata.get_result_tables(result_table_ids=list(no_permission_rt_ids))
                 for rt in rts:
                     rt_id = rt.get("result_table_id")
                     bk_biz_id = rt.get("bk_biz_id")
@@ -790,7 +821,7 @@ class StrategySerializer(serializers.Serializer):
             # 按业务分组调用 project_data_batch_add
             for bk_biz_id, rt_ids in biz_rt_map.items():
                 try:
-                    api.bk_base.project_data_batch_add(
+                    bkbase_permissions.project_data_batch_add(
                         project_id=settings.BKBASE_PROJECT_ID,
                         bk_biz_id=bk_biz_id,
                         object_ids=rt_ids,
@@ -2101,6 +2132,21 @@ class ListTablesRequestSerializer(serializers.Serializer):
     bk_biz_id = serializers.CharField(label=gettext_lazy("业务 ID"), required=False)
 
 
+class ListTableProjectsRequestSerializer(serializers.Serializer):
+    """目录沿用审计空间与场景边界，不接收外部租户或用户身份。"""
+
+    namespace = serializers.CharField(required=False, default=settings.DEFAULT_NAMESPACE)
+    scene_id = serializers.IntegerField(required=False, min_value=1)
+    table_type = serializers.ChoiceField(choices=["BizRt", "BuildIn", "MineBizRt"], default="BizRt")
+
+
+class ListProjectTablesRequestSerializer(ListTableProjectsRequestSerializer):
+    """显式选择一个真实 BKBase 项目，禁止空项目回退为全量读取。"""
+
+    bkbase_namespace = serializers.RegexField(r"^[A-Za-z0-9_-]+$", required=True)
+    table_type = serializers.ChoiceField(choices=["BizRt", "BuildIn", "MineBizRt"])
+
+
 class GetRTFieldsRequestSerializer(serializers.Serializer):
     """
     Get RT Fields
@@ -2439,11 +2485,15 @@ class LinkTableDataPermissionMixin:
         # 校验用户对结果表的权限（MINE_BIZ_RT 类型）
         if mine_biz_rt_ids:
             # 先检查是否在场景授权范围内
-            scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
-            for rt_id in mine_biz_rt_ids:
-                if rt_id not in set(scene_table_ids):
-                    # 不在场景授权范围内，校验用户是否有权限使用此表
-                    self._check_user_table_permission([rt_id])
+            scene_table_ids = set(SceneDataFilter.get_table_ids(scene_id))
+            if get_bkbase_version() == BKBaseVersion.V4:
+                unchecked = mine_biz_rt_ids - scene_table_ids
+                if unchecked:
+                    self._check_user_table_permission(sorted(unchecked))
+            else:
+                for rt_id in mine_biz_rt_ids:
+                    if rt_id not in scene_table_ids:
+                        self._check_user_table_permission([rt_id])
             # 确保项目对结果表有权限（在循环外统一调用，避免重复）
             self._ensure_project_permission(list(mine_biz_rt_ids))
 
@@ -2451,12 +2501,12 @@ class LinkTableDataPermissionMixin:
         """
         确保项目对结果表有权限，如果没有则进行授权
         """
-        if not result_table_ids:
+        if not result_table_ids or get_bkbase_version() == BKBaseVersion.V4:
             return
 
         # 1. 批量检查项目是否对这些结果表有权限
         try:
-            check_result = api.bk_base.project_data_batch_check(
+            check_result = bkbase_permissions.project_data_batch_check(
                 project_id=settings.BKBASE_PROJECT_ID,
                 action_id=UserAuthActionEnum.RT_QUERY.value,
                 object_ids=result_table_ids,
@@ -2475,7 +2525,7 @@ class LinkTableDataPermissionMixin:
 
             # 使用批量接口获取结果表元数据
             try:
-                rts = api.bk_base.get_result_tables(result_table_ids=list(no_permission_rt_ids))
+                rts = bkbase_metadata.get_result_tables(result_table_ids=list(no_permission_rt_ids))
                 for rt in rts:
                     rt_id = rt.get("result_table_id")
                     bk_biz_id = rt.get("bk_biz_id")
@@ -2490,7 +2540,7 @@ class LinkTableDataPermissionMixin:
             # 按业务分组调用 project_data_batch_add
             for bk_biz_id, rt_ids in biz_rt_map.items():
                 try:
-                    api.bk_base.project_data_batch_add(
+                    bkbase_permissions.project_data_batch_add(
                         project_id=settings.BKBASE_PROJECT_ID,
                         bk_biz_id=bk_biz_id,
                         object_ids=rt_ids,
@@ -2503,6 +2553,8 @@ class LinkTableDataPermissionMixin:
         """
         校验当前用户是否有权限查询结果表
         """
+        if get_bkbase_version() == BKBaseVersion.V4:
+            return _check_v4_personal_table_permission(rt_ids, error_field="config")
         username = get_request_username()
         if not username or not rt_ids:
             return
@@ -2515,7 +2567,7 @@ class LinkTableDataPermissionMixin:
         for rt_id in rt_ids:
             # API 调用可能失败，需要捕获异常
             try:
-                result = api.bk_base.user_auth_check(
+                result = bkbase_permissions.user_auth_check(
                     user_id=username,
                     action_id=UserAuthActionEnum.RT_QUERY.value,
                     object_id=rt_id,

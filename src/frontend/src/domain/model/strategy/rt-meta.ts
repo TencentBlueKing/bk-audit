@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 export default class RtzMeta  {
+  bkbase_namespace?: string;
   result_table_id: string;
   result_table_name: string;
   result_table_name_alias: string;
@@ -31,6 +32,7 @@ export default class RtzMeta  {
   };
 
   constructor(payload = {} as RtzMeta) {
+    this.bkbase_namespace = payload.bkbase_namespace;
     this.result_table_id = payload.result_table_id;
     this.result_table_name = payload.result_table_name;
     this.result_table_name_alias = payload.result_table_name_alias;

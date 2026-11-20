@@ -155,6 +155,7 @@
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
+  import { isProjectTableLazyEnabled } from '@hooks/use-project-table';
 
   import InlineTag from '@components/edit-box/inline-tag.vue';
 
@@ -376,6 +377,8 @@
   };
 
   const tableTypeMap = ref<Record<string, TableTypeNode[]>>({});
+  const rtDisplayMap = ref<Record<string, string>>({});
+  let rtDisplaySequence = 0;
 
   const findBestPath = (rtId: string, preferredType?: string) => {
     if (!rtId) return null;
@@ -442,6 +445,9 @@
       return joinDisplayPath([getConfigTypeLabel('LinkTable'), LinkDataDetail.value.name]);
     }
 
+    if (isProjectTableLazyEnabled()) {
+      return joinDisplayPath([getConfigTypeLabel(config.config_type), rtDisplayMap.value[rtId] || rtId]);
+    }
     const path = findBestPath(rtId, config.config_type);
     if (!path) {
       return joinDisplayPath([
@@ -518,6 +524,20 @@
   };
 
   const loadTableTypeMap = async (preferred?: string) => {
+    if (isProjectTableLazyEnabled()) {
+      const sequence = ++rtDisplaySequence;
+      const rtId = resolveRtId(props.data.configs?.data_source?.rt_id);
+      if (!rtId) return;
+      try {
+        const meta = await StrategyManageService.fetchTableRtMeta({ table_id: rtId }, { silent: true, catchError: true });
+        if (sequence !== rtDisplaySequence) return;
+        rtDisplayMap.value[rtId] = [meta.bkbase_namespace,
+          meta.result_table_name_alias || meta.result_table_name || rtId].filter(Boolean).join(' / ');
+      } catch {
+        // 详情只做有限 ID 定位；失败继续显示原 ID。
+      }
+      return;
+    }
     const extraTypes = ['BuildIn', 'BizRt', 'MineBizRt'];
     const types = [...new Set([preferred, ...extraTypes].filter(item => (
       Boolean(item) && item !== 'EventLog' && item !== 'LinkTable'

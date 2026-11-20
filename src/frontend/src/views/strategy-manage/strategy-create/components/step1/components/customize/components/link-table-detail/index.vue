@@ -156,6 +156,7 @@
   import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { isProjectTableLazyEnabled } from '@/hooks/use-project-table';
   import {
     getStrategyResourceSceneParams,
     getStrategySystemScopeParams,
@@ -210,7 +211,29 @@
   });
   const uniqueTableTypes = ref<Array<'BizRt' | 'BuildIn' | 'EventLog'>>([]);
 
+  const rtDisplayMap = ref<Record<string, string>>({});
+  let rtDisplaySequence = 0;
   const fetchTableTypeData = () => {
+    if (isProjectTableLazyEnabled()) {
+      const sequence = ++rtDisplaySequence;
+      const ids = [...new Set((props.linkDataDetail.config?.links || []).flatMap(link => [link.left_table, link.right_table])
+        .filter(table => table.table_type !== 'EventLog').map(table => String(table.rt_id || '')))];
+      const queue = ids.filter(Boolean);
+      Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+        while (queue.length && sequence === rtDisplaySequence) {
+          const id = queue.shift()!;
+          try {
+            const meta = await StrategyManageService.fetchTableRtMeta({ table_id: id }, { silent: true, catchError: true });
+            if (sequence !== rtDisplaySequence) return;
+            rtDisplayMap.value[id] = [meta.bkbase_namespace,
+              meta.result_table_name_alias || meta.result_table_name || id].filter(Boolean).join('/');
+          } catch {
+            // 保留原 ID 展示，不枚举项目或个人表。
+          }
+        }
+      }));
+      return;
+    }
     // 获取tableData
     for (const type of uniqueTableTypes.value) {
       fetchStrategyTableList({
@@ -288,6 +311,9 @@
   };
 
   const getDataSourceText = (table: LinkDataDetailModel['config']['links'][0]['left_table']) => {
+    if (isProjectTableLazyEnabled() && table.table_type !== 'EventLog') {
+      return rtDisplayMap.value[String(table.rt_id)] || String(table.rt_id || '');
+    }
     if (table.table_type === 'BuildIn' || table.table_type === 'BizRt') {
       return findLabelByValue(tableTypeData.value[table.table_type], table.rt_id as string);
     }

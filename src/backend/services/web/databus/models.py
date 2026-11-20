@@ -71,6 +71,7 @@ class CollectorPlugin(OperateRecordModel):
     has_storage = models.BooleanField(gettext_lazy("是否有存储"), default=False)
     has_replica_storage = models.BooleanField(gettext_lazy("是否有副存储"), default=False)
     auth_rt = models.BooleanField(gettext_lazy("是否授权"), default=False)
+    bkbase_v4_resources = models.JSONField(gettext_lazy("BKBase V4资源引用"), default=dict, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("采集插件")
@@ -169,6 +170,7 @@ class CollectorConfig(SoftDeleteModel):
         default=SelectSdkTypeChoices.PYTHON_SDK,
         blank=True,
     )
+    bkbase_v4_resources = models.JSONField(gettext_lazy("BKBase V4资源引用"), default=dict, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("采集项")
@@ -249,6 +251,7 @@ class Snapshot(SoftDeleteModel):
     custom_config = models.JSONField(gettext_lazy("自定义配置"), default=dict, null=True, blank=True)
     status_msg = models.TextField(gettext_lazy("状态信息"), null=True, blank=True)
     auth_rt = models.BooleanField(gettext_lazy("is RT Authorized"), default=False)
+    bkbase_v4_resources = models.JSONField(gettext_lazy("BKBase V4资源引用"), default=dict, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("快照配置")

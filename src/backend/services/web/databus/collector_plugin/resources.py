@@ -31,6 +31,8 @@ from apps.audit.resources import AuditMixinResource
 from apps.exceptions import MetaConfigNotExistException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.collector_plugin.serializers import (
     CreatePluginRequestSerializer,
     CreatePluginResponseSerializer,
@@ -277,21 +279,32 @@ class UpdatePluginResource(PluginBaseResource):
         resp = api.bk_log.update_collector_plugin(**validated_request_data)
 
         # 存入数据库
-        CollectorPlugin.objects.filter(collector_plugin_id=instance.collector_plugin_id).update(
-            etl_config=validated_request_data["etl_config"],
-            etl_params=validated_request_data["etl_params"],
-            retention=validated_request_data["retention"],
-            allocation_min_days=validated_request_data["allocation_min_days"],
-            storage_replies=validated_request_data["storage_replies"],
-            storage_shards_nums=validated_request_data["storage_shards_nums"],
-            storage_shards_size=validated_request_data["storage_shards_size"],
+        config = {
+            field: validated_request_data[field]
+            for field in (
+                "etl_config",
+                "etl_params",
+                "retention",
+                "allocation_min_days",
+                "storage_replies",
+                "storage_shards_nums",
+                "storage_shards_size",
+            )
+        }
+        changed = get_bkbase_version() == BKBaseVersion.V4 and any(
+            getattr(instance, field) != value for field, value in config.items()
         )
+        CollectorPlugin.objects.filter(collector_plugin_id=instance.collector_plugin_id).update(**config)
 
         # 设置默认
         self.set_default(validated_request_data, resp, instance.namespace)
 
         # 启动RT更新
-        create_or_update_plugin_etl.delay(collector_plugin_id=instance.collector_plugin_id)
+        task_params = {"collector_plugin_id": instance.collector_plugin_id}
+        if changed:
+            # 提交新配置时退出原配置恢复；原样保存则由任务按插件状态决定是否恢复。
+            task_params["retry_failed"] = False
+        create_or_update_plugin_etl.delay(**task_params)
 
         # 响应
         return resp

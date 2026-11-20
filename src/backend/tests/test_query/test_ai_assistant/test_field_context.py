@@ -63,7 +63,7 @@ class TestPlanningFieldContext(AIAssistantTestCase):
 
 
 @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=False)
-@mock.patch(f"{FIELD_CONTEXT_MODULE}.api.bk_base.query_sync")
+@mock.patch("bk_resource.api.bk_base.query_sync")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.resource.meta.system_list")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.GlobalMetaConfig.get")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.SearchLogPermission.has_system_search_permission")
@@ -312,7 +312,7 @@ class TestFieldContextService(AIAssistantTestCase):
 
 
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.CollectorPlugin.build_collector_rt")
-@mock.patch(f"{FIELD_CONTEXT_MODULE}.api.bk_base.query_sync")
+@mock.patch("bk_resource.api.bk_base.query_sync")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.resource.meta.system_list")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.GlobalMetaConfig.get")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.SearchLogPermission.has_system_search_permission")

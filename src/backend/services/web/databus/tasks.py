@@ -23,7 +23,7 @@ import traceback
 from typing import Dict, Optional, Type
 
 import requests
-from bk_resource import api, resource
+from bk_resource import resource
 from bk_resource.exceptions import APIRequestError
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
@@ -31,16 +31,25 @@ from blueapps.utils.logger import logger
 from celery.schedules import crontab
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 from django.utils.translation import gettext
 
 from api.bk_base.constants import StorageType
+from apps.exceptions import CoreException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.notice.handlers import ErrorMsgHandler
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.lock import lock
 from core.monitor import Metric
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import plugin_storage_switch
+from services.web.bkbase import query as bkbase_query
+from services.web.bkbase import snapshot_clean_provision, snapshot_restore
+from services.web.bkbase import source as bkbase_source
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.common.monitor import (
     AssetSyncAnomalyEvent,
     AssetSyncCheckAnomalyEvent,
@@ -89,17 +98,139 @@ def start_snapshot():
     snapshots = Snapshot.objects.filter(
         status__in=(SnapshotRunningStatus.PREPARING.value,),
     )
+    is_v4 = get_bkbase_version() == BKBaseVersion.V4
     for snapshot in snapshots:
+        binding = snapshot.bkbase_v4_resources or {}
+        if is_v4 and not isinstance(binding, dict):
+            bkbase_source.fail_snapshot_replay(
+                snapshot, operation_id=None, message="Invalid Snapshot resource bindings"
+            )
+            continue
+        binding = binding if isinstance(binding, dict) else {}
+        operation = binding.get("source_replay")
+        operation = operation if isinstance(operation, dict) else {}
         logger.info(
             "[start_snapshot] SystemID => %s; ResourceTypeID => %s", snapshot.system_id, snapshot.resource_type_id
         )
 
         try:
-            ResourceType.objects.get(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id)
+            resource_type = ResourceType.objects.get(
+                system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id
+            )
         except ResourceType.DoesNotExist:
+            if is_v4:
+                bkbase_source.fail_snapshot_replay(
+                    snapshot,
+                    operation_id=operation.get("operation_id"),
+                    message="Snapshot resource type no longer exists; the pending operation was cancelled",
+                )
             logger.error(
                 "[start_snapshot] System %s ResourceType Not Found => %s", snapshot.system_id, snapshot.resource_type_id
             )
+            continue
+
+        if is_v4:
+            operation_id = operation.get("operation_id")
+            active = operation.get("active") and isinstance(operation_id, str) and operation_id
+            if operation.get("mode") == snapshot_restore.RESTORE_MODE and active:
+                try:
+                    handler = HttpPullHandler(
+                        System.objects.get(system_id=snapshot.system_id),
+                        resource_type,
+                        snapshot,
+                        snapshot.join_data_type,
+                    )
+                    handler.pull_type = operation.get("target_pull_type", snapshot.pull_type)
+                    snapshot_restore.advance(snapshot, handler.config)
+                except (
+                    CoreException,
+                    APIRequestError,
+                    ValueError,
+                    TypeError,
+                    AttributeError,
+                    ImproperlyConfigured,
+                    System.DoesNotExist,
+                ):
+                    bkbase_source.fail_snapshot_replay(
+                        snapshot,
+                        operation_id=operation.get("operation_id"),
+                        message="Snapshot restore configuration is unavailable",
+                    )
+                    logger.warning("[SnapshotRestore] Cannot advance snapshot %s", snapshot.pk)
+                continue
+            # 只有明确源维护意图可进入；其他V4快照不能继续旧清洗/入库循环。
+            provision = binding.get("source_provision") or {}
+            provision = provision if isinstance(provision, dict) else {}
+            if (provision or not snapshot.bkbase_data_id) and not active:
+                provision_params = None
+                try:
+                    handler = HttpPullHandler(
+                        System.objects.get(system_id=snapshot.system_id),
+                        resource_type,
+                        snapshot,
+                        snapshot.join_data_type,
+                    )
+                    if not provision:
+                        handler.update_or_create()
+                    provision_params = handler.config
+                    if provision.get("stage") in ("ready", "clean_ready"):
+                        snapshot_clean_provision.advance(snapshot, provision_params)
+                    else:
+                        bkbase_source.advance_source_provision(snapshot, provision_params)
+                except (
+                    CoreException,
+                    APIRequestError,
+                    ValueError,
+                    TypeError,
+                    ImproperlyConfigured,
+                    System.DoesNotExist,
+                ) as error:
+                    operation = (
+                        (snapshot.bkbase_v4_resources or {}).get("source_provision")
+                        if isinstance(snapshot.bkbase_v4_resources, dict)
+                        else None
+                    )
+                    operation = operation if isinstance(operation, dict) else {}
+                    bkbase_source.fail_source_provision(
+                        snapshot,
+                        operation.get("operation_id"),
+                        operation.get("stage"),
+                        operation.get("digest"),
+                        provision_params,
+                        blocker=getattr(error, "blocker_id", None),
+                    )
+                    logger.warning("[SnapshotProvision] Cannot advance snapshot %s", snapshot.pk)
+                continue
+            if active:
+                try:
+                    handler = HttpPullHandler(
+                        System.objects.get(system_id=snapshot.system_id),
+                        resource_type,
+                        snapshot,
+                        snapshot.join_data_type,
+                    )
+                    handler.pull_type = operation.get("target_pull_type", snapshot.pull_type)
+                    handler.advance_replay()
+                except (
+                    CoreException,
+                    APIRequestError,
+                    ValueError,
+                    TypeError,
+                    ImproperlyConfigured,
+                    System.DoesNotExist,
+                ):
+                    bkbase_source.fail_snapshot_replay(
+                        snapshot,
+                        operation_id=operation_id,
+                        message="Replay source configuration is unavailable; this operation was cancelled",
+                    )
+                    logger.warning("[SnapshotReplay] Cannot advance snapshot %s", snapshot.pk)
+            else:
+                bkbase_source.fail_snapshot_replay(
+                    snapshot,
+                    operation_id=None,
+                    message=gettext("当前 BKBase V4 快照入口尚未适配，仅支持已有资产或基础快照的源维护"),
+                )
             continue
 
         storage_types = snapshot.storages.values_list('storage_type', flat=True)
@@ -139,22 +270,31 @@ def sync_tail_log_time():
 @periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:change_storage_cluster")
 def change_storage_cluster():
+    def update_plugin(collector_plugin):
+        default_plugin_id = GlobalMetaConfig.get(
+            COLLECTOR_PLUGIN_ID,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=collector_plugin.namespace,
+        )
+        return resource.databus.collector_plugin.update_plugin(
+            namespace=collector_plugin.namespace,
+            etl_config=collector_plugin.etl_config,
+            etl_params=collector_plugin.etl_params,
+            is_default=str(default_plugin_id) == str(collector_plugin.collector_plugin_id),
+            collector_plugin_id=collector_plugin.collector_plugin_id,
+        )
+
     def change_plugin_storage():
         collector_plugins = CollectorPlugin.objects.filter(storage_changed=True)
         for collector_plugin in collector_plugins:
             try:
-                default_plugin_id = GlobalMetaConfig.get(
-                    COLLECTOR_PLUGIN_ID,
-                    config_level=ConfigLevelChoices.NAMESPACE.value,
-                    instance_key=collector_plugin.namespace,
-                )
-                resource.databus.collector_plugin.update_plugin(
-                    namespace=collector_plugin.namespace,
-                    etl_config=collector_plugin.etl_config,
-                    etl_params=collector_plugin.etl_params,
-                    is_default=str(default_plugin_id) == str(collector_plugin.collector_plugin_id),
-                    collector_plugin_id=collector_plugin.collector_plugin_id,
-                )
+                if get_bkbase_version() == BKBaseVersion.V4:
+                    if (collector_plugin.bkbase_v4_resources or {}).get(plugin_storage_switch.SWITCH_KEY):
+                        plugin_storage_switch.advance(collector_plugin, update_plugin)
+                    else:
+                        plugin_storage_switch.advance_config_update(collector_plugin, update_plugin)
+                    continue
+                update_plugin(collector_plugin)
                 collector_plugin.refresh_from_db()
                 collector_plugin.storage_changed = False
                 collector_plugin.save()
@@ -182,7 +322,7 @@ def change_storage_cluster():
                 )
                 collector.refresh_from_db()
                 collector.storage_changed = False
-                collector.save()
+                collector.save(update_fields=["storage_changed"])
             except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 title = gettext("ChangeCollectorStorageFailed")
                 content = gettext("Error: %s") % str(err)
@@ -198,6 +338,8 @@ def change_storage_cluster():
 def refresh_snapshot():
     # 获取所有的运行中快照
     snapshots = Snapshot.objects.filter(status=SnapshotRunningStatus.RUNNING.value).order_by("updated_at")
+    if get_bkbase_version() == BKBaseVersion.V4:
+        snapshots = snapshots.filter(join_data_type__in=(JoinDataType.ASSET, JoinDataType.BASIC))
     snapshots_count = snapshots.count()
     logger.info(f"[Refresh Snapshot] Snapshots Count => {snapshots_count}")
     if not snapshots_count:
@@ -210,6 +352,25 @@ def refresh_snapshot():
     if not updated_count:
         return
     # 更新状态
+    if get_bkbase_version() == BKBaseVersion.V4:
+        for snapshot in snapshots[:updated_count]:
+            try:
+                HttpPullHandler(
+                    System.objects.get(system_id=snapshot.system_id),
+                    ResourceType.objects.get(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id),
+                    snapshot,
+                    snapshot.join_data_type,
+                ).prepare_replay()
+            except (
+                CoreException,
+                APIRequestError,
+                ValueError,
+                TypeError,
+                System.DoesNotExist,
+                ResourceType.DoesNotExist,
+            ):
+                logger.warning("[SnapshotReplay] Preconditions rejected snapshot %s", snapshot.pk)
+        return
     snapshot_ids = [snapshot.id for snapshot in snapshots[:updated_count]]
     Snapshot.objects.filter(id__in=snapshot_ids).update(status=SnapshotRunningStatus.PREPARING.value)
 
@@ -299,16 +460,17 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
 
 @periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:create_or_update_plugin_etl")
-def create_or_update_plugin_etl(collector_plugin_id: int = None):
-    """创建或更新采集插件清洗入库"""
+def create_or_update_plugin_etl(collector_plugin_id: int = None, *, retry_failed: bool | None = None):
+    """推进插件清洗入库。按 ID 时，缺省续原流程，True 显式恢复，False 应用新配置。"""
 
     if collector_plugin_id:
         plugins = CollectorPlugin.objects.filter(collector_plugin_id=collector_plugin_id)
     else:
         # 仅为日志/事件采集插件创建入库
-        plugins = CollectorPlugin.objects.filter(
-            plugin_scene__in=[PluginSceneChoices.EVENT.value, PluginSceneChoices.COLLECTOR.value],
-            bkbase_table_id__isnull=True,
+        plugins = bkbase_clean.pending_plugins(
+            CollectorPlugin.objects.filter(
+                plugin_scene__in=[PluginSceneChoices.EVENT.value, PluginSceneChoices.COLLECTOR.value],
+            )
         )
     # 创建或更新
     handler_map = {
@@ -320,7 +482,15 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
         if not handler:
             logger.error("[PluginEtlHandlerNotFound] PluginScene => %s", plugin.plugin_scene)
             continue
-        handler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
+        try:
+            if collector_plugin_id:
+                bkbase_clean.reset_plugin_operation(plugin, retry_failed=retry_failed)
+            handler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
+        except bkbase_clean.PLUGIN_OPERATION_EXCEPTIONS as error:
+            if bkbase_clean.get_bkbase_version() != bkbase_clean.BKBaseVersion.V4:
+                raise
+            logger.exception("BKBase V4 plugin task failed: %s", plugin.pk)
+            bkbase_clean.record_plugin_failure(plugin, error)
 
 
 @periodic_task(run_every=crontab(minute="0", hour="5"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -390,7 +560,7 @@ def check_join_data():
 
         try:
             # 尝试发送请求获取存储中的 count 数据
-            bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+            bulk_resp = bkbase_query.query_sync_bulk(bulk_req_params)
             doris_count_resp, hdfs_count_resp = bulk_resp
             doris_storage_count = doris_count_resp.get("list", [{}])[0].get("count", 0)
             hdfs_storage_count = hdfs_count_resp.get("list", [{}])[0].get("count", 0)
@@ -435,6 +605,34 @@ def refresh_system_snapshots(system_id: int):
 
     # 仅修改当前系统下存在的资源类型的快照
     resource_type_ids = ResourceType.objects.filter(system_id=system_id).values_list("resource_type_id", flat=True)
+
+    if get_bkbase_version() == BKBaseVersion.V4:
+        # 独立源维护不进入旧Clean/Storage组合启动流程，也不覆盖正在进行的操作。
+        snapshots = Snapshot.objects.filter(
+            system_id=system_id,
+            resource_type_id__in=resource_type_ids,
+            status=SnapshotRunningStatus.RUNNING.value,
+            join_data_type__in=(JoinDataType.ASSET, JoinDataType.BASIC),
+        )
+        for snapshot in snapshots:
+            baseline = None
+            try:
+                resource_type = ResourceType.objects.get(
+                    system_id=system_id, resource_type_id=snapshot.resource_type_id
+                )
+                baseline = bkbase_source.configuration_request_digest(snapshot)
+                HttpPullHandler(system, resource_type, snapshot, snapshot.join_data_type).update_or_create()
+            except (
+                CoreException,
+                APIRequestError,
+                ValueError,
+                TypeError,
+                System.DoesNotExist,
+                ResourceType.DoesNotExist,
+            ) as error:
+                bkbase_source.record_configuration_rejection(snapshot, baseline, error)
+                logger.warning("[SnapshotConfiguration] Preconditions rejected snapshot %s", snapshot.pk)
+        return
 
     updated_count = Snapshot.objects.filter(
         system_id=system_id,
@@ -729,3 +927,11 @@ def report_asset_sync_count():
         except Exception as err:
             logger.exception("[AssetSyncReport] count anomaly %s/%s err=%s", snap.system_id, snap.resource_type_id, err)
     logger.info("[AssetSyncReport] count anomaly events reported")
+
+
+@periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:poll_bkbase_v4_clean_operations")
+def poll_bkbase_v4_clean_operations():
+    """V4清洗/删源每次只做一次观测，避免请求线程等待。"""
+    bkbase_clean.poll_clean_operations()
+    bkbase_source.poll_source_operations()
