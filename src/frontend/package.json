@@ -37,7 +37,7 @@
     "express": ">=4.20.0",
     "express-art-template": "1.0.1",
     "js-cookie": "^3.0.8",
-    "markdown-it": "^14.0.0",
+    "markdown-it": "14.3.3",
     "mitt": "3.0.1",
     "monaco-editor": "0.44.0",
     "screenfull": "6.0.2",
