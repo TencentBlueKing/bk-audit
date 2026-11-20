@@ -720,17 +720,13 @@ class ToolResourceTestCase(TestCase):
 
         self.assertEqual(result[0]["uid"], self.sql_tool.uid)
 
-    def _list_tools_default_order(self, recent_uids=None, usage_scores=None):
-        """以默认排序调用 ListTool，并 mock 掉按人隔离的 Redis 数据（最近使用/使用次数）"""
+    def _list_tools_default_order(self, recent_uids=None):
+        """以默认排序调用 ListTool，并 mock 掉按人隔离的 Redis 数据（最近使用）"""
         with (
             patch("services.web.tool.resources.get_request_username", return_value=self.uid),
             patch(
                 "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
                 return_value=recent_uids or [],
-            ),
-            patch(
-                "services.web.tool.resources.tool_usage_count_manager.get_usage_scores",
-                return_value=usage_scores or {},
             ),
         ):
             return self._call_resource_with_request(
@@ -753,26 +749,12 @@ class ToolResourceTestCase(TestCase):
         # 收藏优先，其次最近使用
         self.assertEqual([tool["uid"] for tool in result[:2]], [self.sql_tool.uid, self.bk_tool.uid])
 
-    def test_list_tool_default_order_usage_count_third(self):
-        # 均非收藏且不在最近使用中：按使用次数排序
-        result = self._list_tools_default_order(usage_scores={self.bk_tool.uid: 10, self.sql_tool.uid: 2})
-        self.assertEqual([tool["uid"] for tool in result[:2]], [self.bk_tool.uid, self.sql_tool.uid])
-
-        # 次数全为 0 时第三层不产生区分，退化为名称排序
-        result = self._list_tools_default_order()
-        expected = sorted([self.sql_tool, self.bk_tool], key=lambda t: t.name)
-        self.assertEqual([tool["uid"] for tool in result[:2]], [t.uid for t in expected])
-
     def test_list_tool_default_order_redis_down_degrades(self):
         # Redis 故障时排序降级为 收藏 > 名称，接口不报错
         with (
             patch("services.web.tool.resources.get_request_username", return_value=self.uid),
             patch(
                 "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
-                side_effect=Exception("redis down"),
-            ),
-            patch(
-                "services.web.tool.resources.tool_usage_count_manager.get_usage_scores",
                 side_effect=Exception("redis down"),
             ),
         ):

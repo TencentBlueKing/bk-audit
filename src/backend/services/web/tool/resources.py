@@ -134,7 +134,6 @@ from services.web.tool.tool import (
     create_tool_with_config,
     recent_tool_usage_manager,
     sync_resource_tags,
-    tool_usage_count_manager,
 )
 
 
@@ -405,28 +404,22 @@ class ListTool(ToolBase):
 
     @staticmethod
     def _sort_tools_by_user_preference(queryset, current_user: str) -> List[Tool]:
-        """默认排序：收藏 > 最近使用 > 工具被使用次数 > 名称（三个维度均以人为维度隔离）
+        """默认排序：收藏 > 最近使用 > 名称（两个维度均以人为维度隔离）
 
-        Redis 故障时对应层级降级，不影响接口可用性。
+        Redis 故障时最近使用层级降级为 收藏 > 名称，不影响接口可用性。
         """
         try:
             recent_uids = recent_tool_usage_manager.get_recent_uids(current_user) or []
-        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>次数>名称)
+        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>名称)
             logger.exception("[list_tool] get recent uids failed, degrade sorting")
             recent_uids = []
         recent_set = set(recent_uids)
-        try:
-            usage_scores = tool_usage_count_manager.get_usage_scores(current_user)
-        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>最近使用>名称)
-            logger.exception("[list_tool] get usage scores failed, degrade sorting")
-            usage_scores = {}
-        # 先按名称取确定性序，再按四层优先级稳定排序（次数全为 0 时第三层不产生区分）
+        # 先按名称取确定性序，再按优先级稳定排序
         return sorted(
             queryset.order_by("name"),
             key=lambda t: (
                 0 if getattr(t, "favorite", False) else 1,  # 收藏优先
                 0 if t.uid in recent_set else 1,  # 最近使用次之
-                -usage_scores.get(t.uid, 0),  # 工具被使用次数
                 t.name,  # 名称兜底
             ),
         )
@@ -1294,7 +1287,6 @@ class ExecuteTool(ToolBase):
         current_user = get_request_username()
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
-            tool_usage_count_manager.incr_usage(current_user, uid)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1400,7 +1392,6 @@ class ExecuteToolAPIGW(ExecuteTool):
         current_user = "admin"
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
-            tool_usage_count_manager.incr_usage(current_user, uid)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
