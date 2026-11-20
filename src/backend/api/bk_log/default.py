@@ -200,6 +200,7 @@ class BizsList(BizBaseResource):
     name = gettext_lazy("业务列表")
     action = "/meta/projects/mine/"
     method = "GET"
+    use_admin_username = False
 
 
 class BizTopos(BizBaseResource):
@@ -495,6 +496,7 @@ class CheckAllowed(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/check_allowed/"
     method = "POST"
+    use_admin_username = False
 
     def perform_request(self, validated_request_data):
         resources = super(CheckAllowed, self).perform_request(validated_request_data)
@@ -510,6 +512,7 @@ class GetApplyData(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/get_apply_data/"
     method = "POST"
+    use_admin_username = False
 
     ResponseSerializer = GetApplyDataResponseSerializer
 
@@ -518,7 +521,13 @@ class GetSpacesMine(BKLogBaseResource):
     name = gettext_lazy("获取空间列表")
     method = "GET"
     action = "/meta/spaces/mine/"
-    cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 10, user_related=True)
+    use_admin_username = False
+
+    @property
+    def cache_type(self):
+        # 多租户改造后不复用旧身份查询得到的空间列表；单租户保持原缓存。
+        key = "GetSpacesMinePersonal" if self.use_multi_tenant_mode() else "GetSpacesMine"
+        return CacheTypeItem(key=key, timeout=60 * 10, user_related=True)
 
 
 class CreateCustomCollector(CollectorsBaseResource):
