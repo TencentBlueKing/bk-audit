@@ -24,11 +24,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from services.web.common.constants import CallerResourceType
-from services.web.scene.constants import (
-    PanelStatus,
-    ResourceVisibilityType,
-    SceneStatus,
-)
+from services.web.scene.constants import ResourceVisibilityType, SceneStatus
 from services.web.scene.filters import CompositeScopeFilter
 from services.web.scene.models import Scene
 from services.web.tool.models import Tool
@@ -189,7 +185,8 @@ def extract_extra_variables(source: Any) -> Dict[str, Any]:
 
 def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     """
-    校验指定风险的策略是否关联给定工具，并确保风险所属场景启用且工具在该场景可见、已发布。
+    校验指定风险的策略是否关联给定工具，并确保风险所属场景启用且工具在该场景可见。
+    （工具广场展示开关不参与下钻权限判定）
 
     返回 True 表示存在关联且可访问，False 表示不存在或无法定位。
     """
@@ -220,7 +217,8 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     if not tool:
         return False
 
-    return tool.status == PanelStatus.PUBLISHED
+    # 工具广场展示开关（status）仅控制广场展示，不影响下钻：不再校验是否已发布
+    return True
 
 
 @singledispatch
