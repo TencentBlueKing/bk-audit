@@ -50,7 +50,16 @@ class RiskCallerPermission(BaseCallerPermission):
             perm.has_risk_permission(instance_id, username)
         # 2) 基于 current_type+current_object_id/extra_context 做关系校验
         if current_type and current_object_id:
-            return self.extra_context_validate(current_type, current_object_id, instance_id, kwargs)
+            valid = self.extra_context_validate(current_type, current_object_id, instance_id, kwargs)
+            if not valid:
+                # 下钻权限校验失败诊断日志（保留用于排障定位）
+                logger.warning(
+                    "[drill_perm_diag] extra_context_validate failed: risk=%s current_type=%s current_object_id=%s",
+                    instance_id,
+                    current_type,
+                    current_object_id,
+                )
+            return valid
         return True
 
     def extra_context_validate(self, current_type, current_object_id, instance_id, kwargs):
@@ -72,7 +81,7 @@ class RiskCallerPermission(BaseCallerPermission):
             event_start_time = kwargs.get("event_start_time")
             event_end_time = kwargs.get("event_end_time")
             if variable_values:
-                return validate_tool_variables_with_risk(
+                valid = validate_tool_variables_with_risk(
                     risk_id=instance_id,
                     tool_uid=current_object_id,
                     variable_values=variable_values,
@@ -80,6 +89,19 @@ class RiskCallerPermission(BaseCallerPermission):
                     start_time=event_start_time,
                     end_time=event_end_time,
                 )
+                if not valid:
+                    # 下钻权限校验失败诊断日志（保留用于排障定位）
+                    logger.warning(
+                        "[drill_perm_diag] tool variables invalid: risk=%s tool=%s drill_field=%s "
+                        "start=%s end=%s vars=%s",
+                        instance_id,
+                        current_object_id,
+                        drill_field,
+                        event_start_time,
+                        event_end_time,
+                        list(variable_values.keys()),
+                    )
+                return valid
             return True
 
 
@@ -195,7 +217,7 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
 
     risk = Risk.objects.filter(risk_id=risk_id).only("strategy_id", "scene_id").first()
     if not risk or not risk.strategy_id:
-        # 临时诊断日志（定位下钻 9900403，后续移除）
+        # 下钻权限校验失败诊断日志（保留用于排障定位）
         logger.warning("[drill_perm_diag] risk missing or no strategy: risk=%s tool=%s", risk_id, tool_uid)
         return False
 
