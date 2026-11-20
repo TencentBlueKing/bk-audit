@@ -361,7 +361,13 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
     _IAM_ANY_Q = ~Q(pk=None)
 
     @classmethod
-    def authed_risk_filter(cls, action: Union[ActionMeta, str], username: Optional[str] = None) -> Q:
+    def authed_risk_filter(
+        cls,
+        action: Union[ActionMeta, str],
+        username: Optional[str] = None,
+        *,
+        local_user_types: Optional[List[UserType]] = None,
+    ) -> Q:
         """
         组合权限：IAM 策略 + 本地 TicketPermission
         超管场景（IAM 返回 op=any）时直接使用 IAM 结果，跳过 OR 合并以避免索引失效。
@@ -370,7 +376,7 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         iam_filter = cls.iam_risk_filter(action, username=username)
         if iam_filter == cls._IAM_ANY_Q:
             return iam_filter
-        return cls.local_risk_filter(username=username) | iam_filter
+        return cls.local_risk_filter(user_types=local_user_types, username=username) | iam_filter
 
     # ──── QuerySet 快捷方法 ────
 
@@ -396,11 +402,17 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         return cls.objects.filter(cls.iam_risk_filter(action, username=username))
 
     @classmethod
-    def load_authed_risks(cls, action: Union[ActionMeta, str], username: Optional[str] = None) -> QuerySet["Risk"]:
+    def load_authed_risks(
+        cls,
+        action: Union[ActionMeta, str],
+        username: Optional[str] = None,
+        *,
+        local_user_types: Optional[List[UserType]] = None,
+    ) -> QuerySet["Risk"]:
         """
         获取通过组合权限（IAM + 本地）过滤的风险集（不带展示注解）。
         """
-        return cls.objects.filter(cls.authed_risk_filter(action, username=username))
+        return cls.objects.filter(cls.authed_risk_filter(action, username=username, local_user_types=local_user_types))
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
