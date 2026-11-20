@@ -257,7 +257,11 @@ class SqlDataSearchExecutor(
         for rt in bulk_resp:
             if rt.get("result"):
                 continue
-            raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
+            raise DataSearchTablePermission(
+                rt.get("user_id"),
+                rt.get("object_id"),
+                message=gettext("无数据查询权限，请联系场景管理员处理"),
+            )
 
     def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:
         """
@@ -471,6 +475,18 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         final_params.extend(self._render_pagination_request_params(params))
         return final_params
 
+    @staticmethod
+    def _extract_response_message(parsed_result: Any) -> str:
+        """第三方 JSON 响应里的 message 提到执行结果的 message 上。"""
+        if not isinstance(parsed_result, dict):
+            return ""
+        message = parsed_result.get("message")
+        if message is None:
+            return ""
+        if isinstance(message, str):
+            return message
+        return str(message)
+
     def _execute(self, params: APIToolExecuteParams) -> ApiToolExecuteResult:
         # 1. 渲染参数
         request_params = self._render_request_params(params)
@@ -530,6 +546,13 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             )
             try:
                 parsed_result = response.json()
+                third_party_message = self._extract_response_message(parsed_result)
+                if response.status_code >= 400 and third_party_message.strip():
+                    logger.warning(
+                        "[ApiToolExecute] third-party failure: status=%s detail=%s",
+                        response.status_code,
+                        third_party_message.strip()[:500],
+                    )
                 return ApiToolExecuteResult(
                     status_code=response.status_code,
                     result=parsed_result,
@@ -552,6 +575,8 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
                 err_type=ApiToolErrorType.REQUEST_ERROR,
                 message=str(e),
             )
+        except ApiToolExecuteError:
+            raise
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(f"[{self.__class__.__name__}] Request Failed: {e}", exc_info=True)
             raise ApiToolExecuteError(status_code=500, detail=gettext("请求异常，请联系系统管理员"))

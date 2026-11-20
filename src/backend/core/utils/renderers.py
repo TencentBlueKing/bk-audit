@@ -21,6 +21,8 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.settings import api_settings
 from rest_framework.status import is_success
 
+_TOOL_EXECUTE_CONTACT_MESSAGE = "内部错误，请联系场景管理员处理"
+
 
 class APIRenderer(JSONRenderer):
     """
@@ -52,6 +54,9 @@ class APIRenderer(JSONRenderer):
             response.status_code = status.HTTP_200_OK
             res_data["data"] = data
             res_data["code"] = self.SUCCESS_CODE
+            message = self._extract_tool_execute_message(data)
+            if message:
+                res_data["message"] = message
             return super(APIRenderer, self).render(res_data, accepted_media_type, renderer_context)
 
         code = response.status_code
@@ -73,6 +78,29 @@ class APIRenderer(JSONRenderer):
             res_data["errors"] = errors
 
         return super(APIRenderer, self).render(res_data, accepted_media_type, renderer_context)
+
+    @staticmethod
+    def _extract_tool_execute_message(data):
+        """第三方失败时外层 message 用固定文案，原文留在 data.message。"""
+        if not isinstance(data, dict) or "tool_type" not in data:
+            return None
+        inner = data.get("data")
+        if not isinstance(inner, dict) or "status_code" not in inner:
+            return None
+        if inner.get("status_code") == 200:
+            return None
+        if inner.get("err_type") in {"non_json_response", "request_error"}:
+            return _TOOL_EXECUTE_CONTACT_MESSAGE
+        result = inner.get("result")
+        if not isinstance(result, dict):
+            return None
+        third_party_message = result.get("message")
+        if not isinstance(third_party_message, str) or not third_party_message.strip():
+            return None
+        status_code = inner.get("status_code")
+        if isinstance(status_code, int) and status_code >= 400:
+            return _TOOL_EXECUTE_CONTACT_MESSAGE
+        return None
 
     def format_error_message(self, error):  # pylint: disable=no-self-use
         """

@@ -33,14 +33,16 @@ class ValidationError(BlueException):
     STATUS_CODE = 400
 
     def __init__(self, *args, data=None, **kwargs):
+        # BlueException 只读取 message 关键字，位置参数会退回类上的「参数验证失败」。
         if args:
             custom_message = args[0]
             if isinstance(custom_message, tuple):
-                super(ValidationError, self).__init__(custom_message[1], data=custom_message[0], **kwargs)
+                kwargs.setdefault("message", custom_message[1])
+                if data is None:
+                    data = custom_message[0]
             else:
-                super(ValidationError, self).__init__(custom_message, **kwargs)
-        else:
-            super(ValidationError, self).__init__(**kwargs)
+                kwargs.setdefault("message", custom_message)
+        super().__init__(data=data, **kwargs)
 
 
 class ApiResultError(ApiError):

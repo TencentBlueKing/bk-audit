@@ -487,7 +487,7 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         mock_validator = mock.MagicMock()
         # 模拟 validate_tool_default_values 抛出异常
         mock_validator.validate_tool_default_values.side_effect = PermissionException(
-            action_name="使用隐藏参数 username 的默认值", permission="参数 username 不可见，只能使用默认值"
+            action_name="使用隐藏参数 username 的默认值", permission="参数 username 不可见，不可临时修改"
         )
         mock_validator_cls.return_value = mock_validator
 
@@ -616,7 +616,7 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         mock_validator = mock.MagicMock()
         # 模拟 validate_tool_default_values 抛出异常
         mock_validator.validate_tool_default_values.side_effect = PermissionException(
-            action_name="使用隐藏参数 username 的默认值", permission="参数 username 的默认值不存在"
+            action_name="使用隐藏参数 username 的默认值", permission="参数 username 不可见，不可临时修改"
         )
         mock_validator_cls.return_value = mock_validator
 
@@ -742,7 +742,7 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         mock_validator = mock.MagicMock()
         # 模拟 validate_tool_default_values 抛出异常
         mock_validator.validate_tool_default_values.side_effect = PermissionException(
-            action_name="使用隐藏参数 username 的默认值", permission="参数 username 的默认值不存在"
+            action_name="使用隐藏参数 username 的默认值", permission="参数 username 不可见，不可临时修改"
         )
         mock_validator_cls.return_value = mock_validator
 
@@ -877,7 +877,7 @@ class ApiToolRawNameMatchingTest(TestCase):
         mock_validator = mock.MagicMock()
         # 模拟 validate_tool_default_values 抛出异常
         mock_validator.validate_tool_default_values.side_effect = PermissionException(
-            action_name="使用隐藏参数 query 的默认值", permission="参数 query 的默认值不存在"
+            action_name="使用隐藏参数 query 的默认值", permission="参数 query 不可见，不可临时修改"
         )
         mock_validator_cls.return_value = mock_validator
 
