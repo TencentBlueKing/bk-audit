@@ -317,14 +317,17 @@ class WhitelistTicketCreateTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_handle_failure_does_not_read_ticket_detail(self, is_admin, operate, ticket_detail, apply_result):
+    def test_admin_handle_failure_still_writes_active(self, is_admin, operate, ticket_detail, apply_result):
         from services.web.risk.whitelist.service import _pass_if_admin
 
         operate.side_effect = Exception("操作未找到")
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
         ticket_detail.assert_not_called()
-        apply_result.assert_not_called()
+        apply_result.assert_called_once_with(
+            rule,
+            {"id": "ticket-1", "status": ITSMV4TicketStatus.FINISHED, "approve_result": True},
+        )
 
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
@@ -1119,10 +1122,14 @@ class WhitelistReviewTests(SimpleTestCase):
         active = SimpleNamespace(status=WhitelistStatus.ACTIVE, scene_id=3, expire_at="2026-12-01 00:00:00")
         pending = SimpleNamespace(status=WhitelistStatus.PENDING, scene_id=3, expire_at=None)
         disabled = SimpleNamespace(status=WhitelistStatus.DISABLED, scene_id=3, expire_at=None)
-        with patch("services.web.risk.whitelist.service.Permission") as permission_cls:
+        with patch("services.web.risk.whitelist.service.Permission") as permission_cls, patch(
+            "services.web.risk.whitelist.service.ResourceEnum.SCENE.create_instance", return_value="scene-3"
+        ):
             permission_cls.return_value.has_action_any_permission.return_value = True
+            permission_cls.return_value.is_allowed.return_value = False
             self.assertFalse(is_scene_admin("root", 3))
-            permission_cls.return_value.is_allowed.assert_not_called()
+            permission_cls.return_value.is_allowed.return_value = True
+            self.assertTrue(is_scene_admin("root", 3))
         with patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True):
             self.assertEqual(list_actions(active, "root", is_admin=False), ["edit", "renew", "disable", "hits"])
             self.assertEqual(list_actions(pending, "root", is_admin=False), [])

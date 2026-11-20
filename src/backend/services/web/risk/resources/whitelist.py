@@ -53,6 +53,7 @@ from services.web.risk.whitelist.service import (
     format_snapshot_value,
     get_rule_for_admin,
     is_platform_admin,
+    is_scene_admin,
     managed_scene_ids,
     prepare_callback_ticket,
     refresh_whitelist_nodes,
@@ -116,8 +117,9 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                 *validated_request_data["order_fields"]
             )[(page - 1) * page_size : page * page_size]
         )
-        # 列表只读库里的状态，不会把待审批改成生效中。续期谁都可以申请，通过和驳回只给场景管理员。
-        can_manage = not is_platform_admin(username)
+        # 列表只读库里的状态，不会把待审批改成生效中。续期谁都可以申请。
+        # 通过和驳回认该场景的管理权限；只有平台管理权限时不给。
+        platform_admin = is_platform_admin(username)
         managed = set(scene_ids)
         return {
             "page": page,
@@ -129,7 +131,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                     getattr(row, "hit_count", 0),
                     {},
                     username,
-                    is_admin=can_manage and row.scene_id in managed,
+                    is_admin=(is_scene_admin(username, row.scene_id) if platform_admin else row.scene_id in managed),
                 )
                 for row in rows
             ],
