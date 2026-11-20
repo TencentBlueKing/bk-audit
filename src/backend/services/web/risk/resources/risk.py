@@ -1742,17 +1742,22 @@ class ListRiskBrief(RiskMeta):
     """
     获取风险简要列表
 
-    用于策略配置时选择风险单进行预览。
-    无权限控制，返回精简数据。
+    用于策略配置时选择当前用户可查看的风险单进行预览。
     """
 
     name = gettext_lazy("获取风险简要列表")
     RequestSerializer = ListRiskBriefRequestSerializer
     ResponseSerializer = ListRiskBriefResponseSerializer
     many_response_data = True
+    bind_request = True
 
     def perform_request(self, validated_request_data):
-        queryset = Risk.objects.all()
+        # 报告预览也认可二次确认人的本地工单授权。
+        queryset = Risk.load_authed_risks(
+            ActionEnum.LIST_RISK,
+            username=get_request_username(validated_request_data.get("_request")),
+            local_user_types=[UserType.NOTICE_USER, UserType.OPERATOR, UserType.CONFIRMER],
+        )
 
         # 策略过滤
         strategy_id = validated_request_data.get("strategy_id")
