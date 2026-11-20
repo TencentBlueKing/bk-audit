@@ -195,16 +195,26 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
 
     risk = Risk.objects.filter(risk_id=risk_id).only("strategy_id", "scene_id").first()
     if not risk or not risk.strategy_id:
+        # 临时诊断日志（定位下钻 9900403，后续移除）
+        logger.warning("[drill_perm_diag] risk missing or no strategy: risk=%s tool=%s", risk_id, tool_uid)
         return False
 
     if not StrategyTool.objects.filter(strategy_id=risk.strategy_id, tool_uid=tool_uid).exists():
+        logger.warning(
+            "[drill_perm_diag] strategy not linked to tool: risk=%s strategy=%s tool=%s",
+            risk_id,
+            risk.strategy_id,
+            tool_uid,
+        )
         return False
 
     scene_id = risk.scene_id
     if not scene_id:
+        logger.warning("[drill_perm_diag] risk has no scene: risk=%s tool=%s", risk_id, tool_uid)
         return False
 
     if not Scene.objects.filter(scene_id=scene_id, status=SceneStatus.ENABLED).exists():
+        logger.warning("[drill_perm_diag] scene not enabled: risk=%s scene=%s tool=%s", risk_id, scene_id, tool_uid)
         return False
 
     tool = CompositeScopeFilter.filter_queryset(
@@ -215,6 +225,9 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
         pk_field="uid",
     ).first()
     if not tool:
+        logger.warning(
+            "[drill_perm_diag] tool not visible in scene: risk=%s scene=%s tool=%s", risk_id, scene_id, tool_uid
+        )
         return False
 
     # 工具广场展示开关（status）仅控制广场展示，不影响下钻：不再校验是否已发布
