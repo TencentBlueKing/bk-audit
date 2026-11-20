@@ -27,6 +27,7 @@ from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler, get_entry_feature_toggle
 from apps.meta.models import GlobalMetaConfig
+from core.tenant import use_multi_tenant_mode
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
 from services.web.entry.constants import (
@@ -136,6 +137,7 @@ class EntryHandler(object):
                 "scene_iwiki_url": settings.BKAPP_SCENE_IWIKI_URL,
             },
             "tenant_config": {
+                'BKPAAS_MULTI_TENANT_MODE': use_multi_tenant_mode(),
                 'BK_TENANT_ID': settings.BK_TENANT_ID,
                 'BK_USER_WEB_APIGW_URL': cls.get_user_web_apigw_url(),
             },

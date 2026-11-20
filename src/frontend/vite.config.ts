@@ -63,6 +63,11 @@ export default defineConfig(({ mode }) => {
     publicDir: 'static',
     plugins: [
       vue({
+        template: {
+          compilerOptions: {
+            isCustomElement: tag => tag === 'bk-user-display-name',
+          },
+        },
         script: {
           defineModel: true,
         },

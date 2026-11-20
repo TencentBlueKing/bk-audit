@@ -80,7 +80,7 @@ window.changeConfirm = false;
 
 Promise.all([RootManageService.config(), EntryManageService.watermark(), RootManageService.getUserPermission()])
   .then(([config, data]) => {
-    const BKApp = createApp(App);
+    const BKApp = createApp(App, { tenantConfig: config.tenant_config });
     sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
     BKApp.use(BkuiVue);
     BKApp.use(i18n);

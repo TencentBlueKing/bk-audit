@@ -74,6 +74,29 @@ class EntryHandlerTest(SimpleTestCase):
                 data = HomeResource().request()
                 self.assertIs(data["feature_toggle"]["bkbase_project_rt_lazy_load"], expected)
 
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission", return_value={})
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_home_resource_exposes_display_name_mode_without_changing_username(self, mock_get, mock_permission):
+        mock_get.side_effect = self._get_global_meta_config()
+        for enabled, tenant_id, username in ((True, "tencent", "123456"), (False, "default", "operator")):
+            with self.subTest(enabled=enabled), override_settings(
+                BKPAAS_MULTI_TENANT_MODE=enabled,
+                BK_TENANT_ID=tenant_id,
+                BK_API_URL_TMPL="https://apigw.example.test/{api_name}",
+            ), mock.patch.dict("os.environ", {"BKPAAS_ENVIRONMENT": "prod"}), mock.patch(
+                "services.web.entry.resources.get_local_request", return_value=self._build_request(username)
+            ):
+                data = HomeResource().request()
+                self.assertEqual(data["username"], username)
+                self.assertEqual(
+                    data["tenant_config"],
+                    {
+                        "BKPAAS_MULTI_TENANT_MODE": enabled,
+                        "BK_TENANT_ID": tenant_id,
+                        "BK_USER_WEB_APIGW_URL": "https://apigw.example.test/bk-user-web/prod",
+                    },
+                )
+
 
 class EntryTest(TestCase):
     def test_default_crypto(self) -> None:
