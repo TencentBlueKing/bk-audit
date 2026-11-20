@@ -12,6 +12,7 @@ from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
+from django.conf import settings
 from django.db import transaction
 
 from apps.meta.constants import ConfigLevelChoices
@@ -304,6 +305,12 @@ def _merged_spec(old, desired, *, preserve_storage_targets=False):
             old_config, config = previous.get("storage_config"), node.get("storage_config")
             if isinstance(old_config, dict) and isinstance(config, dict):
                 merged["storage_config"] = deepcopy({**old_config, **config})
+            if isinstance(merged.get("storage_config"), dict):
+                # 开关只用于新节点；锁内最新正式值（包括缺省/null）不能被新建默认覆盖。
+                if isinstance(old_config, dict) and "use_lowercase_field" in old_config:
+                    merged["storage_config"]["use_lowercase_field"] = deepcopy(old_config["use_lowercase_field"])
+                else:
+                    merged["storage_config"].pop("use_lowercase_field", None)
         nodes.append(merged)
     spec.update({key: deepcopy(value) for key, value in desired.items() if key not in ("nodes", "operation_config")})
     spec["nodes"] = nodes
@@ -707,6 +714,8 @@ def _storage_node(context, strategy, config, profile, *, existing_nodes=(), outp
             result["storage_config"]["db"] = database
         if config.get("physical_table_name") or not current:
             result["storage_config"]["table"] = table
+        if not current:
+            result["storage_config"]["use_lowercase_field"] = settings.BKBASE_V4_DORIS_USE_LOWERCASE_FIELD
     elif storage_type == "hdfs":
         configured = profile.get("hdfs_storage_config")
         result["expires"] = _expires(config["expires"])
