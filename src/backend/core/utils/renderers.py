@@ -21,7 +21,7 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.settings import api_settings
 from rest_framework.status import is_success
 
-_TOOL_EXECUTE_CONTACT_MESSAGE = "内部错误，并联系场景管理员处理"
+_TOOL_EXECUTE_CONTACT_MESSAGE = "内部错误，请联系场景管理员处理"
 
 
 class APIRenderer(JSONRenderer):
@@ -87,6 +87,8 @@ class APIRenderer(JSONRenderer):
         inner = data.get("data")
         if not isinstance(inner, dict) or "status_code" not in inner:
             return None
+        if inner.get("status_code") == 200:
+            return None
         if inner.get("err_type") in {"non_json_response", "request_error"}:
             return _TOOL_EXECUTE_CONTACT_MESSAGE
         result = inner.get("result")
@@ -95,9 +97,8 @@ class APIRenderer(JSONRenderer):
         third_party_message = result.get("message")
         if not isinstance(third_party_message, str) or not third_party_message.strip():
             return None
-        result_failed = result.get("result") is False
         status_code = inner.get("status_code")
-        if result_failed or (isinstance(status_code, int) and status_code >= 400):
+        if isinstance(status_code, int) and status_code >= 400:
             return _TOOL_EXECUTE_CONTACT_MESSAGE
         return None
 

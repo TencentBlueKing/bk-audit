@@ -260,7 +260,7 @@ class SqlDataSearchExecutor(
             raise DataSearchTablePermission(
                 rt.get("user_id"),
                 rt.get("object_id"),
-                message=gettext("无数据查询权限，并联系场景管理员处理"),
+                message=gettext("无数据查询权限，请联系场景管理员处理"),
             )
 
     def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:
@@ -547,8 +547,7 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             try:
                 parsed_result = response.json()
                 third_party_message = self._extract_response_message(parsed_result)
-                result_failed = isinstance(parsed_result, dict) and parsed_result.get("result") is False
-                if third_party_message.strip() and (response.status_code >= 400 or result_failed):
+                if response.status_code >= 400 and third_party_message.strip():
                     logger.warning(
                         "[ApiToolExecute] third-party failure: status=%s detail=%s",
                         response.status_code,

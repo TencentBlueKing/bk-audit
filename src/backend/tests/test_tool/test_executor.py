@@ -166,7 +166,7 @@ class TestSqlDataSearchExecutor(DjangoTestCase):
             executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.analyzer_cls)
             with self.assertRaises(DataSearchTablePermission) as raised:
                 executor.execute(self.sql_params)
-            self.assertEqual(str(raised.exception.MESSAGE), "无数据查询权限，并联系场景管理员处理")
+            self.assertEqual(str(raised.exception.MESSAGE), "无数据查询权限，请联系场景管理员处理")
 
     def test_variable_missing(self):
         """测试必填变量缺失时抛出 InputVariableMissingError"""

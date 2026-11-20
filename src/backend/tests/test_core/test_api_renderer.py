@@ -50,10 +50,26 @@ class TestAPIRenderer(SimpleTestCase):
             }
         )
 
-        self.assertEqual(payload["message"], "内部错误，并联系场景管理员处理")
+        self.assertEqual(payload["message"], "内部错误，请联系场景管理员处理")
         self.assertEqual(payload["data"]["data"]["message"], "")
         self.assertTrue(payload["result"])
         self.assertEqual(payload["code"], 0)
+
+    def test_third_party_http_200_keeps_outer_message_null(self):
+        payload = self._render_success(
+            {
+                "data": {
+                    "status_code": 200,
+                    "result": {"result": False, "message": "查询结果有误:员工不存在"},
+                    "err_type": "none",
+                    "message": "",
+                },
+                "tool_type": "api",
+            }
+        )
+
+        self.assertIsNone(payload["message"])
+        self.assertEqual(payload["data"]["data"]["message"], "")
 
     def test_non_json_tool_execute_uses_fixed_outer_message(self):
         payload = self._render_success(
@@ -68,7 +84,7 @@ class TestAPIRenderer(SimpleTestCase):
             }
         )
 
-        self.assertEqual(payload["message"], "内部错误，并联系场景管理员处理")
+        self.assertEqual(payload["message"], "内部错误，请联系场景管理员处理")
         self.assertEqual(payload["data"]["data"]["message"], "Bad Gateway")
 
     def test_success_without_tool_execute_message_keeps_message_null(self):
