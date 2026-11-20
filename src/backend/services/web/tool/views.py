@@ -21,7 +21,7 @@ from services.web.tool.models import Tool
 from services.web.tool.permissions import CallerContextPermission, UseToolPermission
 
 _EXECUTE_ACTIONS = {"execute", "tool_execute_debug"}
-_SCENE_ADMIN_CONTACT = "，并联系场景管理员处理"
+_SCENE_ADMIN_CONTACT = "，请联系场景管理员处理"
 
 
 def _append_scene_admin_contact(message):
@@ -31,7 +31,7 @@ def _append_scene_admin_contact(message):
     text = message.strip().rstrip("。；;，, ")
     if text == "工具不存在":
         return gettext("工具不存在，联系场景管理员")
-    if not text or text.endswith("并联系场景管理员处理") or text.endswith("联系场景管理员"):
+    if not text or text.endswith("请联系场景管理员处理") or text.endswith("联系场景管理员"):
         return text or message
     return gettext("%(reason)s%(contact)s") % {"reason": text, "contact": _SCENE_ADMIN_CONTACT}
 

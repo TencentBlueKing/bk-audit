@@ -21,7 +21,7 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.settings import api_settings
 from rest_framework.status import is_success
 
-_TOOL_EXECUTE_CONTACT_MESSAGE = "内部错误，并联系场景管理员处理"
+_TOOL_EXECUTE_CONTACT_MESSAGE = "内部错误，请联系场景管理员处理"
 
 
 class APIRenderer(JSONRenderer):

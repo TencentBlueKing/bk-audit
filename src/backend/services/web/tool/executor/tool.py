@@ -261,7 +261,7 @@ class SqlDataSearchExecutor(
             raise DataSearchTablePermission(
                 rt.get("user_id"),
                 rt.get("object_id"),
-                message=gettext("无数据查询权限，并联系场景管理员处理"),
+                message=gettext("无数据查询权限，请联系场景管理员处理"),
             )
 
     def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:

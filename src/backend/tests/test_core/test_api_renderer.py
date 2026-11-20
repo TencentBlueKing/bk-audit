@@ -50,7 +50,7 @@ class TestAPIRenderer(SimpleTestCase):
             }
         )
 
-        self.assertEqual(payload["message"], "内部错误，并联系场景管理员处理")
+        self.assertEqual(payload["message"], "内部错误，请联系场景管理员处理")
         self.assertEqual(payload["data"]["data"]["message"], "")
         self.assertTrue(payload["result"])
         self.assertEqual(payload["code"], 0)
@@ -84,7 +84,7 @@ class TestAPIRenderer(SimpleTestCase):
             }
         )
 
-        self.assertEqual(payload["message"], "内部错误，并联系场景管理员处理")
+        self.assertEqual(payload["message"], "内部错误，请联系场景管理员处理")
         self.assertEqual(payload["data"]["data"]["message"], "Bad Gateway")
 
     def test_success_without_tool_execute_message_keeps_message_null(self):
