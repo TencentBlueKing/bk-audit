@@ -2745,14 +2745,20 @@ class TestToolResources(TestCase):
         )
 
     def test_delete_published_platform_tool(self):
-        """测试删除已上架的平台级工具（应失败）"""
-        from services.web.tool.exceptions import SceneToolCannotDelete
-
+        """测试删除广场展示中的平台级工具：开关仅控制广场展示，不再阻止删除"""
+        uid = self.platform_tool.uid
         self.platform_tool.status = PanelStatus.PUBLISHED
         self.platform_tool.save()
-        with self.assertRaises(SceneToolCannotDelete):
-            self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
-        self.assertIsNotNone(Tool.last_version_tool(self.platform_tool.uid))
+
+        self.resource.tool.delete_platform_scene_tool({"uid": uid})
+
+        self.assertIsNone(Tool.last_version_tool(uid))
+        self.assertFalse(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+            ).exists()
+        )
 
     def test_publish_platform_tool(self):
         """测试上架/下架平台级工具"""

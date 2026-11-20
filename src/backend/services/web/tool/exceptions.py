@@ -162,14 +162,6 @@ class ToolDoesNotExist(ToolException):
     MESSAGE = gettext_lazy("工具不存在")
 
 
-class ToolNotPublished(ToolException):
-    """工具未上架。"""
-
-    STATUS_CODE = 404
-    ERROR_CODE = "022"
-    MESSAGE = gettext_lazy("工具未上架")
-
-
 class ToolTypeNotSupport(ToolException):
     """
     工具类型不支持
@@ -300,3 +292,11 @@ class InputVariableDataSourceNotConfiguredError(ToolException):
     def __init__(self, raw_name: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(raw_name=raw_name)
         super().__init__(*args, **kwargs)
+
+
+class ToolReferencedByStrategy(ToolException):
+    """工具已被策略引用，无法删除（删除与广场展示解耦，仅校验策略引用）"""
+
+    STATUS_CODE = 400
+    ERROR_CODE = "025"
+    MESSAGE = gettext_lazy("工具已被策略引用，无法删除")

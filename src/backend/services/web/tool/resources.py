@@ -55,7 +55,6 @@ from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
     BindingType,
-    PanelStatus,
     ResourceVisibilityType,
     SceneStatus,
 )
@@ -87,7 +86,7 @@ from services.web.tool.exceptions import (
     InputVariableNotFoundError,
     SmartPageDataSourceNotFound,
     ToolDoesNotExist,
-    ToolNotPublished,
+    ToolReferencedByStrategy,
     ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import SmartPageExecuteParams
@@ -403,6 +402,28 @@ class ListTool(ToolBase):
     many_response_data = True
     bind_request = True
 
+    @staticmethod
+    def _sort_tools_by_user_preference(queryset, current_user: str) -> List[Tool]:
+        """默认排序：收藏 > 最近使用 > 名称（两个维度均以人为维度隔离）
+
+        Redis 故障时最近使用层级降级为 收藏 > 名称，不影响接口可用性。
+        """
+        try:
+            recent_uids = recent_tool_usage_manager.get_recent_uids(current_user) or []
+        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>名称)
+            logger.exception("[list_tool] get recent uids failed, degrade sorting")
+            recent_uids = []
+        recent_set = set(recent_uids)
+        # 先按名称取确定性序，再按优先级稳定排序
+        return sorted(
+            queryset.order_by("name"),
+            key=lambda t: (
+                0 if getattr(t, "favorite", False) else 1,  # 收藏优先
+                0 if t.uid in recent_set else 1,  # 最近使用次之
+                t.name,  # 名称兜底
+            ),
+        )
+
     def perform_request(self, validated_request_data):
         validated_request_data.pop("_request", None)
         tags = validated_request_data.pop("tags", [])
@@ -519,19 +540,20 @@ class ListTool(ToolBase):
             tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
-        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先，默认保持旧逻辑
+        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先；
+        # 默认按 收藏 > 最近使用 > 工具被使用次数 > 名称（三个维度均以人为维度隔离）
         if recent_used and recent_tool_uids:
             queryset = preserved_order_sort(
                 queryset,
                 ordering_field="uid",
                 value_list=recent_tool_uids,
             )
+            tools = list(queryset)
         elif order_fields:
-            queryset = queryset.order_by(*order_fields)
+            tools = list(queryset.order_by(*order_fields))
         else:
-            queryset = queryset.order_by("-favorite", "name")
+            tools = self._sort_tools_by_user_preference(queryset, current_user)
 
-        tools = list(queryset)
         tool_uids = [t.uid for t in tools]
 
         # 查询 tags
@@ -566,6 +588,9 @@ class DeleteTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
+        # 删除与广场展示解耦；被策略引用的工具禁止删除（后端兜底，与前端禁用提示对齐）
+        if StrategyTool.objects.filter(tool_uid=uid).exists():
+            raise ToolReferencedByStrategy()
         self.deletel_enum_mappings(tool_uid=uid)
         Tool.delete_by_uid(uid)
 
@@ -827,6 +852,12 @@ class UpdateTool(ToolBase):
         updated_time = validated_request_data.pop("updated_time", None)
         if not tool:
             raise ToolDoesNotExist()
+
+        # tags 可选：未传时保持现有标签（部分更新语义，避免误清空；新版本/原版本路径一致生效）
+        if "tags" not in validated_request_data:
+            tag_ids = ToolTag.objects.filter(tool_uid=uid).values_list("tag_id", flat=True)
+            tag_names = Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True)
+            validated_request_data["tags"] = list(tag_names)
 
         if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
             # smart_page 工具：仅更新 default_value_overrides 和 usage_limits，不走全量 config 更新逻辑
@@ -1357,8 +1388,6 @@ class ExecuteToolAPIGW(ExecuteTool):
         tool: Tool = Tool.last_version_tool(uid=uid)
         if not tool:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            raise ToolNotPublished()
 
         current_user = "admin"
         try:
@@ -1888,15 +1917,10 @@ class GetToolDetailByNameAPIGW(ToolBase):
     def get_tool(self, validated_request_data):
         return Tool.all_latest_tools().filter(name=validated_request_data["name"]).first()
 
-    def raise_tool_not_published(self):
-        raise ToolNotPublished()
-
     def get_tool_detail(self, validated_request_data):
         tool = self.get_tool(validated_request_data)
         if not tool:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            self.raise_tool_not_published()
         if tool.tool_type == ToolTypeEnum.SMART_PAGE:
             raise ToolTypeNotSupport()
 
@@ -2030,16 +2054,9 @@ class DeletePlatformSceneTool(DeleteTool):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        from services.web.scene.constants import (
-            BindingType,
-            PanelStatus,
-            ResourceVisibilityType,
-        )
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.models import ResourceBinding
-        from services.web.tool.exceptions import (
-            SceneToolCannotDelete,
-            SceneToolNotExist,
-        )
+        from services.web.tool.exceptions import SceneToolNotExist
 
         uid = validated_request_data.get("uid")
         # 通过 ResourceBinding 确认是平台级工具
@@ -2052,10 +2069,6 @@ class DeletePlatformSceneTool(DeleteTool):
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
-
-        tool = Tool.last_version_tool(uid)
-        if tool and tool.status == PanelStatus.PUBLISHED:
-            raise SceneToolCannotDelete()
 
         # 删除绑定关系（级联删除关联的场景和系统）
         BindingMetadataHelper.delete_resource_binding(

@@ -514,6 +514,58 @@ class ToolResourceTestCase(TestCase):
         self.assertEqual(new_tool['version'], self.sql_tool.version + 1)
         self.assertEqual(new_tool['uid'], self.sql_tool.uid)
 
+    def test_create_tool_default_status_published(self):
+        """创建不传 status 时默认在工具广场展示（与需求创建页默认开启对齐）"""
+        data = {
+            "name": "default-status-tool",
+            "namespace": "default_ns",
+            "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+            "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
+            "config": {
+                "sql": "select * from test",
+                "referenced_tables": [],
+                "input_variable": [],
+                "output_fields": [],
+            },
+            "description": "desc",
+            "tags": [],
+        }
+
+        resp = CreateTool().request(data)
+
+        self.assertEqual(Tool.last_version_tool(resp["uid"]).status, PanelStatus.PUBLISHED)
+
+    def test_update_tool_without_tags_keeps_existing(self):
+        """编辑不传 tags 时保持现有标签（原版本路径）"""
+        UpdateTool().request(
+            {
+                "uid": self.sql_tool.uid,
+                "name": self.sql_tool.name,
+                "description": "update without tags",
+            }
+        )
+
+        self.assertTrue(ToolTag.objects.filter(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id).exists())
+
+    def test_update_tool_new_version_without_tags_keeps_existing(self):
+        """编辑不传 tags 且 config 变更（新版本路径）时保持现有标签"""
+        UpdateTool().request(
+            {
+                "uid": self.sql_tool.uid,
+                "name": self.sql_tool.name,
+                "namespace": self.sql_tool.namespace,
+                "config": {
+                    "sql": "select b from dual",
+                    "referenced_tables": [],
+                    "input_variable": [],
+                    "output_fields": [],
+                },
+                "description": "new version without tags",
+            }
+        )
+
+        self.assertTrue(ToolTag.objects.filter(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id).exists())
+
     def test_update_tool_preserve_creator_on_new_version(self):
         """创建新版本时应保持创建人与旧版本一致"""
         # 将旧版本创建人设为特定用户
@@ -561,6 +613,30 @@ class ToolResourceTestCase(TestCase):
 
         # 补充：tag 自动删除
         self.assertFalse(ToolTag.objects.filter(tool_uid=uid).exists())
+
+    def test_delete_tool_referenced_by_strategy(self):
+        """被策略引用的工具禁止删除（与广场展示解耦）；解除引用后可删除"""
+        from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+        from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.exceptions import ToolReferencedByStrategy
+
+        strategy = Strategy.objects.create(namespace=self.namespace, strategy_name="ref-strategy")
+        StrategyTool.objects.create(
+            strategy=strategy,
+            tool_uid=self.sql_tool.uid,
+            tool_version=self.sql_tool.version,
+            field_name="operator",
+            field_source=StrategyFieldSourceEnum.BASIC.value,
+        )
+
+        with self.assertRaises(ToolReferencedByStrategy):
+            DeleteTool()({"uid": self.sql_tool.uid})
+        self.assertIsNotNone(Tool.last_version_tool(self.sql_tool.uid))
+
+        # 解除引用后可删除
+        StrategyTool.objects.filter(strategy=strategy).delete()
+        DeleteTool()({"uid": self.sql_tool.uid})
+        self.assertIsNone(Tool.last_version_tool(self.sql_tool.uid))
 
     def test_list_tool_filter_only_created_by_me(self):
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
@@ -643,6 +719,51 @@ class ToolResourceTestCase(TestCase):
         )
 
         self.assertEqual(result[0]["uid"], self.sql_tool.uid)
+
+    def _list_tools_default_order(self, recent_uids=None):
+        """以默认排序调用 ListTool，并 mock 掉按人隔离的 Redis 数据（最近使用）"""
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                return_value=recent_uids or [],
+            ),
+        ):
+            return self._call_resource_with_request(
+                ListTool,
+                {"keyword": "", "tags": [], "page": 1, "page_size": 10},
+            )
+
+    def test_list_tool_default_order_favorite_first(self):
+        ToolFavorite.objects.create(tool_uid=self.bk_tool.uid, username=self.uid)
+
+        result = self._list_tools_default_order()
+
+        self.assertEqual(result[0]["uid"], self.bk_tool.uid)
+
+    def test_list_tool_default_order_recent_second(self):
+        ToolFavorite.objects.create(tool_uid=self.sql_tool.uid, username=self.uid)
+
+        result = self._list_tools_default_order(recent_uids=[self.bk_tool.uid])
+
+        # 收藏优先，其次最近使用
+        self.assertEqual([tool["uid"] for tool in result[:2]], [self.sql_tool.uid, self.bk_tool.uid])
+
+    def test_list_tool_default_order_redis_down_degrades(self):
+        # Redis 故障时排序降级为 收藏 > 名称，接口不报错
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                side_effect=Exception("redis down"),
+            ),
+        ):
+            result = self._call_resource_with_request(
+                ListTool,
+                {"keyword": "", "tags": [], "page": 1, "page_size": 10},
+            )
+
+        self.assertEqual(len(result), 2)
 
     def test_list_tool_request_serializer_reject_scene_binding_in_system_scope(self):
         serializer = ListRequestSerializer(
