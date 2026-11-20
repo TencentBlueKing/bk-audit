@@ -53,10 +53,12 @@
         <span class="whitelist-apply__label">{{ t('申请状态') }}</span>
         <span class="whitelist-apply__status">
           <audit-icon
-            v-if="isPending"
-            class="rotate-loading"
-            type="loading" />
-          {{ statusKind === 'other' ? statusText : t(statusText) }}
+            v-if="statusVisual.showIcon"
+            :class="{ 'rotate-loading': statusVisual.icon === 'loading' }"
+            :style="{ color: statusVisual.color }"
+            :svg="statusVisual.svg"
+            :type="statusVisual.icon" />
+          <span>{{ statusKind === 'other' ? statusText : t(statusText) }}</span>
         </span>
       </div>
       <div
@@ -261,6 +263,39 @@
     const rawStatus = String(record.value.status ?? '').trim();
     return rawStatus || '--';
   });
+  /** 与风险详情「执行前审批 / 任务状态」一致：icon + 色值区分审批结果 */
+  const statusVisual = computed(() => {
+    if (statusKind.value === 'pending') {
+      return {
+        showIcon: true,
+        icon: 'loading',
+        color: 'var(--bk-theme-color-brand-2)',
+        svg: true,
+      };
+    }
+    if (statusKind.value === 'approved') {
+      return {
+        showIcon: true,
+        icon: 'completed',
+        color: 'var(--bk-theme-color-success-2)',
+        svg: true,
+      };
+    }
+    if (statusKind.value === 'rejected') {
+      return {
+        showIcon: true,
+        icon: 'delete-fill',
+        color: 'var(--bk-theme-color-danger-2)',
+        svg: false,
+      };
+    }
+    return {
+      showIcon: false,
+      icon: '',
+      color: '',
+      svg: false,
+    };
+  });
   const hasText = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== '';
   const showItsm = computed(() => (
     hasText(record.value.itsmSn)
@@ -326,7 +361,6 @@
 }
 
 .rotate-loading {
-  color: var(--bk-theme-color-brand-2);
   animation: whitelist-spin 1s linear infinite;
 }
 
