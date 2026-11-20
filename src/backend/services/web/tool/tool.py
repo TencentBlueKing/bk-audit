@@ -142,40 +142,4 @@ class RecentToolUsageManager:
         return self.redis_client.zrevrange(key, 0, -1)
 
 
-class ToolUsageCountManager:
-    """工具被使用次数（按人隔离，Redis ZSet）
-
-    Key: tool:usage_count:{username}，member=tool_uid，score=该用户累计执行次数。
-    与 RecentToolUsageManager 同构：排序呈现的是该用户自己的使用频次。
-    """
-
-    REDIS_KEY_TEMPLATE = "tool:usage_count:{username}"
-
-    def __init__(self):
-        self.redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=int(settings.REDIS_PORT),
-            db=int(settings.REDIS_DB),
-            password=settings.REDIS_PASSWORD,
-            decode_responses=True,
-        )
-
-    def _build_key(self, username: str) -> str:
-        return self.REDIS_KEY_TEMPLATE.format(username=username)
-
-    def incr_usage(self, username: str, tool_uid: str):
-        if not username or not tool_uid:
-            return
-
-        key = self._build_key(username)
-        self.redis_client.zincrby(key, 1, tool_uid)
-        # 活跃用户续期；不活跃用户过期后整 key 自动清理
-        self.redis_client.expire(key, settings.RECENT_USED_TTL)
-
-    def get_usage_scores(self, username: str) -> dict:
-        key = self._build_key(username)
-        return dict(self.redis_client.zrange(key, 0, -1, withscores=True))
-
-
 recent_tool_usage_manager = RecentToolUsageManager()
-tool_usage_count_manager = ToolUsageCountManager()

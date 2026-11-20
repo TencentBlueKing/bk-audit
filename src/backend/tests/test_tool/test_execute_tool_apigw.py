@@ -32,7 +32,6 @@ class TestExecuteToolAPIGWResource(TestCase):
                 return_value=mock_executor,
             ) as mock_create_executor,
             mock.patch("tool.resources.recent_tool_usage_manager.record_usage") as mock_record_usage,
-            mock.patch("tool.resources.tool_usage_count_manager.incr_usage") as mock_incr_usage,
             mock.patch("tool.resources.should_skip_permission_from") as mock_skip_permission,
         ):
             result = self.resource.tool.execute_tool_apigw({"uid": "tool_uid", "params": {}})
@@ -40,7 +39,6 @@ class TestExecuteToolAPIGWResource(TestCase):
         self.assertEqual(result["data"], {"ok": True})
         mock_create_executor.assert_called_once_with(tool)
         mock_record_usage.assert_called_once_with("admin", tool.uid)
-        mock_incr_usage.assert_called_once_with("admin", tool.uid)
         mock_skip_permission.assert_not_called()
 
     def test_execute_tool_apigw_allows_unpublished_tool(self):
@@ -61,7 +59,6 @@ class TestExecuteToolAPIGWResource(TestCase):
         with (
             mock.patch("tool.resources.ToolExecutorFactory.create_from_tool", return_value=mock_executor),
             mock.patch("tool.resources.recent_tool_usage_manager.record_usage"),
-            mock.patch("tool.resources.tool_usage_count_manager.incr_usage"),
         ):
             result = self.resource.tool.execute_tool_apigw({"uid": "draft_tool_uid", "params": {}})
 
