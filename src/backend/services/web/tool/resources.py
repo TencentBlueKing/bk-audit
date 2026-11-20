@@ -326,7 +326,7 @@ class ListToolTags(ToolBase):
                 "tag_name": str(ToolTagsEnum.RECENTLY_USED_TOOLS.label),
                 "tag_id": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
                 "tool_count": scoped_tools.filter(
-                    uid__in=recent_tool_usage_manager.get_recent_uids(current_user)
+                    uid__in=recent_tool_usage_manager.get_all_recent_uids(current_user)
                 ).count(),
             },
             {
@@ -499,7 +499,7 @@ class ListTool(ToolBase):
             queryset = queryset.filter(favorite=True)
 
         if recent_used:
-            recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
+            recent_tool_uids = recent_tool_usage_manager.get_all_recent_uids(current_user)
 
             if not recent_tool_uids:
                 return []
@@ -1123,6 +1123,8 @@ class ExecuteTool(ToolBase):
     name = gettext_lazy("工具执行")
     RequestSerializer = ExecuteToolReqSerializer
     ResponseSerializer = ExecuteToolRespSerializer
+    # 广场执行参与最近使用排序；子类（MCP）覆写为 False 仅记录不排序
+    usage_for_square = True
 
     def _get_user_allowed_scopes(self, username: str) -> Tuple[List[str], List[str]]:
         """
@@ -1286,7 +1288,9 @@ class ExecuteTool(ToolBase):
 
         current_user = get_request_username()
         try:
-            recent_tool_usage_manager.record_usage(current_user, uid)
+            # 广场执行参与排序；风险下钻/MCP/接口记录但不参与广场排序
+            for_square = self.usage_for_square and not validated_request_data.get("caller_resource_type")
+            recent_tool_usage_manager.record_usage(current_user, uid, for_square=for_square)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1302,6 +1306,7 @@ class MCPExecuteTool(ExecuteTool):
     """用户态 MCP 工具执行，移除结果中的 SQL 执行实现细节。"""
 
     name = gettext_lazy("工具执行(MCP)")
+    usage_for_square = False
 
     def perform_request(self, validated_request_data):
         response_data = super().perform_request(validated_request_data)
@@ -1391,7 +1396,7 @@ class ExecuteToolAPIGW(ExecuteTool):
 
         current_user = "admin"
         try:
-            recent_tool_usage_manager.record_usage(current_user, uid)
+            recent_tool_usage_manager.record_usage(current_user, uid, for_square=False)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1905,6 +1910,32 @@ class FavoriteTool(ToolBase):
             ToolFavorite.objects.filter(tool_uid=tool.uid, username=username).delete()
 
         return {"favorite": favorite}
+
+
+class RecordToolRecentUsage(ToolBase):
+    """记录工具最近使用（点击打开即算，无需执行）
+
+    供前端在工具广场点击工具卡片/打开工作台时调用；
+    执行链路（ExecuteTool）仍独立记录，互不影响。
+    """
+
+    name = gettext_lazy("记录工具最近使用")
+    RequestSerializer = ToolRetrieveRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+        username = get_request_username()
+        try:
+            recent_tool_usage_manager.record_usage(username, uid)
+        except Exception as e:  # NOCC:broad-except(记录失败不影响使用)
+            logger.error(
+                f"[record_recent_usage] Uid:{uid}; Current User:{username}; "
+                f"Err: {e}; Detail: {traceback.format_exc()}"
+            )
+        return {"recorded": True}
 
 
 class GetToolDetailByNameAPIGW(ToolBase):

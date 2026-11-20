@@ -55,6 +55,7 @@ from services.web.tool.resources import (
     GetToolEnumMappingByCollection,
     GetToolEnumMappingByCollectionKeys,
     ListTool,
+    RecordToolRecentUsage,
     ToolExecuteDebug,
     UpdatePlatformSceneTool,
     UpdateTool,
@@ -638,6 +639,23 @@ class ToolResourceTestCase(TestCase):
         DeleteTool()({"uid": self.sql_tool.uid})
         self.assertIsNone(Tool.last_version_tool(self.sql_tool.uid))
 
+    def test_record_recent_usage(self):
+        """点击打开工具即记录最近使用（无需执行）"""
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch("services.web.tool.resources.recent_tool_usage_manager.record_usage") as mock_record,
+        ):
+            resp = RecordToolRecentUsage().request({"uid": self.sql_tool.uid})
+
+        self.assertTrue(resp["recorded"])
+        mock_record.assert_called_once_with(self.uid, self.sql_tool.uid)
+
+    def test_record_recent_usage_tool_not_exist(self):
+        from services.web.tool.exceptions import ToolDoesNotExist
+
+        with self.assertRaises(ToolDoesNotExist):
+            RecordToolRecentUsage().request({"uid": "not-exist-uid"})
+
     def test_list_tool_filter_only_created_by_me(self):
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
@@ -656,7 +674,7 @@ class ToolResourceTestCase(TestCase):
 
         with (
             patch(
-                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                "services.web.tool.resources.recent_tool_usage_manager.get_all_recent_uids",
                 return_value=recent_uids,
             ),
             patch("services.web.tool.resources.get_request_username", return_value=self.uid),
@@ -678,7 +696,7 @@ class ToolResourceTestCase(TestCase):
 
         with (
             patch(
-                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                "services.web.tool.resources.recent_tool_usage_manager.get_all_recent_uids",
                 return_value=recent_uids,
             ),
             patch("services.web.tool.resources.get_request_username", return_value=self.uid),

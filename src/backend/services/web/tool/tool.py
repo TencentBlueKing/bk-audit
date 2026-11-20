@@ -112,7 +112,15 @@ def sync_resource_tags(
 
 
 class RecentToolUsageManager:
+    """最近使用记录（按人隔离）
+
+    产品口径：广场点击/执行参与排序；风险下钻/MCP/接口记录但不参与广场排序。
+    - tool:recently_used:{username}：广场行为（参与排序）
+    - tool:recently_used_other:{username}：下钻/MCP/接口行为（仅记录，不排序）
+    """
+
     REDIS_KEY_TEMPLATE = "tool:recently_used:{username}"
+    OTHER_KEY_TEMPLATE = "tool:recently_used_other:{username}"
 
     def __init__(self):
         self.redis_client = redis.Redis(
@@ -126,11 +134,15 @@ class RecentToolUsageManager:
     def _build_key(self, username: str) -> str:
         return self.REDIS_KEY_TEMPLATE.format(username=username)
 
-    def record_usage(self, username: str, tool_uid: str):
+    def _build_other_key(self, username: str) -> str:
+        return self.OTHER_KEY_TEMPLATE.format(username=username)
+
+    def record_usage(self, username: str, tool_uid: str, for_square: bool = True):
+        """记录使用；for_square=True 广场行为（参与排序），False 下钻/MCP/接口（仅记录）"""
         if not username or not tool_uid:
             return
 
-        key = self._build_key(username)
+        key = self._build_key(username) if for_square else self._build_other_key(username)
         score = int(time.time())
         cutoff = score - settings.RECENT_USED_TTL
         self.redis_client.zremrangebyscore(key, '-inf', cutoff)
@@ -138,8 +150,17 @@ class RecentToolUsageManager:
         self.redis_client.expire(key, settings.RECENT_USED_TTL)
 
     def get_recent_uids(self, username: str):
+        """广场最近使用（按时间倒序），用于广场默认排序"""
         key = self._build_key(username)
         return self.redis_client.zrevrange(key, 0, -1)
+
+    def get_all_recent_uids(self, username: str):
+        """全部最近使用（广场 + 下钻/MCP/接口合并，按时间倒序），用于最近使用标签与计数"""
+        scores = {}
+        for key in (self._build_key(username), self._build_other_key(username)):
+            for uid, ts in self.redis_client.zrange(key, 0, -1, withscores=True):
+                scores[uid] = max(scores.get(uid, 0), ts)
+        return [uid for uid, _ in sorted(scores.items(), key=lambda kv: kv[1], reverse=True)]
 
 
 recent_tool_usage_manager = RecentToolUsageManager()
