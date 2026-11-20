@@ -564,9 +564,9 @@
           item.value === path[1]
           || decodeId(tab.value, item.value) === leftId
         ))?.item;
-    const leftLabel = left
+    const leftLabel = left && left.node_type !== 'project'
       ? formatNodeNameId(left.label, left.namespace || decodeId(path[0], left.value) || leftId)
-      : leftId;
+      : left?.label || leftId;
     const right = left?.children?.find(item => item.value === path[2])
       || left?.children?.find(item => decodeId(path[0], item.value) === decodeId(path[0], path[2]))
       || lazyChildrenMap.value[`${path[0]}_${path[1]}`]?.find(item => item.value === path[2]);
