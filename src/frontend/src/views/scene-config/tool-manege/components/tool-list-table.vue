@@ -25,25 +25,32 @@
     row-key="uid"
     :search-params="searchParams"
     @clear-search="handleClearSearch"
+    @filter-change="handleFilterChange"
     @request-success="handleRequestSuccess" />
 </template>
 
 <script setup lang="tsx">
-  import { nextTick, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import ToolManageService from '@service/tool-manage';
+
+  import useMessage from '@hooks/use-message';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
-  import EditTag from '@components/edit-box/tag.vue';
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { formatReferencedStrategyNames } from '@views/tool-manage-shared/strategy-reference';
+
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // 工具类型枚举
-  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
+  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision' | 'smart_page';
 
   interface TagItem {
     tag_id: string;
@@ -93,12 +100,15 @@
     (e: 'toggle-status', row: ToolModel): void;
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
+    (e: 'filter-change', filters: Record<string, any>): void;
+    (e: 'tags-change'): void;
   }
 
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const { messageSuccess } = useMessage();
   const router = useRouter();
 
   const listRef = ref();
@@ -123,15 +133,24 @@
     api: t('API接口'),
     data_search: t('数据查询'),
     bk_vision: t('BKVision图表'),
+    smart_page: t('智能用户画像'),
   };
+
+  const toolTypeFilterList = (Object.keys(toolType) as ToolTypeKey[]).map(key => ({
+    label: toolType[key],
+    value: key,
+  }));
 
   const isPlatformTool = (row: ToolModel) => row.visibility?.binding_type === 'platform_binding';
 
   const platformToolTooltip = t('平台工具不支持进行任何操作');
 
+  // 保存标签后父组件重新拉取标签枚举前，用接口返回的新标签兜底展示
+  const savedTagNameMap = ref<Record<string, string>>({});
+
   // 标签名称
   const returnTagsName = (tagId: string) => {
-    let tagName = '';
+    let tagName = savedTagNameMap.value[tagId] || '';
     props.tagsEnums.forEach((item: TagItem) => {
       if (item.tag_id === tagId) {
         tagName = item.tag_name;
@@ -140,12 +159,57 @@
     return tagName;
   };
 
-  const renderTagsContent = (tags: string[], rowKey: string) => {
-    if (!tags || tags.length === 0) {
-      return <span>--</span>;
-    }
-    const labels = tags.map((tagId: string) => returnTagsName(tagId));
-    return <EditTag data={labels} key={rowKey} showCopy={false} />;
+  const editingTagUid = ref('');
+  const savingTagUid = ref('');
+  const tagOptions = computed(() => filterVirtualToolTags(props.tagsEnums));
+
+  const handleTagEdit = (row: ToolModel) => {
+    editingTagUid.value = row.uid;
+  };
+
+  const handleTagEditCancel = () => {
+    editingTagUid.value = '';
+  };
+
+  const handleTagSave = (row: ToolModel, tags: string[]) => {
+    savingTagUid.value = row.uid;
+    MetaManageService.saveTagBindings({
+      resource_type: 'tool',
+      resource_id: row.uid,
+      tags,
+    }).then((result) => {
+      result.forEach((item) => {
+        savedTagNameMap.value[String(item.tag_id)] = item.tag_name;
+      });
+      const targetRow = listRef.value?.getListData()?.find((item: ToolModel) => item.uid === row.uid);
+      if (targetRow) {
+        targetRow.tags = result.map(item => String(item.tag_id));
+      }
+      editingTagUid.value = '';
+      messageSuccess(t('更新成功'));
+      emit('tags-change');
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        savingTagUid.value = '';
+      });
+  };
+
+  const renderTagsContent = (row: ToolModel) => {
+    const labels = (row.tags || []).map((tagId: string) => returnTagsName(tagId));
+    return (
+      <InlineTag
+        editable={!isPlatformTool(row)}
+        isEditing={editingTagUid.value === row.uid}
+        key={row.uid}
+        saving={savingTagUid.value === row.uid}
+        showCopy={false}
+        tagList={tagOptions.value}
+        tags={labels}
+        onCancel={handleTagEditCancel}
+        onEdit={() => handleTagEdit(row)}
+        onSave={(values: string[]) => handleTagSave(row, values)} />
+    );
   };
 
   // 根据策略ID获取策略名称
@@ -207,6 +271,7 @@
       title: t('工具名称'),
       colKey: 'name',
       width: 400,
+      fixed: 'left',
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
@@ -236,28 +301,34 @@
     {
       title: t('工具说明'),
       colKey: 'description',
-      minWidth: 200,
+      minWidth: 400,
       ellipsis: true,
     },
     {
       title: t('工具类型'),
       colKey: 'tool_type',
-      width: 200,
+      width: 140,
       ellipsis: true,
+      filter: {
+        type: 'multiple',
+        showConfirmAndReset: true,
+        resetValue: [],
+        list: toolTypeFilterList,
+      },
       cell: (h: any, { row }: { row: ToolModel }) => <span>
-        {toolType[row.tool_type]}
+        {toolType[row.tool_type] || '--'}
         </span>,
     },
     {
       title: t('标签'),
       colKey: 'tags',
-      width: 300,
-      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags, row.uid),
+      width: 240,
+      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row),
     },
     {
-      title: t('引用策略'),
+      title: t('被引用'),
       colKey: 'strategies',
-      width: 150,
+      width: 100,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => {
         if (!row.strategies || row.strategies.length === 0) {
@@ -283,7 +354,7 @@
     {
       title: t('状态'),
       colKey: 'status',
-      width: 150,
+      width: 100,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
@@ -298,13 +369,13 @@
     {
       title: t('更新人'),
       colKey: 'updated_by',
-      width: 150,
+      width: 120,
       ellipsis: true,
     },
     {
       title: t('更新时间'),
       colKey: 'updated_at',
-      width: 200,
+      width: 170,
       ellipsis: true,
       sortType: 'all',
       sorter: true,
@@ -320,14 +391,20 @@
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPlatform = isPlatformTool(row);
         const isEnabled = row.status === 'published';
-        const hasStrategies = row.strategies && row.strategies.length > 0;
+        const referencedStrategyNames = formatReferencedStrategyNames(row.strategies, props.strategyList);
+        const hasStrategies = Boolean(referencedStrategyNames);
+        // 被策略引用的启用工具不可停用
+        const isToggleDisabled = isPlatform || (isEnabled && hasStrategies);
+        const toggleTooltip = isPlatform
+          ? platformToolTooltip
+          : t('该工具正在被{strategies}使用，无法停用', { strategies: referencedStrategyNames });
         // 删除按钮禁用条件：平台工具、启用状态或被策略引用
         const isDeleteDisabled = isPlatform || isEnabled || hasStrategies;
         // 删除按钮提示文字
         const getDeleteTooltip = () => {
           if (isPlatform) return platformToolTooltip;
+          if (hasStrategies) return t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames });
           if (isEnabled) return t('请先停用后再删除');
-          if (hasStrategies) return t('该工具已被策略引用，无法删除');
           return '';
         };
         const deleteTooltip = getDeleteTooltip();
@@ -369,23 +446,34 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    <bk-button
-                      v-bk-tooltips={{
-                        content: platformToolTooltip,
-                        disabled: !isPlatform,
-                        placement: 'top',
-                      }}
-                      text
-                      disabled={isPlatform}
-                      class={['mr8', isPlatform ? 'mr8-disabled' : '']}
-                      onClick={() => !isPlatform && emit('toggle-status', row)}>
-                      {isEnabled ? t('停用') : t('启用')}
-                    </bk-button>
+                    {isToggleDisabled ? (
+                      <span
+                        v-bk-tooltips={{
+                          content: toggleTooltip,
+                          placement: 'top',
+                          extCls: 'tool-strategy-ref-tips',
+                        }}>
+                        <bk-button
+                          text
+                          disabled
+                          class="mr8 mr8-disabled">
+                          {isEnabled ? t('停用') : t('启用')}
+                        </bk-button>
+                      </span>
+                    ) : (
+                      <bk-button
+                        text
+                        class="mr8"
+                        onClick={() => emit('toggle-status', row)}>
+                        {isEnabled ? t('停用') : t('启用')}
+                      </bk-button>
+                    )}
                     {isDeleteDisabled ? (
                       <span
                         v-bk-tooltips={{
                           content: deleteTooltip,
                           placement: 'top',
+                          extCls: 'tool-strategy-ref-tips',
                         }}>
                         <bk-button
                           text
@@ -414,6 +502,10 @@
 
   const handleClearSearch = () => {
     emit('clear-search');
+  };
+
+  const handleFilterChange = (filters: Record<string, any>) => {
+    emit('filter-change', filters);
   };
 
   const handleRequestSuccess = (data: any) => {
@@ -597,6 +689,12 @@
 
   .tool-more-action-popover.bk-popover.bk-pop2-content {
     padding: 0;
+  }
+
+  .tool-strategy-ref-tips {
+    max-width: 400px;
+    word-break: break-all;
+    white-space: normal;
   }
 
   .more-action-menu {

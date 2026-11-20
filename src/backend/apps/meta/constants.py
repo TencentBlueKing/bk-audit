@@ -277,5 +277,13 @@ NO_TAG_ID = "-2"
 NO_TAG_NAME = gettext_lazy("No Tag")
 
 
+class TagBindingResourceType(TextChoices):
+    """支持编辑标签绑定的资源类型"""
+
+    STRATEGY = "strategy", gettext_lazy("策略")
+    TOOL = "tool", gettext_lazy("工具")
+    LINK_TABLE = "link_table", gettext_lazy("联表")
+
+
 # 为"-"时表明在对应system_id的系统管理员下创建用户组
 DEFAULT_GRADE_MANAGER_ID = "-"

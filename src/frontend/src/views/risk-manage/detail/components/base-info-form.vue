@@ -206,7 +206,7 @@
                     <div
                       v-for="config in getFieldDrill(fieldItem)"
                       :key="config.tool?.uid">
-                      {{ config.drill_name || getToolNameAndType(config.tool?.uid).name }}
+                      {{ config.drill_name || config.tool_name || getToolNameAndType(config.tool?.uid).name }}
                       <bk-button
                         class="ml8"
                         text
@@ -263,6 +263,7 @@
 
   import RenderInfoItem from './render-info-item.vue';
 
+  import useDrillToolAvailability from '@/hooks/use-drill-tool-availability';
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
 
@@ -354,6 +355,10 @@
     },
   });
 
+  const { resolveAvailableDrillConfig } = useDrillToolAvailability({
+    getSceneId: () => props.data.scene_id,
+  });
+
   const {
     data: tagData,
     run: fetchToolTags,
@@ -379,8 +384,12 @@
   };
 
   const handleUseTool = (fieldItem: FieldItem, activeUid?: string) => {
-    const drillConfig = getFieldDrill(fieldItem);
-    if (!drillConfig.length) {
+    const fieldDrill = getFieldDrill(fieldItem);
+    if (!fieldDrill.length) {
+      return;
+    }
+    const drillConfig = resolveAvailableDrillConfig(fieldDrill, activeUid);
+    if (!drillConfig) {
       return;
     }
     riskToolParams.value.drill_field = fieldItem.field_name;

@@ -1181,6 +1181,7 @@
       ctx: parsed.gameData.ctx || existing?.ctx || '',
       exchangeRate: parsed.gameData.exchangeRate || existing?.exchangeRate || '',
       accountNature: parsed.gameData.accountNature || existing?.accountNature || '',
+      wechatCommid: parsed.gameData.wechatCommid || existing?.wechatCommid || '',
     };
     // 仅当 URL 显式带了 initial_tab，或本地尚未记录时才写入，避免丢失用户当前子 tab
     const urlInitialTab = getRouteQueryValue((route.query as Record<string, unknown>).initial_tab);
@@ -1251,6 +1252,7 @@
       totalIssue: gameData.totalIssue || 0,
       exchangeRate: gameData.exchangeRate ?? '',
       accountNature: gameData.accountNature || '',
+      wechatCommid: gameData.wechatCommid || '',
     };
     // 找到 smart_page 工具的 uid，传递给 game-detail 用于接口调用
     const smartPageToolUid = resolveSmartPageToolUid();
