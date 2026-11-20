@@ -20,7 +20,7 @@ import datetime
 import time
 from typing import Dict, List, Union
 
-from bk_resource import api, resource
+from bk_resource import resource
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
@@ -60,6 +60,9 @@ from services.web.analyze.exceptions import ClusterNotExists
 from services.web.analyze.models import Control, ControlVersion
 from services.web.analyze.storage_node import DorisStorageNode, ESStorageNode
 from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
+from services.web.bkbase import deprecated as bkbase_deprecated
+from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase import metadata as bkbase_metadata
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
@@ -71,6 +74,11 @@ class AIOpsController(Controller, BkbaseFlowController):
     """
     Control BKBASE AIOPS Strategy
     """
+
+    def __init__(self, *args, **kwargs):
+        """V4在进入模型业务前拒绝，历史记录不做物理清理。"""
+        bkbase_deprecated.require_model_support()
+        super().__init__(*args, **kwargs)
 
     base_control_type = BaseControlTypeChoices.CONTROL
     doris_storage_node = DorisStorageNode
@@ -105,9 +113,9 @@ class AIOpsController(Controller, BkbaseFlowController):
             node_id = node_config.get("node_id")
             if node_id:
                 node["node_id"] = node_id
-                resp = api.bk_base.update_flow_node(**node)
+                resp = bkbase_flow.update_flow_node(**node)
             else:
-                resp = api.bk_base.create_flow_node(**node)
+                resp = bkbase_flow.create_flow_node(**node)
             node_config["node_id"] = resp["node_id"]
             last_node_id = resp["node_id"]
             # 记录场景方案节点ID，供后续存储节点并联
@@ -126,7 +134,7 @@ class AIOpsController(Controller, BkbaseFlowController):
         return super().check_flow_status(strategy_id, success_status, failed_status, other_status)
 
     def _create_flow(self) -> None:
-        resp = api.bk_base.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=self.flow_name)
+        resp = bkbase_flow.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=self.flow_name)
         self.strategy.backend_data["flow_id"] = resp["flow_id"]
         self.strategy.save(update_record=False, update_fields=["backend_data"])
 
@@ -170,7 +178,7 @@ class AIOpsController(Controller, BkbaseFlowController):
 
         # get exist nodes
         if self.strategy.backend_data.get("flow_id"):
-            bkbase_nodes = api.bk_base.get_flow_graph(flow_id=self.strategy.backend_data["flow_id"])["nodes"]
+            bkbase_nodes = bkbase_flow.get_flow_graph(flow_id=self.strategy.backend_data["flow_id"])["nodes"]
             if bkbase_nodes:
                 node_ids = [node["node_id"] for node in bkbase_nodes]
                 for index, node in enumerate(nodes):
@@ -202,7 +210,7 @@ class AIOpsController(Controller, BkbaseFlowController):
         check batch / batch_join
         """
 
-        result_table = api.bk_base.get_result_table(result_table_id=result_table_id)
+        result_table = bkbase_metadata.get_result_table(result_table_id=result_table_id)
         if is_asset(result_table):
             return FlowDataSourceNodeType.BATCH
         else:
@@ -529,7 +537,7 @@ class AIOpsController(Controller, BkbaseFlowController):
         origin_fields = []
         origin_sqls = []
 
-        for field in api.bk_base.get_rt_fields(result_table_id=result_table_id):
+        for field in bkbase_metadata.get_rt_fields(result_table_id=result_table_id):
             if field["field_name"] == "timestamp":
                 continue
             origin_fields.append(field["field_name"])
@@ -761,7 +769,7 @@ class AiopsPlanSyncHandler:
         # 获取所有带标签的方案，并且需要是启用状态
         return [
             plan
-            for plan in api.bk_base.get_scene_plans(tags=BKBASE_PLAN_TAG)
+            for plan in bkbase_deprecated.get_scene_plans(tags=BKBASE_PLAN_TAG)
             if plan["status"] == BKBASE_PLAN_PUBLISHED_STATUS
         ]
 
@@ -772,7 +780,7 @@ class AiopsPlanSyncHandler:
         for plan in bkbase_plans:
             plan_id = plan["plan_id"]
 
-            plan_detail = api.bk_base.get_plan_detail(plan_id=plan_id)
+            plan_detail = bkbase_deprecated.get_plan_detail(plan_id=plan_id)
 
             # 方案不存在则创建
             if not control_versions.get(plan_id):

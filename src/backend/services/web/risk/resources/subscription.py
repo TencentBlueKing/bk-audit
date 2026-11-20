@@ -4,10 +4,10 @@ Risk event subscription resources.
 """
 import abc
 
-from bk_resource import api
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from services.web.bkbase import query as bkbase_query
 from services.web.risk.exceptions import RiskEventSubscriptionNotFound
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import RiskEventSubscription
@@ -54,7 +54,7 @@ class QueryRiskEventSubscription(RiskEventSubscriptionMeta):
         if validated_request_data.get("raw"):
             return response
 
-        data_resp, count_resp = api.bk_base.query_sync.bulk_request(
+        data_resp, count_resp = bkbase_query.query_sync_bulk(
             [
                 {"sql": query_sql},
                 {"sql": count_sql},

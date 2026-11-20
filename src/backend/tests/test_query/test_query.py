@@ -147,3 +147,23 @@ class CollectorQueryTest(TestCase):
 
         with self.assertRaises(ValidationError):
             self.resource.query.collector_search(**invalid_params)
+
+
+class V4CollectorCountTest(TestCase):
+    @mock.patch("services.web.query.resources.GlobalMetaConfig.get", mock.Mock(return_value=PLUGIN_ID))
+    @mock.patch(
+        "services.web.query.resources.SearchLogPermission.get_scope_auth_systems",
+        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
+    )
+    def test_v4_count_remains_business_sql(self):
+        """V4返回total_records也不替代审计COUNT SQL的总数。"""
+        CollectorPlugin.objects.create(**PLUGIN_DATA)
+        responses = deepcopy(BKBASE_COLLECTOR_SEARCH_API_RESP)
+        responses[0]["total_records"] = 999999
+        with self.settings(BKBASE_API_VERSION="v4"), mock.patch(
+            "bk_resource.api.bk_base.query_sync.bulk_request", return_value=responses
+        ) as query:
+            result = self.resource.query.collector_search(**COLLECTOR_SEARCH_PARAMS)
+        self.assertEqual(result, COLLECTOR_SEARCH_DATA_RESP)
+        self.assertEqual(len(query.call_args.args[0]), 2)
+        self.assertIn("count(", query.call_args.args[0][1]["sql"].lower())

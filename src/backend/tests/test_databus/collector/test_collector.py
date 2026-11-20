@@ -245,22 +245,22 @@ class CollectorTest(TestCase):
 
     @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=STORAGE_LIST))
     @mock.patch(
-        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        "bk_resource.api.bk_base.databus_cleans_post",
         mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
     )
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_storages_post", mock.Mock())
     def test_collector_etl(self):
         """CollectorEtlResource"""
         self.resource.databus.collector.collector_etl(**CREATE_COLLECTOR_ETL_DATA)
 
     @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=STORAGE_LIST))
     @mock.patch(
-        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        "bk_resource.api.bk_base.databus_cleans_post",
         mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
     )
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_storages_post", mock.Mock())
     def test_collector_etl_does_not_join_asset_snapshot(self):
         """资产快照不能作为日志清洗的通用关联结果表。"""
         Snapshot.objects.create(
@@ -277,11 +277,11 @@ class CollectorTest(TestCase):
 
     @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=STORAGE_LIST))
     @mock.patch(
-        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        "bk_resource.api.bk_base.databus_cleans_post",
         mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
     )
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
-    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_storages_post", mock.Mock())
     def test_collector_etl_joins_basic_snapshot(self):
         """日志清洗仅自动关联当前系统的通用关联结果表。"""
         Snapshot.objects.create(
@@ -310,7 +310,7 @@ class CollectorTest(TestCase):
             self.resource.databus.collector.toggle_join_data(**TOGGLE_JOIN_DATA)
 
     @mock.patch("databus.collector.resources.requests.session", SessionMock())
-    @mock.patch("databus.collector.snapshot.join.base.api.bk_base.stop_collector", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.stop_collector", mock.Mock())
     def test_toggle_join_data_stop(self):
         """ToggleJoinDataResource"""
         self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA})
@@ -368,16 +368,16 @@ class CollectorTest(TestCase):
 
     @mock.patch("databus.collector.resources.requests.session", SessionMock())
     @mock.patch(
-        "databus.collector.snapshot.join.http_pull.api.bk_base.create_deploy_plan",
+        "bk_resource.api.bk_base.create_deploy_plan",
         Mock(return_value=CREATE_DEPLOY_PLAN_RESULT),
     )
     @mock.patch(
-        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        "bk_resource.api.bk_base.databus_cleans_post",
         mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
     )
-    @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_tasks_post", mock.Mock())
-    @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_storages_post", mock.Mock())
-    @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_storages_put", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("bk_resource.api.bk_base.databus_storages_put", mock.Mock())
     @mock.patch(
         "databus.collector.snapshot.join.etl_storage.resource.meta.resource_type_schema",
         mock.Mock(return_value=RESOURCE_TYPE_SCHEMA),

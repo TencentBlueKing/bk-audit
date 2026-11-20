@@ -69,7 +69,8 @@ class Permission(object):
 
     @classmethod
     def get_iam_client(cls):
-        return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL)
+        tenant_id = getattr(settings, "BK_TENANT_ID", "")
+        return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL, bk_tenant_id=tenant_id)
 
     def make_request(self, action: Union[ActionMeta, str], resources: List[Resource] = None) -> Request:
         """
@@ -163,7 +164,7 @@ class Permission(object):
         处理无权限 - 跳转申请列表
         """
         application = self._make_application(action_ids, resources, system_id)
-        ok, message, url = self.iam_client.get_apply_url(application, self.bk_token, self.username)
+        ok, message, url = self.iam_client.get_apply_url(application)
         if not ok:
             logger.error(
                 "[iam generate apply url fail] "
@@ -376,9 +377,7 @@ class Permission(object):
         grant_result = None
 
         try:
-            grant_result = self.iam_client.grant_resource_creator_action_attributes(
-                application, self.bk_token, self.username
-            )
+            grant_result = self.iam_client.grant_resource_creator_action_attributes(application)
             logger.info(f"[grant_creator_action] Success! resource: {resource.to_dict()}, result: {grant_result}")
         except Exception as e:  # pylint: disable=broad-except
             logger.exception(f"[grant_creator_action] Failed! resource: {resource.to_dict()}, result: {e}")
@@ -408,7 +407,7 @@ class Permission(object):
         grant_result = None
 
         try:
-            grant_result = self.iam_client.grant_resource_creator_actions(application, self.bk_token, self.username)
+            grant_result = self.iam_client.grant_resource_creator_actions(application)
             logger.info(f"[grant_creator_action] Success! resource: {resource.to_dict()}, result: {grant_result}")
         except Exception as e:  # pylint: disable=broad-except
             logger.exception(f"[grant_creator_action] Failed! resource: {resource.to_dict()}, result: {e}")
@@ -432,9 +431,7 @@ class Permission(object):
             operate="grant",
         )
 
-        self.iam_client.grant_or_revoke_path_permission(
-            request=request, bk_token=self.bk_token, bk_username=self.username
-        )
+        self.iam_client.grant_or_revoke_path_permission(request=request)
 
     def get_policies_for_action(self, action: Union[ActionMeta, str]) -> dict:
         """

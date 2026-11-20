@@ -20,7 +20,6 @@ import abc
 import time
 from functools import cached_property
 
-from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils.module_loading import import_string
@@ -40,6 +39,9 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
+from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase.common import get_bkbase_version
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.exceptions import StrategyStatusUnexpected
 from services.web.strategy_v2.models import Strategy
@@ -127,12 +129,22 @@ class BkbaseFlowController(BaseControl, abc.ABC):
     def flow_name(self) -> str:
         return f"{self.strategy.strategy_type}-{self.strategy.strategy_id}-{str(time.time_ns())}"
 
-    def check_flow_status(self, strategy_id: int, success_status: str, failed_status: str, other_status: str):
+    def check_flow_status(
+        self, strategy_id: int, success_status: str, failed_status: str, other_status: str, operation_id=None
+    ):
         """
         check bkbase flow status
         """
 
-        return check_flow_status.delay(strategy_id, success_status, failed_status, other_status)
+        return bkbase_flow.enqueue_status_check(
+            check_flow_status,
+            self.strategy,
+            strategy_id,
+            success_status,
+            failed_status,
+            other_status,
+            operation_id=operation_id,
+        )
 
     def build_update_flow_params(self) -> dict:
         """
@@ -148,7 +160,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
             },
         }
 
-    def _toggle_strategy(self, status: str, force: bool = False) -> None:
+    def _toggle_strategy_v3(self, status: str, force: bool = False) -> None:
         # update flow
         params = self.build_update_flow_params()
         if not force and (
@@ -164,7 +176,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
             return
         match status:
             case FlowStatusToggleChoices.START.value:
-                api.bk_base.start_flow(**params)
+                bkbase_flow.start_flow(**params)
                 self.strategy.status = StrategyStatusChoices.STARTING
                 self.strategy.save(update_record=False, update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
@@ -175,7 +187,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
                     other_status=StrategyStatusChoices.STARTING,
                 )
             case FlowStatusToggleChoices.RESTART.value:
-                api.bk_base.restart_flow(**params)
+                bkbase_flow.restart_flow(**params)
                 self.strategy.status = StrategyStatusChoices.UPDATING
                 self.strategy.save(update_record=False, update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
@@ -186,7 +198,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
                     other_status=StrategyStatusChoices.UPDATING,
                 )
             case FlowStatusToggleChoices.STOP.value:
-                api.bk_base.stop_flow(**params)
+                bkbase_flow.stop_flow(**params)
                 self.strategy.status = StrategyStatusChoices.STOPPING
                 self.strategy.save(update_record=False, update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=False)
@@ -199,7 +211,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
             case _:
                 raise StrategyStatusUnexpected()
 
-    def _describe_flow_status(self) -> str:
+    def _describe_flow_status_v3(self) -> str:
         """
         获取Flow运行状态
         """
@@ -207,7 +219,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         flow_id = self.strategy.backend_data.get("flow_id")
         if not flow_id:
             return FlowNodeStatusChoices.NO_START
-        data = api.bk_base.get_flow_deploy_data(flow_id=flow_id)
+        data = bkbase_flow.get_flow_deploy_data(flow_id=flow_id)
         if data:
             return data["flow_status"]
         return FlowNodeStatusChoices.NO_START
@@ -217,6 +229,8 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         delete bkbase flow: 实际上是停止
         """
 
+        if bkbase_flow.prepare_controller_delete(self.strategy):
+            return
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             self._toggle_strategy(FlowStatusToggleChoices.STOP)
@@ -226,6 +240,8 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         enable bkbase flow
         """
 
+        if bkbase_flow.route_pure_toggle(self, "start"):
+            return
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.NO_START]:
             self._toggle_strategy(FlowStatusToggleChoices.START, force=force)
@@ -233,6 +249,8 @@ class BkbaseFlowController(BaseControl, abc.ABC):
             self._toggle_strategy(FlowStatusToggleChoices.RESTART, force=force)
 
     def disabled(self, force: bool = False) -> None:
+        if bkbase_flow.route_pure_toggle(self, "stop"):
+            return
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             self._toggle_strategy(FlowStatusToggleChoices.STOP, force=force)
@@ -252,13 +270,17 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         self.update_or_create(StrategyStatusChoices.UPDATING)
 
     def update_or_create(self, status: str):
-        self.strategy.status = status
-        self.strategy.save(update_record=False, update_fields=["status"])
+        if not bkbase_flow.prepare_controller_update(self.strategy, status):
+            self.strategy.status = status
+            self.strategy.save(update_record=False, update_fields=["status"])
+        version = get_bkbase_version()
+        version_args = {"bkbase_version": version} if version == BKBaseVersion.V4 else {}
         call_controller.delay(
             func_name=self._update_or_create.__name__,
             strategy_id=self.strategy.strategy_id,
             base_control_type=self.base_control_type,
             status=status,
+            **version_args,
         )
 
     @abc.abstractmethod
@@ -270,7 +292,7 @@ class BkbaseFlowController(BaseControl, abc.ABC):
         raise NotImplementedError()
 
     @lock(load_lock_name=lambda self, status: f"{self.__class__.__name__}.update_or_create_{self.strategy.strategy_id}")
-    def _update_or_create(self, status: str) -> None:
+    def _update_or_create_v3(self, status: str) -> None:
         try:
             self._update_or_create_bkbase_flow()
             self.enable(force=True)
@@ -288,3 +310,12 @@ class BkbaseFlowController(BaseControl, abc.ABC):
                 title=gettext("Create or Update Flow Failed"),
                 content=gettext("Strategy ID:\t%s") % self.strategy.strategy_id,
             ).send()
+
+    def _toggle_strategy(self, status, force=False):
+        return bkbase_flow.toggle_controller(self, status, force=force)
+
+    def _describe_flow_status(self):
+        return bkbase_flow.describe_controller(self)
+
+    def _update_or_create(self, status):
+        return bkbase_flow.update_or_create_controller(self, status)

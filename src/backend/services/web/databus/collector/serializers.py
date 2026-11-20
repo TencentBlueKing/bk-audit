@@ -27,6 +27,7 @@ from apps.exceptions import ParamsNotValid
 from apps.meta.models import Field
 from apps.meta.utils.fields import STANDARD_FIELDS
 from core.exceptions import ValidationError
+from services.web.bkbase import clean as bkbase_clean
 from services.web.databus import models
 from services.web.databus.collector_plugin.serializers import PluginParamSerializer
 from services.web.databus.constants import (
@@ -102,11 +103,17 @@ class CollectorCreateRequestSerializer(RecordLogTypeMixin):
 
 
 class CollectorCreateResponseSerializer(serializers.ModelSerializer):
+    bkbase_table_id = serializers.SerializerMethodField()
+
+    def get_bkbase_table_id(self, obj):
+        """返回当前版本已就绪的结果表ID，旧字段只读。"""
+        return bkbase_clean.result_table_id(obj)
+
     task_id_list = serializers.ListField(label=gettext_lazy("任务ID列表"), child=serializers.CharField(), required=False)
 
     class Meta:
         model = models.CollectorConfig
-        exclude = ["updated_at", "updated_by", "created_at", "created_by", "is_deleted"]
+        exclude = ["updated_at", "updated_by", "created_at", "created_by", "is_deleted", "bkbase_v4_resources"]
 
 
 class GetCollectorsRequestSerializer(serializers.Serializer):
@@ -114,15 +121,30 @@ class GetCollectorsRequestSerializer(serializers.Serializer):
 
 
 class GetCollectorsResponseSerializer(serializers.ModelSerializer):
+    bkbase_table_id = serializers.SerializerMethodField()
+
+    def get_bkbase_table_id(self, obj):
+        """返回当前版本已就绪的结果表ID，旧字段只读。"""
+        return bkbase_clean.result_table_id(obj)
+
     class Meta:
         model = models.CollectorConfig
-        exclude = ["id", "updated_at", "updated_by", "created_at", "created_by", "is_deleted", "fields"]
+        exclude = [
+            "id",
+            "updated_at",
+            "updated_by",
+            "created_at",
+            "created_by",
+            "is_deleted",
+            "fields",
+            "bkbase_v4_resources",
+        ]
 
 
 class GetCollectorInfoResponseSerializer(GetCollectorsResponseSerializer):
     class Meta:
         model = models.CollectorConfig
-        exclude = ["id", "updated_at", "updated_by", "created_at", "created_by", "is_deleted"]
+        exclude = ["id", "updated_at", "updated_by", "created_at", "created_by", "is_deleted", "bkbase_v4_resources"]
 
 
 class CollectorStatusRequestSerializer(serializers.Serializer):
@@ -373,15 +395,15 @@ class GetDataIdDetailResponseSerializer(DataIdInfoSerializer):
     Get DataID Detail
     """
 
-    sensitivity = serializers.CharField(label=gettext_lazy("敏感等级"))
-    data_encoding = serializers.CharField(label=gettext_lazy("编码"))
-    bk_app_code = serializers.CharField(label=gettext_lazy("数据源平台"))
-    created_by = serializers.CharField(label=gettext_lazy("创建人"))
-    created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
-    updated_by = serializers.CharField(label=gettext_lazy("更新人"))
-    updated_at = serializers.DateTimeField(label=gettext_lazy("更新时间"))
+    sensitivity = serializers.CharField(label=gettext_lazy("敏感等级"), required=False, allow_null=True, default=None)
+    data_encoding = serializers.CharField(label=gettext_lazy("编码"), required=False, allow_null=True, default=None)
+    bk_app_code = serializers.CharField(label=gettext_lazy("数据源平台"), required=False, allow_null=True, default=None)
+    created_by = serializers.CharField(label=gettext_lazy("创建人"), required=False, allow_null=True, default=None)
+    created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"), required=False, allow_null=True, default=None)
+    updated_by = serializers.CharField(label=gettext_lazy("更新人"), required=False, allow_null=True, default=None)
+    updated_at = serializers.DateTimeField(label=gettext_lazy("更新时间"), required=False, allow_null=True, default=None)
     description = serializers.CharField(label=gettext_lazy("描述"), allow_null=True, allow_blank=True)
-    active = serializers.BooleanField(label=gettext_lazy("可用状态"))
+    active = serializers.BooleanField(label=gettext_lazy("可用状态"), required=False, allow_null=True, default=None)
     bkbase_url = serializers.CharField(label=gettext_lazy("计算平台访问链接"), allow_null=True, allow_blank=True)
 
 
@@ -457,9 +479,15 @@ class GetSystemDataIdListResponseSerializer(serializers.ModelSerializer):
     Get System Data ID List
     """
 
+    bkbase_table_id = serializers.SerializerMethodField()
+
+    def get_bkbase_table_id(self, obj):
+        """返回当前版本已就绪的结果表ID，旧字段只读。"""
+        return bkbase_clean.result_table_id(obj)
+
     class Meta:
         model = CollectorConfig
-        fields = "__all__"
+        exclude = ["bkbase_v4_resources"]
 
 
 class DeleteDataIdRequestSerializer(serializers.Serializer):

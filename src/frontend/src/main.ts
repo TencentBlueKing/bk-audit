@@ -80,7 +80,7 @@ window.changeConfirm = false;
 
 Promise.all([RootManageService.config(), EntryManageService.watermark(), RootManageService.getUserPermission()])
   .then(([config, data]) => {
-    const BKApp = createApp(App);
+    const BKApp = createApp(App, { tenantConfig: config.tenant_config });
     sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
     BKApp.use(BkuiVue);
     BKApp.use(i18n);
@@ -128,7 +128,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
         });
       }
       // 登录后预热 agents（地址来自 Entry.agent_auth，失败不阻断业务）
-      if (config.agent_auth?.agents?.length) {
+      if (config.feature_toggle?.ai_capability !== false && config.agent_auth?.agents?.length) {
         warmAgents(config.agent_auth.agents);
       }
     });

@@ -21,10 +21,10 @@ import traceback
 from collections.abc import Mapping
 from typing import Any
 
-from bk_resource import BkApiResource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
+from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 from urllib3.util import Timeout
@@ -43,18 +43,40 @@ from api.bk_base.serializers import (
     UserAuthCheckReqSerializer,
     UserAuthCheckRespSerializer,
 )
+from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 from core.utils.retry import FuncRunner
 
 
-class BkBaseResource(BkApiResource, abc.ABC):
-    base_url = BK_BASE_API_URL
+class BkBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bkbase"
     platform_authorization = True
 
+    @property
+    def use_admin_username(self):
+        return self.platform_authorization
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_BASE_API_URL
+
     def build_request_data(self, validated_request_data: dict) -> dict:
         data = super().build_request_data(validated_request_data)
-        data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+        if self.platform_authorization or not self.use_multi_tenant_mode():
+            data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+        else:
+            # V3 继续发送用户名参数，但与网关用户身份一致；批量调用通过 _request 传递请求。
+            request = data.get("_request") or get_local_request()
+            user = getattr(request, "user", None)
+            username = getattr(user, "bk_username", None) or getattr(user, "username", None)
+            if username and getattr(user, "is_authenticated", False):
+                data["bk_username"] = username
+            else:
+                data.pop("bk_username", None)
         data["bk_app_code"] = settings.APP_CODE
         return data
 
@@ -62,7 +84,12 @@ class BkBaseResource(BkApiResource, abc.ABC):
 class DebugBkBaseResource(BkBaseResource, abc.ABC):
     """用于调试场景的 BKBase 资源，支持独立 base_url。"""
 
-    base_url = BK_BASE_DEBUG_API_URL
+    @property
+    def base_url(self):
+        """多租户模式切换到租户 APIGW"""
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_BASE_DEBUG_API_URL
 
 
 class DatabusStoragesPost(BkBaseResource):
@@ -103,6 +130,7 @@ class DatabusCleansDelete(BkBaseResource):
     action = "/v3/databus/cleans/{processing_id}/"
     method = "DELETE"
     url_keys = ["processing_id"]
+    use_admin_username = False
 
 
 class DatabusTasksPost(BkBaseResource):
@@ -195,6 +223,7 @@ class GetScenePlans(AiopsBaseResource):
     name = gettext_lazy("获取方案列表")
     action = "/v3/aiops/scene_service/plans/"
     method = "GET"
+    use_admin_username = False
 
 
 class GetPlanDetail(AiopsBaseResource):
@@ -221,6 +250,7 @@ class AuthTickets(AiopsBaseResource):
     name = gettext_lazy("RT授权")
     action = "/v3/auth/tickets/"
     method = "POST"
+    use_admin_username = False
 
 
 class CreateFlow(StrategyBkBaseResource):
@@ -346,7 +376,8 @@ class GetMineResultTables(BkBaseResource):
     def build_request_data(self, validated_request_data: dict) -> dict:
         bk_username = validated_request_data["bk_username"]
         data = super().build_request_data(validated_request_data)
-        data["bk_username"] = bk_username
+        if not self.use_multi_tenant_mode():
+            data["bk_username"] = bk_username
         return data
 
 
@@ -520,5 +551,6 @@ class GetBizsList(BkBaseResource):
     def build_request_data(self, validated_request_data: dict) -> dict:
         bk_username = validated_request_data["bk_username"]
         data = super().build_request_data(validated_request_data)
-        data["bk_username"] = bk_username
+        if not self.use_multi_tenant_mode():
+            data["bk_username"] = bk_username
         return data

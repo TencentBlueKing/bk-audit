@@ -46,7 +46,7 @@
         <div class="auto-reports-content">
           <bk-checkbox
             v-model="isAutoGetReports"
-            :disabled="!isEnvent"
+            :disabled="!isEnvent || (!aiCapabilityEnabled && hasAiAgentContent)"
             size="small">
             {{ t('自动生成报告') }}
           </bk-checkbox>
@@ -101,11 +101,11 @@
           </bk-select>
           <bk-button
             v-bk-tooltips="{
-              disabled: !(!hasEditorContent || selectedValue === ''),
+              disabled: isPreviewEnabled,
               content: previewTooltips,
             }"
             class="ml8"
-            :disabled="!hasEditorContent || selectedValue === ''"
+            :disabled="!isPreviewEnabled"
             outline
             theme="primary"
             @click="handlePreview">
@@ -168,6 +168,7 @@
   import StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
+  import { isAiCapabilityEnabled, readStoredAuditConfig } from '@utils/feature-toggle';
 
   import AiEditor from './ai-editor/index.vue';
   import PreviewReport from './preview-report.vue';
@@ -223,8 +224,19 @@
   const { t } = useI18n();
   const isEnvent = ref(false);
   const isAutoGetReports = ref(false);
+  const aiCapabilityEnabled = isAiCapabilityEnabled(readStoredAuditConfig());
   const showPreview = ref(false);
   const aiEditorRef = ref();
+  const hasAiAgentInTemplate = (template: unknown) => {
+    if (typeof template !== 'string') return false;
+    try {
+      const delta = JSON.parse(template);
+      return Array.isArray(delta?.ops) && delta.ops.some((item: Record<string, any>) => !!item?.insert?.aiAgent);
+    } catch {
+      return template.includes('ql-ai-agent');
+    }
+  };
+  const hasAiAgentContent = ref(hasAiAgentInTemplate(props.editData?.report_config?.frontend_template));
   const route = useRoute();
   const router = useRouter();
   const strategyRoutes = getStrategyRouteNames(route);
@@ -295,10 +307,16 @@
   const editorError = ref(false);
   const handleHasContent = (hasContent: boolean) => {
     hasEditorContent.value = hasContent;
+    hasAiAgentContent.value = !!aiEditorRef.value?.getAiLists?.().length;
     if (hasContent) {
       editorError.value = false;
     }
   };
+  const isPreviewEnabled = computed(() => (
+    hasEditorContent.value
+    && selectedValue.value !== ''
+    && (aiCapabilityEnabled || !hasAiAgentContent.value)
+  ));
 
   // 构建报告配置
   const buildReportConfig = () => {
@@ -363,6 +381,9 @@
     };
   };
   const previewTooltips = computed(() => {
+    if (!aiCapabilityEnabled && hasAiAgentContent.value) {
+      return t('AI功能已关闭，包含AI智能体的报告模板无法预览');
+    }
     // 当编辑器有内容且选中了风险工单时，不显示提示
     if (hasEditorContent.value && selectedValue.value !== '') {
       return '';
@@ -488,6 +509,7 @@
   };
 
   const handlePreview = () => {
+    if (!isPreviewEnabled.value) return;
     showPreview.value = true;
     nextTick(() => {
       previewReportRef.value?.setContent({

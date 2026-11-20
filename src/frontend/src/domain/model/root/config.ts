@@ -81,6 +81,7 @@ export default class Config {
     audit_operation_log_record_standards: string;
   };
   tenant_config: {
+    BKPAAS_MULTI_TENANT_MODE?: boolean;
     BK_TENANT_ID: string;
     BK_USER_WEB_APIGW_URL: string;
   };

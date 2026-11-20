@@ -182,7 +182,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
     def setUp(self):
         CapturingRequestLogHandler.records.clear()
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request", return_value="ok")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_generic_client_applies_limiter_to_all_agent_codes(self, acquire, perform_request):
         client = GenericChatCompletion()
@@ -195,7 +195,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         self.assertEqual([call.args[0] for call in acquire.call_args_list], list(AIAgentCode))
         self.assertEqual(perform_request.call_count, len(AIAgentCode))
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request", return_value="ok")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_regular_clients_share_limiter_while_legacy_report_client_bypasses_it(self, acquire, perform_request):
         clients = (
@@ -215,7 +215,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         )
         self.assertEqual(perform_request.call_count, 3)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request", return_value="ok")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_legacy_report_client_can_opt_in_for_regular_ai_workloads(self, acquire, perform_request):
         client = ReportChatCompletion()
@@ -226,7 +226,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         self.assertNotIn("_enable_agent_rate_limit", perform_request.call_args.args[0])
         self.assertIsNone(client._current_agent_code)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request", return_value="ok")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_regular_client_cannot_opt_out_of_global_rate_limit(self, acquire, perform_request):
         client = GenericChatCompletion()
@@ -240,7 +240,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         self.assertNotIn("_enable_agent_rate_limit", perform_request.call_args.args[0])
         self.assertIsNone(client._current_agent_code)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request")
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request")
     @mock.patch(
         "api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire",
         side_effect=AgentRateLimited(AIAgentCode.USER_INTENT),
@@ -254,7 +254,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         perform_request.assert_not_called()
         self.assertIsNone(client._current_agent_code)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", side_effect=RuntimeError("failed"))
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request", side_effect=RuntimeError("failed"))
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_downstream_failure_clears_agent_context(self, acquire, perform_request):
         client = GenericChatCompletion()
@@ -266,7 +266,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         perform_request.assert_called_once()
         self.assertIsNone(client._current_agent_code)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="agent-success-body")
+    @mock.patch("core.bk_api_base.BkApiResource.perform_request", return_value="agent-success-body")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_public_agent_interface_records_request_and_success_response(self, acquire, _perform_request):
         payload = {
@@ -291,7 +291,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
         self.assertEqual(record["response_data"], "agent-success-body")
 
     @mock.patch(
-        "api.bk_plugins_ai_agent.default.BkApiResource.perform_request",
+        "core.bk_api_base.BkApiResource.perform_request",
         side_effect=APIRequestError(result={"message": "diagnostic-upstream-error"}),
     )
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)

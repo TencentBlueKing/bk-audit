@@ -19,7 +19,7 @@ from abc import ABCMeta, abstractmethod
 from datetime import timedelta
 from typing import Dict, Type
 
-from bk_resource import api, resource
+from bk_resource import resource
 from bkstorages.backends.bkrepo import BKRepoFile
 from blueapps.utils.logger import logger
 from django.conf import settings
@@ -35,6 +35,7 @@ from apps.meta.utils.fields import BKDATA_ES_TYPE_MAP, STANDARD_FIELDS
 from apps.meta.utils.tools import is_system_admin
 from apps.permission.handlers.actions import ActionEnum
 from core.sql.constants import FieldType
+from services.web.bkbase import query as bkbase_query
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import AI_ASSISTANT_EXPORT_SOURCE
@@ -146,7 +147,7 @@ class CollectorSearchAllResource(CollectorSearchBaseResource):
         if query_timeout is not None:
             for params in bulk_req_params:
                 params["request_timeout"] = query_timeout
-        bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+        bulk_resp = bkbase_query.query_sync_bulk(bulk_req_params)
         data_resp, count_resp = bulk_resp
         data = self.parse_data(data_resp.get("list", []))
         # 补充系统信息
@@ -205,7 +206,7 @@ class CollectorSearchAllStatisticResource(CollectorSearchBaseResource):
             if query_sql  # 从 stats_sql 字典中获取每个查询 SQL
         ]
         # 请求 BKBASE 数据
-        bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+        bulk_resp = bkbase_query.query_sync_bulk(bulk_req_params)
         results = {}
         for per_resp, sql_name in zip(bulk_resp, (k for k, v in stats_sql.items() if v)):
             per_ret = per_resp.get("list", [])

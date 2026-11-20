@@ -116,7 +116,11 @@
         </bk-dropdown>
         <bk-dropdown class="site-top-dropdown-menu">
           <div class="account-info-btn">
-            <span>{{ userInfo.username }}</span>
+            <bk-user-display-name
+              v-if="displayNameReady && userInfo.username"
+              :key="userInfo.username"
+              :user-id="userInfo.username" />
+            <span v-else>{{ userInfo.username }}</span>
             <audit-icon
               class="logout-btn"
               type="angle-fill-down" />
@@ -146,6 +150,7 @@
   import Cookie from 'js-cookie';
   import {
     computed,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -169,6 +174,8 @@
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
   import VersionLog from '@components/version-log/index.vue';
 
+  import { configureTenantDisplayName } from '@utils/assist/tenant-display-name';
+
   import Layout from './layout.vue';
 
   interface SceneItem {
@@ -176,6 +183,12 @@
     name: string;
     type: 'aggregate' | 'scene' | 'system';
   }
+
+  const props = defineProps<{ tenantConfig?: ConfigModel['tenant_config'] }>();
+  const displayNameReady = ref(false);
+  onMounted(async () => {
+    displayNameReady.value = await configureTenantDisplayName(props.tenantConfig);
+  });
 
   const { locale, t } = useI18n();
   const route = useRoute();

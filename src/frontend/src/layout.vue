@@ -68,6 +68,7 @@
           {{ t('工具广场') }}
         </a>
         <a
+          v-if="aiCapabilityEnabled"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'secChat'
@@ -359,6 +360,7 @@
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
   import usePlatformConfig from '@hooks/use-platform-config';
+  import { isAiCapabilityEnabled, readStoredAuditConfig } from '@utils/feature-toggle';
 
   import AuditMenu from '@components/audit-menu/index.vue';
   import AuditMenuItem from '@components/audit-menu/item.vue';
@@ -401,6 +403,7 @@
 
   const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["risk_handler"]') as string[];
   const userRolePermission = JSON.parse(sessionStorage.getItem('userScenePermission') || '{}') as Record<string, string[]>;
+  const aiCapabilityEnabled = isAiCapabilityEnabled(readStoredAuditConfig());
 
   // 是否展示审计报表导航
   const { feature: hasBkvision } = useFeature('bkvision');
