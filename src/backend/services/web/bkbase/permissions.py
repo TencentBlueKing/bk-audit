@@ -7,6 +7,7 @@
 import re
 
 from bk_resource import api, resource
+from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 
@@ -127,6 +128,31 @@ def list_projects(context=None):
     if context["version"] != BKBaseVersion.V4:
         raise BKBaseResourceMappingError(message="Project lazy loading requires BKBase V4")
     return _projects(context, None)
+
+
+@metadata.list_read_scope()
+def list_user_projects(context=None):
+    """只用当前认证用户读取个人项目目录，不扫描 Dataset 或 Binding。"""
+    context = context or get_bkbase_context(user=get_request_username() or "")
+    if context["version"] != BKBaseVersion.V4:
+        raise BKBaseResourceMappingError(message="Project lazy loading requires BKBase V4")
+    return _projects(context, require_user(context))
+
+
+@metadata.list_read_scope()
+def list_user_namespace_result_tables(namespace, *, context=None):
+    """同一用户目录核权后，完整分页读取一个真实项目，禁止平台或全量回退。"""
+    context = context or get_bkbase_context(user=get_request_username() or "")
+    if (
+        context["version"] != BKBaseVersion.V4
+        or not isinstance(namespace, str)
+        or not re.fullmatch(r"[A-Za-z0-9_-]+", namespace)
+    ):
+        raise BKBaseResourceMappingError(message="An explicit V4 namespace is required")
+    request = require_user(context)
+    if namespace not in _projects(context, request):
+        raise PermissionDenied("BKBase project is not accessible to the authenticated user")
+    return _queryable_tables(metadata.list_project_datasets(context, [namespace], user_request=request))
 
 
 @metadata.list_read_scope()

@@ -1922,10 +1922,12 @@ class ListTableProjects(StrategyV2Base, CacheResource):
         super().__init__(*args, **kwargs)
 
     def perform_request(self, validated_request_data):
-        return [
-            {"label": ns, "value": ns, "namespace": ns, "node_type": "project", "leaf": False}
-            for ns in bkbase_permissions.list_projects()
-        ]
+        projects = (
+            bkbase_permissions.list_user_projects()
+            if validated_request_data["table_type"] == "MineBizRt"
+            else bkbase_permissions.list_projects()
+        )
+        return [{"label": ns, "value": ns, "namespace": ns, "node_type": "project", "leaf": False} for ns in projects]
 
 
 class ListProjectTables(ListTableProjects):

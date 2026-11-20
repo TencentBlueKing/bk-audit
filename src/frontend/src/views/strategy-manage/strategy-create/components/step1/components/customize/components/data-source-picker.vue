@@ -353,7 +353,7 @@
       return t('搜索 联表数据名称');
     }
     // 资产数据后端枚举值为 BuildIn
-    if (activeTypeItem.value?.lazyDirectory && activeTab.value !== props.mineBizRtType) return t('搜索项目 namespace');
+    if (activeTypeItem.value?.lazyDirectory) return t('搜索项目 namespace');
     if (activeTab.value === 'BuildIn') {
       return t('搜索 系统名称、系统ID');
     }
@@ -373,7 +373,7 @@
   const rightEmptyHint = computed(() => (
     activeTab.value === 'EventLog'
       ? t('请先选择左侧插件')
-      : (activeTypeItem.value?.lazyDirectory && activeTab.value !== props.mineBizRtType
+      : (activeTypeItem.value?.lazyDirectory
         ? t('请先选择项目') : t('请先选择左侧业务'))
   ));
 
