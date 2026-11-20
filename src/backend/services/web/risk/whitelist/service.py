@@ -51,7 +51,7 @@ DEFAULT_ACCEPTANCE_DAYS = 30
 
 
 def is_platform_admin(username: str) -> bool:
-    """平台管理员看 IAM 的平台管理权限。这个身份不能通过、驳回或续期，可以编辑、启停和删除。"""
+    """平台管理员看 IAM 的平台管理权限。只有这个权限、没有场景管理权限时不能通过、驳回。可以编辑、启停和删除。"""
 
     if not username:
         return False
@@ -59,9 +59,9 @@ def is_platform_admin(username: str) -> bool:
 
 
 def is_scene_admin(username: str, scene_id: int) -> bool:
-    """场景管理员只看 IAM 的管理场景权限。平台管理员不算场景管理员，不能通过、驳回或续期。"""
+    """看 IAM 的管理场景权限。有该场景的管理权限就可以通过、驳回，即使同时还是平台管理员。"""
 
-    if not username or not scene_id or is_platform_admin(username):
+    if not username or not scene_id:
         return False
     return Permission(username=username).is_allowed(
         ActionEnum.MANAGE_SCENE,
@@ -684,30 +684,28 @@ def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
 
 
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
-    """IAM 场景管理员创建后立刻审批。handle 成功即写成生效中；回调若已先写入则保持回调结果。"""
+    """场景管理员创建后直接写成生效中。先尝试审批工单；回调若已写入终态则保持。"""
 
     if not username or not is_scene_admin(username, rule.scene_id):
         return
-    payload = None
     try:
-        payload = operate_itsm(rule, "approve", username)
+        operate_itsm(rule, "approve", username)
     except Exception:
         logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
     if hasattr(rule, "refresh_from_db"):
         rule.refresh_from_db()
     if getattr(rule, "status", WhitelistStatus.PENDING) != WhitelistStatus.PENDING:
         return
-    if isinstance(payload, dict) and payload.get("success") is True:
-        apply_whitelist_result(
-            rule,
-            {
-                "id": rule.itsm_ticket_id,
-                "status": ITSMV4TicketStatus.FINISHED,
-                "approve_result": True,
-            },
-        )
-        if hasattr(rule, "refresh_from_db"):
-            rule.refresh_from_db()
+    apply_whitelist_result(
+        rule,
+        {
+            "id": rule.itsm_ticket_id,
+            "status": ITSMV4TicketStatus.FINISHED,
+            "approve_result": True,
+        },
+    )
+    if hasattr(rule, "refresh_from_db"):
+        rule.refresh_from_db()
 
 
 def _renew_snapshot(rule: RiskWhitelist) -> dict:
