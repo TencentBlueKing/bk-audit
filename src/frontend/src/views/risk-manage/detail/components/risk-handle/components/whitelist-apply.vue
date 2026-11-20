@@ -253,7 +253,7 @@
   const isPending = computed(() => statusKind.value === 'pending');
   const isRejected = computed(() => statusKind.value === 'rejected');
   const statusText = computed(() => {
-    if (isPending.value) return '待审批';
+    if (isPending.value) return '审批中';
     if (isRejected.value) return '已驳回';
     if (statusKind.value === 'approved') return '已通过';
     const display = String(record.value.statusDisplay ?? '').trim();
