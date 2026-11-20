@@ -105,6 +105,31 @@ class TestToolViewPermissions(TestCase):
         self.assertIsInstance(permission, InstanceActionPermission)
         self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
 
+    def test_use_tool_permission_ignores_square_display_status(self):
+        """广场展示关闭（unpublished）的工具，使用权限不校验 published 状态（防回归）"""
+        from unittest import mock
+
+        permission = UseToolPermission()
+        request = SimpleNamespace(query_params={}, data={}, parser_context={"kwargs": {"uid": "tool-unpublished"}})
+        view = ToolViewSet()
+        view.kwargs = {"uid": "tool-unpublished"}
+        view.request = request
+
+        with (
+            mock.patch(
+                "services.web.tool.permissions.Tool.last_version_tool",
+                return_value=SimpleNamespace(status="unpublished"),
+            ),
+            mock.patch.object(permission, "_is_scene_binding_enabled", return_value=True),
+            mock.patch.object(permission, "_is_resource_manager_exception", return_value=False),
+            mock.patch(
+                "services.web.common.scope_permission.ScopePermission.check_resource_permission", return_value=True
+            ),
+            mock.patch("services.web.common.scope_permission.get_request_username", return_value="alice"),
+        ):
+            # 广场展示状态不参与使用鉴权：由场景可见性/资源范围决定
+            self.assertTrue(permission.has_permission(request, view))
+
 
 class TestUseToolEmptyApplyWindow(SimpleTestCase):
     def _call(self, uid="tool-1"):
@@ -157,19 +182,6 @@ class TestUseToolEmptyApplyWindow(SimpleTestCase):
         self.assertEqual(raised.exception.STATUS_CODE, 400)
         self.assertIsNone(raised.exception.data)
         self.assertEqual(raised.exception.message, "当前用户无 [访问资源(tool:tool-1)] 权限，联系场景管理员")
-
-    def test_unpublished_tool_is_400_for_ordinary_user(self):
-        with (
-            patch.object(Tool, "last_version_tool", return_value=SimpleNamespace(status="unpublished")),
-            patch.object(UseToolPermission, "_is_scene_binding_enabled", return_value=True),
-            patch.object(UseToolPermission, "_is_resource_manager_exception", return_value=False),
-            patch.object(UseToolPermission, "_is_resource_published", return_value=False),
-        ):
-            with self.assertRaises(ValidationError) as raised:
-                self._call()
-
-        self.assertEqual(raised.exception.message, "工具未上架，联系场景管理员")
-        self.assertEqual(raised.exception.STATUS_CODE, 400)
 
     def test_manager_can_use_unpublished_tool(self):
         with (

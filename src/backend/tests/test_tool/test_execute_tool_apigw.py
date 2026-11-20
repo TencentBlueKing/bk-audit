@@ -38,7 +38,7 @@ class TestExecuteToolAPIGWResource(TestCase):
         self.assertEqual(result["tool_type"], ToolTypeEnum.BK_VISION.value)
         self.assertEqual(result["data"], {"ok": True})
         mock_create_executor.assert_called_once_with(tool)
-        mock_record_usage.assert_called_once_with("admin", tool.uid)
+        mock_record_usage.assert_called_once_with("admin", tool.uid, for_square=False)
         mock_skip_permission.assert_not_called()
 
     def test_execute_tool_apigw_allows_unpublished_tool(self):

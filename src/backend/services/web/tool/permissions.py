@@ -27,7 +27,6 @@ from core.models import get_request_username
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
 from services.web.common.scope_permission import ScopeInstancePermission
-from services.web.scene.constants import PanelStatus
 from services.web.tool.exceptions import BkVisionSearchPermissionProhibited
 from services.web.tool.models import Tool
 
@@ -41,41 +40,35 @@ class CallerContextPermission(BasePermission):
 
 
 class UseToolPermission(ScopeInstancePermission):
-    """检查用户是否拥有使用工具的权限（含启停态与管理员例外）。"""
+    """检查用户是否拥有使用工具的权限（场景可见性与资源范围；广场展示状态不参与使用鉴权）。
+
+    说明：工具 status 语义为「是否在工具广场展示」，仅影响广场列表/计数，
+    不应在使用鉴权中校验 published（避免广场隐藏的工具无法使用/下钻）。
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(
             resource_type=BindingResourceType.TOOL,
-            status_getter=self._get_tool_status,
-            published_status=PanelStatus.PUBLISHED,
             *args,
             **kwargs,
         )
 
-    @staticmethod
-    def _get_tool_status(tool_uid: str):
-        tool = Tool.last_version_tool(uid=tool_uid)
-        return tool.status if tool else None
-
     def has_permission(self, request, view) -> bool:
-        """工具不存在、未上架、场景停用和不可见都返回 400，不带申请链接。"""
+        """工具不存在、场景停用和不可见都返回 400，不带申请链接。
+
+        广场展示状态（published/unpublished）不参与使用鉴权。
+        """
 
         resource_id = str(self._get_instance_id(request, view))
         if Tool.last_version_tool(uid=resource_id) is None:
             raise ValidationError(message=gettext("工具不存在，联系场景管理员"))
         if not self._is_scene_binding_enabled(resource_id):
             raise ValidationError(message=gettext("绑定场景停用或被删除，联系场景管理员"))
-        username = get_request_username()
-        if not self._is_resource_manager_exception(username, resource_id) and not self._is_resource_published(
-            resource_id
-        ):
-            raise ValidationError(message=gettext("工具未上架，联系场景管理员"))
         try:
             return super().has_permission(request, view)
         except PermissionException as exc:
             reason = str(exc.args[0] if exc.args else exc.message or "").strip().rstrip("。；;，, ")
             raise ValidationError(message=gettext("%(reason)s，联系场景管理员") % {"reason": reason}) from exc
-
 
 def check_bkvision_share_permission(user_id, share_uid) -> bool:
     """检查bkvision分享权限（受特性开关控制）"""
