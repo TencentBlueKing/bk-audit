@@ -2109,13 +2109,14 @@ class ListTableProjectsRequestSerializer(serializers.Serializer):
 
     namespace = serializers.CharField(required=False, default=settings.DEFAULT_NAMESPACE)
     scene_id = serializers.IntegerField(required=False, min_value=1)
+    table_type = serializers.ChoiceField(choices=["BizRt", "BuildIn", "MineBizRt"], default="BizRt")
 
 
 class ListProjectTablesRequestSerializer(ListTableProjectsRequestSerializer):
     """显式选择一个真实 BKBase 项目，禁止空项目回退为全量读取。"""
 
     bkbase_namespace = serializers.RegexField(r"^[A-Za-z0-9_-]+$", required=True)
-    table_type = serializers.ChoiceField(choices=["BizRt", "BuildIn"])
+    table_type = serializers.ChoiceField(choices=["BizRt", "BuildIn", "MineBizRt"])
 
 
 class GetRTFieldsRequestSerializer(serializers.Serializer):

@@ -99,8 +99,11 @@ def list_scoped_v4_tables(
     *, table_type, namespace, bkbase_namespace=None, result_table_ids=None, scene_id=None, skip_missing=False
 ):
     """单项目或有限ID读取共用能力和预算；场景候选可跳过缺失表，已选回显默认严格。"""
-    if get_bkbase_version() != BKBaseVersion.V4 or table_type not in ("BizRt", "BuildIn"):
+    if get_bkbase_version() != BKBaseVersion.V4 or table_type not in ("BizRt", "BuildIn", "MineBizRt"):
         raise BKBaseResourceMappingError(message="Unsupported scoped BKBase table type or version")
+    if table_type == "MineBizRt":
+        # 个人表沿用原有场景外提交语义，不套用平台候选的排除项、场景交集或Binding筛选。
+        return bkbase_permissions.list_user_namespace_result_tables(bkbase_namespace)
     context = {**get_bkbase_context(), "rt_namespaces": {}}
     tables = (
         bkbase_permissions.list_namespace_result_tables(bkbase_namespace, context=context)
