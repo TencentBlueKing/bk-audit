@@ -428,6 +428,8 @@ BK_APP_OTEL_ADDTIONAL_INSTRUMENTORS = [BKResourceAPIInstrumentor()]
 AEGIS_ID = os.getenv("BKAPP_AEGIS_ID")
 
 # FeatureToggle
+# 单租户沿用原有默认值；多租户需要区分显式配置与默认值。
+AI_CAPABILITY_FEATURE_OVERRIDE = os.getenv("BKAPP_FEATURE_AI_CAPABILITY")
 FEATURE_TOGGLE = {
     "bkbase_aiops": os.getenv("BKAPP_FEATURE_BKBASE_AIOPS", "deny"),
     "bklog_otlp": os.getenv("BKAPP_FEATURE_BKLOG_OTLP", "on"),
@@ -438,8 +440,7 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
-    # AI 相关能力总开关：默认开启；多租户环境由 apps.feature.plugins.AiCapabilityPlugin 强制关闭
-    "ai_capability": os.getenv("BKAPP_FEATURE_AI_CAPABILITY", "available"),
+    "ai_capability": "available" if AI_CAPABILITY_FEATURE_OVERRIDE is None else AI_CAPABILITY_FEATURE_OVERRIDE,
     "bksec": os.getenv("BKAPP_FEATURE_BKSEC", "on"),
 }
 

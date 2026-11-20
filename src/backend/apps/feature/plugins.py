@@ -77,17 +77,13 @@ class BklogOtlpPlugin(BaseFeaturePlugin):
 
 
 class AiCapabilityPlugin(BaseFeaturePlugin):
-    """AI 能力开关插件
-
-    默认开启（settings.FEATURE_TOGGLE["ai_capability"] = "available"），
-    多租户环境下强制关闭，无需运维手动配置。
-    """
+    """多租户 AI 由部署显式开启；单租户保留原有特性优先级。"""
 
     def _update_status(self):
-        # 多租户环境不支持 AI 能力，强制关闭
         if use_multi_tenant_mode():
-            return FeatureStatusChoices.DENY.value
-        # 非多租户环境沿用配置状态（默认 available）
+            # 首屏不查库，其他路径也按同一个部署开关，避免升级时被旧数据库记录意外开启。
+            status = settings.AI_CAPABILITY_FEATURE_OVERRIDE
+            return status if status in FeatureStatusChoices.values else FeatureStatusChoices.DENY.value
         return self._feature.status
 
 
