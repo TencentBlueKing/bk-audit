@@ -70,6 +70,7 @@ class UseToolPermission(ScopeInstancePermission):
             reason = str(exc.args[0] if exc.args else exc.message or "").strip().rstrip("。；;，, ")
             raise ValidationError(message=gettext("%(reason)s，联系场景管理员") % {"reason": reason}) from exc
 
+
 def check_bkvision_share_permission(user_id, share_uid) -> bool:
     """检查bkvision分享权限（受特性开关控制）"""
     if not FeatureHandler(FeatureTypeChoices.CHECK_BKVISION_SHARE_PERMISSION).check():
