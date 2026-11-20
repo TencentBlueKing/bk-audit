@@ -43,8 +43,7 @@
       row-key="id"
       scene-id-key="scene_id"
       use-skeleton
-      @clear-search="handleClearSearch"
-      @request-success="handleRequestSuccess">
+      @clear-search="handleClearSearch">
       <template #empty>
         <div
           class="list-empty"
@@ -116,8 +115,6 @@
   }
 
   const EMPTY_LIST = { results: [] as RiskWhitelist[], total: 0, count: 0 };
-  /** 待审批（含场景管理员代批等待 ITSM 回调）列表静默轮询间隔，对齐策略列表 */
-  const PENDING_POLL_INTERVAL = 5000;
 
   const { t } = useI18n();
   const router = useRouter();
@@ -132,14 +129,6 @@
   const hitRef = ref<InstanceType<typeof HitRecordSideslider>>();
   const searchValue = ref<SearchKey[]>([]);
   const hasSearch = ref(false);
-  let pendingPollTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const stopPendingPoll = () => {
-    if (pendingPollTimer) {
-      clearTimeout(pendingPollTimer);
-      pendingPollTimer = null;
-    }
-  };
 
   const readCachedSceneList = (): CachedSceneItem[] => {
     try {
@@ -180,7 +169,6 @@
     if (access === true) return true;
     if (access === null) return false;
 
-    stopPendingPoll();
     const sceneId = String(getSceneSystemParams().scope_id || '');
     const list = readCachedSceneList();
     const firstManageable = list.find(item => item.permission?.manage_scene === true);
@@ -531,26 +519,6 @@
     listRef.value?.fetchData(buildSearchParams());
   };
 
-  const hasPendingRows = (results?: RiskWhitelist[]) => (
-    (results || []).some(row => row.status === 'pending')
-  );
-
-  /**
-   * 当前页存在待审批时静默刷新列表：列表请求会顺带同步已结束的 ITSM 单，
-   * 场景管理员代批回调生效后可自动从「待审批」变为「生效中」。
-   */
-  const schedulePendingPoll = (results?: RiskWhitelist[]) => {
-    stopPendingPoll();
-    if (!hasPendingRows(results)) return;
-    pendingPollTimer = setTimeout(() => {
-      listRef.value?.silentRefreshList?.();
-    }, PENDING_POLL_INTERVAL);
-  };
-
-  const handleRequestSuccess = (data?: { results?: RiskWhitelist[] }) => {
-    schedulePendingPoll(data?.results);
-  };
-
   const openCreate = () => {
     if (!ensureManageAccessBeforeFetch()) return;
     editRef.value?.open();
@@ -569,7 +537,6 @@
   });
 
   onUnmounted(() => {
-    stopPendingPoll();
     off('scene:change', handleSceneChange);
     off('scene-list-ready', handleSceneListReady);
   });
