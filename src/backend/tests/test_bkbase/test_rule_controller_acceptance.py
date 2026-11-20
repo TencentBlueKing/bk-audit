@@ -56,6 +56,7 @@ class RuleControllerAcceptanceTests(TransactionTestCase):
             {
                 "db": "audit_db",
                 "table": None,
+                "use_lowercase_field": False,
                 "table_type": "duplicate_table",
                 "storage_keys": [],
                 "json_fields": [],
