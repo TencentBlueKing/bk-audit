@@ -1512,7 +1512,8 @@ class ProcessRiskTicket(RiskMeta):
     name = gettext_lazy("风险单据流转")
 
     def perform_request(self, validated_request_data):
-        process_one_risk(risk_id=validated_request_data["risk_id"])
+        # 链式流转（建单/建任务）不允许跑在请求线程，异步执行
+        process_one_risk.delay(risk_id=validated_request_data["risk_id"])
         return
 
 

@@ -197,7 +197,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
 
     @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
-    def test_regular_clients_share_limiter_while_legacy_report_client_bypasses_it(self, acquire, perform_request):
+    def test_regular_clients_share_limiter_with_legacy_report_client(self, acquire, perform_request):
         clients = (
             (GenericChatCompletion(), {"agent_code": AIAgentCode.USER_INTENT}),
             (ReportChatCompletion(), {}),
@@ -211,7 +211,7 @@ class AgentClientRateLimitTest(SimpleTestCase):
 
         self.assertEqual(
             [call.args[0] for call in acquire.call_args_list],
-            [AIAgentCode.USER_INTENT, AIAgentCode.AUDIT_ANALYSE],
+            [AIAgentCode.USER_INTENT, AIAgentCode.AUDIT_REPORT, AIAgentCode.AUDIT_ANALYSE],
         )
         self.assertEqual(perform_request.call_count, 3)
 

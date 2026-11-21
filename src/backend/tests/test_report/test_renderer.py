@@ -498,6 +498,75 @@ class TestRenderTemplate(TestCase):
         # 验证AI变量渲染
         self.assertIn("2025年12月17日", result)
 
+    def test_render_propagates_agent_rate_limited(self):
+        """Agent 限流不能在渲染层被降级成错误文本。"""
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.report.providers import AIProvider
+
+        provider = AIProvider(
+            context={"risk_id": MOCK_RISK["risk_id"]},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=mock.Mock(side_effect=AgentRateLimited(AIAgentCode.AUDIT_REPORT)),
+        )
+
+        with self.assertRaises(AgentRateLimited):
+            _render_template(template="{{ ai.summary }}", providers=[provider], variables={})
+
+    def test_render_reuses_successful_variables_after_rate_limit(self):
+        """部分变量成功后限流，重投只执行未成功的变量"""
+        from uuid import uuid4
+
+        from django.core.cache import cache
+
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.report.providers import AIProvider
+        from services.web.risk.report.renderer import _checkpoint_cache_key
+
+        calls = {"ok": 0, "retry": 0}
+
+        def ai_executor(prompt: str) -> str:
+            if "PROMPT_OK" in prompt:
+                calls["ok"] += 1
+                return "OK"
+            calls["retry"] += 1
+            if calls["retry"] == 1:
+                raise AgentRateLimited(AIAgentCode.AUDIT_REPORT)
+            return "RETRY_OK"
+
+        provider = AIProvider(
+            context={"risk_id": MOCK_RISK["risk_id"]},
+            ai_variables_config=[
+                {"name": "ai.ok", "prompt_template": "PROMPT_OK"},
+                {"name": "ai.retry", "prompt_template": "PROMPT_RETRY"},
+            ],
+            ai_executor=ai_executor,
+            enable_cache=False,
+        )
+        checkpoint_key = f"test-render-partial-{uuid4().hex}"
+        self.addCleanup(cache.delete, _checkpoint_cache_key(checkpoint_key))
+
+        with self.assertRaises(AgentRateLimited):
+            _render_template(
+                template="{{ ai.ok }}|{{ ai.retry }}",
+                providers=[provider],
+                variables={},
+                checkpoint_key=checkpoint_key,
+            )
+
+        result = _render_template(
+            template="{{ ai.ok }}|{{ ai.retry }}",
+            providers=[provider],
+            variables={},
+            checkpoint_key=checkpoint_key,
+        )
+
+        self.assertIn("OK", result)
+        self.assertIn("RETRY_OK", result)
+        self.assertEqual(calls["ok"], 1)
+        self.assertEqual(calls["retry"], 2)
+
     def test_render_provider_thread_pool_preserves_otel_context(self):
         """Provider 在线程池执行时应继承提交任务时的 OTel context。"""
 
