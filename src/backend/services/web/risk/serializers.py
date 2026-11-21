@@ -1364,18 +1364,13 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
     risk_id = serializers.CharField()
     risk_label = serializers.ChoiceField(choices=RiskLabel.choices)
     new_operators = serializers.ListField(child=serializers.CharField(), required=False)
-    description = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
     revoke_process = serializers.BooleanField(default=True)
+    whitelist = serializers.JSONField(required=False)
 
     class Meta:
         model = Risk
-        fields = ["risk_id", "risk_label", "new_operators", "description", "revoke_process"]
-
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        if data["risk_label"] == RiskLabel.MISREPORT and not data.get("description"):
-            raise serializers.ValidationError(gettext("Misreport Description Not Set"))
-        return data
+        fields = ["risk_id", "risk_label", "new_operators", "description", "revoke_process", "whitelist"]
 
 
 class ListRiskRuleReqSerializer(serializers.Serializer):
@@ -2592,6 +2587,7 @@ class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
         default="",
         allow_blank=True,
     )
+    whitelist = serializers.JSONField(required=False)
 
 
 class BatchConfirmAsMisReportRequestSerializer(BulkRiskSelectionSerializer):
@@ -2604,6 +2600,7 @@ class BatchConfirmAsMisReportRequestSerializer(BulkRiskSelectionSerializer):
         allow_blank=False,
         max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
     )
+    whitelist = serializers.JSONField(required=False)
 
 
 # ---------------------------------------------------------------------------
@@ -2629,11 +2626,13 @@ class BulkMisreportReqSerializer(BulkRiskSelectionSerializer):
     risk_id_limit = BULK_ACTION_MAX_RISK_IDS
     description = serializers.CharField(
         label=gettext_lazy("误报说明"),
-        required=True,
-        allow_blank=False,
+        required=False,
+        allow_blank=True,
+        default="",
         max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
     )
     revoke_process = serializers.BooleanField(required=False, default=True)
+    whitelist = serializers.JSONField(required=False)
 
 
 class BulkUnmisreportReqSerializer(BulkRiskSelectionSerializer):
