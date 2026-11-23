@@ -23,7 +23,7 @@
       <div class="landing-illustration">
         <img
           alt="系统接入"
-          :src="landingImg">
+          src="@/images/access-system.png">
       </div>
       <div class="landing-right">
         <h1 class="landing-title">
@@ -108,7 +108,7 @@
           <div class="card-icon">
             <img
               class="card-img"
-              :src="jieruImg">
+              src="@/images/jieru.svg">
           </div>
           <div class="card-body">
             <div class="card-title">
@@ -213,8 +213,6 @@
   import ConfigModel from '@model/root/config';
 
   import useRequest from '@/hooks/use-request';
-  import landingImg from '@/images/access-system.png?inline';
-  import jieruImg from '@/images/jieru.svg?inline';
 
   interface SystemItem {
     id: string;
