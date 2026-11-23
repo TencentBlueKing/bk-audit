@@ -149,7 +149,16 @@ class RiskFlowBaseHandler:
 
     name = gettext_lazy("默认流转")
     allowed_status = []
+    # 自动流转 dispatcher 的匹配状态；与 allowed_status 分开，避免手动操作状态被自动调度。
+    flow_statuses = ()
     enable_notice = True
+
+    @classmethod
+    def match(cls, risk: Risk) -> bool:
+        """当前 handler 是否可由自动流转 dispatcher 执行。"""
+
+        return risk.status in cls.flow_statuses
+
     # 是否允许重复写入流转历史：纯留痕类动作（如风险处理经验）需要保留每一次记录
     allow_duplicate_history = False
 
@@ -176,6 +185,8 @@ class RiskFlowBaseHandler:
         self.init_rule()
         self.init_process_application()
         self.strategy: Strategy = Strategy.objects.filter(strategy_id=self.risk.strategy_id).first()
+        # 本次流转结束后是否还需要由 dispatcher 触发下一个 handler。
+        self.next_step_required = False
 
     def init_rule(self) -> None:
         if self.risk.rule_id:
@@ -296,6 +307,12 @@ class RiskFlowBaseHandler:
         self.notice_current_operator()
         self.auth_notice_user()
         self.post_process(process_result=process_result, *args, **kwargs)
+        self.next_step_required = self.has_next_flow_step()
+
+    def has_next_flow_step(self) -> bool:
+        """当前状态是否还能匹配到不同的自动流转 handler。"""
+
+        return any(handler is not self.__class__ and handler.match(self.risk) for handler in AUTO_FLOW_HANDLERS)
 
     def resolve_display_status(self) -> Optional[str]:
         """
@@ -490,6 +507,7 @@ class NewRisk(RiskFlowBaseHandler):
 
     name = gettext_lazy("流转新风险")
     allowed_status = [RiskStatus.NEW, RiskStatus.CLOSED]
+    flow_statuses = (RiskStatus.NEW,)
     DISPLAY_STATUS_MAP = {
         **RiskFlowBaseHandler.DISPLAY_STATUS_MAP,
         RiskStatus.AWAIT_PROCESS: RiskDisplayStatus.AWAIT_PROCESS,  # 覆盖为"待处理"
@@ -624,6 +642,7 @@ class ForApprove(RiskFlowBaseHandler):
 
     name = gettext_lazy("自动处理审批")
     allowed_status = [RiskStatus.FOR_APPROVE, RiskStatus.NEW, RiskStatus.AWAIT_PROCESS]
+    flow_statuses = (RiskStatus.FOR_APPROVE,)
 
     def _build_approve_form_data(self, ticket_info: dict) -> dict:
         """构造发起审批单据所需的 form_data。"""
@@ -891,6 +910,7 @@ class AutoProcess(RiskFlowBaseHandler):
 
     name = gettext_lazy("自动套餐处理")
     allowed_status = [RiskStatus.AUTO_PROCESS, RiskStatus.FOR_APPROVE, RiskStatus.AWAIT_PROCESS]
+    flow_statuses = (RiskStatus.AUTO_PROCESS,)
 
     def process(self, pa_config: dict = None, **kwargs) -> dict:
         """
@@ -1448,6 +1468,10 @@ class ConfirmRisk(RiskFlowBaseHandler):
 
         self.risk.refresh_from_db()
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run(skip_record=True)
+        # 链式推进（建单/建任务）放 worker，避免完整套餐跑在请求线程
+        from services.web.risk.tasks import process_one_risk
+
+        process_one_risk.delay(risk_id=self.risk.risk_id)
         try:
             RiskHandler().trigger_render_task(self.risk)
         except Exception as e:
@@ -1521,3 +1545,7 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
             "from_status": RiskStatus.PENDING_CONFIRM,
             "to_status": RiskStatus.CLOSED,
         }
+
+
+# 自动流转 dispatcher 的固定遍历顺序，handler 的 match 决定当前步骤是否适用。
+AUTO_FLOW_HANDLERS = (NewRisk, ForApprove, AutoProcess)
