@@ -47,7 +47,6 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import CacheLock, lock
-from core.monitor import Metric
 from core.observability import (
     OBSERVATION_METRIC_STATUS_ERROR,
     OBSERVATION_METRIC_STATUS_SUCCESS,
@@ -630,22 +629,19 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
 
     每次只执行当前状态对应的一个 handler。handler 事务提交后，若状态推进到
     下一个 handler，则释放锁后重新投递本任务；否则结束，等待周期扫描或外部回调。
-    锁 TTL 由 PROCESS_ONE_RISK_LOCK_TIMEOUT 控制（默认 15 分钟）；接受 handler
-    超过 TTL 时锁提前过期可能重复执行的旧风险，换取 worker 丢失后的恢复速度。
-    owner token 保证锁过期后被他人持有时不会误删他人的锁。
+    锁 TTL 使用 DEFAULT_CACHE_LOCK_TIMEOUT（与任务硬时限一致）；worker 丢失后
+    残留锁在 TTL 内过期，周期扫描即可在下一轮接住。owner token 保证锁过期后
+    被他人持有时不会误删他人的锁。
     """
 
     lock_name = f"celery:process_one_risk:{risk_id}"
     next_task_kwargs = None
-    metric_started_at = None
-    metric_result = "success"
     process_name = ""
-    with CacheLock(lock_name=lock_name, timeout=settings.PROCESS_ONE_RISK_LOCK_TIMEOUT) as acquired:
+    with CacheLock(lock_name=lock_name, timeout=settings.DEFAULT_CACHE_LOCK_TIMEOUT) as acquired:
         if not acquired:
             logger_celery.warning("[CacheLockCheckFailed] MultiProcessRunning %s", lock_name)
             return
 
-        metric_started_at = time.monotonic()
         risk = None
         cache_key = ""
         process_class = None
@@ -655,7 +651,6 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
             cache_key = f"process_one_risk:fail:{risk.risk_id}"
             process_class = next((handler for handler in AUTO_FLOW_HANDLERS if handler.match(risk)), None)
             if not process_class:
-                metric_result = "no_handler"
                 return
 
             process_name = process_class.__name__
@@ -664,7 +659,6 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
             handler = process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME)
             handler.run()
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-            metric_result = "error"
             # 没有匹配到 handler 时，异常来自查询/代码本身，交给上层处理
             if process_class is None:
                 raise
@@ -721,21 +715,6 @@ def process_one_risk(*, risk_id: str, chain_depth: int = 0):
                 logger_celery.exception("[ProcessRiskTicket] PostProcess Error %s %s", risk_id, err)
         finally:
             logger_celery.info("[ProcessRiskTicket] End %s", risk_id)
-            if metric_started_at is not None:
-                try:
-                    Metric(
-                        metrics={
-                            "process_one_risk_count": 1,
-                            "process_one_risk_duration_ms": max(0, int((time.monotonic() - metric_started_at) * 1000)),
-                        },
-                        dimension={
-                            "handler": process_name or "unknown",
-                            "result": metric_result,
-                            "chain_depth": str(chain_depth),
-                        },
-                    ).async_report()
-                except Exception as err:  # NOCC:broad-except(指标上报不能影响业务流程)
-                    logger_celery.warning("[ProcessRiskMetric] report failed %s", err)
 
     if next_task_kwargs:
         try:

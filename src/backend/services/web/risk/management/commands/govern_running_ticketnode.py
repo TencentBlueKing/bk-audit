@@ -290,7 +290,6 @@ class Command(BaseCommand):
         self.stdout.write("[H] 两个周期任务消息数（各自周期）:")
         self.stdout.write("    sync_auto_result：每轮 {} 条，周期 {}min".format(sync_total, sync_period))
         self.stdout.write("    process_risk_ticket：每轮 {} 条，周期 {}min".format(process_total, process_period))
-        self.stdout.write("    说明：周期不同，不直接相加；容量按每秒需求计算。")
 
         sops_read_rate = self._parse_rate_per_second(getattr(settings, "SOPS_API_RATE_LIMIT", None))
         itsm_rate = self._parse_rate_per_second(getattr(settings, "ITSM_API_RATE_LIMIT", None))
