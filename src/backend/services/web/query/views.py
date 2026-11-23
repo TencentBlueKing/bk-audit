@@ -17,8 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_resource import api, resource
+from bk_resource.exceptions import APIRequestError
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from django.utils.translation import gettext
 
+from api.bk_log.default import EsQuerySearchResource
 from services.web.query.mcp_views import reject_body_namespace
 
 
@@ -28,6 +31,22 @@ class EsQueryViewSet(ResourceViewSet):
         ResourceRoute("GET", api.bk_log.index_set_operators, endpoint="operators"),
         ResourceRoute("GET", resource.query.field_map, endpoint="field_map"),
     ]
+
+    def handle_exception(self, exc):
+        response = super().handle_exception(exc)
+        if (
+            self.action == "search"
+            and isinstance(exc, APIRequestError)
+            and exc.data.get("module_name") == EsQuerySearchResource.module_name
+            and exc.data.get("url") == EsQuerySearchResource.action
+        ):
+            # 复用通用异常处理的诊断日志，在渲染前替换所有公开错误字段。
+            response.data = {
+                "code": response.status_code,
+                "message": gettext("日志查询失败。请核对查询条件，或提供请求 ID 联系管理员。"),
+                "data": None,
+            }
+        return response
 
 
 class CollectorQueryViewSet(ResourceViewSet):
