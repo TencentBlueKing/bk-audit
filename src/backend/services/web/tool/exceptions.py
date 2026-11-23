@@ -41,7 +41,11 @@ class DataSearchTablePermission(ToolException):
     MESSAGE = gettext_lazy("用户{user}没有权限访问数据源{data_source}")
 
     def __init__(self, user, data_source, *args, **kwargs):
+        # note 为在原报错基础上追加的补充提示，保留“用户X没有权限访问数据源Y”原句，避免整条覆盖丢失上下文。
+        note = kwargs.pop("note", None)
         message = kwargs.pop("message", None) or self.MESSAGE.format(user=user, data_source=data_source)
+        if note:
+            message = f"{message}，{note}"
         self.MESSAGE = message
         super().__init__(*args, message=message, **kwargs)
 
