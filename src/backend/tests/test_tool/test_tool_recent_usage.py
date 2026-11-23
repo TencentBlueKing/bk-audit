@@ -38,6 +38,7 @@ class TestRecentToolUsageManager(SimpleTestCase):
 
     def test_get_all_recent_uids_merges_square_and_legacy(self):
         """最近使用标签合并广场新 key 与旧版历史 key（保留历史）"""
+
         def fake_zrange(key, start, end, withscores):
             if key == "tool:recently_used_square:alice":
                 return [("tool-1", 100.0)]
