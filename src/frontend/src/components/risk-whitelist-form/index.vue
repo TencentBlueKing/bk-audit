@@ -73,28 +73,44 @@
                   <div
                     v-if="conditionIndex < group.conditions.length - 1"
                     class="inner-col-line" />
-                  <bk-select
-                    class="field-select"
-                    :disabled="isPrefillLocked(groupIndex, conditionIndex) || isStrategyRow(groupIndex, conditionIndex)"
-                    :model-value="condition.field"
-                    @change="(value: string) => changeField(groupIndex, conditionIndex, value)">
-                    <bk-option
-                      v-for="field in selectableFields(groupIndex, conditionIndex)"
-                      :key="field.field"
-                      :label="field.label"
-                      :value="field.field" />
-                  </bk-select>
-                  <bk-select
-                    class="operator-select"
-                    :disabled="isPrefillLocked(groupIndex, conditionIndex)"
-                    :model-value="condition.operator"
-                    @change="(value: string) => changeOperator(groupIndex, conditionIndex, value)">
-                    <bk-option
-                      v-for="item in OPERATOR_OPTIONS"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value" />
-                  </bk-select>
+                  <bk-popover
+                    :content="t('此条件为必要条件，禁止调整')"
+                    :disabled="!isStrategyRow(groupIndex, conditionIndex)"
+                    placement="top"
+                    theme="dark">
+                    <span class="locked-select-wrap">
+                      <bk-select
+                        class="field-select"
+                        :disabled="isPrefillLocked(groupIndex, conditionIndex) || isStrategyRow(groupIndex, conditionIndex)"
+                        :model-value="condition.field"
+                        @change="(value: string) => changeField(groupIndex, conditionIndex, value)">
+                        <bk-option
+                          v-for="field in selectableFields(groupIndex, conditionIndex)"
+                          :key="field.field"
+                          :label="field.label"
+                          :value="field.field" />
+                      </bk-select>
+                    </span>
+                  </bk-popover>
+                  <bk-popover
+                    :content="t('此条件为必要条件，禁止调整')"
+                    :disabled="!isStrategyRow(groupIndex, conditionIndex)"
+                    placement="top"
+                    theme="dark">
+                    <span class="locked-select-wrap">
+                      <!-- V1：所有字段操作符固定等于；仅命中策略行保留必要条件提示 -->
+                      <bk-select
+                        class="operator-select"
+                        disabled
+                        :model-value="condition.operator">
+                        <bk-option
+                          v-for="item in OPERATOR_OPTIONS"
+                          :key="item.value"
+                          :label="item.label"
+                          :value="item.value" />
+                      </bk-select>
+                    </span>
+                  </bk-popover>
                   <bk-select
                     v-if="condition.field === 'strategy_id'"
                     class="value-input"
@@ -234,6 +250,12 @@
               type="datetime"
               @update:model-value="changeCustomExpire" />
           </div>
+          <!-- 新建/选期限时展示预计到期时间，对齐 Figma「默认 1 个月并展示到期时间」 -->
+          <div
+            v-if="showExpirePreview"
+            class="expire-preview">
+            {{ t('到期时间') }}：{{ expectedExpire }}
+          </div>
           <bk-alert
             v-if="showSwitchHint"
             class="type-alert"
@@ -313,7 +335,6 @@
 
   import type RiskWhitelist from '@model/risk-whitelist/whitelist';
   import type {
-    CompareOperator,
     LogicConnector,
     MatchCondition,
     MatchGroup,
@@ -329,10 +350,10 @@
     calcExpireAt,
     createDefaultScope,
     createGroup,
-    createStrategyCondition,
     DURATION_OPTIONS,
     everyGroupHasStrategy,
     FALLBACK_CONDITION_FIELDS,
+    getFirstStrategySeed,
     hasStrategyOnlyGroup,
     OPERATOR_OPTIONS,
   } from '@components/risk-whitelist/constants';
@@ -448,9 +469,36 @@
     && (renewEditing.value || validityView.value === 'permanent-switch')
   ));
 
+  /** 非永久时展示预计到期时间；自定义未选日期时 expectedExpire 为 -- */
+  const showExpirePreview = computed(() => (
+    showDurationPicker.value
+    && validityMode.value !== 'permanent'
+    && !showSwitchHint.value
+  ));
+
   const markDirty = () => {
     dirty.value = true;
   };
+
+  /** V1：所有条件操作符强制等于；命中策略补齐展示名 */
+  const normalizeCondition = (condition: MatchCondition): MatchCondition => {
+    const next: MatchCondition = {
+      ...condition,
+      operator: 'eq',
+    };
+    if (next.field === 'strategy_id') {
+      next.field_name = next.field_name || '风险命中策略(ID)';
+      next.field_label = next.field_label || '风险命中策略(ID)(strategy_id)';
+    }
+    return next;
+  };
+
+  const normalizeScope = (input: MatchScope): MatchScope => ({
+    groups: (input.groups || []).map(group => ({
+      ...group,
+      conditions: (group.conditions || []).map(normalizeCondition),
+    })),
+  });
 
   const fillFromRecord = (record: RiskWhitelist | null) => {
     dirty.value = false;
@@ -458,9 +506,10 @@
     renewedActive.value = false;
     renewEditing.value = false;
     if (!record) {
-      scope.value = props.initialScope?.groups?.length
+      const nextScope = props.initialScope?.groups?.length
         ? JSON.parse(JSON.stringify(props.initialScope))
         : createDefaultScope();
+      scope.value = normalizeScope(nextScope);
       syncLockedPrefillKeys(props.initialScope);
       if (props.lockedType) {
         whitelistType.value = props.lockedType;
@@ -474,9 +523,9 @@
       return;
     }
     lockedPrefillKeys.value = new Set();
-    scope.value = JSON.parse(JSON.stringify(record.match_scope?.groups?.length
+    scope.value = normalizeScope(JSON.parse(JSON.stringify(record.match_scope?.groups?.length
       ? record.match_scope
-      : createDefaultScope()));
+      : createDefaultScope())));
     whitelistType.value = record.whitelist_type;
     validityMode.value = record.is_permanent ? 'permanent' : (record.validity_mode || '1m');
     customDays.value = record.custom_days || 1;
@@ -524,6 +573,25 @@
     ));
   });
 
+  /** 菜单新建：策略列表就绪后，空命中策略默认选第一条（不可为空）；属初始化，不标脏 */
+  const ensureDefaultStrategy = () => {
+    if (isEdit.value || isRiskBoundStrategy.value) return;
+    if (!strategyOptions.value.length) return;
+    const first = strategyOptions.value[0];
+    scope.value.groups = scope.value.groups.map(group => ({
+      ...group,
+      conditions: group.conditions.map((condition) => {
+        if (condition.field !== 'strategy_id' || condition.value) return normalizeCondition(condition);
+        return normalizeCondition({
+          ...condition,
+          operator: 'eq',
+          value: first.id,
+          value_display: first.name,
+        });
+      }),
+    }));
+  };
+
   /**
    * 菜单新建：暂用风险侧 /risks/strategies/。
    * 风险单加白：只保留当前风险策略，不请求列表。
@@ -567,6 +635,8 @@
         ...selected.filter(item => !ids.has(item.id)),
         ...fetched,
       ];
+      // 无关键词的首轮拉取：空策略默认第一条
+      if (!kw) ensureDefaultStrategy();
     })
       .catch(() => {
         seedSelectedStrategies();
@@ -735,25 +805,22 @@
     const meta = FALLBACK_CONDITION_FIELDS.find(item => item.field === field);
     if (!meta) return;
     markDirty();
-    patchCondition(groupIndex, conditionIndex, {
+    patchCondition(groupIndex, conditionIndex, normalizeCondition({
       field: meta.field,
       field_name: meta.name,
       field_label: meta.label,
       operator: 'eq',
       value: '',
       value_display: '',
-    });
-  };
-
-  const changeOperator = (groupIndex: number, conditionIndex: number, value: string) => {
-    patchCondition(groupIndex, conditionIndex, { operator: value as CompareOperator });
-    markDirty();
+      connector: scope.value.groups[groupIndex].conditions[conditionIndex]?.connector || 'and',
+    }));
   };
 
   const changeStrategy = (groupIndex: number, conditionIndex: number, value: string) => {
     markDirty();
     const option = strategyOptions.value.find(item => item.id === value);
     patchCondition(groupIndex, conditionIndex, {
+      operator: 'eq',
       value,
       value_display: option?.name || value,
     });
@@ -768,7 +835,8 @@
   };
 
   const addCondition = (groupIndex: number, conditionIndex: number) => {
-    const field = FALLBACK_CONDITION_FIELDS.find(item => item.field !== 'strategy_id')
+    const field = FALLBACK_CONDITION_FIELDS.find(item => item.field === 'raw_event_id')
+      || FALLBACK_CONDITION_FIELDS.find(item => item.field !== 'strategy_id')
       || FALLBACK_CONDITION_FIELDS[1];
     const next: MatchCondition = {
       field: field.field,
@@ -809,10 +877,9 @@
 
   const addGroup = () => {
     markDirty();
-    scope.value.groups.push(createGroup(scope.value.groups.length ? 'and' : 'and'));
-    if (!scope.value.groups[scope.value.groups.length - 1].conditions.length) {
-      scope.value.groups[scope.value.groups.length - 1].conditions.push(createStrategyCondition());
-    }
+    // 新增条件组：命中策略锁定；值默认与第一组一致；组间连接沿用原默认 and（需 OR 时用户可切换）
+    const seed = getFirstStrategySeed(scope.value);
+    scope.value.groups.push(createGroup('and', seed));
   };
 
   const validate = () => {
@@ -849,7 +916,7 @@
 
   const getPayload = (): WhitelistPayload => {
     const payload: WhitelistPayload = {
-      match_scope: scope.value,
+      match_scope: normalizeScope(scope.value),
       whitelist_type: props.lockedType || whitelistType.value,
       reason: reason.value.trim(),
     };
@@ -1128,12 +1195,24 @@
     border-left: 1px dashed var(--bk-theme-border-default);
   }
 
+  .locked-select-wrap {
+    display: inline-flex;
+  }
+
   .field-select {
     width: 260px;
   }
 
   .operator-select {
-    width: 160px;
+    width: 180px;
+  }
+
+  /* V1 操作符恒禁用：置灰已够，不必再显示禁止光标 */
+  .operator-select :deep(.is-disabled),
+  .operator-select.is-disabled,
+  .operator-select :deep(.bk-select-tag.is-disabled),
+  .operator-select :deep(.bk-input.is-disabled) {
+    cursor: default;
   }
 
   .value-input {
@@ -1249,6 +1328,13 @@
     flex: 1;
     min-width: 200px;
     margin-top: 0;
+  }
+
+  .expire-preview {
+    margin-top: var(--bk-theme-space-8);
+    font-size: var(--bk-theme-font-size-sm);
+    line-height: var(--bk-theme-line-height-sm);
+    color: var(--bk-theme-text-default);
   }
 
   .field-tip,

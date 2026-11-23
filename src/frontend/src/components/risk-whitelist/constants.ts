@@ -7,7 +7,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
+    10|  software distributed under the License is distributed on
   an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
@@ -68,51 +68,62 @@ export const RENEW_DURATION_OPTIONS = DURATION_OPTIONS.filter(
   (item): item is { id: Exclude<ValidityMode, 'permanent'>; name: string } => item.id !== 'permanent',
 );
 
+/**
+ * V1：匹配范围所有字段操作符仅允许等于（面聊结论，安全优先）。
+ * string/number 差异表达式延后到后续版本再评估。
+ */
+export const OPERATOR_LABEL_MAP: Partial<Record<CompareOperator, string>> & { eq: string } = {
+  eq: '=等于',
+};
+
+/** V1 唯一可选操作符 */
 export const OPERATOR_OPTIONS: Array<{ value: CompareOperator; label: string }> = [
-  { value: 'eq', label: '=等于' },
-  { value: 'neq', label: '!=不等于' },
+  { value: 'eq', label: OPERATOR_LABEL_MAP.eq },
 ];
 
+const buildField = (
+  field: string,
+  name: string,
+  valueType: ConditionFieldOption['value_type'],
+  fieldGroup: 'risk' | 'event',
+): ConditionFieldOption => ({
+  field,
+  name,
+  // 与场景风险搜索展示一致：中文名(field)
+  label: `${name}(${field})`,
+  value_type: valueType,
+  field_group: fieldGroup,
+  operators: OPERATOR_OPTIONS,
+});
+
+/**
+ * 条件字段与场景风险搜索对齐：
+ * - 风险字段：风险ID / 标题 / 等级 / 命中策略 / 标签 / 责任人 / 当前处理人
+ * - 事件字段：原始事件ID / 操作IP / 账号
+ */
 export const FALLBACK_CONDITION_FIELDS: ConditionFieldOption[] = [
-  {
-    field: 'strategy_id',
-    name: '命中策略(ID)',
-    label: '命中策略(ID)(strategy_id)',
-    value_type: 'strategy',
-    operators: OPERATOR_OPTIONS,
-  },
-  {
-    field: 'raw_event_id',
-    name: '原始事件ID',
-    label: '原始事件ID(raw_event_id)',
-    value_type: 'text',
-    operators: OPERATOR_OPTIONS,
-  },
-  {
-    field: 'operator',
-    name: '责任人',
-    label: '责任人(operator)',
-    value_type: 'text',
-    operators: OPERATOR_OPTIONS,
-  },
-  {
-    field: 'src_ip',
-    name: '操作IP',
-    label: '操作IP(src_ip)',
-    value_type: 'text',
-    operators: OPERATOR_OPTIONS,
-  },
-  {
-    field: 'account',
-    name: '账号',
-    label: '账号(account)',
-    value_type: 'text',
-    operators: OPERATOR_OPTIONS,
-  },
+  buildField('strategy_id', '风险命中策略(ID)', 'strategy', 'risk'),
+  buildField('risk_id', '风险ID', 'text', 'risk'),
+  buildField('title', '风险标题', 'text', 'risk'),
+  buildField('risk_level', '风险等级', 'text', 'risk'),
+  buildField('tags', '风险标签', 'text', 'risk'),
+  buildField('operator', '责任人', 'text', 'risk'),
+  buildField('current_operator', '当前处理人', 'text', 'risk'),
+  buildField('raw_event_id', '原始事件ID', 'text', 'event'),
+  buildField('src_ip', '操作IP', 'text', 'event'),
+  buildField('account', '账号', 'text', 'event'),
 ];
+
+export const getFieldMeta = (field: string) => (
+  FALLBACK_CONDITION_FIELDS.find(item => item.field === field)
+);
+
+/** V1 统一返回等于；保留方法签名便于后续放开 */
+export const getOperatorsForField = (_field?: string) => OPERATOR_OPTIONS;
 
 export const createCondition = (
-  field = FALLBACK_CONDITION_FIELDS[1],
+  field = FALLBACK_CONDITION_FIELDS.find(item => item.field === 'raw_event_id')
+    || FALLBACK_CONDITION_FIELDS[1],
   connector: LogicConnector = 'and',
 ): MatchCondition => ({
   field: field.field,
@@ -124,11 +135,21 @@ export const createCondition = (
   connector,
 });
 
-export const createStrategyCondition = (): MatchCondition => createCondition(FALLBACK_CONDITION_FIELDS[0], 'and');
+export const createStrategyCondition = (
+  seed?: Partial<Pick<MatchCondition, 'value' | 'value_display'>>,
+): MatchCondition => ({
+  ...createCondition(FALLBACK_CONDITION_FIELDS[0], 'and'),
+  operator: 'eq',
+  value: seed?.value || '',
+  value_display: seed?.value_display || seed?.value || '',
+});
 
-export const createGroup = (connector: LogicConnector = 'and'): MatchGroup => ({
+export const createGroup = (
+  connector: LogicConnector = 'and',
+  strategySeed?: Partial<Pick<MatchCondition, 'value' | 'value_display'>>,
+): MatchGroup => ({
   connector,
-  conditions: [createStrategyCondition()],
+  conditions: [createStrategyCondition(strategySeed)],
 });
 
 export const createDefaultScope = (): MatchScope => ({
@@ -136,10 +157,25 @@ export const createDefaultScope = (): MatchScope => ({
     connector: 'and',
     conditions: [
       createStrategyCondition(),
-      createCondition(FALLBACK_CONDITION_FIELDS[1], 'and'),
+      createCondition(
+        FALLBACK_CONDITION_FIELDS.find(item => item.field === 'raw_event_id')
+          || FALLBACK_CONDITION_FIELDS[1],
+        'and',
+      ),
     ],
   }],
 });
+
+export const getFirstStrategySeed = (scope: MatchScope) => {
+  const strategy = scope.groups
+    .flatMap(group => group.conditions)
+    .find(item => item.field === 'strategy_id' && item.value);
+  if (!strategy) return undefined;
+  return {
+    value: String(strategy.value),
+    value_display: strategy.value_display || String(strategy.value),
+  };
+};
 
 export const durationLabel = (mode: ValidityMode, customDays = 1) => {
   if (mode === 'custom') return `${customDays}天`;

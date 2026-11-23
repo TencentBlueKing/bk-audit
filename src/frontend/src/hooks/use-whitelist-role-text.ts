@@ -27,12 +27,17 @@ const readRoles = () => {
   }
 };
 
-/** 场景管理员自己发起会代审批，规则可直接生效；平台管理员走待审批。 */
-const canDirectActivate = () => readRoles().includes('scene_admin');
+/**
+ * 管理员（平台/场景）发起时规则可直接生效。
+ * 验收口径：管理员确认后立即生效/关单，确认框不得再提示「待审批」。
+ */
+const canDirectActivate = () => {
+  const roles = readRoles();
+  return roles.includes('scene_admin') || roles.includes('saas_admin');
+};
 
-/** 后端口径：误报加白会先误报关单；冒险加白等审批通过后再关单。 */
+/** 后端口径：误报加白会先误报关单；非管理员冒险加白等审批通过后再关单。 */
 export const getWhitelistApplyHint = (type: WhitelistType, isAdmin: boolean) => {
-  // 仅场景管理员代审批可直接生效，不展示待审批提示；平台管理员与普通人一致
   if (isAdmin && canDirectActivate()) return '';
   if (type === 'false_positive') {
     return '提交后将按误报关闭当前风险单，加白规则待场景管理员审批通过后生效。';
@@ -51,17 +56,19 @@ export const getWhitelistApplySuccess = (type: WhitelistType, isAdmin: boolean) 
     : '加白申请已提交';
 };
 
-export const getWhitelistRiskCloseImpact = (type: WhitelistType, _isAdmin: boolean) => {
+export const getWhitelistRiskCloseImpact = (type: WhitelistType, isAdmin: boolean) => {
   if (type === 'false_positive') {
     return '当前风险单将按误报关闭。';
   }
-  // 冒险加白：发起时不改风险单，审批通过后才关单（场景管理员代审批也属审批通过）
+  if (isAdmin && canDirectActivate()) {
+    return '确认后当前风险单将立即关闭。';
+  }
   return '审批通过后当前风险单将关闭。';
 };
 
 export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) => {
   if (isAdmin && canDirectActivate()) {
-    return '白名单立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
+    return '加白规则确认后立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
   }
   if (type === 'false_positive') {
     return '加白规则待审批通过后生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
@@ -69,9 +76,14 @@ export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) 
   return '审批通过后白名单生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
 };
 
+/** 风险单冒险加白 + 管理员：合并关单与生效说明 */
+export const getWhitelistAdventureAdminImpact = () => (
+  '加白规则确认后立即关单并生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。'
+);
+
 /**
  * 管理员（saas_admin / scene_admin）与处理人、场景用户的加白文案。
- * 同时拥有管理员角色时走管理员入口文案；是否「立即生效」以场景管理员为准。
+ * 同时拥有管理员角色时走管理员入口文案；管理员确认后立即生效。
  */
 export default function useWhitelistRoleText() {
   const isAdmin = computed(() => {

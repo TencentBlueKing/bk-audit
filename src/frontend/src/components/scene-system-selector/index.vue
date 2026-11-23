@@ -716,7 +716,12 @@
       syncSceneContextToUrl(nextQuery);
     }
     if (!routeAligned || !locationAligned) {
-      router.replace({ query: getQueryFromLocation() }).catch(() => {});
+      // 必须带上地址栏 path：首屏 initial navigation 未完成时 route 仍是 START/`/`，
+      // 只传 query 的 replace 会相对根路径解析，被 redirect 到待我处理（场景配置侧栏刷新必现）
+      router.replace({
+        path: window.location.pathname,
+        query: getQueryFromLocation(),
+      }).catch(() => {});
     }
   };
 

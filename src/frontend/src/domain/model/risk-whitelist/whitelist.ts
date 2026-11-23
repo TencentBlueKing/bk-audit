@@ -26,7 +26,23 @@ export type InterceptAction = 'suppress_new' | 'suppress_append';
 
 export type LogicConnector = 'and' | 'or';
 
-export type CompareOperator = 'eq' | 'neq';
+/**
+ * V1 白名单匹配范围仅允许等于（安全优先）。
+ * 其它取值仅用于兼容历史脏数据，读写时会归一为 eq。
+ */
+export type CompareOperator =
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'lt'
+  | 'gte'
+  | 'lte'
+  | 'include'
+  | 'exclude'
+  | 'like'
+  | 'not_like'
+  | 'isnull'
+  | 'notnull';
 
 /** 同时是后端 duration_days 的取值：permanent / Nd / Nm / custom（另传 expire_at） */
 export type ValidityMode = 'permanent' | '7d' | '1m' | '3m' | '6m' | '12m' | 'custom';
@@ -74,11 +90,16 @@ export interface WhitelistFlow {
   rejected_at: string;
 }
 
+/** string / number 决定可用操作符集合；strategy 固定等于 */
+export type ConditionValueType = 'text' | 'number' | 'strategy';
+
 export interface ConditionFieldOption {
   field: string;
   label: string;
   name: string;
-  value_type: 'text' | 'strategy';
+  value_type: ConditionValueType;
+  /** 风险字段 / 事件字段，对齐场景风险搜索分组 */
+  field_group?: 'risk' | 'event';
   operators: Array<{ value: CompareOperator; label: string }>;
 }
 

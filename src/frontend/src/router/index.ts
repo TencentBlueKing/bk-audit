@@ -150,9 +150,13 @@ function checkAccessRedirect(
 
 /**
  * 判断是否进入场景配置业务页（不含引导页）
+ * 风险白名单虽挂在场景配置导航下，但有独立权限校验，不走场景配置分享链接分流
  */
 function isSceneConfigBusinessRoute(to: RouteLocationNormalized) {
   if (SCENE_CONFIG_LANDING_NAMES.has(String(to.name || ''))) {
+    return false;
+  }
+  if (to.path.startsWith('/risk-whitelist')) {
     return false;
   }
   return to.path.startsWith('/scene-config')
@@ -302,11 +306,15 @@ async function resolveSceneConfigSceneAccess(
 export default (config: ConfigModel) => {
   const routes: Array<RouteRecordRaw> = [
     {
+      // redirect 放到空 path 子路由，避免子页懒加载失败时被父级 `/` redirect 带到待我处理
       path: '/',
-      redirect: {
-        name: 'handleManage',
-      },
       children: [
+        {
+          path: '',
+          redirect: {
+            name: 'handleManage',
+          },
+        },
         AttentionManage,
         AnalysisManage,
         SystemManage,
@@ -393,14 +401,16 @@ export default (config: ConfigModel) => {
         return;
       } else {
         // 基于角色策略表进行访问控制
-        // saas_admin / scene_admin 角色不受 userLandingPage 重定向限制
+        // saas_admin / scene_admin 可进场景配置业务页（含 /risk-whitelist）；
+        // 同账号常兼有 risk_handler，不能再被其 landingPage / userLandingPage 规则踢走
         const hasAdminPrivilege = userRole.includes('saas_admin') || userRole.includes('scene_admin');
         for (const role of userRole) {
           let rules = ROLE_ACCESS_MAP[role];
           if (!rules) continue;
           if (hasAdminPrivilege) {
-            // 过滤掉 userLandingPage 重定向的规则
-            rules = rules.filter(r => r.redirect !== 'userLandingPage');
+            rules = rules.filter(r => (
+              r.redirect !== 'userLandingPage' && r.redirect !== 'landingPage'
+            ));
           }
           const redirect = checkAccessRedirect(to.path, to.name, rules);
           if (redirect) {
@@ -435,8 +445,13 @@ export default (config: ConfigModel) => {
         return;
       }
 
-      // 显示确认弹窗
-      const confirmed = await changeConfirm({ route: from, router });
+      // 离开确认取消会 reject，不能进外层 catch，否则首屏 next(false) 可能回退到 /
+      let confirmed = true;
+      try {
+        confirmed = await changeConfirm({ route: from, router });
+      } catch {
+        confirmed = false;
+      }
       if (confirmed) {
         lastRouterHrefCache = to.fullPath;
         next();
@@ -444,14 +459,35 @@ export default (config: ConfigModel) => {
         next(false);
       }
     } catch (error) {
+      // 首屏导航失败时 next(false) 会把地址回成 /，再被父级 redirect 到待我处理
+      if (isSharedLinkEntry(from) && to.fullPath && to.fullPath !== '/') {
+        lastRouterHrefCache = to.fullPath;
+        next();
+        return;
+      }
       next(false);
     }
   });
 
   router.onError((error: any) => {
-    if (/Failed to fetch dynamically imported module/.test(error.message)) {
-      window.location.href = lastRouterHrefCache;
+    const message = String(error?.message || '');
+    if (!/Failed to fetch dynamically imported module|error loading dynamically imported module/i.test(message)) {
+      return;
     }
+    // 懒加载失败时：优先回到本次导航目标，避免被根路径 redirect 吞进待我处理
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const fallback = (lastRouterHrefCache && lastRouterHrefCache !== '/')
+      ? lastRouterHrefCache
+      : current;
+    if (fallback && fallback !== '/' && !fallback.startsWith('/handle-manage')) {
+      window.location.replace(fallback);
+      return;
+    }
+    if (current && current !== '/') {
+      window.location.reload();
+      return;
+    }
+    window.location.reload();
   });
 
   return router;

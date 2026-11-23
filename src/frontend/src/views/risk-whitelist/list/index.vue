@@ -259,6 +259,14 @@
     moreOpenId.value = null;
   };
 
+  /** 失焦 / 点击外部时收起「更多」菜单 */
+  const handleDocumentClick = (event: MouseEvent) => {
+    if (moreOpenId.value === null) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.('.more-dropdown, .bk-dropdown-menu, .more-trigger')) return;
+    closeMoreMenu();
+  };
+
   const runMoreAction = (action: () => void) => {
     closeMoreMenu();
     nextTick(() => {
@@ -271,6 +279,7 @@
     items: Array<{ label: string; onClick: () => void }>,
   ) => (
     <bk-dropdown
+      class="more-dropdown"
       isShow={moreOpenId.value === rowId}
       placement="bottom-end"
       trigger="manual"
@@ -504,14 +513,15 @@
 
   const handleSearch = () => {
     if (!ensureManageAccessBeforeFetch()) return;
-    listRef.value?.fetchData(buildSearchParams());
+    // resetSearch：删除某一搜索条件后必须清掉 paramsMemo 里旧字段，否则列表不恢复
+    listRef.value?.fetchData(buildSearchParams(), { resetSearch: true });
   };
 
   const handleClearSearch = () => {
     searchValue.value = [];
     hasSearch.value = false;
     if (!ensureManageAccessBeforeFetch()) return;
-    listRef.value?.fetchData({});
+    listRef.value?.fetchData({}, { resetSearch: true });
   };
 
   const refresh = () => {
@@ -534,11 +544,13 @@
   onMounted(() => {
     onEvent('scene:change', handleSceneChange);
     onEvent('scene-list-ready', handleSceneListReady);
+    document.addEventListener('click', handleDocumentClick, true);
   });
 
   onUnmounted(() => {
     off('scene:change', handleSceneChange);
     off('scene-list-ready', handleSceneListReady);
+    document.removeEventListener('click', handleDocumentClick, true);
   });
 </script>
 <style lang="postcss" scoped>
