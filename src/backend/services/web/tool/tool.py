@@ -190,6 +190,11 @@ class RecentToolUsageManager:
         key = self._build_key(username)
         return self.redis_client.zrevrange(key, 0, -1)
 
+    def get_recent_scores(self, username: str) -> dict:
+        """广场最近使用 uid -> 最近使用时间戳，用于按时间倒序排序"""
+        key = self._build_key(username)
+        return dict(self.redis_client.zrange(key, 0, -1, withscores=True))
+
     def get_all_recent_uids(self, username: str):
         """全部最近使用（广场 + 下钻/MCP/接口合并，按时间倒序），用于最近使用标签与计数"""
         scores = {}

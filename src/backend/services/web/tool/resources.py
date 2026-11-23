@@ -51,7 +51,7 @@ from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
 )
-from services.web.common.constants import ScopeType
+from services.web.common.constants import BindingResourceType, ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
@@ -423,22 +423,21 @@ class ListTool(ToolBase):
 
     @staticmethod
     def _sort_tools_by_user_preference(queryset, current_user: str) -> List[Tool]:
-        """默认排序：收藏 > 最近使用 > 名称（两个维度均以人为维度隔离）
+        """默认排序：收藏 > 最近使用（按时间倒序，最近用的在前）> 名称（两个维度均以人为维度隔离）
 
         Redis 故障时最近使用层级降级为 收藏 > 名称，不影响接口可用性。
         """
         try:
-            recent_uids = recent_tool_usage_manager.get_recent_uids(current_user) or []
+            recent_scores = recent_tool_usage_manager.get_recent_scores(current_user) or {}
         except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>名称)
-            logger.exception("[list_tool] get recent uids failed, degrade sorting")
-            recent_uids = []
-        recent_set = set(recent_uids)
+            logger.exception("[list_tool] get recent scores failed, degrade sorting")
+            recent_scores = {}
         # 先按名称取确定性序，再按优先级稳定排序
         return sorted(
             queryset.order_by("name"),
             key=lambda t: (
                 0 if getattr(t, "favorite", False) else 1,  # 收藏优先
-                0 if t.uid in recent_set else 1,  # 最近使用次之
+                -recent_scores.get(t.uid, 0),  # 最近使用时间倒序（无记录=0 排最后）
                 t.name,  # 名称兜底
             ),
         )
@@ -1948,6 +1947,14 @@ class RecordToolRecentUsage(ToolBase):
         if not tool:
             raise ToolDoesNotExist()
         username = get_request_username()
+        # 仅记录当前用户可见范围内工具的最近使用，避免对不可见工具刷记录
+        visible = ScopePermission(username=username).check_resource_permission(
+            resource_type=BindingResourceType.TOOL,
+            resource_id=uid,
+            raise_exception=False,
+        )
+        if not visible:
+            return {"recorded": False}
         try:
             recent_tool_usage_manager.record_usage(username, uid)
         except Exception as e:  # NOCC:broad-except(记录失败不影响使用)
