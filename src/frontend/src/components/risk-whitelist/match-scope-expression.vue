@@ -36,8 +36,10 @@
   </div>
   <div
     v-else
+    v-bk-tooltips="tagScopeTip"
     class="match-scope-tag"
-    :class="{ 'is-multi': showRail }">
+    :class="{ 'is-multi': showRail }"
+    @mouseenter="syncTagOverflow">
     <div
       v-if="showRail"
       class="match-scope-tag__rail">
@@ -51,15 +53,9 @@
         <span
           v-if="row.showAnd"
           class="match-scope-tag__op">and</span>
-        <span
-          v-bk-tooltips="buildChipTip(row.field, `${index}-field`)"
-          class="match-scope-tag__chip is-field"
-          @mouseenter="(e) => syncChipOverflow(`${index}-field`, e)">{{ row.field }}</span>
+        <span class="match-scope-tag__chip is-field">{{ row.field }}</span>
         <span class="match-scope-tag__symbol">{{ row.operator }}</span>
-        <span
-          v-bk-tooltips="buildChipTip(row.value, `${index}-value`)"
-          class="match-scope-tag__chip is-value"
-          @mouseenter="(e) => syncChipOverflow(`${index}-value`, e)">{{ row.value }}</span>
+        <span class="match-scope-tag__chip is-value">{{ row.value }}</span>
         <button
           v-if="row.showToggle"
           class="match-scope-tag__toggle"
@@ -78,7 +74,7 @@
 
   import type { CompareOperator, MatchGroup } from '@model/risk-whitelist/whitelist';
 
-  import { FALLBACK_CONDITION_FIELDS } from './constants';
+  import { FALLBACK_CONDITION_FIELDS, OPERATOR_LABEL_MAP } from './constants';
 
   interface Props {
     scope?: Record<string, any> | null;
@@ -105,7 +101,7 @@
   const { t } = useI18n();
   const expanded = ref(false);
   const textOverflowed = ref(false);
-  const overflowedChipKeys = ref<Record<string, boolean>>({});
+  const tagOverflowed = ref(false);
 
   const groups = computed<MatchGroup[]>(() => {
     const input = props.scope || {};
@@ -139,26 +135,10 @@
   const showRail = computed(() => multipleGroups.value && (!canToggle.value || expanded.value));
   const groupLabel = computed(() => (groups.value[1]?.connector || 'and').toUpperCase());
 
-  const operatorText = (operator: CompareOperator) => (operator === 'neq' ? '不等于' : '等于');
+  // V1 仅等于；历史脏数据也按等于展示
+  const operatorText = (_operator?: CompareOperator) => OPERATOR_LABEL_MAP.eq;
 
   const isEllipsisOverflow = (el: HTMLElement) => el.scrollWidth > el.clientWidth + 1;
-
-  const syncChipOverflow = (key: string, event: MouseEvent) => {
-    const el = event.currentTarget as HTMLElement;
-    const overflowed = isEllipsisOverflow(el);
-    if (overflowedChipKeys.value[key] === overflowed) return;
-    overflowedChipKeys.value = {
-      ...overflowedChipKeys.value,
-      [key]: overflowed,
-    };
-  };
-
-  const buildChipTip = (text: string, key: string) => ({
-    content: text,
-    disabled: !overflowedChipKeys.value[key],
-    delay: 80,
-    placement: 'top',
-  });
 
   const clipGroups = (input: MatchGroup[], maxRows: number) => {
     let left = maxRows;
@@ -206,11 +186,11 @@
         const op = groupIndex === 0 && conditionIndex === 0
           ? ''
           : (conditionIndex === 0 ? group.connector : condition.connector || 'and').toUpperCase();
-        const symbol = condition.operator === 'neq' ? '!=' : '=';
-        const shown = condition.value_display || condition.value;
-        const text = condition.field === 'strategy_id'
-          ? `命中策略(ID) ${symbol} ${shown}`
-          : `${condition.field_label || condition.field}${symbol}${shown}`;
+        const shown = condition.value_display || condition.value || '--';
+        const fieldName = condition.field === 'strategy_id'
+          ? (condition.field_name || '风险命中策略(ID)')
+          : (condition.field_label || condition.field);
+        const text = `${fieldName} ${OPERATOR_LABEL_MAP.eq} ${shown}`;
         lines.push({ op, text });
       });
     });
@@ -221,13 +201,16 @@
     .map(line => (line.op ? `${line.op} ${line.text}` : line.text))
     .join('\n'));
 
-  const textScopeTip = computed(() => ({
+  const buildScopeTip = (overflowed: boolean) => ({
     content: fullTextContent.value,
-    disabled: props.inline || !textOverflowed.value || !fullTextContent.value,
+    disabled: !overflowed || !fullTextContent.value,
     delay: 80,
     placement: 'top',
     extCls: 'match-scope-text-tip',
-  }));
+  });
+
+  const textScopeTip = computed(() => buildScopeTip(!props.inline && textOverflowed.value));
+  const tagScopeTip = computed(() => buildScopeTip(tagOverflowed.value));
 
   const syncTextOverflow = (event: MouseEvent) => {
     if (props.inline) {
@@ -237,6 +220,14 @@
     const root = event.currentTarget as HTMLElement;
     const contents = root.querySelectorAll('.match-scope-text__content');
     textOverflowed.value = Array.from(contents).some(node => isEllipsisOverflow(node as HTMLElement));
+  };
+
+  const syncTagOverflow = (event: MouseEvent) => {
+    const root = event.currentTarget as HTMLElement;
+    const chips = root.querySelectorAll('.match-scope-tag__chip');
+    const chipOverflowed = Array.from(chips).some(node => isEllipsisOverflow(node as HTMLElement));
+    // 多组折叠时也出 tip，方便看完整表达式
+    tagOverflowed.value = chipOverflowed || (canToggle.value && !expanded.value);
   };
 </script>
 <style lang="postcss" scoped>

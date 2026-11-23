@@ -70,6 +70,7 @@
   import type { MatchScope, ValidityMode, WhitelistType } from '@model/risk-whitelist/whitelist';
 
   import useWhitelistRoleText, {
+    getWhitelistAdventureAdminImpact,
     getWhitelistApplyHint,
     getWhitelistEffectImpact,
     getWhitelistRiskCloseImpact,
@@ -114,14 +115,20 @@
   const impacts = computed(() => {
     const lines: string[] = [];
     const type = whitelistType.value;
-    if (!isAdmin.value && source.value === 'risk') {
+    const admin = isAdmin.value;
+    if (!admin && source.value === 'risk') {
       const hint = getWhitelistApplyHint(type, false);
       if (hint) lines.push(hint);
     }
-    if (source.value === 'risk') {
-      lines.push(getWhitelistRiskCloseImpact(type, isAdmin.value));
+    // 管理员从风险单冒险加白：确认后立即关单并生效（合并一条，对齐验收文案）
+    if (source.value === 'risk' && admin && type === 'risk_acceptance') {
+      lines.push(getWhitelistAdventureAdminImpact());
+    } else {
+      if (source.value === 'risk') {
+        lines.push(getWhitelistRiskCloseImpact(type, admin));
+      }
+      lines.push(getWhitelistEffectImpact(type, admin));
     }
-    lines.push(getWhitelistEffectImpact(type, isAdmin.value));
     if (type === 'false_positive') {
       lines.push('误报加白用于检测不准的情况，命中后不再作为风险处理。');
     }

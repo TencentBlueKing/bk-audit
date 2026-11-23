@@ -1306,16 +1306,11 @@
     } = getSearchParams();
 
     const pageValue = isUnload.value ? 1 : page;
-    // 非首次加载时，才从 URL 读取 page_size
     if (pageValue && pageSize) {
       pagination.current = normalizePage(pageValue);
-      if (isUnload.value) {
-        // 首次加载时，强制使用默认值 10，忽略 URL 中的 page_size
-        pagination.limit = 10;
-      } else {
-        // 非首次加载时，从 URL 读取 page_size
-        pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
-      }
+      // URL 已带 page_size 时优先保留用户选择；窗口适配仅作未指定时的默认值
+      pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
+      pageSizeLocked.value = true;
       pagination.limitList = Array.from(new Set([...pagination.limitList, pagination.limit])).sort((a, b) => a - b);
     }
     if (sort) {
@@ -1617,7 +1612,8 @@
         pagination.limitList = Array.from(pageLimit).sort((a, b) => a - b);
         if (typeof props.tableMaxHeight === 'number') {
           applyAutoPageSize(rowNum);
-        } else if (isUnload.value) {
+        } else if (isUnload.value && !pageSizeLocked.value) {
+          // 仅当 URL/用户未指定 page_size 时，才用窗口高度推算默认条数
           pagination.limit = rowNum;
         }
       }

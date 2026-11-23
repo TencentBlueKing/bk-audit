@@ -73,6 +73,14 @@
   color: var(--bk-theme-table-header-text);
 }
 
+/* 已排序态需盖过 th *，保留品牌色以区分未排序 */
+.t-table thead .t-table__sort-icon--active,
+.t-table thead .t-table__sort-icon--active *,
+.t-table thead .t-table__sort-icon.t-is-focus,
+.t-table thead .t-table__sort-icon:hover {
+  color: var(--bk-theme-color-brand-2) !important;
+}
+
 /* 内容行高仍是 42；上下 8 写在行高里面，对应文本格 pad 上8 下8。表头保持上下 0。 */
 .t-table tbody td,
 .t-table.t-size-m td {

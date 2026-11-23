@@ -198,7 +198,7 @@
   });
 
   const handleSearch = () => {
-    listRef.value?.fetchData(buildParams(searchValue.value));
+    listRef.value?.fetchData(buildParams(searchValue.value), { resetSearch: true });
   };
 
   const open = (id: number | string, code: string) => {
