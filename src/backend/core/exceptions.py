@@ -34,15 +34,18 @@ class ValidationError(BlueException):
 
     def __init__(self, *args, data=None, **kwargs):
         # BlueException 只读取 message 关键字，位置参数会退回类上的「参数验证失败」。
+        # 位置参数仍传给父类，调用方会从 args 读取原文。
+        forwarded = args
         if args:
             custom_message = args[0]
             if isinstance(custom_message, tuple):
                 kwargs.setdefault("message", custom_message[1])
                 if data is None:
                     data = custom_message[0]
+                forwarded = (custom_message[1], *args[1:])
             else:
                 kwargs.setdefault("message", custom_message)
-        super().__init__(data=data, **kwargs)
+        super().__init__(*forwarded, data=data, **kwargs)
 
 
 class ApiResultError(ApiError):
