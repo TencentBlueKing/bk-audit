@@ -27,6 +27,7 @@
     row-key="uid"
     :search-params="searchParams"
     @clear-search="handleClearSearch"
+    @filter-change="handleFilterChange"
     @request-success="handleRequestSuccess" />
 </template>
 
@@ -44,15 +45,23 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import ToolManageService from '@service/tool-manage';
+
+  import useMessage from '@hooks/use-message';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { formatReferencedStrategyNames, type StrategyOption } from '@views/tool-manage-shared/strategy-reference';
+
   import sceneIconUrl from '@images/scene.svg';
   import systemIconUrl from '@images/system.svg';
+
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
 
   // 工具类型枚举
   type ToolTypeKey = 'api' | 'data_search' | 'bk_vision' | 'smart_page';
@@ -97,12 +106,20 @@
     name: string;
   }
 
+  interface TagItem {
+    tag_id: string;
+    tag_name: string;
+  }
+
   interface Props {
     searchParams: Record<string, any>;
     sceneNameMap?: Record<string, string>;
     systemNameMap?: Record<string, string>;
     sceneOptions?: SceneOption[];
     systemOptions?: SystemOption[];
+    strategyList?: StrategyOption[];
+    globalStrategyIds?: number[];
+    tagsEnums?: TagItem[];
   }
 
   interface Emits {
@@ -113,6 +130,8 @@
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
     (e: 'status-counts', counts: { all: number; published: number; unpublished: number }): void;
+    (e: 'filter-change', filters: Record<string, any>): void;
+    (e: 'tags-change'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -120,11 +139,15 @@
     systemNameMap: () => ({}),
     sceneOptions: () => [],
     systemOptions: () => [],
+    strategyList: () => [],
+    globalStrategyIds: () => [],
+    tagsEnums: () => [],
   });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
   const router = useRouter();
+  const { messageSuccess } = useMessage();
 
   const listRef = ref();
   const activeJumpPopoverUid = ref<string | null>(null);
@@ -155,12 +178,107 @@
     smart_page: t('智能用户画像'),
   };
 
+  const toolTypeFilterList = (Object.keys(toolType) as ToolTypeKey[]).map(key => ({
+    label: toolType[key],
+    value: key,
+  }));
+
   const formatCellText = (value: unknown) => {
     if (value === null || value === undefined || value === '') {
       return '--';
     }
     return String(value);
   };
+
+  // 保存标签后父组件重新拉取标签枚举前，用接口返回的新标签兜底展示
+  const savedTagNameMap = ref<Record<string, string>>({});
+
+  const getTagName = (tagId: string) => props.tagsEnums
+    .find(item => String(item.tag_id) === String(tagId))?.tag_name
+    || savedTagNameMap.value[String(tagId)]
+    || tagId;
+
+  const editingTagUid = ref('');
+  const savingTagUid = ref('');
+  const tagOptions = computed(() => filterVirtualToolTags(props.tagsEnums));
+
+  const handleTagEdit = (row: ToolModel) => {
+    editingTagUid.value = row.uid;
+  };
+
+  const handleTagEditCancel = () => {
+    editingTagUid.value = '';
+  };
+
+  const handleTagSave = (row: ToolModel, tags: string[]) => {
+    savingTagUid.value = row.uid;
+    MetaManageService.saveTagBindings({
+      resource_type: 'tool',
+      resource_id: row.uid,
+      tags,
+    }).then((result) => {
+      result.forEach((item) => {
+        savedTagNameMap.value[String(item.tag_id)] = item.tag_name;
+      });
+      const targetRow = listRef.value?.getListData()?.find((item: ToolModel) => item.uid === row.uid);
+      if (targetRow) {
+        targetRow.tags = result.map(item => String(item.tag_id));
+      }
+      editingTagUid.value = '';
+      messageSuccess(t('更新成功'));
+      emit('tags-change');
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        savingTagUid.value = '';
+      });
+  };
+
+  const renderTagsContent = (row: ToolModel) => (
+    <InlineTag
+      isEditing={editingTagUid.value === row.uid}
+      key={row.uid}
+      saving={savingTagUid.value === row.uid}
+      showCopy={false}
+      tagList={tagOptions.value}
+      tags={(row.tags || []).map(getTagName)}
+      onCancel={handleTagEditCancel}
+      onEdit={() => handleTagEdit(row)}
+      onSave={(values: string[]) => handleTagSave(row, values)} />
+  );
+
+  const getStrategyName = (strategyId: number) => {
+    const strategy = props.strategyList.find(item => String(item.value) === String(strategyId));
+    return strategy ? strategy.label : `${strategyId}`;
+  };
+
+  const isGlobalStrategy = (strategyId: number) => props.globalStrategyIds
+    .some(id => String(id) === String(strategyId));
+
+  const handleStrategyClick = (strategyId: number) => {
+    const url = router.resolve({
+      name: isGlobalStrategy(strategyId) ? 'platformStrategyList' : 'strategyList',
+      query: { strategy_id: String(strategyId) },
+    }).href;
+    window.open(url, '_blank');
+  };
+
+  const renderStrategiesTooltipContent = (strategies: number[]) => (
+    <div class="strategies-tooltip-content">
+      {strategies.map((strategyId: number) => (
+        <div
+          class="strategy-item"
+          onClick={() => handleStrategyClick(strategyId)}>
+          <span class="strategy-name">
+            {getStrategyName(strategyId)}（{strategyId}）
+          </span>
+          <audit-icon
+            class="strategy-link-icon"
+            type="jump-link" />
+        </div>
+      ))}
+    </div>
+  );
 
   // 根据可见范围信息组装标签文案（场景 + 平台/系统）
   // 后端 visibility_type 枚举值：
@@ -594,6 +712,7 @@
       title: t('工具名称'),
       colKey: 'name',
       width: 250,
+      fixed: 'left',
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
@@ -607,7 +726,7 @@
     {
       title: t('工具说明'),
       colKey: 'description',
-      width: 450,
+      minWidth: 400,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{formatCellText(row.description)}</span>
@@ -616,22 +735,60 @@
     {
       title: t('工具类型'),
       colKey: 'tool_type',
-      width: 150,
+      width: 140,
       ellipsis: true,
+      filter: {
+        type: 'multiple',
+        showConfirmAndReset: true,
+        resetValue: [],
+        list: toolTypeFilterList,
+      },
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{toolType[row.tool_type] || '--'}</span>
       ),
     },
     {
+      title: t('标签'),
+      colKey: 'tags',
+      width: 240,
+      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row),
+    },
+    {
       title: t('可见范围'),
       colKey: 'visibility',
-      width: 400,
+      width: 300,
       cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row),
+    },
+    {
+      title: t('被引用'),
+      colKey: 'strategies',
+      width: 100,
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: ToolModel }) => {
+        if (!row.strategies || row.strategies.length === 0) {
+          return <span>--</span>;
+        }
+        return (
+          <bk-popover
+            placement="bottom"
+            theme="dark"
+            trigger="hover">
+            {{
+              default: () => (
+                <span class="strategies-count">
+                  {row.strategies.length} {t('个')}
+                </span>
+              ),
+              content: () => renderStrategiesTooltipContent(row.strategies),
+            }}
+          </bk-popover>
+        );
+      },
     },
     {
       title: t('状态'),
       colKey: 'status',
-      width: 120,
+      width: 100,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
@@ -655,7 +812,7 @@
     {
       title: t('更新时间'),
       colKey: 'updated_at',
-      width: 150,
+      width: 170,
       ellipsis: true,
       sortType: 'all',
       sorter: true,
@@ -670,6 +827,11 @@
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPublished = row.status === 'published';
+        const referencedStrategyNames = formatReferencedStrategyNames(row.strategies, props.strategyList);
+        const isReferenced = Boolean(referencedStrategyNames);
+        const deleteDisabledTip = isReferenced
+          ? t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames })
+          : t('请先停用后再删除');
 
         return (
           <div class="action-cell">
@@ -680,13 +842,30 @@
               onClick={() => emit('edit', row)}>
               {t('编辑')}
             </bk-button>
-            <bk-button
-              text
-              theme="primary"
-              class="mr8"
-              onClick={() => emit('toggle-status', row)}>
-              {isPublished ? t('停用') : t('启用')}
-            </bk-button>
+            {isPublished && isReferenced ? (
+              <span
+                class="mr8"
+                v-bk-tooltips={{
+                  content: t('该工具正在被{strategies}使用，无法停用', { strategies: referencedStrategyNames }),
+                  placement: 'top',
+                  extCls: 'tool-strategy-ref-tips',
+                }}>
+                <bk-button
+                  text
+                  theme="primary"
+                  disabled>
+                  {t('停用')}
+                </bk-button>
+              </span>
+            ) : (
+              <bk-button
+                text
+                theme="primary"
+                class="mr8"
+                onClick={() => emit('toggle-status', row)}>
+                {isPublished ? t('停用') : t('启用')}
+              </bk-button>
+            )}
             <bk-popover
               extCls="tool-more-action-popover"
               placement="bottom-start"
@@ -702,11 +881,12 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    {isPublished ? (
+                    {isPublished || isReferenced ? (
                       <span
                         v-bk-tooltips={{
-                          content: t('请先停用后再删除'),
+                          content: deleteDisabledTip,
                           placement: 'bottom',
+                          extCls: 'tool-strategy-ref-tips',
                         }}>
                         <span class="delete-disabled">{t('删除')}</span>
                       </span>
@@ -730,6 +910,10 @@
 
   const handleClearSearch = () => {
     emit('clear-search');
+  };
+
+  const handleFilterChange = (filters: Record<string, any>) => {
+    emit('filter-change', filters);
   };
 
   const handleRequestSuccess = (data: any) => {
@@ -897,6 +1081,37 @@
     max-width: 280px;
     word-break: break-word;
     white-space: normal;
+  }
+
+  .tool-strategy-ref-tips {
+    max-width: 400px;
+    word-break: break-all;
+    white-space: normal;
+  }
+
+  .strategies-count {
+    color: #4d4f56;
+    cursor: pointer;
+    border-bottom: 1px dashed #c4c6cc;
+  }
+
+  .strategies-tooltip-content {
+    .strategy-item {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+
+    .strategy-name {
+      color: #fff;
+    }
+
+    .strategy-link-icon {
+      font-size: 16px;
+      color: #699df4;
+    }
   }
 
   .tool-jump-scope-popover.bk-popover.bk-pop2-content {

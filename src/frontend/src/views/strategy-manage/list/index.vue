@@ -236,6 +236,9 @@
         :data="strategyItem"
         :detail-loading="detailLoading"
         :strategy-map="strategyTagMap"
+        :tag-editable="isStrategyTagEditable(strategyItem)"
+        :tag-list="strategyLabelList"
+        :tag-save="handleDetailTagSave"
         :user-group-list="userGroupList"
         @tab-change="handleDetailTabChange" />
     </div>
@@ -332,6 +335,7 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
+  import InlineTag from '@components/edit-box/inline-tag.vue';
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -669,6 +673,8 @@
   // 列表是否已成功加载过（用于区分「场景相同但首屏请求失败」与「无需重复请求」）
   const hasListLoadedOnce = ref(false);
   const strategyTagMap = ref<Record<string, string>>({});
+  const editingTagStrategyId = ref<number | null>(null);
+  const savingTagStrategyId = ref<number | null>(null);
   const statusMap = ref<Record<string, string>>({});
   // 挂起的需要轮询的id列表
   const pendingStatusIdList = ref<Array<number>>([]);
@@ -998,6 +1004,61 @@
     searchData.value = buildSearchData();
   };
 
+  const isStrategyTagEditable = (data: StrategyModel) => !isSceneGlobalStrategy(data)
+    && Boolean(resolveStrategyPermission(data.permission?.edit_strategy));
+
+  const handleTagEdit = (data: StrategyModel) => {
+    editingTagStrategyId.value = data.strategy_id;
+  };
+
+  const handleTagEditCancel = () => {
+    editingTagStrategyId.value = null;
+  };
+
+  const saveStrategyTags = (strategy: StrategyModel, tags: string[]) => MetaManageService.saveTagBindings({
+    resource_type: 'strategy',
+    resource_id: String(strategy.strategy_id),
+    tags,
+  }).then((result) => {
+    const nameToIdMap: Record<string, string> = {};
+    result.forEach((item) => {
+      strategyTagMap.value[item.tag_id] = item.tag_name;
+      nameToIdMap[item.tag_name] = String(item.tag_id);
+    });
+    // 接口返回顺序与提交顺序无关，按用户编辑顺序回填，保证新加的标签在最后
+    const orderedIds = tags.map(name => nameToIdMap[name]).filter(Boolean);
+    const tagIds = [
+      ...orderedIds,
+      ...result.map(item => String(item.tag_id)).filter(id => !orderedIds.includes(id)),
+    ];
+    const targetRow = listRef.value?.getListData()
+      ?.find((item: StrategyModel) => item.strategy_id === strategy.strategy_id);
+    if (targetRow) {
+      targetRow.tags = tagIds;
+    }
+    if (strategyItem.value.strategy_id === strategy.strategy_id) {
+      strategyItem.value.tags = tagIds;
+    }
+    messageSuccess(t('更新成功'));
+    fetchStrategyTags(getStrategyListScopeParams(route)).then(() => {
+      refreshSearchData();
+    });
+  });
+
+  const handleTagSave = (data: StrategyModel, tags: string[]) => {
+    savingTagStrategyId.value = data.strategy_id;
+    saveStrategyTags(data, tags)
+      .then(() => {
+        editingTagStrategyId.value = null;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        savingTagStrategyId.value = null;
+      });
+  };
+
+  const handleDetailTagSave = (tags: string[]) => saveStrategyTags(strategyItem.value, tags);
+
   const tableColumn = ref([
     {
       label: () => t('策略ID'),
@@ -1094,9 +1155,16 @@
       render: ({ data }: { data: StrategyModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
         return (
-          <EditTag
-            data={tags}
+          <InlineTag
+            editable={isStrategyTagEditable(data)}
+            isEditing={editingTagStrategyId.value === data.strategy_id}
             key={`tags-${data.strategy_id}-${tags.join('|')}`}
+            saving={savingTagStrategyId.value === data.strategy_id}
+            tagList={strategyLabelList.value}
+            tags={tags}
+            onCancel={handleTagEditCancel}
+            onEdit={() => handleTagEdit(data)}
+            onSave={(values: string[]) => handleTagSave(data, values)}
           />
         );
       },
@@ -2024,7 +2092,7 @@
     if (domList) {
       domList.forEach((dom) => {
         const el = dom as HTMLElement;
-        el.style.background = isNew ? '#f2fff4' : '#fff';
+        el.style.background = isNew ? '#f2fff4' : '';
       });
     }
   };

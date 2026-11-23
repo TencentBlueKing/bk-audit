@@ -148,6 +148,7 @@ export const CHART_FIELDS = {
 export const EXPORT_USER_FIELDS = {
   GAME_NAME: '游戏名称',
   OPENID: 'openid',
+  WECHAT_COMMID: '微信commid',
   WECHAT: '微信',
   QQ: 'QQ',
   COIN_BALANCE: '代币存量',
@@ -188,6 +189,7 @@ export const PROFILE_FIELDS = {
   IS_TEST_ACCOUNT: '是否测试号',
   // 账号宽表新增字段（main_openid_list 调整后返回）
   PLATFORM_ACCOUNT_TYPE: '平台账号类型',
+  WECHAT_COMMID: '微信commid',
   TOTAL_RECHARGE_YUAN: '总充值（元）',
   ACCOUNT_NATURE: '账号性质',
   TOTAL_ISSUE_COUNT_YUAN: '累计发数（¥）',
@@ -208,6 +210,12 @@ export const getExchangeRateValue = (row: Record<string, any> = {}) => (
     ?? row.exchangeRate
     ?? ''
 );
+
+/** 代币兑换比为空或负数（后端 -1）时视为未设置 */
+export const isUnsetExchangeRate = (val: unknown) => {
+  if (val === null || val === undefined || val === '') return true;
+  return Number(val) < 0;
+};
 
 /** 读取后端返回的账号性质 */
 export const getAccountNatureValue = (row: Record<string, any> = {}) => (

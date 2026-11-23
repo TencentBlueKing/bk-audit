@@ -61,8 +61,13 @@ from services.web.scene.models import (
 )
 from services.web.scene.serializers import SceneFilterSerializer
 from services.web.scene.views import SceneViewSet
-from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.constants import (
+    StrategyFieldSourceEnum,
+    StrategySource,
+    StrategyStatusChoices,
+)
+from services.web.strategy_v2.models import Strategy, StrategyTool
+from services.web.tool.exceptions import ToolUsedByStrategyCannotDelete
 from services.web.tool.models import Tool
 from services.web.vision.constants import ReportGroupType
 from services.web.vision.models import (
@@ -749,6 +754,25 @@ class TestSceneResource(TestCase):
         self.assertIn(strategy.strategy_id, target["strategy_ids"])
         self.assertEqual(target["risk_count"], 1)
 
+    def test_scene_list_strategy_count_includes_draft(self):
+        """场景列表策略数按绑定数统计，包含草稿策略"""
+        strategy = self._create_bound_strategy(self.scene, "场景运行策略")
+        draft = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="场景草稿策略",
+            status=StrategyStatusChoices.DRAFT,
+        )
+        self._bind_strategy_to_scene(draft, self.scene)
+
+        result = self.resource.scene.list_scene({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+
+        self.assertSetEqual(
+            set(target["strategy_ids"]),
+            {strategy.strategy_id, draft.strategy_id},
+        )
+        self.assertEqual(target["strategy_count"], 2)
+
     def test_scene_list_default_sort_defers_strategy_and_risk_stats_to_batch_queries(self):
         """默认排序主查询不内联策略/风险统计子查询"""
         strategy = self._create_bound_strategy(self.scene, "默认排序批量统计策略")
@@ -1217,8 +1241,8 @@ class TestSceneResource(TestCase):
         self.assertEqual(default_result["risk_count"], 1)
         self.assertEqual(request_window_result["risk_count"], 2)
 
-    def test_scene_retrieve_strategy_count_counts_running_strategies(self):
-        """测试场景详情策略数量仅统计运行中策略"""
+    def test_scene_retrieve_strategy_count_counts_bound_strategies(self):
+        """测试场景详情策略数量按绑定数统计，包含非运行中策略"""
         visible_strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="详情可见策略",
@@ -1255,12 +1279,16 @@ class TestSceneResource(TestCase):
 
         self.assertSetEqual(
             set(detail["strategy_ids"]),
-            {visible_strategy.strategy_id, another_visible_strategy.strategy_id},
+            {
+                visible_strategy.strategy_id,
+                another_visible_strategy.strategy_id,
+                disabled_strategy.strategy_id,
+            },
         )
-        self.assertEqual(detail["strategy_count"], 2)
+        self.assertEqual(detail["strategy_count"], 3)
 
-    def test_get_scene_info_strategy_count_counts_running_strategies(self):
-        """测试场景管理员详情策略数量仅统计运行中策略"""
+    def test_get_scene_info_strategy_count_counts_bound_strategies(self):
+        """测试场景管理员详情策略数量按绑定数统计，包含非运行中策略"""
         running_strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="管理员详情运行策略",
@@ -1276,8 +1304,11 @@ class TestSceneResource(TestCase):
 
         result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
 
-        self.assertEqual(result["strategy_ids"], [running_strategy.strategy_id])
-        self.assertEqual(result["strategy_count"], 1)
+        self.assertSetEqual(
+            set(result["strategy_ids"]),
+            {running_strategy.strategy_id, disabled_strategy.strategy_id},
+        )
+        self.assertEqual(result["strategy_count"], 2)
 
     def test_create_scene_all_systems_without_system_id(self):
         """创建场景选择全系统时允许不传 system_id"""
@@ -2773,6 +2804,122 @@ class TestToolResources(TestCase):
         )
         updated_tool = Tool.last_version_tool(self.platform_tool.uid)
         self.assertEqual(updated_tool.status, PanelStatus.UNPUBLISHED)
+
+    # ==================== 被策略字段下钻引用的工具禁止停用/删除 ====================
+
+    def _create_strategy(self, name: str, binding_type: str = None, status: str = None) -> "Strategy":
+        """创建策略，binding_type 为空表示无绑定记录的策略"""
+
+        strategy = Strategy.objects.create(namespace="default", strategy_name=name)
+        if status:
+            strategy.status = status
+            strategy.save(update_fields=["status"])
+        if binding_type:
+            ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy.strategy_id),
+                binding_type=binding_type,
+            )
+        return strategy
+
+    def _bind_strategy_tool(self, strategy: "Strategy", tool: "Tool", field_name: str = "field_1") -> None:
+        """模拟策略字段下钻引用工具"""
+
+        StrategyTool.objects.create(
+            strategy=strategy,
+            tool_uid=tool.uid,
+            tool_version=tool.version,
+            field_name=field_name,
+            field_source=StrategyFieldSourceEnum.BASIC.value,
+        )
+
+    def test_delete_platform_tool_used_by_global_strategy(self):
+        """被全局策略下钻引用的平台级工具不可删除"""
+
+        self._bind_strategy_tool(self._create_strategy("全局策略A", BindingType.PLATFORM_BINDING), self.platform_tool)
+        with self.assertRaises(ToolUsedByStrategyCannotDelete):
+            self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
+        self.assertIsNotNone(Tool.last_version_tool(self.platform_tool.uid))
+
+    def test_delete_platform_tool_used_by_scene_strategy(self):
+        """平台级工具被场景策略引用时同样不可删除"""
+
+        self._bind_strategy_tool(self._create_strategy("场景策略A", BindingType.SCENE_BINDING), self.platform_tool)
+        with self.assertRaises(ToolUsedByStrategyCannotDelete):
+            self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
+        self.assertIsNotNone(Tool.last_version_tool(self.platform_tool.uid))
+
+    def test_delete_tool_ignores_draft_strategy(self):
+        """草稿策略的引用不构成阻塞"""
+
+        strategy = self._create_strategy("草稿策略A", BindingType.PLATFORM_BINDING, StrategyStatusChoices.DRAFT.value)
+        self._bind_strategy_tool(strategy, self.platform_tool)
+
+        self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
+        self.assertIsNone(Tool.last_version_tool(self.platform_tool.uid))
+
+    def test_delete_scene_tool_used_by_strategy(self):
+        """场景级工具被全局策略或场景策略引用时均不可删除"""
+
+        for binding_type in [BindingType.PLATFORM_BINDING, BindingType.SCENE_BINDING]:
+            with self.subTest(binding_type=binding_type):
+                self._bind_strategy_tool(self._create_strategy(f"策略-{binding_type}", binding_type), self.scene_tool)
+                with self.assertRaises(ToolUsedByStrategyCannotDelete):
+                    self.resource.tool.delete_scene_scope_tool(
+                        {"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid}
+                    )
+                self.assertIsNotNone(Tool.last_version_tool(self.scene_tool.uid))
+                StrategyTool.objects.all().delete()
+
+    def test_delete_tool_ignores_deleted_strategy(self):
+        """已删除的策略不再阻塞工具删除"""
+
+        strategy = self._create_strategy("已删除策略", BindingType.PLATFORM_BINDING)
+        self._bind_strategy_tool(strategy, self.platform_tool)
+        strategy.is_deleted = True
+        strategy.save(update_fields=["is_deleted"])
+
+        self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
+        self.assertIsNone(Tool.last_version_tool(self.platform_tool.uid))
+
+    def test_publish_tool_not_blocked_by_strategy(self):
+        """上架不受策略引用限制"""
+
+        self._bind_strategy_tool(self._create_strategy("全局策略C", BindingType.PLATFORM_BINDING), self.platform_tool)
+        self.resource.tool.publish_platform_scene_tool({"uid": self.platform_tool.uid})
+        self.assertEqual(Tool.last_version_tool(self.platform_tool.uid).status, PanelStatus.PUBLISHED)
+
+    def test_disable_exception_data_contains_strategy_names(self):
+        """异常 data 中携带被引用的策略名且不重复，后端不产出成品提示语"""
+
+        strategy = self._create_strategy("重复引用策略", BindingType.PLATFORM_BINDING)
+        self._bind_strategy_tool(strategy, self.platform_tool, field_name="field_1")
+        self._bind_strategy_tool(strategy, self.platform_tool, field_name="field_2")
+
+        with self.assertRaises(ToolUsedByStrategyCannotDelete) as ctx:
+            self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
+        self.assertEqual(ctx.exception.data["strategy_names"], ["重复引用策略"])
+        self.assertNotIn("「重复引用策略」", ctx.exception.message)
+
+    def test_get_tool_detail_returns_strategy_refs(self):
+        """工具详情返回引用策略及可停用/可删除标记"""
+
+        strategy = self._create_strategy("详情策略", BindingType.PLATFORM_BINDING)
+        self._bind_strategy_tool(strategy, self.platform_tool)
+
+        data = self.resource.tool.get_tool_detail({"uid": self.platform_tool.uid})
+        self.assertEqual(data["strategy_refs"], [{"strategy_id": strategy.strategy_id, "strategy_name": "详情策略"}])
+        # 被策略引用可停用（关展示不影响下钻），仅删除受限
+        self.assertTrue(data["can_disable"])
+        self.assertFalse(data["can_delete"])
+
+    def test_get_tool_detail_without_strategy_ref(self):
+        """未被策略引用的工具允许停用与删除"""
+
+        data = self.resource.tool.get_tool_detail({"uid": self.platform_tool.uid})
+        self.assertEqual(data["strategy_refs"], [])
+        self.assertTrue(data["can_disable"])
+        self.assertTrue(data["can_delete"])
 
     def test_publish_scene_tool(self):
         """测试上架/下架场景级工具"""

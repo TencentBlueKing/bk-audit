@@ -45,6 +45,8 @@ export default {
     数据查询: 'Data query',
     API接口: 'API interface',
     BKVision图表: 'BKVision chart',
+    智能用户画像: 'Smart user profile',
+    被引用: 'Referenced',
     简易模式: 'Simple mode',
     SQL模式: 'SQL mode',
     '用于单一数据表，先配置的输入与输出字段，默认生成查询语句': 'For a single data table, first configure the input and output fields, and generate a default query statement',
