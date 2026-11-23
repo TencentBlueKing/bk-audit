@@ -435,6 +435,11 @@
     ContentCardRef.value?.getToolsList(tagId.value);
   };
 
+  const recordSquareRecentUsage = (uid?: string) => {
+    if (!uid || uid.startsWith('game_detail_')) return;
+    ToolManageService.recordRecentUsage(uid);
+  };
+
   if (isDrillDownRoute) {
     resetForDrillDown();
     const drillUid = routeUid;
@@ -480,6 +485,7 @@
         name: routeUid.startsWith('game_detail_') ? getGameDetailTabName() : routeUid,
       } as ToolInfo);
       openTool(tempTool);
+      recordSquareRecentUsage(routeUid);
     } else if (activeToolUid.value !== routeUid) {
       switchTab(routeUid);
     }
@@ -626,6 +632,7 @@
   }
 
   const handleOpenTool = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
+    recordSquareRecentUsage(tool.uid);
     ContentCardRef.value?.saveScrollPosition();
     openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
@@ -634,6 +641,7 @@
   };
 
   const handleAddToolFromPopover = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
+    recordSquareRecentUsage(tool.uid);
     ContentCardRef.value?.saveScrollPosition();
     openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
