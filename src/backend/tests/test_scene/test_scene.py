@@ -67,10 +67,7 @@ from services.web.strategy_v2.constants import (
     StrategyStatusChoices,
 )
 from services.web.strategy_v2.models import Strategy, StrategyTool
-from services.web.tool.exceptions import (
-    ToolUsedByStrategyCannotDelete,
-    ToolUsedByStrategyCannotDisable,
-)
+from services.web.tool.exceptions import ToolUsedByStrategyCannotDelete
 from services.web.tool.models import Tool
 from services.web.vision.constants import ReportGroupType
 from services.web.vision.models import (
@@ -2779,14 +2776,20 @@ class TestToolResources(TestCase):
         )
 
     def test_delete_published_platform_tool(self):
-        """测试删除已上架的平台级工具（应失败）"""
-        from services.web.tool.exceptions import SceneToolCannotDelete
-
+        """测试删除广场展示中的平台级工具：开关仅控制广场展示，不再阻止删除"""
+        uid = self.platform_tool.uid
         self.platform_tool.status = PanelStatus.PUBLISHED
         self.platform_tool.save()
-        with self.assertRaises(SceneToolCannotDelete):
-            self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
-        self.assertIsNotNone(Tool.last_version_tool(self.platform_tool.uid))
+
+        self.resource.tool.delete_platform_scene_tool({"uid": uid})
+
+        self.assertIsNone(Tool.last_version_tool(uid))
+        self.assertFalse(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+            ).exists()
+        )
 
     def test_publish_platform_tool(self):
         """测试上架/下架平台级工具"""
@@ -2879,46 +2882,11 @@ class TestToolResources(TestCase):
         self.resource.tool.delete_platform_scene_tool({"uid": self.platform_tool.uid})
         self.assertIsNone(Tool.last_version_tool(self.platform_tool.uid))
 
-    def test_disable_platform_tool_used_by_global_strategy(self):
-        """被全局策略下钻引用的平台级工具不可停用"""
-
-        self.platform_tool.status = PanelStatus.PUBLISHED
-        self.platform_tool.save(update_fields=["status"])
-        self._bind_strategy_tool(self._create_strategy("全局策略B", BindingType.PLATFORM_BINDING), self.platform_tool)
-
-        with self.assertRaises(ToolUsedByStrategyCannotDisable):
-            self.resource.tool.publish_platform_scene_tool({"uid": self.platform_tool.uid})
-        self.assertEqual(Tool.last_version_tool(self.platform_tool.uid).status, PanelStatus.PUBLISHED)
-
-    def test_disable_scene_tool_used_by_strategy(self):
-        """被引用的场景级工具不可停用"""
-
-        self.scene_tool.status = PanelStatus.PUBLISHED
-        self.scene_tool.save(update_fields=["status"])
-        self._bind_strategy_tool(self._create_strategy("场景策略B", BindingType.SCENE_BINDING), self.scene_tool)
-
-        with self.assertRaises(ToolUsedByStrategyCannotDisable):
-            self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
-        self.assertEqual(Tool.last_version_tool(self.scene_tool.uid).status, PanelStatus.PUBLISHED)
-
     def test_publish_tool_not_blocked_by_strategy(self):
         """上架不受策略引用限制"""
 
         self._bind_strategy_tool(self._create_strategy("全局策略C", BindingType.PLATFORM_BINDING), self.platform_tool)
         self.resource.tool.publish_platform_scene_tool({"uid": self.platform_tool.uid})
-        self.assertEqual(Tool.last_version_tool(self.platform_tool.uid).status, PanelStatus.PUBLISHED)
-
-    def test_update_tool_status_to_unpublished_blocked(self):
-        """编辑接口直接下架同样受策略引用限制"""
-
-        self.platform_tool.status = PanelStatus.PUBLISHED
-        self.platform_tool.save(update_fields=["status"])
-        self._bind_strategy_tool(self._create_strategy("全局策略D", BindingType.PLATFORM_BINDING), self.platform_tool)
-
-        with self.assertRaises(ToolUsedByStrategyCannotDisable):
-            self.resource.tool.update_platform_scene_tool(
-                {"uid": self.platform_tool.uid, "tags": [], "status": PanelStatus.UNPUBLISHED}
-            )
         self.assertEqual(Tool.last_version_tool(self.platform_tool.uid).status, PanelStatus.PUBLISHED)
 
     def test_disable_exception_data_contains_strategy_names(self):
@@ -2941,7 +2909,8 @@ class TestToolResources(TestCase):
 
         data = self.resource.tool.get_tool_detail({"uid": self.platform_tool.uid})
         self.assertEqual(data["strategy_refs"], [{"strategy_id": strategy.strategy_id, "strategy_name": "详情策略"}])
-        self.assertFalse(data["can_disable"])
+        # 被策略引用可停用（关展示不影响下钻），仅删除受限
+        self.assertTrue(data["can_disable"])
         self.assertFalse(data["can_delete"])
 
     def test_get_tool_detail_without_strategy_ref(self):

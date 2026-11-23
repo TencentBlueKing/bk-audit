@@ -142,7 +142,8 @@ def attach_strategy_refs(tools: Iterable[Tool]) -> None:
             for sid in sorted(tool_strategy_ids.get(str(tool.uid), set()))
         ]
         setattr(tool, "strategy_refs", refs)
-        setattr(tool, "can_disable", not refs)
+        # 被策略引用不影响停用（关展示不影响下钻）；仅删除受引用限制
+        setattr(tool, "can_disable", True)
         setattr(tool, "can_delete", not refs)
 
 
