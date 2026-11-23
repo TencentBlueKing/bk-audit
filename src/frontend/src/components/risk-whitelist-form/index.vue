@@ -469,15 +469,27 @@
     && (renewEditing.value || validityView.value === 'permanent-switch')
   ));
 
-  /** 非永久时展示预计到期时间；自定义未选日期时 expectedExpire 为 -- */
+  /** 快捷期限展示预计到期时间；自定义已有日期选择器，不再重复展示 */
   const showExpirePreview = computed(() => (
     showDurationPicker.value
     && validityMode.value !== 'permanent'
+    && validityMode.value !== 'custom'
     && !showSwitchHint.value
   ));
 
   const markDirty = () => {
     dirty.value = true;
+  };
+
+  /** 只清对应字段的校验，避免改加白原因时把匹配范围错误一并抹掉 */
+  const clearScopeError = () => {
+    if (scopeError.value) scopeError.value = '';
+  };
+  const clearReasonError = () => {
+    if (reasonError.value) reasonError.value = '';
+  };
+  const clearValidityError = () => {
+    if (validityError.value) validityError.value = '';
   };
 
   /** V1：所有条件操作符强制等于；命中策略补齐展示名 */
@@ -537,6 +549,12 @@
   watch(whitelistType, (type) => {
     if (type === 'risk_acceptance' && validityMode.value === 'permanent') {
       validityMode.value = '1m';
+      return;
+    }
+    // 误报加白默认永久；从冒险切回时恢复默认，避免仍停在 1 个月
+    if (type === 'false_positive' && !isEdit.value) {
+      validityMode.value = 'permanent';
+      customExpire.value = '';
     }
   });
   watch(falsePositiveDisabled, (disabled) => {
@@ -757,6 +775,7 @@
       if (index > 0) group.connector = next;
     });
     markDirty();
+    clearScopeError();
   };
 
   const toggleInnerConnector = (groupIndex: number) => {
@@ -766,6 +785,7 @@
       if (index > 0) condition.connector = next;
     });
     markDirty();
+    clearScopeError();
   };
 
   const changeWhitelistType = (value: WhitelistType) => {
@@ -778,6 +798,7 @@
     if (value === 'permanent' && whitelistType.value === 'risk_acceptance') return;
     validityMode.value = value;
     markDirty();
+    clearValidityError();
   };
 
   const startRenew = () => {
@@ -794,17 +815,20 @@
       customDays.value = Math.max(Math.ceil(picked.diff(dayjs(), 'hour', true) / 24), 1);
     }
     markDirty();
+    clearValidityError();
   };
 
   const changeReason = (value: string) => {
     reason.value = value;
     markDirty();
+    clearReasonError();
   };
 
   const changeField = (groupIndex: number, conditionIndex: number, field: string) => {
     const meta = FALLBACK_CONDITION_FIELDS.find(item => item.field === field);
     if (!meta) return;
     markDirty();
+    clearScopeError();
     patchCondition(groupIndex, conditionIndex, normalizeCondition({
       field: meta.field,
       field_name: meta.name,
@@ -818,6 +842,7 @@
 
   const changeStrategy = (groupIndex: number, conditionIndex: number, value: string) => {
     markDirty();
+    clearScopeError();
     const option = strategyOptions.value.find(item => item.id === value);
     patchCondition(groupIndex, conditionIndex, {
       operator: 'eq',
@@ -828,6 +853,7 @@
 
   const changeTextValue = (groupIndex: number, conditionIndex: number, value: string) => {
     markDirty();
+    clearScopeError();
     patchCondition(groupIndex, conditionIndex, {
       value,
       value_display: value,
@@ -849,6 +875,7 @@
     };
     scope.value.groups[groupIndex].conditions.splice(conditionIndex + 1, 0, next);
     markDirty();
+    clearScopeError();
   };
 
   const canRemoveCondition = (groupIndex: number, conditionIndex: number) => {
@@ -863,20 +890,24 @@
     if (group.conditions.length === 1) {
       scope.value.groups.splice(groupIndex, 1);
       markDirty();
+      clearScopeError();
       return;
     }
     group.conditions.splice(conditionIndex, 1);
     markDirty();
+    clearScopeError();
   };
 
   const removeGroup = (groupIndex: number) => {
     if (scope.value.groups.length <= 1) return;
     scope.value.groups.splice(groupIndex, 1);
     markDirty();
+    clearScopeError();
   };
 
   const addGroup = () => {
     markDirty();
+    clearScopeError();
     // 新增条件组：命中策略锁定；值默认与第一组一致；组间连接沿用原默认 and（需 OR 时用户可切换）
     const seed = getFirstStrategySeed(scope.value);
     scope.value.groups.push(createGroup('and', seed));

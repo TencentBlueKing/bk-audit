@@ -54,7 +54,17 @@ const LIST_QUERY_KEYS = [
 /** 规则标识列按后端整数主键 id 排序 */
 const toSortField = (field: string) => field.replace(/^(-?)rule_code$/, '$1id');
 
-/** 搜索框里的规则标识、匹配范围、包含条件在后端分别是 id / keyword */
+/** 多选值统一拆开后再按逗号拼回，保证传参为 strategy_id,raw_event_id */
+const joinConditionKeywords = (value?: string) => String(value || '')
+  .split(/[,\s]+/)
+  .map(item => item.trim())
+  .filter(Boolean)
+  .join(',');
+
+/**
+ * 搜索框里的规则标识、匹配范围、包含条件在后端分别是 id / keyword。
+ * 包含条件：字段 key 写入 keyword；多选逗号分隔（如 strategy_id,raw_event_id）。
+ */
 const normalizeListParams = (params: Record<string, any>): Record<string, any> => {
   const {
     rule_code: ruleCode,
@@ -64,7 +74,8 @@ const normalizeListParams = (params: Record<string, any>): Record<string, any> =
     keyword: rawKeyword,
     ...rest
   } = params;
-  const keyword = [rawKeyword, matchScope, conditionKeyword].filter(Boolean).join(' ');
+  const conditionPart = joinConditionKeywords(conditionKeyword);
+  const keyword = [rawKeyword, matchScope, conditionPart].filter(Boolean).join(' ');
   const normalized: Record<string, any> = {
     ...rest,
     ...(ruleCode ? { id: ruleCode } : {}),

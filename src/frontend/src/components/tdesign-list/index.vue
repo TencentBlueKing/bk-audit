@@ -1474,8 +1474,9 @@
       tableFilterValue.value = getColumnsResetValue(tableColumns.value);
       paramsMemo = {};
     }
+    // 分页/排序始终从 URL 恢复；刷新时也要保留用户选的 page_size
+    parseURL();
     if (!pageReloaded) {
-      parseURL();
       const restoredFromStorage = restoreTableFilterState();
       if (!restoredFromStorage) {
         restoreTableFiltersFromUrl();
