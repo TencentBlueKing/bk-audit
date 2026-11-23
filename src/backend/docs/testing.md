@@ -30,9 +30,13 @@ GitHub Actions 使用 x86 runner 和官方 `mysql:5.7.44` service，不受本地
 
 ## Worktree 隔离
 
+从对应的本地开发环境取得所需配置。依赖一致时可复用 `.venv`；依赖不同时在当前 worktree 准备自己的环境。需要 `.env` 时，核对目标环境后使用独立文件。`config/local_settings.py` 从适用的本地配置准备独立副本。已有配置先核对，再按需补齐。检查这些本地文件受 Git 忽略。
+
 每个 worktree 必须使用不同的 `DATABASES["default"]["TEST"]["NAME"]` 和 `CELERY_TEST_QUEUE_PREFIX`。Redis 使用本 worktree 独立的 `REDIS_DB`；`REDIS_KEY_PREFIX` 仅作额外命名隔离，不能替代 DB 隔离。项目同时存在直接 Redis 客户端，不能假定所有访问都经过 Django cache 的 key prefix。
 
 多个 worktree 可以共享同一个 RabbitMQ Broker，但不能共享 `CELERY_TEST_QUEUE_PREFIX`，否则并发测试可能消费其他 worktree 的任务。
+
+开始有状态验证前，核对本次进程使用的测试库、队列前缀，以及缓存、直接 Redis 客户端和普通开发 Broker（如使用 Redis）的实际实例与 DB。部分 Redis 客户端在设置导入时按环境变量初始化，需在启动前设置独立的 `REDIS_DB`，并核对 `.env`、进程环境变量和 `local_settings.py` 的覆盖关系。检查 DB 是否可用时以对应实例和当前占用为准，记录时省略密码和完整连接串。
 
 ## 重置中间件
 
