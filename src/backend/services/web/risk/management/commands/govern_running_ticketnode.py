@@ -22,19 +22,25 @@ to the current version of the project delivered to anyone in the future.
 #   2) 按 action / 是否该风险最新节点 / 对应 Risk.status 三维分组；
 #   3) 单独给出 ForApprove/AutoProcess 且风险已 CLOSED 的数量。
 #
-# 治理口径（评审后执行，需显式 --apply）：
+# 治理口径：
 #   - 仅把「风险已关闭」的遗留 running 标记为 finished；
 #   - 未关闭风险的当前审批/套餐节点保持 running；
-#   - 只写 TicketNode.status，禁止改动业务库其它表。
+#   - 只写 TicketNode.status，禁止改动业务库其它表；
+#   - 通过 --out 落盘被修改记录，可核对、可回滚。
 #
 # 用法：
 #   python manage.py govern_running_ticketnode                       # 只读统计
 #   python manage.py govern_running_ticketnode --apply               # 治理并输出前后对比
+#   python manage.py govern_running_ticketnode --apply --out /tmp/govern.json
+#   --out 落盘实际更新成功的记录，包含 batch/node_id/risk_id/action/前后状态
+
+import json
+import time
 
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import OperationalError, connection
+from django.db import OperationalError, connection, transaction
 from django.db.models import Count
 
 from services.web.risk.constants import RiskStatus, TicketNodeStatus
@@ -44,12 +50,16 @@ from services.web.risk.models import Risk, TicketNode
 # 需要跟外部系统（ITSM / SOPS）同步状态的节点；其余节点按设计长期保持 running
 DEFAULT_GOVERN_ACTIONS = [ForApprove.__name__, AutoProcess.__name__]
 
+# 三维交叉表最多展示行数，避免输出过长
+CROSS_TABLE_LIMIT = 80
+
 
 class Command(BaseCommand):
     help = "TicketNode RUNNING 存量统计与遗留治理（一次性数据治理，默认只读）"
 
     def add_arguments(self, parser):
         parser.add_argument("--apply", action="store_true", help="执行清理；默认只统计，不写库")
+        parser.add_argument("--out", type=str, default="", help="落盘本次被修改的节点记录（JSON），用于核对/回滚")
         parser.add_argument("--batch-size", type=int, default=500, help="每批更新条数，默认 500")
         parser.add_argument("--max-rounds", type=int, default=0, help="最大清理轮次，0 表示不限")
         parser.add_argument("--actions", type=str, default="", help="治理的 action，逗号分隔；默认审批+套餐")
@@ -72,7 +82,9 @@ class Command(BaseCommand):
             metrics = self.stats(ctx)
             self.capacity_stats(ctx, metrics)
 
-        self.clean(ctx, options["apply"], options["batch_size"], options["max_rounds"])
+        changed = self.clean(ctx, options["apply"], options["batch_size"], options["max_rounds"])
+        if changed and options["out"]:
+            self.dump_changed(changed, options["out"])
 
     # ------------------------------------------------------------------ 统计
 
@@ -106,6 +118,19 @@ class Command(BaseCommand):
         self.stdout.write("[B] TicketNode 按 action 分组（每行是节点记录，不是风险单）:")
         for row in running.values("action").annotate(c=Count("id")).order_by("-c"):
             self.stdout.write("    {:<24} {}".format(row["action"], row["c"]))
+
+        # [C] 三维交叉：action × 是否该风险最新节点 × risk.status
+        self.stdout.write("")
+        self.stdout.write("[C] 三维交叉：action × 是否该风险最新节点 × risk.status")
+        self.stdout.write("    {:<24} {:<10} {:<16} {}".format("action", "is_latest", "risk.status", "count"))
+        self.stdout.write("    " + "-" * 68)
+        started = time.time()
+        rows = self.cross_table(node_table, risk_table)
+        for action, is_latest, status, count in rows[:CROSS_TABLE_LIMIT]:
+            self.stdout.write("    {:<24} {:<10} {:<16} {}".format(action, is_latest, status or "<risk 不存在>", count))
+        if len(rows) > CROSS_TABLE_LIMIT:
+            self.stdout.write("    ... 共 {} 行，仅展示前 {} 行".format(len(rows), CROSS_TABLE_LIMIT))
+        self.stdout.write("    (耗时 %.1fs)" % (time.time() - started))
 
         # [D] 候选集（收窄后 sync 会扫的）
         candidate = running.filter(action__in=actions)
@@ -154,6 +179,29 @@ class Command(BaseCommand):
             "sync_by_action": sync_by_action,
         }
 
+    def cross_table(self, node_table, risk_table):
+        """按 action / 是否该风险最新节点 / risk.status 三维分组
+
+        是否最新节点用 EXISTS 判断（走 risk_id 索引），避免全表自连接放大。
+        """
+        sql = f"""
+            SELECT n.action,
+                   CASE WHEN EXISTS (
+                       SELECT 1 FROM {node_table} m
+                       WHERE m.risk_id = n.risk_id AND m.timestamp > n.timestamp
+                   ) THEN 'no' ELSE 'yes' END AS is_latest,
+                   r.status,
+                   COUNT(*)
+            FROM {node_table} n
+            LEFT JOIN {risk_table} r ON r.risk_id = n.risk_id
+            WHERE n.status = %s
+            GROUP BY 1, 2, 3
+            ORDER BY 4 DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [TicketNodeStatus.RUNNING])
+            return cursor.fetchall()
+
     # ------------------------------------------------------------------ 容量统计
 
     @staticmethod
@@ -194,10 +242,14 @@ class Command(BaseCommand):
         return None
 
     @staticmethod
-    def _fmt_seconds(value):
-        if value is None:
+    def _fmt_capacity(demand, rate):
+        if rate is None:
             return "无法计算"
-        return "{:.0f}s（{:.1f}min）".format(value, value / 60)
+        if rate <= 0:
+            return "速率未配置"
+        if demand > rate:
+            return "超出，会积压"
+        return "余量 {:.4f}/s".format(rate - demand)
 
     def capacity_stats(self, ctx, metrics):
         """[G][H][I] 候选集、每轮任务数、按环境变量的理论容量。"""
@@ -210,10 +262,21 @@ class Command(BaseCommand):
 
         sync_by_action = metrics.get("sync_by_action") or {}
         sync_total = metrics.get("sync_candidates") or 0
-        total_messages = sync_total + process_total
 
-        sync_period = self._parse_period_minutes(getattr(settings, "SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE", None))
-        process_period = self._parse_period_minutes(getattr(settings, "PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE", None))
+        sync_period = self._parse_period_minutes(getattr(settings, "SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE", None)) or 10
+        process_period = (
+            self._parse_period_minutes(getattr(settings, "PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE", None)) or 10
+        )
+        sync_period_seconds = sync_period * 60
+        process_period_seconds = process_period * 60
+        # 两个任务周期可能不同，容量统一按“次/秒”计算，避免直接用每轮数量相加。
+        sync_auto_per_second = sync_by_action.get("AutoProcess", 0) / sync_period_seconds
+        process_auto_per_second = process_by_status.get(RiskStatus.AUTO_PROCESS, 0) / process_period_seconds
+        sync_approve_per_second = sync_by_action.get("ForApprove", 0) / sync_period_seconds
+        process_approve_per_second = process_by_status.get(RiskStatus.FOR_APPROVE, 0) / process_period_seconds
+        itsm_demand = sync_approve_per_second + process_approve_per_second
+        sops_demand = sync_auto_per_second + process_auto_per_second
+        sops_write_upper = 2 * max(sync_auto_per_second, process_auto_per_second)
 
         self.stdout.write("")
         self.stdout.write(
@@ -224,87 +287,55 @@ class Command(BaseCommand):
             self.stdout.write("    {:<24} {}".format(status, process_by_status.get(status, 0)))
 
         self.stdout.write("")
-        self.stdout.write("[H] 两个周期任务每轮投递的消息数:")
-        self.stdout.write("    sync_auto_result：按 TicketNode 候选，每轮 %s 条" % sync_total)
-        self.stdout.write("    process_risk_ticket：按 Risk 候选，每轮 %s 条" % process_total)
-        self.stdout.write("    合计每轮消息：%s 条" % total_messages)
+        self.stdout.write("[H] 两个周期任务消息数（各自周期）:")
+        self.stdout.write("    sync_auto_result：每轮 {} 条，周期 {}min".format(sync_total, sync_period))
+        self.stdout.write("    process_risk_ticket：每轮 {} 条，周期 {}min".format(process_total, process_period))
+        self.stdout.write("    说明：周期不同，不直接相加；容量按每秒需求计算。")
 
         sops_read_rate = self._parse_rate_per_second(getattr(settings, "SOPS_API_RATE_LIMIT", None))
         itsm_rate = self._parse_rate_per_second(getattr(settings, "ITSM_API_RATE_LIMIT", None))
-
-        sync_approve = sync_by_action.get("ForApprove", 0)
-        sync_auto = sync_by_action.get("AutoProcess", 0)
-        process_approve = process_by_status.get(RiskStatus.FOR_APPROVE, 0)
-        process_auto = process_by_status.get(RiskStatus.AUTO_PROCESS, 0)
-
-        itsm_demand = sync_approve + process_approve
-        sops_demand = sync_auto + process_auto
-        period_seconds = (sync_period or process_period or 10) * 60
-        sops_write_upper = 2 * max(sync_auto, process_auto)
         sops_write_rate = self._parse_rate_per_second(getattr(settings, "SOPS_OPERATE_API_RATE_LIMIT", None))
-        sops_write_drain = sops_write_upper / sops_write_rate if sops_write_rate else None
 
         self.stdout.write("")
-        self.stdout.write("[I] 理论容量/等待（基于当前候选 + 环境变量，不是实测耗时）")
+        self.stdout.write("[I] 理论容量/等待（按每秒需求，基于当前候选 + 环境变量，不是实测耗时）")
         self.stdout.write("    计算口径：")
+        self.stdout.write("      候选数 / 各自周期秒数 = 次/秒；再与限流速率比较")
         self.stdout.write("      ITSM 读需求 = sync TicketNode(ForApprove) + process Risk(FOR_APPROVE)")
         self.stdout.write("      SOPS 读需求 = sync TicketNode(AutoProcess) + process Risk(AUTO_PROCESS)")
-        self.stdout.write("      排空时间 = 需求 / 对应限流速率")
         self.stdout.write(
             "    SOPS 读（get_template_info/get_task_status/get_node_data 等）: "
-            "需求 %s 次/轮，速率 %s，排空 %s"
+            "需求 %.4f 次/s（sync %.4f + process %.4f），速率 %s -> %s"
             % (
                 sops_demand,
+                sync_auto_per_second,
+                process_auto_per_second,
                 getattr(settings, "SOPS_API_RATE_LIMIT", "?"),
-                self._fmt_seconds(sops_demand / sops_read_rate if sops_read_rate else None),
+                self._fmt_capacity(sops_demand, sops_read_rate),
             )
         )
         self.stdout.write(
             "    SOPS 写上限（假设所有 AutoProcess 都需要 create+start，取 max）: "
-            "需求 %s 次/轮（2 × max(%s, %s)），速率 %s，排空 %s / 周期 %ss -> %s"
+            "需求 %.4f 次/s（2 × max(sync %.4f, process %.4f)），速率 %s -> %s"
             % (
                 sops_write_upper,
-                sync_auto,
-                process_auto,
+                sync_auto_per_second,
+                process_auto_per_second,
                 getattr(settings, "SOPS_OPERATE_API_RATE_LIMIT", "?"),
-                self._fmt_seconds(sops_write_drain),
-                period_seconds,
-                "超出，会积压"
-                if sops_write_drain is not None and sops_write_drain > period_seconds
-                else ("余量 %.0fs" % (period_seconds - sops_write_drain) if sops_write_drain is not None else "无法计算"),
+                self._fmt_capacity(sops_write_upper, sops_write_rate),
             )
         )
         self.stdout.write("      说明：已有 task_id 的 AutoProcess 实际只读不写，所以这是上限。")
         self.stdout.write(
             "    ITSM 读（get_ticket_status/ticket_detail/workflows 等）: "
-            "需求 %s 次/轮，速率 %s，排空 %s"
+            "需求 %.4f 次/s（sync %.4f + process %.4f），速率 %s -> %s"
             % (
                 itsm_demand,
+                sync_approve_per_second,
+                process_approve_per_second,
                 getattr(settings, "ITSM_API_RATE_LIMIT", "?"),
-                self._fmt_seconds(itsm_demand / itsm_rate if itsm_rate else None),
+                self._fmt_capacity(itsm_demand, itsm_rate),
             )
         )
-
-        if itsm_rate:
-            itsm_drain = itsm_demand / itsm_rate
-            self.stdout.write(
-                "    两路合计 ITSM 读排空: %s / 周期 %ss -> %s"
-                % (
-                    self._fmt_seconds(itsm_drain),
-                    period_seconds,
-                    "超出，会积压" if itsm_drain > period_seconds else "余量 %.0fs" % (period_seconds - itsm_drain),
-                )
-            )
-        if sops_read_rate:
-            sops_drain = sops_demand / sops_read_rate
-            self.stdout.write(
-                "    两路合计 SOPS 读排空: %s / 周期 %ss -> %s"
-                % (
-                    self._fmt_seconds(sops_drain),
-                    period_seconds,
-                    "超出，会积压" if sops_drain > period_seconds else "余量 %.0fs" % (period_seconds - sops_drain),
-                )
-            )
 
     # ------------------------------------------------------------------ 治理
 
@@ -328,17 +359,10 @@ class Command(BaseCommand):
             WHERE n.status = %s AND n.action IN ({placeholders}) AND r.status = %s
         """
         select_sql = f"""
-            SELECT n.id, n.action FROM {node_table} n
+            SELECT n.id, n.risk_id, n.action FROM {node_table} n
             JOIN {risk_table} r ON r.risk_id = n.risk_id
             WHERE n.status = %s AND n.action IN ({placeholders}) AND r.status = %s
             LIMIT {int(batch_size)}
-        """
-        # 只锁 TicketNode 行，不 JOIN Risk；避免与 process_one_risk（先锁 Risk 再更新
-        # TicketNode）形成相反的加锁顺序导致死锁。Risk.status=closed 已在 SELECT 时筛选。
-        update_sql = f"""
-            UPDATE {node_table}
-            SET status = %s
-            WHERE id = %s AND status = %s AND action = %s
         """
 
         with connection.cursor() as cursor:
@@ -350,15 +374,16 @@ class Command(BaseCommand):
         self.stdout.write("=" * 72)
         self.stdout.write("待清理 TicketNode 记录数: %s" % to_clean)
 
+        changed = []
         if not apply:
             self.stdout.write("当前为只读模式，未写入任何数据；确认后加 --apply 执行。")
             self.stdout.write("")
-            return
+            return changed
 
         if not to_clean:
             self.stdout.write("无待清理节点，跳过。")
             self.stdout.write("")
-            return
+            return changed
 
         total_updated = 0
         rounds = 0
@@ -375,35 +400,56 @@ class Command(BaseCommand):
             if not batch:
                 break
 
-            # 逐行更新：只锁 TicketNode 行，避免跨表死锁；Risk.status=closed 已在 SELECT 时筛选。
-            # 锁冲突（1205/1213）跳过当前行，留给下一轮或下次命令，不中断整批。
+            # 按风险分组：同一风险只锁一次 Risk，锁顺序固定为 Risk -> TicketNode，
+            # 与业务更新顺序一致；更新前复核 Risk 仍为 CLOSED，避免 SELECT 后被重开误关。
+            grouped = {}
+            for node_id, risk_id, action in batch:
+                grouped.setdefault(risk_id, []).append((node_id, action))
+
             updated = 0
             skipped = 0
-            with connection.cursor() as cursor:
-                for node_id, action in batch:
-                    try:
-                        cursor.execute(
-                            update_sql,
-                            [
-                                TicketNodeStatus.FINISHED,
-                                node_id,
-                                TicketNodeStatus.RUNNING,
-                                action,
-                            ],
-                        )
-                    except OperationalError as err:
-                        errno = err.args[0] if err.args else None
-                        if errno in (1205, 1213):
-                            skipped += 1
-                            logger.warning(
-                                "[GovernRunningTicketNode] lock conflict, skip node_id=%s err=%s",
-                                node_id,
-                                err,
-                            )
+            batch_no = rounds + 1
+            for risk_id, items in grouped.items():
+                # 事务回滚时不能把明细带到 --out：先在组内累积，提交成功后再合并。
+                group_updated = 0
+                group_changed = []
+                try:
+                    with transaction.atomic():
+                        risk = Risk.objects.select_for_update().only("status").filter(risk_id=risk_id).first()
+                        if risk is None or risk.status != RiskStatus.CLOSED:
+                            skipped += len(items)
                             continue
-                        raise
-                    if cursor.rowcount:
-                        updated += cursor.rowcount
+                        for node_id, action in items:
+                            rowcount = TicketNode.objects.filter(
+                                id=node_id,
+                                status=TicketNodeStatus.RUNNING,
+                                action=action,
+                            ).update(status=TicketNodeStatus.FINISHED)
+                            if rowcount:
+                                group_updated += rowcount
+                                group_changed.append(
+                                    {
+                                        "batch": batch_no,
+                                        "node_id": node_id,
+                                        "risk_id": risk_id,
+                                        "action": action,
+                                        "before_status": TicketNodeStatus.RUNNING,
+                                        "after_status": TicketNodeStatus.FINISHED,
+                                    }
+                                )
+                except OperationalError as err:
+                    errno = err.args[0] if err.args else None
+                    if errno in (1205, 1213):
+                        skipped += len(items)
+                        logger.warning(
+                            "[GovernRunningTicketNode] lock conflict, skip risk_id=%s err=%s",
+                            risk_id,
+                            err,
+                        )
+                        continue
+                    raise
+                updated += group_updated
+                changed.extend(group_changed)
 
             total_updated += updated
             rounds += 1
@@ -416,9 +462,8 @@ class Command(BaseCommand):
                 total_updated,
             )
             self.stdout.write(
-                "  round {}: 本批 {} 条，实际更新 {} 条，锁冲突跳过 {} 条，累计 {} 条".format(
-                    rounds, len(batch), updated, skipped, total_updated
-                )
+                "  round {}: 本批 {} 条，实际更新 {} 条，锁冲突/风险已重开跳过 {} 条，"
+                "累计 {} 条".format(rounds, len(batch), updated, skipped, total_updated)
             )
 
             if updated == 0:
@@ -447,6 +492,7 @@ class Command(BaseCommand):
             b, a = before[key], after[key]
             self.stdout.write("    {:<28} {:>12} {:>12} {:>12}".format(label, b, a, a - b))
         self.stdout.write("")
+        return changed
 
     def snapshot(self, ctx):
         """取关键指标快照，用于治理前后对比"""
@@ -455,3 +501,15 @@ class Command(BaseCommand):
             "total": running.count(),
             "candidate": running.filter(action__in=ctx["actions"]).count(),
         }
+
+    def dump_changed(self, changed, path):
+        """落盘被修改记录，用于核对与回滚"""
+        payload = {
+            "finished_status": TicketNodeStatus.FINISHED,
+            "rolled_back_to": TicketNodeStatus.RUNNING,
+            "count": len(changed),
+            "records": changed,
+        }
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+        self.stdout.write("已落盘 {} 条变更记录到 {}（回滚即把 status 改回 {}）。".format(len(changed), path, TicketNodeStatus.RUNNING))
