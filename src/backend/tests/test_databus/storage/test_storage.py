@@ -96,6 +96,57 @@ class StorageTest(TestCase):
         result.pop("is_deleted", None)
         self.assertEqual(result, CREATE_OR_UPDATE_REDIS_DATA)
 
+    def test_redis_permission_mapping(self):
+        """BKSEC 1578945：redis 端点按 redis_id 拆分 CREATE/EDIT 权限"""
+        from services.web.databus.storage.views import StoragesViewSet
+
+        view = StoragesViewSet()
+        view.action = "redis"
+        view.request = mock.Mock(data={})
+        self.assertEqual(view.get_permissions()[0].actions[0].id, "create_storage")
+        view.request = mock.Mock(data={"redis_id": 1})
+        self.assertEqual(view.get_permissions()[0].actions[0].id, "edit_storage")
+
+    @mock.patch("databus.storage.handler.redis.api.bk_base.create_resource_set", mock.Mock(return_value={}))
+    def test_create_redis_response_excludes_password(self):
+        """BKSEC 1578945：创建响应剔除 password，保留非敏感字段"""
+        result = self.resource.databus.storage.create_or_update_redis(**CREATE_OR_UPDATE_REDIS_PARAMS)
+        result = ordered_dict_to_json(result)
+        self.assertNotIn("password", result["connection_info"])
+        self.assertEqual(result["connection_info"]["host"], CREATE_OR_UPDATE_REDIS_PARAMS["connection_info"]["host"])
+
+    def test_redis_framework_log_disabled(self):
+        """BKSEC 1578945：框架明文请求日志已关闭（双保险）"""
+        from services.web.databus.storage.resources import CreateOrUpdateRedisResource
+
+        self.assertFalse(CreateOrUpdateRedisResource.support_data_collect)
+
+    def test_redis_redacted_log_keeps_context_without_password(self):
+        """BKSEC 1578945：自记录脱敏日志保留排障字段、剔除密码（含异常分支）"""
+        from services.web.databus.storage.resources import CreateOrUpdateRedisResource
+
+        req = {
+            "namespace": "default",
+            "connection_info": {"host": "synth.example.com", "port": 6379, "password": "SYNTH-PWD-123"},
+        }
+        with self.assertLogs("app", level="INFO") as captured:
+            CreateOrUpdateRedisResource._log_redacted(req, {"redis_id": 1})
+            CreateOrUpdateRedisResource._log_redacted(req, {"error": "synth bkbase failure"})
+        text = "\n".join(captured.output)
+        self.assertNotIn("SYNTH-PWD-123", text)
+        self.assertIn("synth.example.com", text)
+        self.assertIn("synth bkbase failure", text)
+
+    @mock.patch("databus.storage.handler.redis.api.bk_base.create_resource_set", mock.Mock(return_value={}))
+    def test_redis_redacted_log_direct_call_includes_kwargs(self):
+        """BKSEC 1578945：resource 直调（**kwargs）场景脱敏日志含完整请求参数而非 null"""
+        with self.assertLogs("app", level="INFO") as captured:
+            self.resource.databus.storage.create_or_update_redis(**CREATE_OR_UPDATE_REDIS_PARAMS)
+        text = "\n".join(captured.output)
+        self.assertIn('"host": "host"', text)
+        self.assertIn('"password": "***"', text)
+        self.assertNotIn('"password": "password"', text)
+
     def test_admin_with_empty_string(self):
         """
         测试 admin 字段包含空字符串的情况

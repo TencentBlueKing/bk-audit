@@ -33,9 +33,22 @@ class StoragesViewSet(ResourceViewSet):
     }
 
     def get_permissions(self):
+        # redis 为创建/更新二合一端点，按请求体 redis_id 拆分写权限（BKSEC 1578945）：
+        # 无 redis_id → 创建 → CREATE_STORAGE；有 redis_id → 更新 → EDIT_STORAGE
+        if self.action == "redis":
+            redis_id = self._get_redis_id()
+            action = ActionEnum.EDIT_STORAGE if redis_id else ActionEnum.CREATE_STORAGE
+            return [IAMPermission(actions=[action])]
         if self.iam_action_mappings.get(self.action):
             return [IAMPermission(actions=[self.iam_action_mappings[self.action]])]
         return [IAMPermission(actions=[ActionEnum.LIST_STORAGE])]
+
+    def _get_redis_id(self):
+        """从请求体获取 redis_id（DRF initialize_request 先于 get_permissions，request.data 可用）"""
+        try:
+            return self.request.data.get("redis_id")
+        except Exception:  # NOCC:broad-except(非 JSON body 等场景按创建处理，由 IAM 权限兜底)
+            return None
 
     resource_routes = [
         ResourceRoute(

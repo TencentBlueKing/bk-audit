@@ -175,7 +175,11 @@ from core.constants import OrderTypeChoices
 from core.models import get_request_username
 from core.utils.cache import CacheMixin
 from core.utils.tools import get_app_info
-from core.utils.url_security import URLSecurityError, mask_authorization, validate_request_url
+from core.utils.url_security import (
+    URLSecurityError,
+    mask_authorization,
+    validate_request_url,
+)
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 
 
