@@ -154,7 +154,12 @@ export const syncSceneContextToUrl = (queryOverride?: Record<string, string>) =>
     }
   });
   const search = params.toString();
-  const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash || ''}`;
+  const hash = window.location.hash || '';
+  const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${hash}`;
+  // 地址没变就不要 replace / popstate。复制标签时列表会再同步一次相同场景参数，
+  // 无方向的 popstate 会被 Vue Router 当成失败后退，退回进入页面前的历史。
+  if (nextUrl === currentUrl) return;
   window.history.replaceState(window.history.state, '', nextUrl);
   window.dispatchEvent(new PopStateEvent('popstate'));
 };

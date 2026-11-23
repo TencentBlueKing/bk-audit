@@ -26,8 +26,28 @@ import {
 export default function () {
   const router = useRouter();
   const searchParams = new URLSearchParams(window.location.search);
-  const notifyUrlChange = () => {
-    window.dispatchEvent(new PopStateEvent('popstate'));
+  /**
+   * 只改当前历史条目的查询串。
+   * 不派发 popstate：Vue Router 会把无方向的 pop 当成失败的后退并 history.go(-1)，
+   * 复制标签时列表会再写一次相同地址，从而退回进入列表前的页面。
+   */
+  const replaceLocationSearch = (search: string) => {
+    const hash = window.location.hash || '';
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${hash}`;
+    if (nextUrl === currentUrl) return;
+
+    window.history.replaceState(window.history.state, '', nextUrl);
+    const params = new URLSearchParams(search);
+    const query: Record<string, string | string[]> = Object.create(null);
+    Array.from(new Set(params.keys())).forEach((key) => {
+      const values = params.getAll(key);
+      query[key] = values.length <= 1 ? (values[0] ?? '') : values;
+    });
+    router.replace({
+      query,
+      hash,
+    }).catch(() => {});
   };
   const getSearchParams = () => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
@@ -101,8 +121,7 @@ export default function () {
         curSearchParams.append(key, params[key]);
       }
     });
-    window.history.replaceState({}, '', `?${curSearchParams.toString()}`);
-    notifyUrlChange();
+    replaceLocationSearch(curSearchParams.toString());
   };
 
   const removeSearchParam = (paramKey: string | Array<string>) => {
@@ -111,8 +130,7 @@ export default function () {
     keyList.forEach((key) => {
       curSearchParams.delete(key);
     });
-    window.history.replaceState({}, '', `?${curSearchParams.toString()}`);
-    notifyUrlChange();
+    replaceLocationSearch(curSearchParams.toString());
   };
 
   const SCENE_CONTEXT_KEYS = ['scene_id', 'scope_id', 'scope_type'];
@@ -154,11 +172,10 @@ export default function () {
     ) {
       restParams.scene_id = String(params.scene_id);
     }
-    window.history.replaceState({}, '', `?${buildURLParams({
+    replaceLocationSearch(buildURLParams({
       ...sceneContext,
       ...restParams,
-    })}`);
-    notifyUrlChange();
+    }));
   };
 
   const mergeAndReplaceSearchParams = (params: Record<string, any>) => {
