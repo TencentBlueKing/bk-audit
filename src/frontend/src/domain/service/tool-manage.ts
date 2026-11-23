@@ -14,6 +14,8 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type { IRequestPayload } from '@utils/request';
+
 import ToolInfo from '../model/tool/tool-info';
 import type {
   CreatePlatformToolPayload,
@@ -25,6 +27,7 @@ import type {
   UpdatePlatformToolPayload,
   UpdateSceneToolPayload,
 } from '../model/tool/tool-manage-types';
+
 import ToolManageSources from '../source/tool-manage';
 
 export default  {
@@ -114,9 +117,9 @@ export default  {
      * @desc 工具执行
      * @param { Object } params
      */
-  fetchToolsExecute(params: ToolExecutePayload) {
+  fetchToolsExecute(params: ToolExecutePayload, payload = {} as IRequestPayload) {
     // 保留外壳 message：API 工具下游非 200 时，产品文案在外层 message（code 仍为 0）
-    return ToolManageSources.getToolsExecute(params).then(({ data, message }) => ({
+    return ToolManageSources.getToolsExecute(params, payload).then(({ data, message }) => ({
       ...data,
       message: message || '',
     }));

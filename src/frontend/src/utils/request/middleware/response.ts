@@ -152,7 +152,12 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
 
   // 统一错误处理逻辑
   interceptors.use(undefined, (error: RequestError) => {
-    // 调用方声明自行处理错误时，跳过全局 toast
+    // 登录失效始终走全局跳转，即使调用方声明自行处理业务错误
+    if (error.code === 401) {
+      redirectLogin(error.response.data.login_url);
+      return Promise.reject(error);
+    }
+    // 调用方声明自行处理错误时，跳过全局 toast / 权限弹窗
     if (error.response?.config?.payload?.catchError || error.localHandling?.catchError) {
       return Promise.reject(error);
     }
@@ -166,10 +171,6 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
       : undefined;
 
     switch (error.code) {
-      // 未登陆
-      case 401:
-        redirectLogin(error.response.data.login_url);
-        break;
       case 403:
         if (!isSilent) {
           handlePermission(error);

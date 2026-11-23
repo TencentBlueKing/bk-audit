@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div v-if="toolExecuteData?.data?.status_code === 200 && groupData.length > 0">
+  <div v-if="!hasExecuteRequestError && toolExecuteData?.data?.status_code === 200 && groupData.length > 0">
     <!-- 使用动态组件，单分组用 div，多分组用 bk-card -->
     <component
       :is="(groupData.length === 1 && !isGrouping) ? 'div' : AuditCollapsePanel"
@@ -179,8 +179,8 @@
       </div>
     </component>
   </div>
-  <!-- 未查询时显示空占位 -->
-  <div v-else-if="!toolExecuteData || Object.keys(toolExecuteData).length === 0">
+  <!-- 未查询时显示空占位（请求失败走下方异常态，避免误显示暂无数据） -->
+  <div v-else-if="!hasExecuteRequestError && (!toolExecuteData || Object.keys(toolExecuteData).length === 0)">
     <bk-exception
       class="exception-part"
       scene="part"
@@ -188,7 +188,7 @@
       {{ t('暂无数据') }}
     </bk-exception>
   </div>
-  <!-- 查询失败时显示异常：status_code !== 200；主文案取外壳 message -->
+  <!-- 查询失败：外层 code≠0（含 403）或内层 status_code !== 200；主文案取后端 message -->
   <div v-else>
     <bk-exception
       :description="executeErrorDescription"
@@ -239,6 +239,7 @@
 
   import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
+  import type { ToolExecutePayload } from '@model/tool/tool-manage-types';
 
   import useRequest from '@hooks/use-request';
 
@@ -406,17 +407,28 @@
 
   const isGrouping = computed(() => props.toolDetails.config.output_config?.enable_grouping);
 
-  // 获取工具执行结果
+  // 获取工具执行结果；catchError 跳过全局 toast / 权限弹窗，由结果区展示 message（401 仍全局跳转登录）
   const {
     loading: isLoading,
     data: toolExecuteData,
+    error: hasExecuteRequestError,
+    errorMessage: executeRequestErrorMessage,
     run: fetchToolsExecute,
-  } = useRequest(ToolManageService.fetchToolsExecute, {
-    defaultValue: {},
-  });
+  } = useRequest(
+    (params: ToolExecutePayload) => ToolManageService.fetchToolsExecute(params, { catchError: true }),
+    {
+      defaultValue: {},
+    },
+  );
 
-  // 外壳 message 优先；空则兜底（下游 200 不走此分支，仍按 status_code === 200 成功）
+  // 请求被拒时优先用拦截器带出的 message；成功外壳内失败再取外层 message；否则兜底
   const executeErrorDescription = computed(() => {
+    if (hasExecuteRequestError.value) {
+      const requestMessage = executeRequestErrorMessage.value;
+      if (typeof requestMessage === 'string' && requestMessage.trim()) {
+        return requestMessage;
+      }
+    }
     const outerMessage = toolExecuteData.value?.message;
     if (typeof outerMessage === 'string' && outerMessage.trim()) {
       return outerMessage;
@@ -426,15 +438,22 @@
 
   watch(
     () => [
+      hasExecuteRequestError.value,
       toolExecuteData.value?.data?.status_code,
       props.toolDetails?.config?.property?.scene_id,
     ],
-    ([statusCode]) => {
-      if (statusCode != null && statusCode !== 200) {
+    ([requestError, statusCode]) => {
+      if (requestError || (statusCode != null && statusCode !== 200)) {
         loadSceneManagers();
       }
     },
   );
+
+  watch(hasExecuteRequestError, (isError) => {
+    if (isError) {
+      groupData.value = [];
+    }
+  });
 
   // 格式化工具变量值
   const formatToolVariableValue = (item: SearchItem) => {
@@ -553,6 +572,8 @@
         tool_variables: toolVariables,
       },
       ...(props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {}),
+    }).catch(() => {
+      // 错误已由 useRequest 写入 error/errorMessage，结果区展示，避免未处理的 Promise 拒绝
     });
   };
 
@@ -563,6 +584,8 @@
     resetGroupData: () => {
       groupData.value = [];
       toolExecuteData.value = {};
+      hasExecuteRequestError.value = false;
+      executeRequestErrorMessage.value = '';
     },
   });
 

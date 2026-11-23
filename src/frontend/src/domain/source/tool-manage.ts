@@ -28,7 +28,9 @@ import type {
   UpdateSceneToolPayload,
 } from '@model/tool/tool-manage-types';
 
-import Request from '@utils/request';
+import Request, {
+  type IRequestPayload,
+} from '@utils/request';
 import { processedParams } from '@utils/request/lib/utils';
 
 import ModuleBase from './module-base';
@@ -144,8 +146,8 @@ class ToolManage extends ModuleBase {
     return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/${query}`);
   }
   // 工具执行
-  getToolsExecute(params: ToolExecutePayload) {
-    return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
+  getToolsExecute(params: ToolExecutePayload, payload = {} as IRequestPayload) {
+    return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params, payload });
   }
   // 工具调试
   getToolsDebug(params: ToolDebugPayload) {
