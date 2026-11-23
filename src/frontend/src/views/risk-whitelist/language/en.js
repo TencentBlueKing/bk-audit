@@ -84,7 +84,6 @@ export default {
     申请状态: 'Request status',
     审批中: 'Approving',
     当前节点: 'Current node',
-    '已结束（驳回）': 'Ended (rejected)',
     当前审批人: 'Current approver',
     驳回人: 'Rejected by',
     驳回理由: 'Rejection reason',

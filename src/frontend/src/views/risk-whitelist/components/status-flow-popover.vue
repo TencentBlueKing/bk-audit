@@ -56,7 +56,7 @@
         </div>
         <div class="flow-row">
           <span class="flow-label">{{ t('当前节点') }}</span>
-          <span>{{ status === 'rejected' ? t('已结束（驳回）') : (flow.current_node || '--') }}</span>
+          <span>{{ flow.current_node || '--' }}</span>
         </div>
         <div
           v-if="status === 'pending'"
