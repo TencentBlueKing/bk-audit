@@ -443,6 +443,24 @@ class ListTool(ToolBase):
             ),
         )
 
+    def _sort_tools(
+        self, queryset, *, recent_used, recent_tool_uids, order_fields, favorite, current_user
+    ) -> List[Tool]:
+        """排序：最近使用标签保持 Redis 时间序；显式 sort 优先；我的收藏保持原排序；其余按用户偏好"""
+        if recent_used and recent_tool_uids:
+            queryset = preserved_order_sort(
+                queryset,
+                ordering_field="uid",
+                value_list=recent_tool_uids,
+            )
+            return list(queryset)
+        if order_fields:
+            return list(queryset.order_by(*order_fields))
+        if favorite:
+            # 我的收藏：保持原有 收藏>名称 排序，不受最近使用时间影响
+            return list(queryset.order_by("-favorite", "name"))
+        return self._sort_tools_by_user_preference(queryset, current_user)
+
     def perform_request(self, validated_request_data):
         validated_request_data.pop("_request", None)
         tags = validated_request_data.pop("tags", [])
@@ -559,19 +577,15 @@ class ListTool(ToolBase):
             tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
-        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先；
-        # 默认按 收藏 > 最近使用 > 工具被使用次数 > 名称（三个维度均以人为维度隔离）
-        if recent_used and recent_tool_uids:
-            queryset = preserved_order_sort(
-                queryset,
-                ordering_field="uid",
-                value_list=recent_tool_uids,
-            )
-            tools = list(queryset)
-        elif order_fields:
-            tools = list(queryset.order_by(*order_fields))
-        else:
-            tools = self._sort_tools_by_user_preference(queryset, current_user)
+        # 排序逻辑：最近使用保持原 Redis 顺序；显式 sort 优先；我的收藏保持原排序；其余按用户偏好
+        tools = self._sort_tools(
+            queryset,
+            recent_used=recent_used,
+            recent_tool_uids=recent_tool_uids,
+            order_fields=order_fields,
+            favorite=favorite,
+            current_user=current_user,
+        )
 
         tool_uids = [t.uid for t in tools]
 

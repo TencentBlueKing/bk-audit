@@ -21,25 +21,27 @@ class TestRecentToolUsageManager(SimpleTestCase):
         self.manager.record_usage("alice", "tool-1")
 
         key = self.manager.redis_client.zadd.call_args.args[0]
-        self.assertEqual(key, "tool:recently_used:alice")
+        self.assertEqual(key, "tool:recently_used_square:alice")
 
-    def test_record_other_usage_writes_other_key(self):
+    def test_record_other_usage_not_recorded(self):
+        """下钻/MCP/接口不再记录最近使用（无实际意义）"""
         self.manager.record_usage("alice", "tool-1", for_square=False)
 
-        key = self.manager.redis_client.zadd.call_args.args[0]
-        self.assertEqual(key, "tool:recently_used_other:alice")
+        self.manager.redis_client.zadd.assert_not_called()
 
     def test_get_recent_uids_reads_square_key_only(self):
         self.manager.redis_client.zrevrange.return_value = ["tool-1"]
 
         self.manager.get_recent_uids("alice")
 
-        self.manager.redis_client.zrevrange.assert_called_once_with("tool:recently_used:alice", 0, -1)
+        self.manager.redis_client.zrevrange.assert_called_once_with("tool:recently_used_square:alice", 0, -1)
 
-    def test_get_all_recent_uids_merges_square_and_other(self):
+    def test_get_all_recent_uids_merges_square_and_legacy(self):
+        """最近使用标签合并广场新 key 与旧版历史 key（保留历史）"""
         def fake_zrange(key, start, end, withscores):
-            if key == "tool:recently_used:alice":
+            if key == "tool:recently_used_square:alice":
                 return [("tool-1", 100.0)]
+            # 旧版历史 key（含早期下钻/MCP 记录）
             return [("tool-1", 200.0), ("tool-2", 150.0)]
 
         self.manager.redis_client.zrange.side_effect = fake_zrange
