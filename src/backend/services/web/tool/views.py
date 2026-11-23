@@ -70,6 +70,7 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.user_query_table_auth_check, endpoint="user_query_table_auth_check"),
         ResourceRoute("POST", resource.tool.tool_execute_debug, endpoint="tool_execute_debug"),
         ResourceRoute("PUT", resource.tool.favorite_tool, pk_field="uid", endpoint="favorite"),
+        ResourceRoute("POST", resource.tool.record_tool_recent_usage, pk_field="uid", endpoint="recent_usage"),
         ResourceRoute(
             "POST",
             resource.tool.get_tool_input_variable_candidates,

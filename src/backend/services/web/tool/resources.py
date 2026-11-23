@@ -52,7 +52,7 @@ from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
 )
-from services.web.common.constants import ScopeType
+from services.web.common.constants import BindingResourceType, ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
@@ -348,7 +348,7 @@ class ListToolTags(ToolBase):
                 "tag_name": str(ToolTagsEnum.RECENTLY_USED_TOOLS.label),
                 "tag_id": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
                 "tool_count": scoped_tools.filter(
-                    uid__in=recent_tool_usage_manager.get_recent_uids(current_user)
+                    uid__in=recent_tool_usage_manager.get_all_recent_uids(current_user)
                 ).count(),
             },
             {
@@ -423,6 +423,45 @@ class ListTool(ToolBase):
     ResponseSerializer = ToolListResponseSerializer
     many_response_data = True
     bind_request = True
+
+    @staticmethod
+    def _sort_tools_by_user_preference(queryset, current_user: str) -> List[Tool]:
+        """默认排序：收藏 > 最近使用（按时间倒序，最近用的在前）> 名称（两个维度均以人为维度隔离）
+
+        Redis 故障时最近使用层级降级为 收藏 > 名称，不影响接口可用性。
+        """
+        try:
+            recent_scores = recent_tool_usage_manager.get_recent_scores(current_user) or {}
+        except Exception:  # NOCC:broad-except(Redis 故障时降级，排序退化为收藏>名称)
+            logger.exception("[list_tool] get recent scores failed, degrade sorting")
+            recent_scores = {}
+        # 先按名称取确定性序，再按优先级稳定排序
+        return sorted(
+            queryset.order_by("name"),
+            key=lambda t: (
+                0 if getattr(t, "favorite", False) else 1,  # 收藏优先
+                -recent_scores.get(t.uid, 0),  # 最近使用时间倒序（无记录=0 排最后）
+                t.name,  # 名称兜底
+            ),
+        )
+
+    def _sort_tools(
+        self, queryset, *, recent_used, recent_tool_uids, order_fields, favorite, current_user
+    ) -> List[Tool]:
+        """排序：最近使用标签保持 Redis 时间序；显式 sort 优先；我的收藏保持原排序；其余按用户偏好"""
+        if recent_used and recent_tool_uids:
+            queryset = preserved_order_sort(
+                queryset,
+                ordering_field="uid",
+                value_list=recent_tool_uids,
+            )
+            return list(queryset)
+        if order_fields:
+            return list(queryset.order_by(*order_fields))
+        if favorite:
+            # 我的收藏：保持原有 收藏>名称 排序，不受最近使用时间影响
+            return list(queryset.order_by("-favorite", "name"))
+        return self._sort_tools_by_user_preference(queryset, current_user)
 
     def perform_request(self, validated_request_data):
         validated_request_data.pop("_request", None)
@@ -499,7 +538,7 @@ class ListTool(ToolBase):
             queryset = queryset.filter(favorite=True)
 
         if recent_used:
-            recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
+            recent_tool_uids = recent_tool_usage_manager.get_all_recent_uids(current_user)
 
             if not recent_tool_uids:
                 return []
@@ -540,19 +579,16 @@ class ListTool(ToolBase):
             tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
-        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先，默认保持旧逻辑
-        if recent_used and recent_tool_uids:
-            queryset = preserved_order_sort(
-                queryset,
-                ordering_field="uid",
-                value_list=recent_tool_uids,
-            )
-        elif order_fields:
-            queryset = queryset.order_by(*order_fields)
-        else:
-            queryset = queryset.order_by("-favorite", "name")
+        # 排序逻辑：最近使用保持原 Redis 顺序；显式 sort 优先；我的收藏保持原排序；其余按用户偏好
+        tools = self._sort_tools(
+            queryset,
+            recent_used=recent_used,
+            recent_tool_uids=recent_tool_uids,
+            order_fields=order_fields,
+            favorite=favorite,
+            current_user=current_user,
+        )
 
-        tools = list(queryset)
         tool_uids = [t.uid for t in tools]
 
         # 查询 tags
@@ -1119,6 +1155,8 @@ class ExecuteTool(ToolBase):
     name = gettext_lazy("工具执行")
     RequestSerializer = ExecuteToolReqSerializer
     ResponseSerializer = ExecuteToolRespSerializer
+    # 广场执行参与最近使用排序；子类（MCP）覆写为 False 仅记录不排序
+    usage_for_square = True
 
     def _get_user_allowed_scopes(self, username: str) -> Tuple[List[str], List[str]]:
         """
@@ -1282,7 +1320,9 @@ class ExecuteTool(ToolBase):
 
         current_user = get_request_username()
         try:
-            recent_tool_usage_manager.record_usage(current_user, uid)
+            # 广场执行参与排序；风险下钻/MCP/接口记录但不参与广场排序
+            for_square = self.usage_for_square and not validated_request_data.get("caller_resource_type")
+            recent_tool_usage_manager.record_usage(current_user, uid, for_square=for_square)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1298,6 +1338,7 @@ class MCPExecuteTool(ExecuteTool):
     """用户态 MCP 工具执行，移除结果中的 SQL 执行实现细节。"""
 
     name = gettext_lazy("工具执行(MCP)")
+    usage_for_square = False
 
     def perform_request(self, validated_request_data):
         response_data = super().perform_request(validated_request_data)
@@ -1389,7 +1430,7 @@ class ExecuteToolAPIGW(ExecuteTool):
 
         current_user = "admin"
         try:
-            recent_tool_usage_manager.record_usage(current_user, uid)
+            recent_tool_usage_manager.record_usage(current_user, uid, for_square=False)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
@@ -1905,6 +1946,40 @@ class FavoriteTool(ToolBase):
             ToolFavorite.objects.filter(tool_uid=tool.uid, username=username).delete()
 
         return {"favorite": favorite}
+
+
+class RecordToolRecentUsage(ToolBase):
+    """记录工具最近使用（点击打开即算，无需执行）
+
+    供前端在工具广场点击工具卡片/打开工作台时调用；
+    执行链路（ExecuteTool）仍独立记录，互不影响。
+    """
+
+    name = gettext_lazy("记录工具最近使用")
+    RequestSerializer = ToolRetrieveRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+        username = get_request_username()
+        # 仅记录当前用户可见范围内工具的最近使用，避免对不可见工具刷记录
+        visible = ScopePermission(username=username).check_resource_permission(
+            resource_type=BindingResourceType.TOOL,
+            resource_id=uid,
+            raise_exception=False,
+        )
+        if not visible:
+            return {"recorded": False}
+        try:
+            recent_tool_usage_manager.record_usage(username, uid)
+        except Exception as e:  # NOCC:broad-except(记录失败不影响使用)
+            logger.error(
+                f"[record_recent_usage] Uid:{uid}; Current User:{username}; "
+                f"Err: {e}; Detail: {traceback.format_exc()}"
+            )
+        return {"recorded": True}
 
 
 class GetToolDetailByNameAPIGW(ToolBase):

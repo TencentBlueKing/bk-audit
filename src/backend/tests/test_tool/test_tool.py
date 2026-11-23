@@ -55,6 +55,7 @@ from services.web.tool.resources import (
     GetToolEnumMappingByCollection,
     GetToolEnumMappingByCollectionKeys,
     ListTool,
+    RecordToolRecentUsage,
     ToolExecuteDebug,
     UpdatePlatformSceneTool,
     UpdateTool,
@@ -562,6 +563,39 @@ class ToolResourceTestCase(TestCase):
         # 补充：tag 自动删除
         self.assertFalse(ToolTag.objects.filter(tool_uid=uid).exists())
 
+    def test_record_recent_usage(self):
+        """点击打开工具即记录最近使用（无需执行）；仅可见工具被记录"""
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch(
+                "services.web.tool.resources.ScopePermission.check_resource_permission", return_value=True
+            ) as mock_visible,
+            patch("services.web.tool.resources.recent_tool_usage_manager.record_usage") as mock_record,
+        ):
+            resp = RecordToolRecentUsage().request({"uid": self.sql_tool.uid})
+
+        self.assertTrue(resp["recorded"])
+        mock_record.assert_called_once_with(self.uid, self.sql_tool.uid)
+        mock_visible.assert_called_once()
+
+    def test_record_recent_usage_invisible_tool_not_recorded(self):
+        """不可见工具不记录最近使用（防止对不可见工具刷记录）"""
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch("services.web.tool.resources.ScopePermission.check_resource_permission", return_value=False),
+            patch("services.web.tool.resources.recent_tool_usage_manager.record_usage") as mock_record,
+        ):
+            resp = RecordToolRecentUsage().request({"uid": self.sql_tool.uid})
+
+        self.assertFalse(resp["recorded"])
+        mock_record.assert_not_called()
+
+    def test_record_recent_usage_tool_not_exist(self):
+        from services.web.tool.exceptions import ToolDoesNotExist
+
+        with self.assertRaises(ToolDoesNotExist):
+            RecordToolRecentUsage().request({"uid": "not-exist-uid"})
+
     def test_list_tool_filter_only_created_by_me(self):
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
@@ -580,7 +614,7 @@ class ToolResourceTestCase(TestCase):
 
         with (
             patch(
-                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                "services.web.tool.resources.recent_tool_usage_manager.get_all_recent_uids",
                 return_value=recent_uids,
             ),
             patch("services.web.tool.resources.get_request_username", return_value=self.uid),
@@ -602,7 +636,7 @@ class ToolResourceTestCase(TestCase):
 
         with (
             patch(
-                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                "services.web.tool.resources.recent_tool_usage_manager.get_all_recent_uids",
                 return_value=recent_uids,
             ),
             patch("services.web.tool.resources.get_request_username", return_value=self.uid),
@@ -643,6 +677,85 @@ class ToolResourceTestCase(TestCase):
         )
 
         self.assertEqual(result[0]["uid"], self.sql_tool.uid)
+
+    def _list_tools_default_order(self, recent_scores=None):
+        """以默认排序调用 ListTool，并 mock 掉按人隔离的 Redis 数据（最近使用时间戳）"""
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_scores",
+                return_value=recent_scores or {},
+            ),
+        ):
+            return self._call_resource_with_request(
+                ListTool,
+                {"keyword": "", "tags": [], "page": 1, "page_size": 10},
+            )
+
+    def test_list_tool_default_order_favorite_first(self):
+        ToolFavorite.objects.create(tool_uid=self.bk_tool.uid, username=self.uid)
+
+        result = self._list_tools_default_order()
+
+        self.assertEqual(result[0]["uid"], self.bk_tool.uid)
+
+    def test_list_tool_default_order_recent_second(self):
+        ToolFavorite.objects.create(tool_uid=self.sql_tool.uid, username=self.uid)
+
+        result = self._list_tools_default_order(recent_scores={self.bk_tool.uid: 100})
+
+        # 收藏优先，其次最近使用
+        self.assertEqual([tool["uid"] for tool in result[:2]], [self.sql_tool.uid, self.bk_tool.uid])
+
+    def test_list_tool_default_order_recent_by_time_desc(self):
+        """最近使用按点击时间倒序：最近使用的排在前"""
+        # bk_tool 时间更新 → 排前
+        result = self._list_tools_default_order(recent_scores={self.sql_tool.uid: 100, self.bk_tool.uid: 200})
+        self.assertEqual([tool["uid"] for tool in result[:2]], [self.bk_tool.uid, self.sql_tool.uid])
+
+        # 反转时间：sql_tool 更新 → 排前
+        result = self._list_tools_default_order(recent_scores={self.sql_tool.uid: 300, self.bk_tool.uid: 200})
+        self.assertEqual([tool["uid"] for tool in result[:2]], [self.sql_tool.uid, self.bk_tool.uid])
+
+    def test_list_tool_favorites_tag_keeps_name_order(self):
+        """我的收藏标签保持 收藏>名称 排序，不受最近使用时间影响（回归）"""
+        from services.web.tool.constants import ToolTagsEnum
+
+        ToolFavorite.objects.create(tool_uid=self.sql_tool.uid, username=self.uid)
+        ToolFavorite.objects.create(tool_uid=self.bk_tool.uid, username=self.uid)
+
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_scores",
+                return_value={self.bk_tool.uid: 200, self.sql_tool.uid: 100},
+            ) as mock_scores,
+        ):
+            result = self._call_resource_with_request(
+                ListTool,
+                {"keyword": "", "tags": [int(ToolTagsEnum.FAVORITE_TOOLS.value)], "page": 1, "page_size": 10},
+            )
+
+        # 两个收藏项按名称排序（即使 bk_tool 最近使用时间更新也不提前）
+        expected = sorted([self.sql_tool, self.bk_tool], key=lambda t: t.name)
+        self.assertEqual([tool["uid"] for tool in result[:2]], [t.uid for t in expected])
+        mock_scores.assert_not_called()  # 我的收藏分支不读最近使用
+
+    def test_list_tool_default_order_redis_down_degrades(self):
+        # Redis 故障时排序降级为 收藏 > 名称，接口不报错
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_scores",
+                side_effect=Exception("redis down"),
+            ),
+        ):
+            result = self._call_resource_with_request(
+                ListTool,
+                {"keyword": "", "tags": [], "page": 1, "page_size": 10},
+            )
+
+        self.assertEqual(len(result), 2)
 
     def test_list_tool_request_serializer_reject_scene_binding_in_system_scope(self):
         serializer = ListRequestSerializer(
