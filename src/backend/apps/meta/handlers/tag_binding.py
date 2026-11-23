@@ -1,0 +1,173 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+
+from typing import List, Optional, Tuple, Type, Union
+
+from bk_resource import resource
+from django.db import models, transaction
+from django.db.models import OuterRef, QuerySet, Subquery
+from django.http import Http404
+
+from apps.meta.constants import TagBindingResourceType
+from apps.meta.models import Tag
+
+
+def create_missing_tag_bindings_in_order(
+    relation_model: Type[models.Model],
+    relation_resource_field: str,
+    resource_uid: Union[str, int],
+    tag_names: List[str],
+    tags: List[dict],
+    existing_tag_ids: set,
+) -> None:
+    """按请求 tag_names 的顺序创建缺失的标签绑定，已有绑定保持原顺序。
+
+    save_tags 返回的标签受 Tag.Meta.ordering 影响，不能直接按返回顺序创建；
+    这里按请求顺序把标签名映射为 tag_id，保序去重后只创建尚未绑定的部分。
+    save_tags 返回的是库内规范名，MySQL CI 排序规则下请求名可能与规范名仅大小写/重音不同，
+    因此精确名未命中时按数据库语义再解析一次，避免把已复用的标签当作未知标签漏绑。
+    """
+    tag_id_by_name = {item["tag_name"]: item["tag_id"] for item in tags}
+    ordered_tag_ids = []
+    for name in tag_names:
+        tag_id = tag_id_by_name.get(name)
+        if tag_id is None:
+            tag_id = Tag.objects.filter(tag_name=name).order_by("tag_id").values_list("tag_id", flat=True).first()
+        if tag_id is not None:
+            ordered_tag_ids.append(tag_id)
+    ordered_tag_ids = list(dict.fromkeys(ordered_tag_ids))
+    relation_model.objects.bulk_create(
+        [
+            relation_model(**{relation_resource_field: resource_uid, "tag_id": tag_id})
+            for tag_id in ordered_tag_ids
+            if tag_id not in existing_tag_ids
+        ]
+    )
+
+
+@transaction.atomic
+def sync_resource_tags(
+    relation_resource_field: str,
+    resource_uid: str,
+    tag_names: List[str],
+    relation_model: Type[models.Model],
+) -> QuerySet:
+    """
+    同步资源标签关联
+
+    参数:
+        relation_resource_field: 关联表中关联资源的字段名，
+        resource_uid: 资源唯一标识
+        tag_names: 标签名列表
+        relation_model: 关联表模型类
+    返回:
+        当前绑定的标签列表
+    """
+    filter_kwargs = {relation_resource_field: resource_uid}
+    tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names]) if tag_names else []
+    desired_tag_ids = {t["tag_id"] for t in tags}
+
+    # 只增删差量，保留已有绑定记录 id，展示顺序即可直接按绑定 id 排序
+    relation_qs = relation_model.objects.filter(**filter_kwargs)
+    existing_tag_ids = set(relation_qs.values_list("tag_id", flat=True))
+    relation_qs.exclude(tag_id__in=desired_tag_ids).delete()
+    create_missing_tag_bindings_in_order(
+        relation_model=relation_model,
+        relation_resource_field=relation_resource_field,
+        resource_uid=resource_uid,
+        tag_names=tag_names,
+        tags=tags,
+        existing_tag_ids=existing_tag_ids,
+    )
+
+    if not desired_tag_ids:
+        return Tag.objects.none()
+    binding_id = relation_model.objects.filter(**filter_kwargs, tag_id=OuterRef("tag_id")).values("pk")[:1]
+    return (
+        Tag.objects.filter(tag_id__in=desired_tag_ids).annotate(binding_id=Subquery(binding_id)).order_by("binding_id")
+    )
+
+
+class TagBindingHandler:
+    """策略/联表/工具标签绑定"""
+
+    @classmethod
+    def save(cls, namespace: str, resource_type: str, resource_id: str, tags: List[str]) -> QuerySet:
+        relation_model, relation_resource_field, normalized_id = cls.resolve(
+            resource_type=resource_type,
+            resource_id=resource_id,
+            namespace=namespace,
+        )
+        return sync_resource_tags(
+            relation_resource_field=relation_resource_field,
+            resource_uid=normalized_id,
+            tag_names=tags,
+            relation_model=relation_model,
+        )
+
+    @classmethod
+    def resolve(cls, resource_type: str, resource_id: str, namespace: str) -> Tuple[Type[models.Model], str, str]:
+        if resource_type == TagBindingResourceType.STRATEGY:
+            from services.web.strategy_v2.models import Strategy, StrategyTag
+
+            strategy_id = int(resource_id)
+            if not Strategy.objects.filter(strategy_id=strategy_id, namespace=namespace).exists():
+                raise Http404
+            return StrategyTag, "strategy_id", str(strategy_id)
+
+        if resource_type == TagBindingResourceType.LINK_TABLE:
+            from services.web.strategy_v2.models import LinkTable, LinkTableTag
+
+            if not LinkTable.objects.filter(uid=resource_id, namespace=namespace).exists():
+                raise Http404
+            return LinkTableTag, "link_table_uid", str(resource_id)
+
+        if resource_type == TagBindingResourceType.TOOL:
+            from services.web.tool.models import Tool, ToolTag
+
+            if not Tool.objects.filter(uid=resource_id, namespace=namespace).exists():
+                raise Http404
+            return ToolTag, "tool_uid", str(resource_id)
+
+        raise Http404
+
+
+def get_tool_binding_info(resource_id: str) -> Tuple[bool, Optional[str]]:
+    from services.web.scene.constants import (
+        BindingType,
+        ResourceVisibilityType,
+        SceneStatus,
+    )
+    from services.web.scene.models import ResourceBinding
+
+    binding = ResourceBinding.objects.filter(
+        resource_type=ResourceVisibilityType.TOOL,
+        resource_id=str(resource_id),
+    ).first()
+    if not binding or binding.binding_type != BindingType.SCENE_BINDING:
+        return False, None
+
+    scene_id = (
+        binding.binding_scenes.filter(
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        )
+        .values_list("scene_id", flat=True)
+        .first()
+    )
+    return True, str(scene_id) if scene_id is not None else None

@@ -23,15 +23,15 @@
     </render-info-block>
     <render-info-block>
       <render-info-item :label="t('标签')">
-        <span v-if="data.tags && data.tags.length">
-          <span
-            v-for="tagItem in data.tags"
-            :key="tagItem"
-            class="label-item"> {{ strategyTagMap[tagItem] }}</span>
-        </span>
-        <span v-else>
-          --
-        </span>
+        <inline-tag
+          :editable="tagEditable"
+          :is-editing="isTagEditing"
+          :saving="isTagSaving"
+          :tag-list="tagList"
+          :tags="(data.tags || []).map(item => strategyTagMap[item] || item)"
+          @cancel="isTagEditing = false"
+          @edit="isTagEditing = true"
+          @save="handleTagSave" />
       </render-info-item>
     </render-info-block>
     <render-info-block>
@@ -57,20 +57,48 @@
   </div>
 </template>
 <script setup lang="ts">
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
+
+  import InlineTag from '@components/edit-box/inline-tag.vue';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
   interface Props {
-    data: LinkDataDetailModel
-    strategyTagMap: Record<string, string>
+    data: LinkDataDetailModel,
+    strategyTagMap: Record<string, string>,
+    tagEditable?: boolean,
+    tagList?: Array<{ tag_id: string | number, tag_name: string }>,
+    tagSave?: (tags: string[]) => Promise<unknown>,
   }
 
-  defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    tagEditable: false,
+    tagList: () => [],
+    tagSave: undefined,
+  });
   const { t } = useI18n();
+
+  const isTagEditing = ref(false);
+  const isTagSaving = ref(false);
+
+  const handleTagSave = (tags: string[]) => {
+    if (!props.tagSave) {
+      return;
+    }
+    isTagSaving.value = true;
+    props.tagSave(tags)
+      .then(() => {
+        isTagEditing.value = false;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        isTagSaving.value = false;
+      });
+  };
 </script>
 <style scoped lang="postcss">
 .link-data-basic-info {

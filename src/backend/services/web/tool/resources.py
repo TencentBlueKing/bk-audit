@@ -37,6 +37,7 @@ from api.bk_base.constants import UserAuthActionEnum
 from api.bk_base.serializers import UserAuthCheckRespSerializer
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
+from apps.meta.handlers.tag_binding import sync_resource_tags
 from apps.meta.models import EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
@@ -86,8 +87,9 @@ from services.web.tool.exceptions import (
     InputVariableNotFoundError,
     SmartPageDataSourceNotFound,
     ToolDoesNotExist,
-    ToolReferencedByStrategy,
     ToolTypeNotSupport,
+    ToolUsedByStrategyCannotDelete,
+    ToolUsedByStrategyCannotDisable,
 )
 from services.web.tool.executor.model import SmartPageExecuteParams
 from services.web.tool.executor.tool import (
@@ -131,9 +133,10 @@ from services.web.tool.serializers import (
 )
 from services.web.tool.tasks import update_bkvision_config
 from services.web.tool.tool import (
+    attach_strategy_refs,
     create_tool_with_config,
+    get_blocking_strategy_names,
     recent_tool_usage_manager,
-    sync_resource_tags,
 )
 
 
@@ -284,6 +287,22 @@ class ToolBase(AuditMixinResource, abc.ABC):
                     "system_ids": system_id_map[binding["id"]],
                 }
             setattr(tool, "visibility", visibility)
+
+    @staticmethod
+    def assert_tool_can_disable(tool_uid: str) -> None:
+        """校验工具是否可停用（下架），被策略字段下钻引用时禁止"""
+
+        strategy_names = get_blocking_strategy_names(tool_uid)
+        if strategy_names:
+            raise ToolUsedByStrategyCannotDisable(strategy_names)
+
+    @staticmethod
+    def assert_tool_can_delete(tool_uid: str) -> None:
+        """校验工具是否可删除，被策略字段下钻引用时禁止"""
+
+        strategy_names = get_blocking_strategy_names(tool_uid)
+        if strategy_names:
+            raise ToolUsedByStrategyCannotDelete(strategy_names)
 
 
 class ListToolTags(ToolBase):
@@ -571,6 +590,7 @@ class ListTool(ToolBase):
         for tool in tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
+        attach_strategy_refs(tools)
         BindingMetadataHelper.attach_binding_metadata(
             tools,
             resource_type=ResourceVisibilityType.TOOL,
@@ -588,9 +608,7 @@ class DeleteTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
-        # 删除与广场展示解耦；被策略引用的工具禁止删除（后端兜底，与前端禁用提示对齐）
-        if StrategyTool.objects.filter(tool_uid=uid).exists():
-            raise ToolReferencedByStrategy()
+        self.assert_tool_can_delete(uid)
         self.deletel_enum_mappings(tool_uid=uid)
         Tool.delete_by_uid(uid)
 
@@ -1534,6 +1552,7 @@ class ListToolAll(ToolBase):
         for tool in tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
+        attach_strategy_refs(tools)
         BindingMetadataHelper.attach_binding_metadata(
             tools,
             resource_type=ResourceVisibilityType.TOOL,
@@ -1596,6 +1615,7 @@ class GetToolDetail(ToolBase):
         strategies_ids = list(StrategyTool.objects.filter(tool_uid=tool.uid).values_list("strategy_id", flat=True))
         setattr(tool, "tags", [str(tid) for tid in tag_ids])
         setattr(tool, "strategies", [str(sid) for sid in strategies_ids])
+        attach_strategy_refs([tool])
 
         # 查询当前用户对该工具的收藏状态（使用 tool_uid 关联）
         favorite = ToolFavorite.objects.filter(tool_uid=tool.uid, username=current_user).exists()
@@ -2101,6 +2121,9 @@ class DeletePlatformSceneTool(DeleteTool):
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
+        # 需在删除绑定关系前校验，绑定关系删除后无法判定工具作用域
+        self.assert_tool_can_delete(uid)
+
         # 删除绑定关系（级联删除关联的场景和系统）
         BindingMetadataHelper.delete_resource_binding(
             resource_id=uid,
@@ -2142,9 +2165,10 @@ class PublishPlatformSceneTool(ToolBase):
         if not tool:
             raise SceneToolNotExist()
 
-        tool.status = status or (
+        new_status = status or (
             PanelStatus.UNPUBLISHED if tool.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
         )
+        tool.status = new_status
         tool.save(update_fields=["status"])
         return tool
 
@@ -2248,6 +2272,9 @@ class DeleteSceneScopeTool(DeleteTool):
         ).exists():
             raise SceneToolNotExist()
 
+        # 需在删除绑定关系前校验，绑定关系删除后无法判定工具作用域
+        self.assert_tool_can_delete(uid)
+
         # 删除绑定关系（级联删除关联的场景）
         BindingMetadataHelper.delete_resource_binding(
             resource_id=uid,
@@ -2299,8 +2326,9 @@ class PublishSceneScopeTool(ToolBase):
         if not tool:
             raise SceneToolNotExist()
 
-        tool.status = status or (
+        new_status = status or (
             PanelStatus.UNPUBLISHED if tool.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
         )
+        tool.status = new_status
         tool.save(update_fields=["status"])
         return tool

@@ -38,7 +38,14 @@
                 :data="linkDataDetail"
                 :max-version-map="maxVersionMap"
                 :strategy-tag-map="strategyTagMap"
-                style="height: calc(100% - 50px)" />
+                style="height: calc(100% - 50px)"
+                v-bind="active === 'basicInfo'
+                  ? {
+                    tagEditable: isTagEditable,
+                    tagList,
+                    tagSave: handleTagSave,
+                  }
+                  : {}" />
             </scroll-faker>
           </bk-tab-panel>
         </bk-tab>
@@ -64,10 +71,15 @@
     show(uid?:string):void
   }
   interface Props {
-    maxVersionMap: Record<string, number>
+    maxVersionMap: Record<string, number>,
+    editPermissionMap?: Record<string, boolean>,
+    tagSave?: (uid: string, tags: string[]) => Promise<Array<{ tag_id: string, tag_name: string }>>,
   }
 
-  defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    editPermissionMap: () => ({}),
+    tagSave: undefined,
+  });
   const { t } = useI18n();
 
   const showDetail = ref(false);
@@ -77,6 +89,7 @@
     linkStrategy: LinkStrategy,
   };
   const strategyTagMap = ref<Record<string, string>>({});
+  const tagList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
 
   const panels = [
     { name: 'basicInfo', label: t('基础信息') },
@@ -96,6 +109,7 @@
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
+      tagList.value = data;
     },
   });
 
@@ -106,6 +120,21 @@
   } = useRequest(linkDataManageService.fetchLinkDataDetail, {
     defaultValue: new LinkDataDetailModel(),
   });
+
+  const isTagEditable = computed(() => props.tagSave !== undefined
+    && Boolean(props.editPermissionMap[linkDataDetail.value.uid]));
+
+  const handleTagSave = (tags: string[]) => {
+    if (!props.tagSave) {
+      return Promise.resolve();
+    }
+    return props.tagSave(linkDataDetail.value.uid, tags).then((result) => {
+      result.forEach((item) => {
+        strategyTagMap.value[item.tag_id] = item.tag_name;
+      });
+      linkDataDetail.value.tags = result.map(item => String(item.tag_id));
+    });
+  };
 
   defineExpose<Exposes>({
     show(uid: string, showLinkStrategy?: boolean) {

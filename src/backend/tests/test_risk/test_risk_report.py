@@ -17,13 +17,21 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+from functools import partial
+from types import SimpleNamespace
 from unittest import mock
 
+from django.db.models import Q
+from django.test import override_settings
+from django.urls import resolve
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.test import APIRequestFactory, force_authenticate
 
-from services.web.common.constants import ScopeType
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.service import PermissionService
 from services.web.risk.constants import RiskReportStatus, RiskStatus
-from services.web.risk.models import Risk, RiskReport
+from services.web.risk.models import Risk, RiskReport, UserType
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
@@ -283,141 +291,155 @@ class TestGenerateRiskReport(TestCase):
             self.resource.risk.generate_risk_report({"risk_id": self.risk.risk_id})
 
 
+@override_settings(ROOT_URLCONF="services.web.urls")
 class TestListRiskBrief(TestCase):
-    """测试获取风险简要列表接口"""
+    """通过 HTTP 路由验证风险简表的授权范围和预览兼容性。"""
 
     def setUp(self):
         super().setUp()
+        self.factory = APIRequestFactory()
+        self.user = SimpleNamespace(username="risk-brief-user", is_authenticated=True)
         self.scene = Scene.objects.create(name="risk-brief-scene")
         self.other_scene = Scene.objects.create(name="risk-brief-other-scene")
-        self.strategy = Strategy.objects.create(
-            namespace="default",
-            strategy_name="test-strategy",
-            risk_level=RiskLevel.HIGH.value,
-        )
-        BindingMetadataHelper.create_resource_binding(
-            resource_id=str(self.strategy.strategy_id),
-            resource_type=ResourceVisibilityType.STRATEGY,
-            scene_id=self.scene.scene_id,
-        )
+        self.strategy = self._create_strategy("source", self.scene)
+        self.same_scene_strategy = self._create_strategy("same-scene", self.scene)
+        self.other_strategy = self._create_strategy("other-scene", self.other_scene)
         self.now = timezone.now()
-        # 注意：ListRiskBrief 使用 created_at 进行时间过滤
-        self.risk1 = Risk.objects.create(
-            risk_id="risk-brief-1",
-            raw_event_id="raw-brief-1",
-            strategy=self.strategy,
-            status=RiskStatus.NEW,
-            title="Risk 1",
-            event_time=self.now - datetime.timedelta(days=1),
-        )
-        self.risk2 = Risk.objects.create(
-            risk_id="risk-brief-2",
-            raw_event_id="raw-brief-2",
-            strategy=self.strategy,
-            status=RiskStatus.NEW,
-            title="Risk 2",
-            event_time=self.now,
+        self.source_risk = self._create_risk("source", self.strategy, self.scene, minutes_ago=3)
+        self.same_strategy_risk = self._create_risk("same-strategy", self.strategy, self.scene, minutes_ago=1)
+        self.same_scene_risk = self._create_risk("same-scene", self.same_scene_strategy, self.scene, minutes_ago=2)
+        self.other_risk = self._create_risk("other-scene", self.other_strategy, self.other_scene, minutes_ago=4)
+        self.iam_filter = self.enterContext(
+            mock.patch.object(PermissionService, "get_risk_filter", autospec=True, return_value=Q(pk__in=[]))
         )
 
-    def test_list_risk_brief(self):
-        """测试获取风险简要列表"""
-        result = self.resource.risk.list_risk_brief(
-            {
-                "scope_type": ScopeType.SCENE,
-                "scope_id": str(self.scene.scene_id),
-                "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
-                "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
-            }
-        )
-
-        self.assertEqual(len(result), 2)
-        risk_ids = [r["risk_id"] for r in result]
-        self.assertIn(self.risk1.risk_id, risk_ids)
-        self.assertIn(self.risk2.risk_id, risk_ids)
-
-    def test_list_risk_brief_with_strategy_filter(self):
-        """测试按策略筛选风险简要列表"""
-        other_strategy = Strategy.objects.create(
-            namespace="default",
-            strategy_name="other-strategy",
-            risk_level=RiskLevel.LOW.value,
-        )
+    def _create_strategy(self, name, scene):
+        strategy = Strategy.objects.create(namespace=self.namespace, strategy_name=name)
         BindingMetadataHelper.create_resource_binding(
-            resource_id=str(other_strategy.strategy_id),
+            resource_id=str(strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
-            scene_id=self.other_scene.scene_id,
+            scene_id=scene.scene_id,
         )
-        Risk.objects.create(
-            risk_id="risk-other-strategy",
-            raw_event_id="raw-other",
-            strategy=other_strategy,
-            status=RiskStatus.NEW,
-            title="Other Risk",
+        return strategy
+
+    def _create_risk(self, name, strategy, scene, minutes_ago):
+        risk = Risk.objects.create(
+            risk_id=f"risk-brief-{name}",
+            raw_event_id=f"raw-brief-{name}",
+            strategy=strategy,
+            scene_id=scene.scene_id,
+            title=name,
             event_time=self.now,
         )
+        Risk.objects.filter(pk=risk.pk).update(created_at=self.now - datetime.timedelta(minutes=minutes_ago))
+        return risk
 
-        result = self.resource.risk.list_risk_brief(
-            {
-                "scope_type": ScopeType.SCENE,
-                "scope_id": str(self.scene.scene_id),
-                "strategy_id": self.strategy.strategy_id,
-                "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
-                "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
-            }
+    def _dispatch(self, path, method, params):
+        request = method(path, params)
+        force_authenticate(request, user=self.user)
+        match = resolve(path)
+        response = match.func(request, **match.kwargs)
+        self.assertEqual(response.status_code, 200, response.data)
+        return response.data
+
+    def _list(self, **params):
+        query = {
+            "start_time": (self.now - datetime.timedelta(days=1)).isoformat(),
+            "end_time": self.now.isoformat(),
+            **params,
+        }
+        return self._dispatch("/api/v1/risks/brief/", self.factory.get, query)
+
+    def test_iam_filters_risks_before_count_and_pagination(self):
+        self.iam_filter.return_value = Q(pk__in=[self.source_risk.pk, self.other_risk.pk])
+
+        first = self._list(page=1, page_size=1)
+        second = self._list(page=2, page_size=1)
+
+        self.assertEqual((first["total"], first["num_pages"], first["page"]), (2, 2, 1))
+        self.assertEqual((second["total"], second["num_pages"], second["page"]), (2, 2, 2))
+        self.assertEqual([row["risk_id"] for row in first["results"]], [self.source_risk.pk])
+        self.assertEqual([row["risk_id"] for row in second["results"]], [self.other_risk.pk])
+        self.assertEqual(set(first["results"][0]), {"risk_id", "title", "strategy_id", "created_at"})
+        for permission_call in self.iam_filter.call_args_list:
+            service, action = permission_call.args
+            self.assertEqual(service.username, self.user.username)
+            self.assertEqual(action, ActionEnum.LIST_RISK)
+
+    def test_no_permissions_returns_empty_page(self):
+        self.source_risk.auth_users(ActionEnum.LIST_RISK.id, ["another-user"])
+        self.same_strategy_risk.auth_users(ActionEnum.PROCESS_RISK.id, [self.user.username])
+
+        page = self._list()
+
+        self.assertEqual(page["total"], 0)
+        self.assertEqual(page["results"], [])
+
+    def test_strategy_filter_intersects_with_view_permission(self):
+        self.iam_filter.return_value = Q(pk__in=[self.source_risk.pk, self.same_scene_risk.pk])
+
+        source_page = self._list(strategy_id=str(self.strategy.pk))
+        other_page = self._list(strategy_id=str(self.other_strategy.pk))
+
+        self.assertEqual(source_page["total"], 1)
+        self.assertEqual([row["risk_id"] for row in source_page["results"]], [self.source_risk.pk])
+        self.assertEqual(other_page["total"], 0)
+        self.assertEqual(other_page["results"], [])
+
+    def test_time_range_uses_created_at(self):
+        self.iam_filter.return_value = Q(pk=self.source_risk.pk)
+
+        page = self._list(start_time=(self.now - datetime.timedelta(minutes=2)).isoformat())
+
+        self.assertEqual(page["total"], 0)
+        self.assertEqual(page["results"], [])
+
+    def test_local_ticket_grants_are_combined_with_iam(self):
+        self.iam_filter.return_value = Q(pk=self.source_risk.pk)
+        self.source_risk.auth_users(ActionEnum.LIST_RISK.id, [self.user.username], UserType.OPERATOR)
+        self.same_strategy_risk.auth_users(ActionEnum.LIST_RISK.id, [self.user.username], UserType.OPERATOR)
+        self.same_scene_risk.auth_users(ActionEnum.LIST_RISK.id, [self.user.username], UserType.NOTICE_USER)
+        self.other_risk.auth_users(ActionEnum.LIST_RISK.id, [self.user.username], UserType.CONFIRMER)
+
+        page = self._list()
+
+        self.assertEqual(page["total"], 4)
+        self.assertEqual(
+            [row["risk_id"] for row in page["results"]],
+            [self.same_strategy_risk.pk, self.same_scene_risk.pk, self.source_risk.pk, self.other_risk.pk],
         )
 
-        self.assertEqual(len(result), 2)
-        for r in result:
-            self.assertEqual(r["strategy_id"], self.strategy.strategy_id)
+    def test_edit_and_clone_can_preview_the_visible_source_sample(self):
+        self.source_risk.auth_users(ActionEnum.LIST_RISK.id, [self.user.username], UserType.CONFIRMER)
+        path = f"/api/v1/namespaces/{self.namespace}/report/preview/"
+        for granted_action, resource_type, resource_id in (
+            (ActionEnum.EDIT_STRATEGY, "strategy", self.strategy.pk),
+            (ActionEnum.CREATE_STRATEGY, "scene", self.scene.pk),
+        ):
+            with self.subTest(action=granted_action.id):
 
-    def test_list_risk_brief_empty_when_out_of_time_range(self):
-        """测试时间范围外没有结果"""
-        # 查询过去很久的时间范围，应该没有结果
-        result = self.resource.risk.list_risk_brief(
-            {
-                "scope_type": ScopeType.SCENE,
-                "scope_id": str(self.scene.scene_id),
-                "start_time": (self.now - datetime.timedelta(days=100)).isoformat(),
-                "end_time": (self.now - datetime.timedelta(days=99)).isoformat(),
-            }
-        )
+                def authorize(action, resources, raise_exception):
+                    allowed = action == granted_action and [(r.type, str(r.id)) for r in resources] == [
+                        (resource_type, str(resource_id))
+                    ]
+                    if not allowed and raise_exception:
+                        raise PermissionDenied("synthetic permission denied")
+                    return allowed
 
-        self.assertEqual(len(result), 0)
-
-    def test_list_risk_brief_not_filter_by_scene(self):
-        """测试风险简要列表不按场景隔离（仅策略+时间过滤）"""
-        other_strategy = Strategy.objects.create(
-            namespace="default",
-            strategy_name="other-scene-strategy",
-            risk_level=RiskLevel.LOW.value,
-        )
-        BindingMetadataHelper.create_resource_binding(
-            resource_id=str(other_strategy.strategy_id),
-            resource_type=ResourceVisibilityType.STRATEGY,
-            scene_id=self.other_scene.scene_id,
-        )
-        Risk.objects.create(
-            risk_id="risk-brief-other-scene",
-            raw_event_id="raw-brief-other-scene",
-            strategy=other_strategy,
-            status=RiskStatus.NEW,
-            title="Other Scene Risk",
-            event_time=self.now,
-        )
-
-        result = self.resource.risk.list_risk_brief(
-            {
-                "scope_type": ScopeType.SCENE,
-                "scope_id": str(self.scene.scene_id),
-                "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
-                "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
-            }
-        )
-
-        risk_ids = [r["risk_id"] for r in result]
-        self.assertIn(self.risk1.risk_id, risk_ids)
-        self.assertIn(self.risk2.risk_id, risk_ids)
-        self.assertIn("risk-brief-other-scene", risk_ids)
+                samples = self._list(strategy_id=str(self.strategy.pk))["results"]
+                self.assertEqual([row["risk_id"] for row in samples], [self.source_risk.pk])
+                with mock.patch.object(PermissionService, "is_allowed", side_effect=authorize), mock.patch(
+                    "services.web.risk.report.task_submitter.render_template.delay",
+                    return_value=SimpleNamespace(id="risk-brief-preview"),
+                ) as render:
+                    response = self._dispatch(
+                        path,
+                        partial(self.factory.post, format="json"),
+                        {"risk_id": samples[0]["risk_id"], "report_config": {"template": "sample", "ai_variables": []}},
+                    )
+                self.assertEqual(response, {"task_id": "risk-brief-preview", "status": "PENDING"})
+                render.assert_called_once()
+                self.assertEqual(render.call_args.kwargs["variables"]["risk"]["risk_id"], self.source_risk.pk)
 
 
 class TestReportEnabled(TestCase):

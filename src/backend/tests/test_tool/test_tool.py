@@ -619,7 +619,7 @@ class ToolResourceTestCase(TestCase):
         """被策略引用的工具禁止删除（与广场展示解耦）；解除引用后可删除"""
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
-        from services.web.tool.exceptions import ToolReferencedByStrategy
+        from services.web.tool.exceptions import ToolUsedByStrategyCannotDelete
 
         strategy = Strategy.objects.create(namespace=self.namespace, strategy_name="ref-strategy")
         StrategyTool.objects.create(
@@ -630,7 +630,7 @@ class ToolResourceTestCase(TestCase):
             field_source=StrategyFieldSourceEnum.BASIC.value,
         )
 
-        with self.assertRaises(ToolReferencedByStrategy):
+        with self.assertRaises(ToolUsedByStrategyCannotDelete):
             DeleteTool()({"uid": self.sql_tool.uid})
         self.assertIsNotNone(Tool.last_version_tool(self.sql_tool.uid))
 
