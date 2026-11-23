@@ -57,6 +57,15 @@ class BootstrapTest(unittest.TestCase):
     def configure(self):
         self.cli("configure", "--source-root", self.repo, "--share", SHARE)
 
+    def test_check_without_sharing_policy_still_checks_checkout(self):
+        result = self.cli("check")
+        self.assertIn("OK checkout instructions: AGENTS.md", result.stdout)
+        self.assertIn("no material sharing policy", result.stdout)
+        self.assertFalse((self.target / SHARE).exists())
+        self.assertNotEqual(self.cli("apply", ok=False).returncode, 0)
+        (self.target / "AGENTS.md").unlink()
+        self.assertNotEqual(self.cli("check", ok=False).returncode, 0)
+
     def test_check_is_read_only_and_apply_is_idempotent(self):
         self.configure()
         r = self.cli("check", ok=False)

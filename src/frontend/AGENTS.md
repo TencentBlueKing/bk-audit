@@ -6,7 +6,7 @@
 ## 项目速览
 
 - 单包前端：Vue 3.5 + TypeScript + Vite 8 + vue-router 4 + vue-i18n 11 + `bkui-vue`（新增列表优先 `tdesign-list`，存量 `render-list` 继续复用）。无 Pinia / Vuex。
-- 包管理器 **npm**（Node `>= 16.16.0`）。常用：`npm run dev`（默认 `https://localhost:8082`）、`npm run type-check`、`npm run build`。
+- 包管理器 **npm**（Node 版本要求见 `package.json`，本地可用 `.nvmrc` 选择版本）。常用：`npm run dev`（默认 `https://localhost:8082`）、`npm run type-check`、`npm run build`。
 - 分层：`views` → `components` / `hooks` / `utils` → `domain`（service → source → model）→ `@utils/request`。视图只 import `@service/*`。
 - 状态：URL query 为主（筛选/分页/场景），辅以 sessionStorage / localStorage / mitt。场景三元组见 `utils/assist/scene-system-params.ts`。
 - 提交：Husky + lint-staged（前端）；message 以仓库根 `agent/shared/skills/generate-project-commit` 为准。禁止提交 `.agents/`、`skills-lock.json`、`.env*`。
@@ -21,12 +21,13 @@
 
 ## 任务路由
 
-先按意图读对应 skill（路径：`.agents/skills/<name>/SKILL.md`），再按需打开 `docs/`。
+先按意图读已接入的对应 skill，再按需打开 `docs/`。对应技能缺失时从仓库根的 onboarding 入口定位维护源。
 
 | 意图 | 读 |
 | --- | --- |
 | 配环境 / 装 skill / TAPD·Figma MCP | `bk-audit-frontend-onboarding`（只配环境，不写业务） |
-| TAPD 单据、分支、commit、PR、回写 | `bk-audit-tapd-dev`；写查见其 `references/write-check.md` |
+| TAPD 单据及对应的功能交付、回写 | `bk-audit-tapd-dev`；审计内部团队提交先核实 TAPD 关联 |
+| feature 依赖链、stage 合入或 BKOP 联调 | 从已接入的内部来源读 `bk-audit-git-collaboration` |
 | Figma 还原 | `bk-audit-ui-development` |
 | 颜色 / 圆角 / 字号 | `bk-audit-theme`（`--audit-*`，`src/css/tokens.css`） |
 | bkui / 区间日期 / 列表表格 | `bk-audit-bkui-vue` / `bk-audit-date-picker` / `bk-audit-tdesign-ui` |

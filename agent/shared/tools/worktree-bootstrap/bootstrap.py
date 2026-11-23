@@ -104,7 +104,12 @@ def load_config(common):
 
 
 def check_or_apply(root, common, apply):
-    source, shares = load_config(common)
+    policy = state_dir(common) / "config.json"
+    if not apply and not os.path.lexists(policy):
+        source, shares = None, []
+        print("INFO no material sharing policy; checking checkout instructions only")
+    else:
+        source, shares = load_config(common)
     failures = 0
     tracked = set(git(root, "ls-files", "-z").split("\x00"))
     for rel in ("AGENTS.md", "src/backend/AGENTS.md"):
@@ -117,6 +122,7 @@ def check_or_apply(root, common, apply):
     for rel in shares:
         try:
             no_link_parents(source, rel)
+            no_link_parents(root, rel)
             src, dst = source / rel, root / rel
             if src.is_symlink() or not src.is_dir():
                 raise ValueError("Source topic missing or symlink: " + str(src))
@@ -130,7 +136,6 @@ def check_or_apply(root, common, apply):
             if root == source:
                 print("OK source topic:", rel)
                 continue
-            no_link_parents(root, rel)
             if dst.is_symlink() and dst.resolve() == src:
                 print("OK shared topic:", rel)
             elif os.path.lexists(dst):
