@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from bk_resource import api
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 from django.utils.translation import gettext
 from rest_framework import serializers
@@ -20,7 +20,7 @@ from rest_framework.settings import api_settings
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
-from apps.permission.handlers.resource_types import ResourceEnum
+from core.models import get_request_username
 from core.serializers import FriendlyDateTimeField
 from core.utils.time import mstimestamp_to_date_string
 from services.web.common.constants import ScopeType
@@ -55,7 +55,7 @@ DEFAULT_ACCEPTANCE_DAYS = 30
 
 
 def is_platform_admin(username: str) -> bool:
-    """平台管理员看 IAM 的平台管理权限。只有这个权限、没有场景管理权限时不能通过、驳回。可以编辑、启停和删除。"""
+    """平台管理员看 IAM 的平台管理权限。这个权限不能通过、驳回，可以编辑、启停和删除。"""
 
     if not username:
         return False
@@ -63,15 +63,11 @@ def is_platform_admin(username: str) -> bool:
 
 
 def is_scene_admin(username: str, scene_id: int) -> bool:
-    """看 IAM 的管理场景权限。有该场景的管理权限就可以通过、驳回，即使同时还是平台管理员。"""
+    """场景管理员是该场景 managers 里的人。平台管理员不在名单里不能立即通过，也不能通过、驳回。"""
 
     if not username or not scene_id:
         return False
-    return Permission(username=username).is_allowed(
-        ActionEnum.MANAGE_SCENE,
-        [ResourceEnum.SCENE.create_instance(scene_id)],
-        raise_exception=False,
-    )
+    return username in _scene_admin_usernames(scene_id)
 
 
 def managed_scene_ids(username: str):
@@ -218,6 +214,41 @@ def format_snapshot_value(key: str, value):
         return value
 
 
+def build_hit_event_fields(snapshot: dict) -> list:
+    """field 保留原字段名，field_name 用策略事件字段配置里的中文名。"""
+
+    from services.web.strategy_v2.models import Strategy
+    from services.web.strategy_v2.resources import GetEventFieldsConfig
+
+    snapshot = snapshot or {}
+    strategy_id = snapshot.get("strategy_id")
+    lookup = int(strategy_id) if isinstance(strategy_id, str) and strategy_id.isdigit() else strategy_id
+    strategy = Strategy.objects.filter(strategy_id=lookup).first() if lookup not in (None, "") else None
+    reader = GetEventFieldsConfig()
+    configured = [
+        *reader.get_event_basic_field_configs(None, False),
+        *reader.get_event_data_field_configs(strategy, None, False),
+        *reader.get_event_evidence_field_configs(strategy, None, False),
+    ]
+    names = {item["field_name"]: item["display_name"] for item in configured if item.get("display_name")}
+    fields = []
+    for key, value in snapshot.items():
+        shown = format_snapshot_value(key, value)
+        fields.append(
+            {
+                "field": key,
+                "field_name": names.get(key) or key,
+                "field_type": type(shown).__name__,
+                "field_value": ""
+                if shown is None
+                else shown
+                if isinstance(shown, str)
+                else json.dumps(shown, ensure_ascii=False),
+            }
+        )
+    return fields
+
+
 def _format_expire(value) -> str:
     return _format_dt(value)
 
@@ -256,7 +287,7 @@ def _node_payload(rule: RiskWhitelist, ticket: dict = None, previous: dict = Non
         "whitelist_type": rule.whitelist_type,
         "validity_text": validity_text(rule),
         "reason": rule.reason,
-        "submitted_at": _format_dt(rule.created_at),
+        "submitted_at": submitted_at_of(rule),
         "itsm_ticket_id": str(ticket.get("id") or rule.itsm_ticket_id or ""),
         "itsm_sn": ticket.get("sn") or rule.itsm_sn or "",
         "itsm_url": ticket.get("frontend_url") or rule.itsm_ticket_url or "",
@@ -572,7 +603,7 @@ def apply_whitelist_result(rule: RiskWhitelist, ticket: dict) -> RiskWhitelist:
             current.refresh_from_db()
             refresh_whitelist_nodes(current, ticket)
             return current
-        current.save(update_fields=["status", "reject_reason", "updated_at", "updated_by"])
+        _save_rule(current, ["status", "reject_reason", "updated_at", "updated_by"])
     current.refresh_from_db()
     refresh_whitelist_nodes(current, ticket)
     if current.status == WhitelistStatus.ACTIVE:
@@ -687,6 +718,16 @@ def _bind_ticket(rule: RiskWhitelist, ticket: dict) -> None:
     rule.itsm_ticket_url = ticket.get("frontend_url") or ""
 
 
+def submitted_at_of(rule: RiskWhitelist) -> str:
+
+    # 续期重建单据会把 updated_at 推到创建时间之后；纯创建（含建单失败）两者一致
+    created_at = getattr(rule, "created_at", None)
+    updated_at = getattr(rule, "updated_at", None)
+    if updated_at and created_at and updated_at > created_at:
+        return _format_dt(updated_at)
+    return _format_dt(created_at)
+
+
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
     """场景管理员创建后直接写成生效中。先尝试审批工单；回调若已写入终态则保持。"""
 
@@ -728,7 +769,17 @@ def _renew_snapshot(rule: RiskWhitelist) -> dict:
 def _restore_renew_snapshot(rule: RiskWhitelist, previous: dict) -> None:
     for key, value in previous.items():
         setattr(rule, key, value)
-    rule.save(update_fields=[*previous.keys(), "updated_at"])
+    _save_rule(rule, [*previous.keys(), "updated_at"])
+
+
+def _save_rule(rule: RiskWhitelist, fields) -> None:
+    """按字段保存白名单。回调、Celery 等入口没有登录用户时，把 updated_by 排除出 update_fields，
+    UPDATE 不含该列，从而保住实例加载时携带的原更新人，避免基类把它写成空。"""
+
+    fields = set(fields)
+    if not get_request_username():
+        fields.add("updated_by")
+    rule.save(update_fields=list(fields))
 
 
 def renew_whitelist(
@@ -763,8 +814,9 @@ def renew_whitelist(
     rule.itsm_sn = ""
     rule.itsm_ticket_url = ""
     rule.updated_by = username
-    rule.save(
-        update_fields=[
+    _save_rule(
+        rule,
+        [
             "status",
             "whitelist_type",
             "reject_reason",
@@ -774,7 +826,7 @@ def renew_whitelist(
             "itsm_ticket_url",
             "updated_at",
             "updated_by",
-        ]
+        ],
     )
     try:
         ticket = _submit_itsm_ticket(
@@ -796,8 +848,9 @@ def renew_whitelist(
     _bind_ticket(rule, ticket)
     rule.updated_by = username
     # 不回写 status。回调若已写成生效中，这里再写待审批会把它盖掉。
-    rule.save(
-        update_fields=[
+    _save_rule(
+        rule,
+        [
             "whitelist_type",
             "match_scope",
             "reason",
@@ -809,7 +862,7 @@ def renew_whitelist(
             "itsm_ticket_url",
             "updated_at",
             "updated_by",
-        ]
+        ],
     )
     refresh_whitelist_nodes(rule, ticket)
     if rule.status == WhitelistStatus.PENDING:
@@ -828,7 +881,7 @@ def create_itsm_ticket(rule_id: int) -> None:
         _abort_whitelist(rule)
         raise
     _bind_ticket(rule, ticket)
-    rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
+    _save_rule(rule, ["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
     rule.refresh_from_db()
     # 节点要等调用方按这里的状态插入。这时刷节点还找不到记录。
 
@@ -935,9 +988,10 @@ def _load_ticket_detail(rule: RiskWhitelist) -> dict:
 def expire_whitelists() -> int:
     """到期只改白名单状态。节点申请状态仍是已通过。"""
 
-    return RiskWhitelist.objects.filter(
+    updated = RiskWhitelist.objects.filter(
         status=WhitelistStatus.ACTIVE, expire_at__isnull=False, expire_at__lte=timezone.now()
-    ).update(status=WhitelistStatus.EXPIRED)
+    ).update(status=WhitelistStatus.EXPIRED, skip_update_user=True)
+    return updated
 
 
 def _json_safe(value):
@@ -1050,8 +1104,33 @@ def _maintenance_actions(rule: RiskWhitelist) -> list:
     return []
 
 
+def order_whitelist_queryset(queryset, order_fields):
+    """到期时间排序：永久白名单没有到期时间（expire_at 为空）。
+
+    沿用 NULL 的排序语义：倒序时空值置顶（永久在最上面），正序时空值垫底。
+    """
+
+    ordering = []
+    for field in order_fields:
+        descending = str(field).startswith("-")
+        name = field[1:] if descending else field
+        if name != "expire_at":
+            ordering.append(field)
+            continue
+        queryset = queryset.annotate(
+            expire_is_permanent=Case(
+                When(expire_at__isnull=True, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        )
+        ordering.append("-expire_is_permanent" if descending else "expire_is_permanent")
+        ordering.append("-expire_at" if descending else "expire_at")
+    return queryset.order_by(*ordering)
+
+
 def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list:
-    """通过和驳回只给 IAM 场景管理员。续期是申请，看到这条白名单的人都可以发起。"""
+    """通过和驳回只给该场景的场景管理员。续期是申请，看到这条白名单的人都可以发起。"""
 
     if is_admin is None:
         is_admin = bool(username and is_scene_admin(username, rule.scene_id))
@@ -1214,7 +1293,11 @@ def sync_whitelist_nodes_for_risk(risk_id: str) -> None:
 
 
 def serialize_rule(
-    rule: RiskWhitelist, hit_count: int = 0, progress: dict = None, username: str = "", is_admin=None
+    rule: RiskWhitelist,
+    hit_count: int = 0,
+    progress: dict = None,
+    username: str = "",
+    is_admin=None,
 ) -> dict:
     if progress is None:
         progress = getattr(rule, "_itsm_progress", None)
@@ -1234,6 +1317,8 @@ def serialize_rule(
         "hit_count": hit_count,
         "updated_by": rule.updated_by or "",
         "updated_at": _format_dt(rule.updated_at),
+        # 单据提交时间：创建取创建时间，续期重建单据后取更新时间，其余不变
+        "submitted_at": submitted_at_of(rule),
         "applicant": rule.created_by or "",
         "itsm_ticket_id": rule.itsm_ticket_id or "",
         "itsm_sn": rule.itsm_sn or "",

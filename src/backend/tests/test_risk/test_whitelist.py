@@ -18,6 +18,7 @@ from services.web.risk.whitelist.service import (
     _node_payload,
     _submit_itsm_ticket,
     _ticket_on_rule,
+    build_hit_event_fields,
     create_itsm_ticket,
     expire_at_from,
     flow_of,
@@ -29,9 +30,18 @@ from services.web.risk.whitelist.service import (
     resolve_expire_at,
     review_whitelist,
     submit_whitelist,
+    submitted_at_of,
     validity_text,
 )
 from services.web.scene.constants import ITSMV4TicketStatus
+
+
+def _fmt(value):
+    """复用 service 的格式化，保证断言口径和实现一致。"""
+
+    from services.web.risk.whitelist.service import _format_dt
+
+    return _format_dt(value)
 
 
 def _scope():
@@ -414,6 +424,7 @@ class WhitelistDurationTests(SimpleTestCase):
 
     def test_node_keeps_ticket_after_approve(self):
         expire = datetime.datetime(2026, 12, 11, 8, 33, 41, 289366, tzinfo=datetime.timezone.utc)
+        submitted = datetime.datetime(2026, 11, 11, 8, 33, 41, 289366, tzinfo=datetime.timezone.utc)
         rule = SimpleNamespace(
             id=1,
             is_permanent=False,
@@ -422,7 +433,8 @@ class WhitelistDurationTests(SimpleTestCase):
             created_by="admin",
             whitelist_type=WhitelistType.RISK_ACCEPTANCE,
             reason="接受",
-            created_at=expire,
+            created_at=submitted,
+            updated_at=None,
             itsm_ticket_id="102026111108334100059701",
             itsm_sn="DE2026111100000001",
             itsm_ticket_url="http://itsm/1",
@@ -442,6 +454,8 @@ class WhitelistDurationTests(SimpleTestCase):
         self.assertEqual(payload["itsm_sn"], "DE2026111100000001")
         self.assertEqual(payload["itsm_status"], WhitelistStatus.ACTIVE)
         self.assertEqual(payload["itsm_status_display"], "生效中")
+        # 纯创建：更新时间未晚于创建时间，提交时间取创建时间
+        self.assertEqual(payload["submitted_at"], "2026-11-11 16:33:41")
         rule.status = WhitelistStatus.PENDING
         rule.itsm_ticket_url = "http://itsm/1"
         rule.updated_by = ""
@@ -564,6 +578,18 @@ class WhitelistDurationTests(SimpleTestCase):
     def test_risk_acceptance_cannot_be_permanent(self):
         with self.assertRaises(ValidationError):
             resolve_expire_at(WhitelistType.RISK_ACCEPTANCE, duration_days="permanent")
+
+    def test_submitted_at_uses_created_at_until_renewed(self):
+        created = datetime.datetime(2026, 11, 11, 8, 33, 41, tzinfo=datetime.timezone.utc)
+        renewed = datetime.datetime(2026, 12, 1, 9, 0, 0, tzinfo=datetime.timezone.utc)
+        # 纯创建：更新时间为空或与创建时间一致，提交时间取创建时间
+        pure_created = SimpleNamespace(created_at=created, updated_at=None)
+        self.assertEqual(submitted_at_of(pure_created), _fmt(created))
+        same_time = SimpleNamespace(created_at=created, updated_at=created)
+        self.assertEqual(submitted_at_of(same_time), _fmt(created))
+        # 续期重建单据：更新时间晚于创建时间，提交时间取更新时间
+        renewed_rule = SimpleNamespace(created_at=created, updated_at=renewed)
+        self.assertEqual(submitted_at_of(renewed_rule), _fmt(renewed))
 
 
 class _Rule:
@@ -1036,6 +1062,48 @@ class WhitelistListQueryTests(SimpleTestCase):
         )
         self.assertEqual(serializer.validated_data["order_fields"], ["-updated_at", "hit_count"])
 
+    def test_expire_sort_puts_permanent_first_when_descending(self):
+        from services.web.risk.whitelist.service import order_whitelist_queryset
+
+        class _Query:
+            def annotate(self, **kwargs):
+                return self
+
+            def order_by(self, *fields):
+                self.fields = fields
+                return self
+
+        # 倒序（默认列表方向）永久置顶；正序沿用 NULL 语义，永久垫底
+        descending = order_whitelist_queryset(_Query(), ["-expire_at"])
+        self.assertEqual(descending.fields, ("-expire_is_permanent", "-expire_at"))
+        ascending = order_whitelist_queryset(_Query(), ["expire_at"])
+        self.assertEqual(ascending.fields, ("expire_is_permanent", "expire_at"))
+
+    def test_callback_save_keeps_updated_by(self):
+        from services.web.risk.whitelist.service import _save_rule
+
+        rule = SimpleNamespace(updated_by="", created_by="alice", updated_at=None)
+        saved = {}
+
+        def save(update_fields=None):
+            saved["update_fields"] = set(update_fields or [])
+
+        rule.save = save
+        # 回调没有登录用户：把 updated_by 一并写回，避免基类将更新人保存成空
+        with patch("services.web.risk.whitelist.service.get_request_username", return_value=""):
+            _save_rule(rule, ["status"])
+        self.assertIn("updated_by", saved["update_fields"])
+
+    def test_expire_whitelists_keeps_original_updated_by(self):
+        from services.web.risk.whitelist.service import expire_whitelists
+
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects") as objects:
+            expire_whitelists()
+        fields = objects.filter.return_value.update.call_args.kwargs
+        # 到期 Celery 没有登录用户：跳过 updated_by，保留各行原更新人，不写成创建人或后台账号
+        self.assertTrue(fields["skip_update_user"])
+        self.assertNotIn("updated_by", fields)
+
     def test_match_scope_filter_accepts_field_label_or_value(self):
         from services.web.risk.whitelist.serializers import (
             ListRiskWhitelistReqSerializer,
@@ -1093,23 +1161,16 @@ class WhitelistApproveCloseTests(SimpleTestCase):
 
 
 class WhitelistReviewTests(SimpleTestCase):
-    def test_scene_admin_uses_iam_manage_scene(self):
+    def test_scene_admin_is_scene_manager(self):
         from apps.permission.handlers.actions import ActionEnum
         from services.web.risk.whitelist.service import (
             is_scene_admin,
             managed_scene_ids,
         )
 
-        with patch("services.web.risk.whitelist.service.Permission") as permission_cls, patch(
-            "services.web.risk.whitelist.service.ResourceEnum.SCENE.create_instance", return_value="scene-3"
-        ) as create_instance:
-            permission_cls.return_value.has_action_any_permission.return_value = False
-            permission_cls.return_value.is_allowed.return_value = True
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]):
             self.assertTrue(is_scene_admin("alice", 3))
-            create_instance.assert_called_once_with(3)
-            self.assertEqual(permission_cls.return_value.is_allowed.call_args.args[0], ActionEnum.MANAGE_SCENE)
-            self.assertEqual(permission_cls.return_value.is_allowed.call_args.args[1], ["scene-3"])
-            self.assertFalse(permission_cls.return_value.is_allowed.call_args.kwargs["raise_exception"])
+            self.assertFalse(is_scene_admin("root", 3))
 
         with patch("services.web.risk.whitelist.service.ScopePermission") as scope_cls:
             scope_cls.return_value.get_scene_ids.return_value = [3]
@@ -1122,14 +1183,9 @@ class WhitelistReviewTests(SimpleTestCase):
         active = SimpleNamespace(status=WhitelistStatus.ACTIVE, scene_id=3, expire_at="2026-12-01 00:00:00")
         pending = SimpleNamespace(status=WhitelistStatus.PENDING, scene_id=3, expire_at=None)
         disabled = SimpleNamespace(status=WhitelistStatus.DISABLED, scene_id=3, expire_at=None)
-        with patch("services.web.risk.whitelist.service.Permission") as permission_cls, patch(
-            "services.web.risk.whitelist.service.ResourceEnum.SCENE.create_instance", return_value="scene-3"
-        ):
-            permission_cls.return_value.has_action_any_permission.return_value = True
-            permission_cls.return_value.is_allowed.return_value = False
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]):
             self.assertFalse(is_scene_admin("root", 3))
-            permission_cls.return_value.is_allowed.return_value = True
-            self.assertTrue(is_scene_admin("root", 3))
+            self.assertTrue(is_scene_admin("alice", 3))
         with patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True):
             self.assertEqual(list_actions(active, "root", is_admin=False), ["edit", "renew", "disable", "hits"])
             self.assertEqual(list_actions(pending, "root", is_admin=False), [])
@@ -1198,3 +1254,19 @@ class WhitelistSnapshotTimeTests(SimpleTestCase):
         self.assertEqual(shown, "2024-11-18 12:00:00")
         self.assertEqual(format_snapshot_value("strategy_id", 9), 9)
         self.assertEqual(format_snapshot_value("event_time", "2024-11-18 12:00:00"), "2024-11-18 12:00:00")
+
+
+class WhitelistHitEventFieldNameTests(SimpleTestCase):
+    def test_field_name_uses_existing_event_field_config(self):
+        strategy = SimpleNamespace(
+            event_data_field_configs=[{"field_name": "username", "display_name": "操作人用户名"}],
+            event_evidence_field_configs=[],
+        )
+        with patch("services.web.strategy_v2.models.Strategy.objects") as objects:
+            objects.filter.return_value.first.return_value = strategy
+            fields = build_hit_event_fields({"strategy_id": "9", "operator": "alice", "username": "alice"})
+
+        names = {item["field"]: item["field_name"] for item in fields}
+        self.assertEqual(names["strategy_id"], "命中策略(ID)")
+        self.assertEqual(names["operator"], "责任人")
+        self.assertEqual(names["username"], "操作人用户名")

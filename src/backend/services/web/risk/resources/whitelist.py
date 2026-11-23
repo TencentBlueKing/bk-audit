@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import abc
-import json
 
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -48,13 +47,14 @@ from services.web.risk.whitelist.serializers import (
 from services.web.risk.whitelist.service import (
     _bind_ticket,
     _format_dt,
+    _save_rule,
     apply_whitelist_result,
+    build_hit_event_fields,
     ensure_same_strategy_scene,
-    format_snapshot_value,
     get_rule_for_admin,
-    is_platform_admin,
     is_scene_admin,
     managed_scene_ids,
+    order_whitelist_queryset,
     prepare_callback_ticket,
     refresh_whitelist_nodes,
     renew_whitelist,
@@ -113,14 +113,13 @@ class ListRiskWhitelists(RiskWhitelistMeta):
         page = validated_request_data["page"]
         page_size = validated_request_data["page_size"]
         rows = list(
-            queryset.annotate(hit_count=Count("hits", filter=Q(hits__is_deleted=False))).order_by(
-                *validated_request_data["order_fields"]
+            order_whitelist_queryset(
+                queryset.annotate(hit_count=Count("hits", filter=Q(hits__is_deleted=False))),
+                validated_request_data["order_fields"],
             )[(page - 1) * page_size : page * page_size]
         )
         # 列表只读库里的状态，不会把待审批改成生效中。续期谁都可以申请。
-        # 通过和驳回认该场景的管理权限；只有平台管理权限时不给。
-        platform_admin = is_platform_admin(username)
-        managed = set(scene_ids)
+        # 通过和驳回只给该场景 managers 里的场景管理员，平台管理员不给。
         return {
             "page": page,
             "page_size": page_size,
@@ -131,7 +130,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                     getattr(row, "hit_count", 0),
                     {},
                     username,
-                    is_admin=(is_scene_admin(username, row.scene_id) if platform_admin else row.scene_id in managed),
+                    is_admin=is_scene_admin(username, row.scene_id),
                 )
                 for row in rows
             ],
@@ -253,7 +252,7 @@ class UpdateRiskWhitelist(RiskWhitelistMeta):
             return serialize_rule(renewed, username=get_request_username())
         rule.match_scope = validated_request_data["match_scope"]
         rule.reason = validated_request_data["reason"]
-        rule.save(update_fields=["match_scope", "reason", "updated_at", "updated_by"])
+        _save_rule(rule, ["match_scope", "reason", "updated_at", "updated_by"])
         return serialize_rule(rule, username=get_request_username())
 
 
@@ -298,7 +297,7 @@ class EnableRiskWhitelist(RiskWhitelistMeta):
             rule.status = WhitelistStatus.EXPIRED
         else:
             rule.status = WhitelistStatus.ACTIVE
-        rule.save(update_fields=["status", "updated_at", "updated_by"])
+        _save_rule(rule, ["status", "updated_at", "updated_by"])
         return serialize_rule(rule, username=get_request_username())
 
 
@@ -311,7 +310,7 @@ class DisableRiskWhitelist(RiskWhitelistMeta):
         if rule.status != WhitelistStatus.ACTIVE:
             raise ValidationError(gettext("只有生效中的规则可以停用"))
         rule.status = WhitelistStatus.DISABLED
-        rule.save(update_fields=["status", "updated_at", "updated_by"])
+        _save_rule(rule, ["status", "updated_at", "updated_by"])
         return serialize_rule(rule, username=get_request_username())
 
 
@@ -390,22 +389,7 @@ class FetchWhitelistHitEvent(RiskWhitelistMeta):
         hit = RiskWhitelistHit.objects.filter(pk=validated_request_data["hit_id"], whitelist=rule).first()
         if hit is None:
             raise ValidationError(gettext("命中记录不存在"))
-        fields = []
-        for key, value in (hit.event_snapshot or {}).items():
-            shown = format_snapshot_value(key, value)
-            fields.append(
-                {
-                    "field": key,
-                    "field_name": key,
-                    "field_type": type(shown).__name__,
-                    "field_value": ""
-                    if shown is None
-                    else shown
-                    if isinstance(shown, str)
-                    else json.dumps(shown, ensure_ascii=False),
-                }
-            )
-        return {"fields": fields}
+        return {"fields": build_hit_event_fields(hit.event_snapshot)}
 
 
 class RiskWhitelistCallback(RiskWhitelistMeta):
@@ -428,7 +412,7 @@ class RiskWhitelistCallback(RiskWhitelistMeta):
             return {"result": False, "message": "invalid callback"}
         if not rule.itsm_ticket_id:
             _bind_ticket(rule, ticket)
-            rule.save(update_fields=["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
+            _save_rule(rule, ["itsm_ticket_id", "itsm_sn", "itsm_ticket_url", "updated_at", "updated_by"])
         ticket = prepare_callback_ticket(ticket)
         if rule.status == WhitelistStatus.PENDING:
             rule = apply_whitelist_result(rule, ticket)
