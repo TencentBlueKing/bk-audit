@@ -143,8 +143,7 @@
               error-display-type="tooltips"
               label=""
               label-width="0"
-              :property="`tools.${toolIndex}.tool`"
-              required>
+              :property="`tools.${toolIndex}.tool`">
               <audit-collapse-panel
                 is-active>
                 <template #label="{ isCollapseActive, handleClick }">
@@ -172,10 +171,12 @@
                       @click="handleDeleteTool(toolConfig)" />
                   </div>
                 </template>
+                <!-- 非必填：空则回退工具名；勿加 required，避免父级 is-required 把星号带到此 label -->
                 <bk-form-item
                   :label="t('下钻按钮名称')"
                   label-width="160"
-                  property="tools.${toolIndex}.drill_name">
+                  :property="`tools.${toolIndex}.drill_name`"
+                  :required="false">
                   <bk-input
                     v-model="formData.tools[toolIndex].drill_name"
                     :placeholder="t('未填写时将使用工具名称作为下钻按钮名称')" />

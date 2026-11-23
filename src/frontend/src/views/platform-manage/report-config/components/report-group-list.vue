@@ -1158,12 +1158,12 @@
     }
   }
 
-  /* 新建报表高亮绿底（刷新后消失） */
+  /* 新建报表高亮绿底（刷新后消失；与表格 new-row 规范色一致） */
   &.is-new-created {
-    background-color: #e8fbf0;
+    background-color: var(--bk-theme-table-row-new-bg);
 
     &:hover {
-      background-color: #d4f3e1;
+      background-color: var(--bk-theme-table-row-new-hover-bg);
     }
   }
 }

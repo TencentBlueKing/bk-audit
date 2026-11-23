@@ -31,7 +31,7 @@
         class="page-search"
         clearable
         :data="searchData"
-        :placeholder="t('规则标识、匹配范围、包含条件、加白类型、加白原因、更新人')"
+        :placeholder="t('规则标识、匹配范围、包含条件、加白类型、加白原因、更新人、状态')"
         unique-select
         @update:model-value="handleSearch" />
     </div>
@@ -40,6 +40,7 @@
       :columns="columns"
       :data-source="dataSource"
       is-need-scene-id
+      :row-class-name="getRowClassName"
       row-key="id"
       scene-id-key="scene_id"
       use-skeleton
@@ -54,7 +55,7 @@
     </tdesign-list>
     <create-edit-sideslider
       ref="editRef"
-      @success="refresh" />
+      @success="handleCreateEditSuccess" />
     <reject-dialog
       ref="rejectRef"
       @success="refresh" />
@@ -83,7 +84,11 @@
   import useMessage from '@hooks/use-message';
 
   import MatchScopeExpression from '@components/risk-whitelist/match-scope-expression.vue';
-  import { WHITELIST_STATUS_TEXT, WHITELIST_TYPE_TEXT } from '@components/risk-whitelist/constants';
+  import {
+    FALLBACK_CONDITION_FIELDS,
+    WHITELIST_STATUS_TEXT,
+    WHITELIST_TYPE_TEXT,
+  } from '@components/risk-whitelist/constants';
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import {
@@ -129,6 +134,9 @@
   const hitRef = ref<InstanceType<typeof HitRecordSideslider>>();
   const searchValue = ref<SearchKey[]>([]);
   const hasSearch = ref(false);
+  /** 新建成功后绿底高亮，刷新后消失 */
+  const highlightNewId = ref<string | null>(null);
+  const NEW_ROW_STORAGE_KEY = 'risk_whitelist_new_id';
 
   const readCachedSceneList = (): CachedSceneItem[] => {
     try {
@@ -201,7 +209,17 @@
   const searchData = [
     { id: 'rule_code', name: t('规则标识') },
     { id: 'match_scope', name: t('匹配范围') },
-    { id: 'condition_keyword', name: t('包含条件') },
+    {
+      id: 'condition_keyword',
+      name: t('包含条件'),
+      multiple: true,
+      placeholder: t('请选择包含条件'),
+      // id 用字段 key，便于 keyword 命中 match_scope 里的 field（如 strategy_id）
+      children: FALLBACK_CONDITION_FIELDS.map(item => ({
+        id: item.field,
+        name: t(item.name),
+      })),
+    },
     {
       id: 'whitelist_type',
       name: t('加白类型'),
@@ -215,9 +233,17 @@
     {
       id: 'status',
       name: t('状态'),
+      multiple: true,
+      placeholder: t('请选择状态'),
       children: Object.entries(WHITELIST_STATUS_TEXT).map(([id, name]) => ({ id, name: t(name) })),
     },
   ];
+
+  const getRowClassName = (row: Record<string, any>) => {
+    if (!highlightNewId.value) return '';
+    const rowData = row?.row || row;
+    return String(rowData?.id) === String(highlightNewId.value) ? 'new-row' : '';
+  };
 
   const filterList = (map: Record<string, string>) => Object.entries(map).map(([value, label]) => ({
     label: t(label),
@@ -529,6 +555,19 @@
     listRef.value?.fetchData(buildSearchParams());
   };
 
+  const handleCreateEditSuccess = (created?: RiskWhitelist | null) => {
+    if (created?.id != null && created.id !== '') {
+      const id = String(created.id);
+      highlightNewId.value = id;
+      try {
+        sessionStorage.setItem(NEW_ROW_STORAGE_KEY, id);
+      } catch {
+        // ignore
+      }
+    }
+    refresh();
+  };
+
   const openCreate = () => {
     if (!ensureManageAccessBeforeFetch()) return;
     editRef.value?.open();
@@ -542,6 +581,15 @@
   };
 
   onMounted(() => {
+    try {
+      const cached = sessionStorage.getItem(NEW_ROW_STORAGE_KEY);
+      if (cached) {
+        highlightNewId.value = cached;
+        sessionStorage.removeItem(NEW_ROW_STORAGE_KEY);
+      }
+    } catch {
+      // ignore
+    }
     onEvent('scene:change', handleSceneChange);
     onEvent('scene-list-ready', handleSceneListReady);
     document.addEventListener('click', handleDocumentClick, true);

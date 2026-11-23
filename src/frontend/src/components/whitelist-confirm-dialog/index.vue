@@ -21,7 +21,7 @@
     :esc-close="false"
     header-align="center"
     :quick-close="false"
-    :title="t(roleText.text.value.confirmTitle)"
+    :title="t(confirmTitle)"
     width="480">
     <div class="confirm-body">
       <div class="desc-row">
@@ -90,6 +90,8 @@
     customDays?: number;
     source?: 'menu' | 'risk';
     expireAt?: string;
+    /** 菜单编辑：标题改为「确定编辑白名单」 */
+    mode?: 'create' | 'edit';
   }
 
   const { t } = useI18n();
@@ -102,9 +104,13 @@
   const customDays = ref(1);
   const source = ref<'menu' | 'risk'>('menu');
   const expireAt = ref<string | null>(null);
+  const mode = ref<'create' | 'edit'>('create');
   let resolver: ((value: boolean) => void) | null = null;
 
   const typeText = computed(() => WHITELIST_TYPE_TEXT[whitelistType.value]);
+  const confirmTitle = computed(() => (
+    mode.value === 'edit' ? '确定编辑白名单？' : roleText.text.value.confirmTitle
+  ));
   const validityText = computed(() => {
     if (expireAt.value !== null) return expireAt.value || '--';
     return validityMode.value === 'permanent'
@@ -136,7 +142,7 @@
       lines.push('冒险加白表示风险真实存在，可能带来安全风险。因冒险加白导致重大安全事故的，申请人需承担主要责任，请谨慎操作。');
     }
     if (hasStrategyOnlyGroup(scope.value)) {
-      lines.push('当前存在只锁定整条策略的条件组，命中该策略的风险都会被抑制。');
+      lines.push('当前匹配范围仅锁定策略，将抑制该策略下全部对象的后续风险，请确认范围是否过宽。');
     }
     return lines;
   });
@@ -148,6 +154,7 @@
     customDays.value = options.customDays || 1;
     source.value = options.source || 'menu';
     expireAt.value = options.expireAt === undefined ? null : options.expireAt;
+    mode.value = options.mode || 'create';
     isShow.value = true;
     return new Promise<boolean>((resolve) => {
       resolver = resolve;

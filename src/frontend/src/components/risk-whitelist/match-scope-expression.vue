@@ -190,7 +190,8 @@
         const fieldName = condition.field === 'strategy_id'
           ? (condition.field_name || '风险命中策略(ID)')
           : (condition.field_label || condition.field);
-        const text = `${fieldName} ${OPERATOR_LABEL_MAP.eq} ${shown}`;
+        // 文本/ tip 统一「字段 = 值」，避免有的条件有空格、有的没有
+        const text = `${fieldName} = ${shown}`;
         lines.push({ op, text });
       });
     });

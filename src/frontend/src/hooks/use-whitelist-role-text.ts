@@ -68,7 +68,7 @@ export const getWhitelistRiskCloseImpact = (type: WhitelistType, isAdmin: boolea
 
 export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) => {
   if (isAdmin && canDirectActivate()) {
-    return '加白规则确认后立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
+    return '确认后立即生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
   }
   if (type === 'false_positive') {
     return '加白规则待审批通过后生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。';
@@ -78,7 +78,7 @@ export const getWhitelistEffectImpact = (type: WhitelistType, isAdmin: boolean) 
 
 /** 风险单冒险加白 + 管理员：合并关单与生效说明 */
 export const getWhitelistAdventureAdminImpact = () => (
-  '加白规则确认后立即关单并生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。'
+  '确认后立即关单并生效。后续命中该匹配范围的风险将不再生成新单，已有风险单不再追加事件。'
 );
 
 /**

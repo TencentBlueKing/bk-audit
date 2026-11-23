@@ -55,7 +55,7 @@
   import RiskWhitelistForm from '@components/risk-whitelist-form/index.vue';
   import WhitelistConfirmDialog from '@components/whitelist-confirm-dialog/index.vue';
 
-  const emit = defineEmits<{(e: 'success'): void}>();
+  const emit = defineEmits<{(e: 'success', created?: RiskWhitelist | null): void}>();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const isShow = ref(false);
@@ -84,6 +84,7 @@
         ? preview.expireAt
         : (preview.editable ? undefined : preview.expireAt),
       source: 'menu',
+      mode: isEdit.value ? 'edit' : 'create',
     });
     if (!confirmed) return;
     submitting.value = true;
@@ -95,10 +96,11 @@
         renew: preview.editable && !(current.is_permanent && payload.validity_mode === 'permanent'),
       })
       : RiskWhitelistService.create(payload);
-    request.then(() => {
+    request.then((data) => {
       messageSuccess(t(isEdit.value ? '白名单已更新' : '白名单已生效'));
       isShow.value = false;
-      emit('success');
+      // 仅新建回传记录，供列表绿底高亮
+      emit('success', isEdit.value ? null : data);
     })
       .finally(() => {
         submitting.value = false;

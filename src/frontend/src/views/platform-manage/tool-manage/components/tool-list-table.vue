@@ -770,7 +770,7 @@
           if (row) {
             /* eslint-disable no-param-reassign */
             Array.from(row.querySelectorAll('td')).forEach((tdEl: HTMLElement) => {
-              tdEl.style.background = '#f2fff4';
+              tdEl.style.background = 'var(--bk-theme-table-row-new-bg)';
             });
             /* eslint-enable no-param-reassign */
           }

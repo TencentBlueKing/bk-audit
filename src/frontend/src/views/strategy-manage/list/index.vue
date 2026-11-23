@@ -2024,7 +2024,7 @@
     if (domList) {
       domList.forEach((dom) => {
         const el = dom as HTMLElement;
-        el.style.background = isNew ? '#f2fff4' : '';
+        el.style.background = isNew ? 'var(--bk-theme-table-row-new-bg)' : '';
       });
     }
   };
