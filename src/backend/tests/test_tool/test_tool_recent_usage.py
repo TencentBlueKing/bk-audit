@@ -4,7 +4,6 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from services.web.scene.constants import PanelStatus
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.models import Tool
 from services.web.tool.resources import ExecuteTool, ExecuteToolAPIGW, MCPExecuteTool
@@ -67,7 +66,6 @@ class TestExecuteToolUsageSource(TestCase):
             tool_type=ToolTypeEnum.BK_VISION.value,
             config={"uid": "vision_uid"},
             permission_owner="owner",
-            status=PanelStatus.PUBLISHED,
         )
 
     def _execute(self, resource_cls, extra=None):

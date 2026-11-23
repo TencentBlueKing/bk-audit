@@ -24,11 +24,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from services.web.common.constants import CallerResourceType
-from services.web.scene.constants import (
-    PanelStatus,
-    ResourceVisibilityType,
-    SceneStatus,
-)
+from services.web.scene.constants import ResourceVisibilityType, SceneStatus
 from services.web.scene.filters import CompositeScopeFilter
 from services.web.scene.models import Scene
 from services.web.tool.models import Tool
@@ -54,7 +50,16 @@ class RiskCallerPermission(BaseCallerPermission):
             perm.has_risk_permission(instance_id, username)
         # 2) 基于 current_type+current_object_id/extra_context 做关系校验
         if current_type and current_object_id:
-            return self.extra_context_validate(current_type, current_object_id, instance_id, kwargs)
+            valid = self.extra_context_validate(current_type, current_object_id, instance_id, kwargs)
+            if not valid:
+                # 下钻权限校验失败诊断日志（保留用于排障定位）
+                logger.warning(
+                    "[drill_perm_diag] extra_context_validate failed: risk=%s current_type=%s current_object_id=%s",
+                    instance_id,
+                    current_type,
+                    current_object_id,
+                )
+            return valid
         return True
 
     def extra_context_validate(self, current_type, current_object_id, instance_id, kwargs):
@@ -76,7 +81,7 @@ class RiskCallerPermission(BaseCallerPermission):
             event_start_time = kwargs.get("event_start_time")
             event_end_time = kwargs.get("event_end_time")
             if variable_values:
-                return validate_tool_variables_with_risk(
+                valid = validate_tool_variables_with_risk(
                     risk_id=instance_id,
                     tool_uid=current_object_id,
                     variable_values=variable_values,
@@ -84,6 +89,19 @@ class RiskCallerPermission(BaseCallerPermission):
                     start_time=event_start_time,
                     end_time=event_end_time,
                 )
+                if not valid:
+                    # 下钻权限校验失败诊断日志（保留用于排障定位）
+                    logger.warning(
+                        "[drill_perm_diag] tool variables invalid: risk=%s tool=%s drill_field=%s "
+                        "start=%s end=%s vars=%s",
+                        instance_id,
+                        current_object_id,
+                        drill_field,
+                        event_start_time,
+                        event_end_time,
+                        list(variable_values.keys()),
+                    )
+                return valid
             return True
 
 
@@ -189,7 +207,8 @@ def extract_extra_variables(source: Any) -> Dict[str, Any]:
 
 def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     """
-    校验指定风险的策略是否关联给定工具，并确保风险所属场景启用且工具在该场景可见、已发布。
+    校验指定风险的策略是否关联给定工具，并确保风险所属场景启用且工具在该场景可见。
+    （工具广场展示开关不参与下钻权限判定）
 
     返回 True 表示存在关联且可访问，False 表示不存在或无法定位。
     """
@@ -198,16 +217,26 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
 
     risk = Risk.objects.filter(risk_id=risk_id).only("strategy_id", "scene_id").first()
     if not risk or not risk.strategy_id:
+        # 下钻权限校验失败诊断日志（保留用于排障定位）
+        logger.warning("[drill_perm_diag] risk missing or no strategy: risk=%s tool=%s", risk_id, tool_uid)
         return False
 
     if not StrategyTool.objects.filter(strategy_id=risk.strategy_id, tool_uid=tool_uid).exists():
+        logger.warning(
+            "[drill_perm_diag] strategy not linked to tool: risk=%s strategy=%s tool=%s",
+            risk_id,
+            risk.strategy_id,
+            tool_uid,
+        )
         return False
 
     scene_id = risk.scene_id
     if not scene_id:
+        logger.warning("[drill_perm_diag] risk has no scene: risk=%s tool=%s", risk_id, tool_uid)
         return False
 
     if not Scene.objects.filter(scene_id=scene_id, status=SceneStatus.ENABLED).exists():
+        logger.warning("[drill_perm_diag] scene not enabled: risk=%s scene=%s tool=%s", risk_id, scene_id, tool_uid)
         return False
 
     tool = CompositeScopeFilter.filter_queryset(
@@ -218,9 +247,13 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
         pk_field="uid",
     ).first()
     if not tool:
+        logger.warning(
+            "[drill_perm_diag] tool not visible in scene: risk=%s scene=%s tool=%s", risk_id, scene_id, tool_uid
+        )
         return False
 
-    return tool.status == PanelStatus.PUBLISHED
+    # 工具广场展示开关（status）仅控制广场展示，不影响下钻：不再校验是否已发布
+    return True
 
 
 @singledispatch

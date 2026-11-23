@@ -57,7 +57,6 @@ from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
     BindingType,
-    PanelStatus,
     ResourceVisibilityType,
     SceneStatus,
 )
@@ -89,7 +88,6 @@ from services.web.tool.exceptions import (
     InputVariableNotFoundError,
     SmartPageDataSourceNotFound,
     ToolDoesNotExist,
-    ToolNotPublished,
     ToolTypeNotSupport,
     ToolUsedByStrategyCannotDelete,
     ToolUsedByStrategyCannotDisable,
@@ -887,9 +885,11 @@ class UpdateTool(ToolBase):
         if not tool:
             raise ToolDoesNotExist()
 
-        # 编辑接口可直接变更上架状态，停用前需校验是否被策略字段下钻引用
-        if validated_request_data.get("status") == PanelStatus.UNPUBLISHED and tool.status != PanelStatus.UNPUBLISHED:
-            self.assert_tool_can_disable(uid)
+        # tags 可选：未传时保持现有标签（部分更新语义，避免误清空；新版本/原版本路径一致生效）
+        if "tags" not in validated_request_data:
+            tag_ids = ToolTag.objects.filter(tool_uid=uid).values_list("tag_id", flat=True)
+            tag_names = Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True)
+            validated_request_data["tags"] = list(tag_names)
 
         if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
             # smart_page 工具：仅更新 default_value_overrides 和 usage_limits，不走全量 config 更新逻辑
@@ -1425,8 +1425,6 @@ class ExecuteToolAPIGW(ExecuteTool):
         tool: Tool = Tool.last_version_tool(uid=uid)
         if not tool:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            raise ToolNotPublished()
 
         current_user = "admin"
         try:
@@ -1992,15 +1990,10 @@ class GetToolDetailByNameAPIGW(ToolBase):
     def get_tool(self, validated_request_data):
         return Tool.all_latest_tools().filter(name=validated_request_data["name"]).first()
 
-    def raise_tool_not_published(self):
-        raise ToolNotPublished()
-
     def get_tool_detail(self, validated_request_data):
         tool = self.get_tool(validated_request_data)
         if not tool:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            self.raise_tool_not_published()
         if tool.tool_type == ToolTypeEnum.SMART_PAGE:
             raise ToolTypeNotSupport()
 
@@ -2134,16 +2127,9 @@ class DeletePlatformSceneTool(DeleteTool):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        from services.web.scene.constants import (
-            BindingType,
-            PanelStatus,
-            ResourceVisibilityType,
-        )
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.models import ResourceBinding
-        from services.web.tool.exceptions import (
-            SceneToolCannotDelete,
-            SceneToolNotExist,
-        )
+        from services.web.tool.exceptions import SceneToolNotExist
 
         uid = validated_request_data.get("uid")
         # 通过 ResourceBinding 确认是平台级工具
@@ -2156,10 +2142,6 @@ class DeletePlatformSceneTool(DeleteTool):
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
-
-        tool = Tool.last_version_tool(uid)
-        if tool and tool.status == PanelStatus.PUBLISHED:
-            raise SceneToolCannotDelete()
 
         # 需在删除绑定关系前校验，绑定关系删除后无法判定工具作用域
         self.assert_tool_can_delete(uid)
@@ -2208,9 +2190,6 @@ class PublishPlatformSceneTool(ToolBase):
         new_status = status or (
             PanelStatus.UNPUBLISHED if tool.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
         )
-        # 下架等同于停用，被策略字段下钻引用时禁止；上架不受限制
-        if new_status == PanelStatus.UNPUBLISHED and tool.status != new_status:
-            self.assert_tool_can_disable(uid)
         tool.status = new_status
         tool.save(update_fields=["status"])
         return tool
@@ -2372,9 +2351,6 @@ class PublishSceneScopeTool(ToolBase):
         new_status = status or (
             PanelStatus.UNPUBLISHED if tool.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
         )
-        # 下架等同于停用，被策略字段下钻引用时禁止；上架不受限制
-        if new_status == PanelStatus.UNPUBLISHED and tool.status != new_status:
-            self.assert_tool_can_disable(uid)
         tool.status = new_status
         tool.save(update_fields=["status"])
         return tool
