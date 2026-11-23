@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import json
+
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from django.utils.translation import gettext
@@ -19,8 +21,54 @@ from services.web.tool.exceptions import ToolDoesNotExist, ToolNotPublished
 from services.web.tool.models import Tool
 from services.web.tool.permissions import CallerContextPermission, UseToolPermission
 
+_EXECUTE_ACTIONS = {"execute", "tool_execute_debug"}
+_SCENE_ADMIN_CONTACT = "，请联系场景管理员处理"
 
-class ToolViewSet(ResourceViewSet):
+
+def _append_scene_admin_contact(message):
+    """执行失败保留原报错，只在末尾补充联系场景管理员。"""
+    if not isinstance(message, str):
+        return message
+    text = message.strip().rstrip("。；;，, ")
+    if text == "工具不存在":
+        return gettext("工具不存在，联系场景管理员")
+    if not text or text.endswith("请联系场景管理员处理") or text.endswith("联系场景管理员"):
+        return text or message
+    return gettext("%(reason)s%(contact)s") % {"reason": text, "contact": _SCENE_ADMIN_CONTACT}
+
+
+def _has_apply_url(data) -> bool:
+    """权限申请链接存在时，不改原文案。"""
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            return False
+    if not isinstance(data, dict):
+        return False
+    if data.get("apply_url"):
+        return True
+    return _has_apply_url(data.get("data")) or _has_apply_url(data.get("permission"))
+
+
+class ToolExecuteContactMixin:
+    """只改工具执行接口的错误文案，不改统一返回封装。"""
+
+    def handle_exception(self, exc):
+        response = super().handle_exception(exc)
+        if getattr(self, "action", None) not in _EXECUTE_ACTIONS or response is None:
+            return response
+        data = response.data
+        if _has_apply_url(data):
+            return response
+        if isinstance(data, dict) and isinstance(data.get("message"), str):
+            data["message"] = _append_scene_admin_contact(data["message"])
+        elif isinstance(data, str):
+            response.data = _append_scene_admin_contact(data)
+        return response
+
+
+class ToolViewSet(ToolExecuteContactMixin, ResourceViewSet):
     lookup_field = "uid"
 
     def get_permissions(self):
@@ -78,7 +126,7 @@ class ToolViewSet(ResourceViewSet):
     ]
 
 
-class ToolAPIGWViewSet(APIGWViewSet):
+class ToolAPIGWViewSet(ToolExecuteContactMixin, APIGWViewSet):
     """
     Execute Tool APIGW
     """
@@ -89,7 +137,7 @@ class ToolAPIGWViewSet(APIGWViewSet):
     ]
 
 
-class MCPUserToolViewSet(UserAPIGWViewSet):
+class MCPUserToolViewSet(ToolExecuteContactMixin, UserAPIGWViewSet):
     """供 MCP 调用的工具用户态接口。"""
 
     lookup_field = "uid"

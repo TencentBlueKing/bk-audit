@@ -20,6 +20,12 @@ from services.web.ai_assistant.schemas.audit_statistics import (
 
 
 class RequestExceptionHandlerTest(TestCase):
+    def test_validation_error_keeps_positional_message(self):
+        error = ValidationError("需要 scene_id")
+
+        self.assertEqual(error.message, "需要 scene_id")
+        self.assertEqual(error.STATUS_CODE, 400)
+
     def test_attachment_input_validation_details_survive_http_rendering(self):
         """实际字段校验原因通过 HTTP 信封保留，原始用户输入不进入错误响应。"""
         handler = import_string(settings.REST_FRAMEWORK["EXCEPTION_HANDLER"])
