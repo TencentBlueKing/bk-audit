@@ -1028,8 +1028,13 @@
     text-align: center;
     cursor: pointer;
     background: var(--bk-theme-surface-default);
-    border: 1px solid var(--bk-theme-color-warn-2);
+    border: 1px solid var(--bk-theme-color-warn-3);
     border-radius: var(--bk-theme-tag-radius);
+  }
+
+  .outer-logic:hover,
+  .inner-logic:hover {
+    background: var(--bk-theme-status-warn-bg);
   }
 
   .outer-logic {

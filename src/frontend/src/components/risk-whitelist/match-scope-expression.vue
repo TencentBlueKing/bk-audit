@@ -55,7 +55,7 @@
           v-bk-tooltips="buildChipTip(row.field, `${index}-field`)"
           class="match-scope-tag__chip is-field"
           @mouseenter="(e) => syncChipOverflow(`${index}-field`, e)">{{ row.field }}</span>
-        <span class="match-scope-tag__op-chip">{{ row.operator }}</span>
+        <span class="match-scope-tag__symbol">{{ row.operator }}</span>
         <span
           v-bk-tooltips="buildChipTip(row.value, `${index}-value`)"
           class="match-scope-tag__chip is-value"
@@ -314,9 +314,6 @@
   left: 0;
   z-index: 1;
   padding: 0 var(--bk-theme-space-4);
-  color: var(--bk-theme-color-warn-2);
-  background: var(--bk-theme-surface-default);
-  border: 1px solid var(--bk-theme-color-warn-2);
   border-radius: var(--bk-theme-control-radius);
   transform: translate(-50%, -50%);
 }
@@ -340,7 +337,7 @@
 }
 
 .match-scope-tag__chip,
-.match-scope-tag__op-chip,
+.match-scope-tag__symbol,
 .match-scope-tag__op,
 .match-scope-tag__group-op {
   display: inline-flex;
@@ -362,29 +359,36 @@
   min-width: 0;
   overflow: hidden;
   line-height: 22px;
+  color: var(--bk-theme-text-default);
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: var(--bk-theme-surface-soft);
 }
 
-.match-scope-tag__chip.is-field {
-  color: var(--bk-theme-color-success-2);
-  background: var(--bk-theme-color-success-6);
+.match-scope-tag__chip.is-field:hover,
+.match-scope-tag__chip.is-value:hover {
+  background: var(--bk-theme-border-default);
 }
 
-.match-scope-tag__chip.is-value {
-  color: var(--bk-theme-text-default);
-  background: var(--bk-theme-surface-muted);
+.match-scope-tag__symbol {
+  color: var(--bk-theme-color-brand-2);
+  background: var(--bk-theme-fill-info);
 }
 
-.match-scope-tag__op-chip {
-  color: var(--bk-theme-color-warn-2);
-  background: var(--bk-theme-color-warn-6);
+.match-scope-tag__symbol:hover {
+  background: var(--bk-theme-color-brand-5);
 }
 
-.match-scope-tag__op {
+.match-scope-tag__op,
+.match-scope-tag__group-op {
   color: var(--bk-theme-color-warn-2);
   background: var(--bk-theme-surface-default);
-  border: 1px solid var(--bk-theme-color-warn-2);
+  border: 1px solid var(--bk-theme-color-warn-3);
+}
+
+.match-scope-tag__op:hover,
+.match-scope-tag__group-op:hover {
+  background: var(--bk-theme-status-warn-bg);
 }
 
 .match-scope-tag__toggle {
