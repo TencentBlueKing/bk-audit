@@ -69,7 +69,11 @@ from apps.meta.models import (
 from apps.meta.utils.format import format_resource_permission
 from apps.meta.utils.system import wrapper_system_status
 from core.models import get_request_username
-from core.utils.url_security import URLSecurityError, validate_request_url, validate_resource_path
+from core.utils.url_security import (
+    URLSecurityError,
+    validate_request_url,
+    validate_resource_path,
+)
 from services.web.common.serializers import OptionalScopeQuerySerializer
 
 
@@ -389,6 +393,7 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text=gettext_lazy("操作的 system_id 和 resource_type_ids 会被自动填充"),
     )
+
     # 资源路径形态校验规则与 core.utils.url_security.validate_resource_path 同源（含禁用前缀）
     def validate_path(self, value: str) -> str:
         """资源路径形态校验（仅管增量，存量脏数据由 schema 拉取出口校验兜底）"""
