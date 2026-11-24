@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
 import traceback
 from collections.abc import Mapping
 from typing import Any
@@ -44,6 +45,7 @@ from api.bk_base.serializers import (
     UserAuthCheckRespSerializer,
 )
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+from core.sensitive import redact_secrets
 from core.utils.retry import FuncRunner
 
 
@@ -122,6 +124,29 @@ class CreateResourceSet(BkBaseResource):
     name = gettext_lazy("创建资源")
     action = "/v3/resourcecenter/resource_sets/"
     method = "POST"
+    # BKSEC 1578945：V3 Redis 注册链路请求体含连接密码明文，框架日志无脱敏能力，关闭；
+    # 排障日志由本资源 request() 以脱敏形式自记录（对齐 StorageAssetCreate 同款方案）
+    support_data_collect = False
+
+    def request(self, request_data=None, **kwargs):
+        """脱敏版请求日志：完整保留注册排障上下文，仅敏感键名值打码"""
+        log_request_data = request_data if request_data is not None else kwargs
+        try:
+            response_data = super().request(request_data=request_data, **kwargs)
+        except Exception as err:
+            self._log_redacted(log_request_data, {"error": str(err)})
+            raise
+        self._log_redacted(log_request_data, response_data)
+        return response_data
+
+    @staticmethod
+    def _log_redacted(request_data, response_data):
+        logger.info(
+            "[ResourceRequestLog][Redacted]\nResource => api.bk_base.default.CreateResourceSet\n"
+            "RequestData => %s\nResponseData => %s",
+            json.dumps(redact_secrets(request_data), ensure_ascii=False, default=str),
+            json.dumps(redact_secrets(response_data), ensure_ascii=False, default=str),
+        )
 
 
 class UpdateResourceSet(BkBaseResource):
@@ -129,6 +154,28 @@ class UpdateResourceSet(BkBaseResource):
     action = "/v3/resourcecenter/resource_sets/{resource_set_id}/"
     method = "PATCH"
     url_keys = ["resource_set_id"]
+    # BKSEC 1578945：V3 Redis 更新链路请求体含连接密码明文，同 CreateResourceSet 关闭框架明文日志
+    support_data_collect = False
+
+    def request(self, request_data=None, **kwargs):
+        """脱敏版请求日志：完整保留更新排障上下文，仅敏感键名值打码"""
+        log_request_data = request_data if request_data is not None else kwargs
+        try:
+            response_data = super().request(request_data=request_data, **kwargs)
+        except Exception as err:
+            self._log_redacted(log_request_data, {"error": str(err)})
+            raise
+        self._log_redacted(log_request_data, response_data)
+        return response_data
+
+    @staticmethod
+    def _log_redacted(request_data, response_data):
+        logger.info(
+            "[ResourceRequestLog][Redacted]\nResource => api.bk_base.default.UpdateResourceSet\n"
+            "RequestData => %s\nResponseData => %s",
+            json.dumps(redact_secrets(request_data), ensure_ascii=False, default=str),
+            json.dumps(redact_secrets(response_data), ensure_ascii=False, default=str),
+        )
 
 
 class CleanPreview(BkBaseResource):
