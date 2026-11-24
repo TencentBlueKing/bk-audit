@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
+import json
 import math
 
 from bk_resource.exceptions import APIRequestError
@@ -39,9 +40,7 @@ from api.bk_iam_v4.serializers import (
     RetrieveSystemRequestSerializer,
     RevokeAuthorizationRequestSerializer,
 )
-from api.constants import APIProvider
 from api.domains import BK_IAM_V4_API_URL
-from api.utils import get_endpoint
 from core.bk_api_base import AuditBkApiResource
 
 
@@ -50,8 +49,6 @@ class IAMV4BaseResource(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        if self.use_multi_tenant_mode():
-            return get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_IAM_V4_API_URL
 
     def parse_response(self, response):
@@ -139,6 +136,28 @@ class RetrieveSystemResource(IAMV4BaseResource):
     method = "GET"
     url_keys = ["system_id"]
     RequestSerializer = RetrieveSystemRequestSerializer
+
+
+class RetrieveCallbackSystemResource(RetrieveSystemResource):
+    """复用系统详情接口，仅以应用身份读取回调认证 token。"""
+
+    TIMEOUT = (5, 10)
+
+    def build_header(self, validated_request_data):
+        # 不透传入站用户凭据，也不替换成租户管理员；token 属于 system 注册的全租户应用。
+        headers = {
+            "X-Bkapi-Authorization": json.dumps(
+                {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
+            )
+        }
+        if self.use_multi_tenant_mode():
+            headers["X-Bk-Tenant-Id"] = settings.SYSTEM_TENANT_ID
+        return headers
+
+    def before_request(self, kwargs):
+        # 不允许随重定向转发应用凭据。
+        kwargs.update(allow_redirects=False, verify=True)
+        return kwargs
 
 
 class DirectAuthResource(IAMV4BaseResource):

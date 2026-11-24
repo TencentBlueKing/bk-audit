@@ -1,8 +1,9 @@
 import json
 import re
-from urllib.parse import urlsplit
 
 import requests
+
+from api.utils import normalize_iam_v4_gateway_url
 
 from .model import ModelSnapshot, normalize_model, valid_id
 
@@ -25,29 +26,11 @@ class ModelAPIError(Exception):
     """An IAM model operation did not produce a trustworthy result."""
 
 
-def normalize_gateway_url(value: str) -> str:
-    url = urlsplit(value)
-    if (
-        url.scheme != "https"
-        or not url.hostname
-        or url.username is not None
-        or url.password is not None
-        or url.query
-        or url.fragment
-        or not url.path.strip("/")
-        or any(part in (".", "..") for part in url.path.split("/"))
-    ):
-        raise ValueError("configure an explicit HTTPS IAM V4 gateway and stage without credentials")
-    if url.port is not None and url.port < 1:
-        raise ValueError("invalid IAM V4 gateway port")
-    return value.rstrip("/")
-
-
 class ModelClient:
     """Use application credentials for model management, independently of runtime IAM clients."""
 
     def __init__(self, gateway_url: str, app_code: str, app_secret: str, tenant_id: str | None, *, session=None):
-        self.gateway_url = normalize_gateway_url(gateway_url)
+        self.gateway_url = normalize_iam_v4_gateway_url(gateway_url)
         if not app_code or not app_secret:
             raise ValueError("IAM model application credentials are missing")
         self._secret = app_secret

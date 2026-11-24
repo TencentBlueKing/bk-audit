@@ -6,14 +6,15 @@
 
 | 变量 | 用途与取值 |
 | --- | --- |
-| `BKAPP_BK_IAM_V4_API_URL` | 必填。目标环境的 IAM V4 网关完整地址，包含 stage，例如 `https://iam-gateway.example.com/api/bkiam/prod`。 |
+| `BKAPP_BK_IAM_V4_API_URL` | 模型同步必填，也是运行时优先使用的 IAM V4 网关地址，包含 stage，例如 `https://iam-gateway.example.com/api/bkiam/prod`。运行时不填则多租户用 `prod`，单租户沿用原有环境规则。 |
+| `BKAPP_SYSTEM_TENANT_ID` | 全租户应用注册所在的租户，默认 `system`。多租户下，模型同步任务和各实例读取 IAM 回调 token 都用这个值，不填实例自己的租户 ID。同一环境只需同步一份模型。 |
 | `BKAPP_IAM_SYSTEM_ID` / `BKAPP_IAM_SYSTEM_NAME` | 复用运行态系统 ID / 名称，默认 `bk-audit` / `审计中心`；ID 必须匹配模型。 |
 | `BKPAAS_APP_ID` / `BKPAAS_APP_SECRET` | 已有审计应用凭据，由部署环境或 KMS 提供；模型管理需单独核对 API 授权，不使用平台用户 token。 |
 | `BKAPP_IAM_V4_MODEL_CLIENTS` | 允许调用 IAM 系统的应用 appcode，逗号分隔。默认不填：首次注册只加入当前 `BKPAAS_APP_ID` 对应的 appcode，已有系统保留线上名单。显式填写时按完整名单覆盖；两种情况下都会确保当前应用在名单中。 |
 | `BKAPP_IAM_V4_MODEL_MANAGERS` | 首次注册的 IAM 系统管理员账号，逗号分隔，默认为空。各环境按需填自己的管理员；更新已有系统时忽略此配置，不覆盖线上名单。 |
 | `BKAPP_BK_IAM_RESOURCE_API_HOST` | IAM 可访问的审计 HTTPS 地址，例如 `https://audit.example.com`。命令自动拼接 `/api/v1/iam/resources/`；多租户用可按租户分流的共享入口。例外用 `--callback-url`。 |
 
-单租户默认不加租户头，特殊网关可用 `--tenant-id`。多租户模型固定使用 `system`，不使用审计实例的租户 ID。两个租户共享模型，业务鉴权、授权及回调仍按目标租户处理；命令不负责部署回调路由。显式指定的迁移网关须与部署目标核对，命令不会回退到运行态默认 stage。
+单租户默认不加租户头，模型同步遇到特殊网关可用 `--tenant-id`。多租户共享一份模型和回调 token，但业务鉴权、授权和资源查询仍在目标租户的实例处理。模型同步命令不会回退到运行时的默认网关，也不会配置回调路由。
 
 ## 执行命令
 

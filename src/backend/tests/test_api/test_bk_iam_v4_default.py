@@ -4,6 +4,7 @@ from unittest import mock
 
 from bk_resource.exceptions import APIRequestError, ValidateException
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 from requests.exceptions import HTTPError
 
@@ -523,6 +524,30 @@ class TestIAMV4SystemResources(SimpleTestCase):
 
 
 class TestIAMV4Endpoint(SimpleTestCase):
+    def test_multi_tenant_resolves_configured_domain(self):
+        import api.domains as domains
+
+        try:
+            with self.settings(
+                BKPAAS_MULTI_TENANT_MODE=True,
+                IAM_PERMISSION_BACKEND="v4",
+                BK_IAM_V4_API_URL="https://iam.example.test/dev/",
+            ):
+                importlib.reload(domains)
+                self.assertEqual(domains.BK_IAM_V4_API_URL, "https://iam.example.test/dev")
+        finally:
+            importlib.reload(domains)
+
+    def test_multi_tenant_default_domain_is_prod(self):
+        import api.domains as domains
+
+        try:
+            with self.settings(BKPAAS_MULTI_TENANT_MODE=True, BK_IAM_V4_API_URL=""):
+                importlib.reload(domains)
+                self.assertTrue(domains.BK_IAM_V4_API_URL.endswith("/prod"))
+        finally:
+            importlib.reload(domains)
+
     def test_default_endpoint_uses_stage_gateway(self):
         import api.domains as domains
 
@@ -533,12 +558,37 @@ class TestIAMV4Endpoint(SimpleTestCase):
         finally:
             importlib.reload(domains)
 
-    def test_endpoint_can_be_overridden_for_dev_e2e(self):
+    def test_v4_rejects_invalid_explicit_gateway_during_endpoint_resolution(self):
         import api.domains as domains
 
         try:
-            with mock.patch.object(settings, "BK_IAM_V4_API_URL", "http://bkiam.dev"):
+            for url in ("http://iam.example.test/dev", "https://fake-user:fake-password@iam.example.test/dev"):
+                with self.subTest(url=url), self.settings(IAM_PERMISSION_BACKEND="v4", BK_IAM_V4_API_URL=url):
+                    with self.assertRaisesRegex(ImproperlyConfigured, "BKAPP_BK_IAM_V4_API_URL") as error:
+                        importlib.reload(domains)
+                    self.assertNotIn("fake-password", str(error.exception))
+        finally:
+            importlib.reload(domains)
+
+    def test_v4_rejects_invalid_default_gateway_during_endpoint_resolution(self):
+        import api.domains as domains
+
+        try:
+            with (
+                self.settings(IAM_PERMISSION_BACKEND="v4", BK_IAM_V4_API_URL=""),
+                mock.patch("api.utils.APIGW_URL_FORMAT", "http://gateway.example.test/{api_name}/{stage}"),
+                self.assertRaisesRegex(ImproperlyConfigured, "BKAPP_BK_IAM_V4_API_URL"),
+            ):
                 importlib.reload(domains)
-                self.assertEqual(domains.BK_IAM_V4_API_URL, "http://bkiam.dev")
+        finally:
+            importlib.reload(domains)
+
+    def test_v3_does_not_validate_unused_v4_override(self):
+        import api.domains as domains
+
+        try:
+            with self.settings(IAM_PERMISSION_BACKEND="v3", BK_IAM_V4_API_URL="http://iam.example.test/dev"):
+                importlib.reload(domains)
+                self.assertEqual(domains.BK_IAM_V4_API_URL, "http://iam.example.test/dev")
         finally:
             importlib.reload(domains)

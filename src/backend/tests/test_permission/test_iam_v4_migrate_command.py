@@ -186,6 +186,14 @@ def test_multi_tenant_migrates_using_system_not_instance_tenant(invoke):
     assert session.request.call_args.kwargs["headers"]["X-Bk-Tenant-Id"] == "system"
 
 
+@override_settings(BKPAAS_MULTI_TENANT_MODE=True, BK_TENANT_ID="tencent", SYSTEM_TENANT_ID="global-test")
+def test_multi_tenant_model_uses_configured_system_scope(invoke):
+    run, session = invoke
+    session.request.side_effect = [MISSING]
+    assert "tenant=global-test" in run("--dry-run", "--tenant-id", "global-test", *MANAGERS)
+    assert session.request.call_args.kwargs["headers"]["X-Bk-Tenant-Id"] == "global-test"
+
+
 def test_apply_rejects_stale_preview_before_writing(invoke, tmp_path):
     run, session = invoke
     session.request.side_effect = [MISSING, *existing(resources=(RESOURCE,))]

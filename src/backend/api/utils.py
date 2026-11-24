@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import os
+from urllib.parse import urlsplit
 
 from api.constants import (
     AI_AGENT_API_URL_TMPL,
@@ -40,6 +41,25 @@ def get_endpoint(api_name, provider=APIProvider.APIGW, stag="stag", prod="prod",
     if provider == APIProvider.ESB:
         return ESB_URL_FORMAT.format(api_name)
     return APIGW_URL_FORMAT.format(api_name=api_name, stage=stage)
+
+
+def normalize_iam_v4_gateway_url(value: str) -> str:
+    """校验 IAM V4 网关地址，并统一去掉末尾斜杠。"""
+    url = urlsplit(value)
+    if (
+        url.scheme != "https"
+        or not url.hostname
+        or url.username is not None
+        or url.password is not None
+        or url.query
+        or url.fragment
+        or not url.path.strip("/")
+        or any(part in (".", "..") for part in url.path.split("/"))
+    ):
+        raise ValueError("configure an explicit HTTPS IAM V4 gateway and stage without credentials")
+    if url.port is not None and url.port < 1:
+        raise ValueError("invalid IAM V4 gateway port")
+    return value.rstrip("/")
 
 
 def get_agent_base_url(agent_code) -> str:

@@ -5,6 +5,10 @@ IAM_PERMISSION_BACKEND_V3 = "v3"
 IAM_PERMISSION_BACKEND_V4 = "v4"
 
 
+class CallbackAuthUnavailable(RuntimeError):
+    """无法读取资源回调凭据，区别于请求凭据不匹配。"""
+
+
 def get_iam_permission_backend() -> str:
     """Return the configured IAM backend, defaulting unknown values to V3 semantics."""
     backend = getattr(settings, "IAM_PERMISSION_BACKEND", IAM_PERMISSION_BACKEND_V3)

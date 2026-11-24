@@ -72,6 +72,11 @@ class Permission(object):
         tenant_id = getattr(settings, "BK_TENANT_ID", "")
         return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL, bk_tenant_id=tenant_id)
 
+    @classmethod
+    def is_resource_callback_auth_allowed(cls, system_id: str, authorization: str) -> bool:
+        """保留 IAM V3 SDK 的回调鉴权，不依赖用户登录态。"""
+        return cls.get_iam_client().is_basic_auth_allowed(system_id, authorization)
+
     def make_request(self, action: Union[ActionMeta, str], resources: List[Resource] = None) -> Request:
         """
         获取请求对象

@@ -624,6 +624,9 @@ BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARE
 # 多租户模式总开关（取值 1/true/yes/on 视为开启）
 BKPAAS_MULTI_TENANT_MODE = str(os.getenv("BKPAAS_MULTI_TENANT_MODE", "False")).lower() in ("1", "true", "yes", "on")
 
+# 全租户应用注册所在的租户，与审计实例绑定的租户无关。
+SYSTEM_TENANT_ID = os.getenv("BKAPP_SYSTEM_TENANT_ID", "").strip() or "system"
+
 # 实例绑定租户：由部署控制面注入，只读、非空
 # 多租户开启时必须设置；关闭时可留空（兼容模式）
 AUDIT_INSTANCE_TENANT_ID = os.getenv("BKAPP_AUDIT_INSTANCE_TENANT_ID", "").strip().lower()

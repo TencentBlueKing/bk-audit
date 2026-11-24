@@ -39,6 +39,7 @@
     - `BKAPP_CMSI_URL`
     - `BKAPP_BASE_API_URL`
     - `BKAPP_BK_VISION_API_URL`
+    - `BKAPP_BK_IAM_V4_API_URL`
 
 - 开关/其他
     - `BKAPP_USE_APIGW`：是否优先走 APIGW（部分服务生效）。
@@ -69,7 +70,10 @@
 - Vision：`BK_VISION_API_URL`：
     - 若 `BKAPP_BK_VISION_API_URL` 存在，直接使用
     - 否则 APIGW `api_name`=`BKAPP_BK_VISION_API_NAME`，`stag="stag-new"`
-- IAM V4：`BK_IAM_V4_API_URL` = APIGW，`api_name`=`BKAPP_BKIAM_APIGW_NAME`，`stag="dev"`
+- IAM V4：`BK_IAM_V4_API_URL` 优先使用 `BKAPP_BK_IAM_V4_API_URL`；未填则按 `BKAPP_BKIAM_APIGW_NAME` 构造 APIGW 地址。
+    - 多租户用 `prod`；单租户生产用 `prod`，非生产用 `stage`。
+    - 启用 IAM V4 时，在加载配置时校验最终地址：必须是带 stage 路径的 HTTPS URL，不允许包含账号密码、查询参数或片段。不合法直接报错。
+    - V4 回调取 token 也使用该地址；模型同步命令必须显式设置 `BKAPP_BK_IAM_V4_API_URL`，不会使用默认地址。
 
 **示例：仅覆盖 APIGW 名称**
 

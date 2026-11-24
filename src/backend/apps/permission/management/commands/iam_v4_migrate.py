@@ -29,9 +29,10 @@ def _csv(value: str) -> list[str]:
 def _model_tenant(explicit: str | None) -> str | None:
     # 全租户应用共用一份模型；部署实例的租户不是模型注册的租户。
     if settings.BKPAAS_MULTI_TENANT_MODE:
-        if explicit and explicit != "system":
-            raise ValueError("multi-tenant IAM model management requires tenant=system")
-        return "system"
+        scope = settings.SYSTEM_TENANT_ID
+        if explicit and explicit != scope:
+            raise ValueError(f"multi-tenant IAM model management requires tenant={scope}")
+        return scope
     return explicit
 
 
