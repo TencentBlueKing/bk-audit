@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import base64
+import copy
 import os
 
 from bk_resource.utils.cache import CacheTypeItem
@@ -84,6 +85,19 @@ class ListUserDepartments(UserManageResource):
             return ["bk_username"]
         return []
 
+    def build_url(self, validated_request_data):
+        # 多租户模式下 URL 占位符为 bk_username，但调用方（Vision 等）统一使用 id= 传入
+        # 在接口边界按租户模式映射参数键，保持调用方单租户旧路径（id）不变。
+        if (
+            self.use_multi_tenant_mode()
+            and "id" in validated_request_data
+            and "bk_username" not in validated_request_data
+        ):
+            data = copy.deepcopy(validated_request_data)
+            data["bk_username"] = data.pop("id")
+            return super().build_url(data)
+        return super().build_url(validated_request_data)
+
     cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60, user_related=False)
 
 
@@ -116,6 +130,19 @@ class RetrieveDepartment(UserManageResource):
         if self.use_multi_tenant_mode():
             return ["department_id"]
         return []
+
+    def build_url(self, validated_request_data):
+        # 多租户模式下 URL 占位符为 department_id，但调用方（Vision 等）统一使用 id= 传入
+        # 在接口边界按租户模式映射参数键，保持调用方单租户旧路径（id）不变。
+        if (
+            self.use_multi_tenant_mode()
+            and "id" in validated_request_data
+            and "department_id" not in validated_request_data
+        ):
+            data = copy.deepcopy(validated_request_data)
+            data["department_id"] = data.pop("id")
+            return super().build_url(data)
+        return super().build_url(validated_request_data)
 
     cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
     platform_authorization = True

@@ -69,7 +69,11 @@ class Permission(object):
 
     @classmethod
     def get_iam_client(cls):
-        tenant_id = getattr(settings, "BK_TENANT_ID", "")
+        # 开启多租户时，传租户id，不开启时，传""
+        if getattr(settings, "BKPAAS_MULTI_TENANT_MODE", False):
+            tenant_id = getattr(settings, "BK_TENANT_ID", "")
+        else:
+            tenant_id = ""
         return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL, bk_tenant_id=tenant_id)
 
     def make_request(self, action: Union[ActionMeta, str], resources: List[Resource] = None) -> Request:
