@@ -5,6 +5,7 @@ import requests
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase
 
+from api.bk_base_v4 import default as sdk
 from api.bk_base_v4.default import (
     CleanGet,
     DataSourceGet,
@@ -15,6 +16,7 @@ from api.bk_base_v4.default import (
     StorageAssetGet,
 )
 from services.web.bkbase.common import get_resource_or_none
+from services.web.databus.collector.snapshot.system import provision
 
 
 class ResourceErrorTests(SimpleTestCase):
@@ -24,7 +26,107 @@ class ResourceErrorTests(SimpleTestCase):
         response.raise_for_status.return_value = None
         response.json.return_value = payload
         response.request.url = "https://gateway.test/resource"
+        response.history = []
         return response
+
+    def test_snapshot_write_route_rejection_requires_raw_gateway_code(self):
+        for cls in (
+            sdk.DataConnCreate,
+            sdk.DataSourceCreate,
+            sdk.CleanCreate,
+            sdk.DataStorageCreate,
+            sdk.DataSourceUpdate,
+        ):
+            for payload, code in (
+                ({"code": 1640401, "message": "route rejected"}, "1640401"),
+                ({"message": "[1640401] route rejected"}, ""),
+            ):
+                resource = cls()
+                response = self.response(payload)
+                response.status_code = 404
+                response.raise_for_status.side_effect = requests.HTTPError(response=response)
+                with self.subTest(resource=cls.__name__, payload=payload), mock.patch.object(
+                    resource, "build_header", return_value={}
+                ), mock.patch.object(requests.sessions.Session, "request", return_value=response) as http:
+                    with self.assertRaises(APIRequestError) as caught:
+                        resource.request(tenant="tenant_a", namespace="audit", name="snapshot", metadata={}, spec={})
+                self.assertEqual(caught.exception.http_status, 404)
+                self.assertEqual(getattr(caught.exception, "gateway_error_code", None), code)
+                self.assertFalse(getattr(caught.exception, "resource_not_found", False))
+                self.assertIs(http.call_args.kwargs["allow_redirects"], False)
+
+    def test_snapshot_writes_reject_redirects_and_history_without_route_evidence(self):
+        for cls in (
+            sdk.DataConnCreate,
+            sdk.DataSourceCreate,
+            sdk.CleanCreate,
+            sdk.DataStorageCreate,
+            sdk.DataSourceUpdate,
+        ):
+            for status, history in ((307, []), (308, []), (404, [self.response({})])):
+                resource = cls()
+                response = self.response({"code": 1640401, "message": "route rejected"})
+                response.status_code = status
+                response.history = history
+                with self.subTest(resource=cls.__name__, status=status), mock.patch.object(
+                    resource, "build_header", return_value={}
+                ), mock.patch.object(requests.sessions.Session, "request", return_value=response):
+                    with self.assertRaises(APIRequestError) as caught:
+                        resource.request(tenant="tenant_a", namespace="audit", name="snapshot", metadata={}, spec={})
+                self.assertFalse(getattr(caught.exception, "gateway_error_code", ""))
+
+    def test_snapshot_named_lookup_requires_direct_native_absence(self):
+        for cls in (sdk.DataConnGet, sdk.DataSourceGet, sdk.CleanGet, sdk.DataStorageGet):
+            for payload, missing in (
+                ({"result": False, "code": "1558025", "data": "Resource not found."}, True),
+                ({"result": False, "code": "1500102", "data": {"err": "resource not exists"}}, True),
+                ({"result": False, "code": "1500102", "data": "resource not exists"}, False),
+                ({"result": False, "code": "1500102", "data": {"err": "unrelated"}}, False),
+                ({"result": False, "code": "1558025"}, False),
+            ):
+                resource = cls()
+                with self.subTest(resource=cls.__name__, payload=payload), mock.patch.object(
+                    resource, "build_header", return_value={}
+                ), mock.patch.object(requests.sessions.Session, "request", return_value=self.response(payload)) as http:
+                    if missing:
+                        self.assertIsNone(
+                            provision._get_snapshot_resource_or_none(
+                                resource.request, tenant="tenant_a", namespace="audit", name="snapshot"
+                            )
+                        )
+                    else:
+                        with self.assertRaises(APIRequestError):
+                            provision._get_snapshot_resource_or_none(
+                                resource.request, tenant="tenant_a", namespace="audit", name="snapshot"
+                            )
+                self.assertIs(http.call_args.kwargs["allow_redirects"], False)
+
+    def test_snapshot_named_lookup_rejects_redirected_missing_envelope(self):
+        for cls in (sdk.DataConnGet, sdk.DataSourceGet, sdk.CleanGet, sdk.DataStorageGet):
+            resource = cls()
+            response = self.response({"result": False, "code": "1558025", "data": "Resource not found."})
+            response.history = [self.response({})]
+            with self.subTest(resource=cls.__name__), mock.patch.object(
+                resource, "build_header", return_value={}
+            ), mock.patch.object(requests.sessions.Session, "request", return_value=response), self.assertRaises(
+                APIRequestError
+            ):
+                provision._get_snapshot_resource_or_none(
+                    resource.request, tenant="tenant_a", namespace="audit", name="snapshot"
+                )
+
+    def test_snapshot_guards_do_not_change_lists_or_unrelated_writes(self):
+        for cls in (sdk.DataSourceList, sdk.CleanList, sdk.DataStorageList, sdk.DataConnUpdate, sdk.CleanUpdate):
+            resource = cls()
+            payload = [] if resource.method == "GET" else {}
+            with self.subTest(resource=cls.__name__), mock.patch.object(
+                resource, "build_header", return_value={}
+            ), mock.patch.object(requests.sessions.Session, "request", return_value=self.response(payload)) as http:
+                self.assertEqual(
+                    resource.request(tenant="tenant_a", namespace="audit", name="snapshot", metadata={}, spec={}),
+                    payload,
+                )
+            self.assertIsNot(http.call_args.kwargs.get("allow_redirects"), False)
 
     def request_list(self, payload):
         """经过真实request校验链，仅替换HTTP响应和鉴权头构造。"""

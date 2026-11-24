@@ -4,9 +4,11 @@ from contextlib import contextmanager
 from copy import deepcopy
 from unittest import mock
 
+import requests
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase, override_settings
 
+from api.bk_base_v4.default import DataConnGet
 from services.web.bkbase import source
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.snapshot.system import provision, pull
@@ -143,8 +145,9 @@ class SystemSnapshotCreationTests(SimpleTestCase):
             self.assertFalse(self.in_transaction)
             resource = self.resources.get((kind, kwargs["name"]))
             if resource is None:
-                error = APIRequestError(result={"message": "missing"})
-                error.http_status = 404
+                error = APIRequestError(result={"result": False, "code": "1558025", "data": "Resource not found."})
+                error.http_status = 200
+                error.resource_not_found = True
                 raise error
             return deepcopy(resource)
 
@@ -250,6 +253,39 @@ class SystemSnapshotCreationTests(SimpleTestCase):
             if pending is None:
                 return
         self.fail("system snapshot did not complete")
+
+    def test_gateway_404_cannot_start_snapshot_create(self):
+        self._assert_lookup_failure_blocks_create(404, {"code": 1640401, "message": "route missing"})
+
+    def test_permission_failures_cannot_start_snapshot_create(self):
+        for status in (401, 403):
+            with self.subTest(status=status):
+                self._assert_lookup_failure_blocks_create(status, {"message": "denied"})
+
+    def test_timeout_cannot_start_snapshot_create(self):
+        self._assert_lookup_failure_blocks_create(None, requests.Timeout("synthetic timeout"))
+
+    def test_redirect_cannot_start_snapshot_create(self):
+        for status in (301, 302, 307, 308):
+            with self.subTest(status=status):
+                self._assert_lookup_failure_blocks_create(
+                    status, {"result": False, "code": "1558025", "data": "Resource not found."}
+                )
+
+    def _assert_lookup_failure_blocks_create(self, status, payload):
+        """保留真实 SDK 与编排链，只模拟第三方 HTTP。"""
+        resource = DataConnGet()
+        self.sdk.data_conn_get.side_effect = resource.request
+        response = requests.Response()
+        response.status_code = status
+        response._content = json.dumps(payload).encode() if status is not None else b""
+        response.url = "https://gateway.synthetic.test/resource"
+        response.request = requests.Request("GET", response.url).prepare()
+        with mock.patch.object(resource, "build_header", return_value={}), mock.patch.object(
+            requests.sessions.Session, "request", **({"return_value": response} if status else {"side_effect": payload})
+        ), self.assertRaises(APIRequestError):
+            provision.ensure_system_snapshot("action")
+        self.assertEqual(self.posts, [])
 
     def test_three_schemas_create_once_and_use_formal_refs_and_binding(self):
         for kind in ("action", "resource_type", "user"):

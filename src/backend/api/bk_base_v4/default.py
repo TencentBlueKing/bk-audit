@@ -429,6 +429,40 @@ class UserCheck(UserBkBaseV4Resource):
     ResponseSerializer = PayloadResponseSerializer
 
 
+class _SnapshotResource(BkBaseV4Resource):
+    """仅给命名快照详情和显式写端保留直达请求证据，不影响继承的列表与其他写端。"""
+
+    snapshot_write = False
+
+    @property
+    def snapshot_request(self):
+        """名称详情由 URL 参数限定，写端必须逐个显式启用。"""
+        return self.snapshot_write or (self.method == "GET" and "name" in self.url_keys)
+
+    def before_request(self, kwargs):
+        """只信任原始端点，不跟随重定向查询或重发写入。"""
+        if self.snapshot_request:
+            kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """拒绝重定向链；写端路由错误码只取原始 404 JSON 顶层字段。"""
+        if self.snapshot_request and (300 <= response.status_code < 400 or response.history):
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Snapshot request redirected")
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            if self.snapshot_request:
+                error.http_status = response.status_code
+            if self.snapshot_write and response.status_code == 404:
+                try:
+                    failure = response.json()
+                except ValueError:
+                    failure = None
+                error.gateway_error_code = str(failure.get("code", "")) if isinstance(failure, dict) else ""
+            raise
+
+
 class DataSourceList(BkBaseV4Resource):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/"
     method = "GET"
@@ -437,29 +471,20 @@ class DataSourceList(BkBaseV4Resource):
     ResponseSerializer = PayloadResponseSerializer
 
 
-class DataSourceGet(DataSourceList):
+class DataSourceGet(_SnapshotResource, DataSourceList):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/"
     url_keys = ["tenant", "namespace", "name"]
     RequestSerializer = NamedResourceRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
 
 
-class DataSourceCreate(DataSourceList):
+class DataSourceCreate(_SnapshotResource, DataSourceList):
     """创建 DataSource；受理不代表 DataId 已就绪。"""
 
     method = "POST"
+    snapshot_write = True
     RequestSerializer = ResourceWriteRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
-
-    def before_request(self, kwargs):
-        """禁止重定向导致重复创建。"""
-        kwargs["allow_redirects"] = False
-        return super().before_request(kwargs)
-
-    def parse_response(self, response):
-        if 300 <= response.status_code < 400:
-            raise APIRequestError(module_name=self.module_name, url=self.action, result="DataSource POST redirected")
-        return super().parse_response(response)
 
 
 class DataConnCreate(DataSourceCreate):
@@ -479,6 +504,7 @@ class UserDataSourceGet(UserBkBaseV4Resource, DataSourceGet):
 class DataSourceUpdate(DataSourceGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/"
     method = "PUT"
+    snapshot_write = True
     RequestSerializer = NamedResourceWriteRequestSerializer
 
 
@@ -544,7 +570,7 @@ class CleanDebug(BkBaseV4Resource):
     ResponseSerializer = ObjectResponseSerializer
 
 
-class CleanGet(BkBaseV4Resource):
+class CleanGet(_SnapshotResource):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/cleans/{name}/"
     method = "GET"
     url_keys = ["tenant", "namespace", "name"]
@@ -562,6 +588,7 @@ class CleanList(CleanGet):
 class CleanCreate(CleanGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/cleans/"
     method = "POST"
+    snapshot_write = True
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
 
@@ -576,7 +603,7 @@ class CleanDelete(CleanGet):
     ResponseSerializer = None
 
 
-class DataStorageGet(BkBaseV4Resource):
+class DataStorageGet(_SnapshotResource):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datastorages/{name}/"
     method = "GET"
     url_keys = ["tenant", "namespace", "name"]
@@ -594,6 +621,7 @@ class DataStorageList(DataStorageGet):
 class DataStorageCreate(DataStorageGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datastorages/"
     method = "POST"
+    snapshot_write = True
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
 

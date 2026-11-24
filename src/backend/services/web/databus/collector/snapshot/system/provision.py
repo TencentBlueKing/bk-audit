@@ -7,18 +7,16 @@ import json
 import time
 import uuid
 from copy import deepcopy
+from typing import Callable
 from urllib.parse import urlsplit
 
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 from django.db import transaction
 
 from services.web.bkbase import clean, metadata, source, storage
-from services.web.bkbase.common import (
-    get_resource_or_none,
-    operation_result,
-    resource_params,
-)
+from services.web.bkbase.common import operation_result, resource_params
 from services.web.bkbase.constants import (
     BKBASE_V4_PULL_RESULTS_PATH,
     CleanRole,
@@ -30,6 +28,16 @@ from services.web.databus.collector.snapshot.system.clean import PullCleanHandle
 from services.web.databus.collector.snapshot.system.pull import HttpPullHandler
 
 OWNER_ANNOTATION = "bkaudit_iam_operation"
+
+
+def _get_snapshot_resource_or_none(getter: Callable, **params) -> dict | None:
+    """命名快照详情仅接受 SDK 验证过的 HTTP 200 原生业务缺失，网关 404 仍抛错。"""
+    try:
+        return getter(**params)
+    except APIRequestError as error:
+        if getattr(error, "http_status", None) == 200 and getattr(error, "resource_not_found", False):
+            return None
+        raise
 
 
 def _create_config(kind, context):
@@ -163,7 +171,7 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
     ref = operation["refs"][key]
     step = operation["steps"].get(key)
     params = resource_params(context, ref, kind=ref["kind"])
-    current = get_resource_or_none(getter, **params)
+    current = _get_snapshot_resource_or_none(getter, **params)
     digest = source._replay_digest(desired)
     if step is None:
         if current is not None:
@@ -224,7 +232,7 @@ def _source_spec(params, operation, *, report_config=None):
 def _running_source(context, record):
     operation = record["creation"]
     ref = operation["refs"]["data_source"]
-    current = get_resource_or_none(api.bk_base_v4.data_source_get, **resource_params(context, ref))
+    current = _get_snapshot_resource_or_none(api.bk_base_v4.data_source_get, **resource_params(context, ref))
     if current is None:
         return None
     _owned(context, operation, ref, current)
