@@ -8,7 +8,11 @@ from django.db.models import Q
 from django.test import SimpleTestCase
 from rest_framework.exceptions import ValidationError
 
-from services.web.risk.resources.whitelist import RiskWhitelistCallback
+from services.web.risk.resources.whitelist import (
+    BatchCreateRiskWhitelist,
+    CreateRiskWhitelist,
+    RiskWhitelistCallback,
+)
 from services.web.risk.whitelist.constants import (
     HitAction,
     WhitelistStatus,
@@ -1402,3 +1406,91 @@ class WhitelistHitEventFieldNameTests(SimpleTestCase):
         self.assertEqual(names["strategy_id"], "命中策略(ID)")
         self.assertEqual(names["operator"], "责任人")
         self.assertEqual(names["username"], "操作人用户名")
+
+
+class WhitelistCreateRiskLabelTests(SimpleTestCase):
+    """带 risk_id 的加白只发起白名单审批，不直接改风险状态。
+
+    PRD 口径：「误报加白」与「冒险加白」关单语义一致，审批通过后由回调关单；
+    提交即误报关单只属于「标记误报同时加白」（UpdateRiskLabel 链路）。
+    """
+
+    def _rule(self):
+        created = datetime.datetime(2024, 11, 1, 12, 0, 0)
+        return SimpleNamespace(
+            id=1,
+            scene_id=1,
+            risk_id="whitelist_fp_risk",
+            match_scope=_scope(),
+            whitelist_type=WhitelistType.FALSE_POSITIVE,
+            expire_at=None,
+            is_permanent=True,
+            status=WhitelistStatus.PENDING,
+            reason="误报加白不直接关单",
+            updated_by="tester",
+            updated_at=created,
+            created_at=created,
+            created_by="tester",
+            itsm_ticket_id="",
+            itsm_sn="",
+            itsm_ticket_url="",
+            callback_token="t",
+            renewed_at=None,
+        )
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.create_itsm_ticket")
+    @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    @patch("services.web.risk.resources.whitelist.Risk.objects.filter")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
+    def test_false_positive_with_risk_id_does_not_misreport(self, _username, risk_filter, *_service_mocks):
+        risk = SimpleNamespace(
+            risk_id="whitelist_fp_risk", strategy_id=9, raw_event_id="fp_evt_1", scene_id=1, current_operator=[]
+        )
+        risk_filter.return_value = [risk]
+        rule = self._rule()
+        rule.refresh_from_db = lambda: None
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create", return_value=rule), patch(
+            "services.web.risk.resources.risk.UpdateRiskLabel.request"
+        ) as update_label:
+            CreateRiskWhitelist().request(
+                {
+                    "risk_id": risk.risk_id,
+                    "match_scope": _scope(),
+                    "whitelist_type": WhitelistType.FALSE_POSITIVE,
+                    "reason": "误报加白不直接关单",
+                }
+            )
+        update_label.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.create_itsm_ticket")
+    @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
+    def test_batch_false_positive_does_not_misreport(self, _username, *_service_mocks):
+        risk = SimpleNamespace(
+            risk_id="whitelist_fp_risk", strategy_id=9, raw_event_id="fp_evt_1", scene_id=1, current_operator=[]
+        )
+        rule = self._rule()
+        rule.refresh_from_db = lambda: None
+        with patch(
+            "services.web.risk.resources.risk._load_bulk_selection",
+            return_value=SimpleNamespace(risk_ids=[risk.risk_id], risks=[risk], risk_map={}, error=None),
+        ), patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create", return_value=rule), patch(
+            "services.web.risk.resources.risk.UpdateRiskLabel.request"
+        ) as update_label:
+            BatchCreateRiskWhitelist().request(
+                {
+                    "risk_ids": [risk.risk_id],
+                    "match_scope": _scope(),
+                    "whitelist_type": WhitelistType.FALSE_POSITIVE,
+                    "reason": "批量误报加白不直接关单",
+                }
+            )
+        update_label.assert_not_called()

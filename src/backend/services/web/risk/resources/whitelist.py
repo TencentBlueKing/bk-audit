@@ -23,13 +23,8 @@ from django.utils.translation import gettext, gettext_lazy
 from apps.audit.resources import AuditMixinResource
 from core.exceptions import ValidationError
 from core.models import get_request_username
-from services.web.risk.constants import RiskLabel
 from services.web.risk.models import Risk
-from services.web.risk.whitelist.constants import (
-    DELETABLE_STATUS,
-    WhitelistStatus,
-    WhitelistType,
-)
+from services.web.risk.whitelist.constants import DELETABLE_STATUS, WhitelistStatus
 from services.web.risk.whitelist.match import scope_field_names, validate_match_scope
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.whitelist.serializers import (
@@ -174,8 +169,6 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
             risks = list(Risk.objects.filter(risk_id=risk_id))
             if not risks:
                 raise ValidationError(gettext("风险单不存在"))
-            _misreport_for_whitelist(risks, validated_request_data)
-            risks = list(Risk.objects.filter(risk_id=risk_id))
             scene_id = risks[0].scene_id
         elif not scene_id:
             raise ValidationError(gettext("需要 scene_id"))
@@ -208,8 +201,6 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
         if len(risks) != len(risk_ids):
             raise ValidationError(gettext("部分风险单不存在"))
         ensure_same_strategy_scene(risks)
-        _misreport_for_whitelist(risks, validated_request_data)
-        risks = list(Risk.objects.filter(risk_id__in=risk_ids))
         created = _submit_created(
             validated_request_data,
             scene_id=risks[0].scene_id,
@@ -219,21 +210,6 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
         if not isinstance(created, list):
             created = [created]
         return [serialize_rule(item, progress={}, username=username) for item in created]
-
-
-def _misreport_for_whitelist(risks, validated_request_data) -> None:
-    if validated_request_data.get("whitelist_type") != WhitelistType.FALSE_POSITIVE:
-        return
-    from services.web.risk.resources.risk import UpdateRiskLabel
-
-    for risk in risks:
-        UpdateRiskLabel().request(
-            {
-                "risk_id": risk.risk_id,
-                "risk_label": RiskLabel.MISREPORT,
-                "description": validated_request_data.get("reason") or "",
-            }
-        )
 
 
 def _submit_created(validated_request_data, *, scene_id, risks, username):
