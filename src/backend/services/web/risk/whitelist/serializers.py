@@ -82,6 +82,9 @@ class ListRiskWhitelistReqSerializer(SortSerializerMixin, serializers.Serializer
     match_scope = FlexibleListField(
         child=serializers.CharField(allow_blank=False), required=False, label=gettext_lazy("匹配范围")
     )
+    contains_fields = FlexibleListField(
+        child=serializers.CharField(allow_blank=False), required=False, label=gettext_lazy("包含条件")
+    )
     updated_by = FlexibleListField(
         child=serializers.CharField(allow_blank=False), required=False, label=gettext_lazy("更新人")
     )

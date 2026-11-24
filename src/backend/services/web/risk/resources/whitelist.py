@@ -30,7 +30,7 @@ from services.web.risk.whitelist.constants import (
     WhitelistStatus,
     WhitelistType,
 )
-from services.web.risk.whitelist.match import validate_match_scope
+from services.web.risk.whitelist.match import scope_field_names, validate_match_scope
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.whitelist.serializers import (
     BatchCreateRiskWhitelistReqSerializer,
@@ -76,6 +76,27 @@ def _filter_any_icontains(queryset, field_name, values):
     return queryset.filter(matched) if matched else queryset
 
 
+def _filter_contains_fields(queryset, fields):
+    """按匹配范围包含的条件字段筛选，多个字段任一命中即可。
+
+    icontains 只能粗筛 JSON 文本，字段名互为子串或命中字段值都会误伤，
+    所以再对候选行用 scope_field_names 精确判定（白名单表规模小）。
+    """
+
+    fields = [field for field in fields or [] if field]
+    if not fields:
+        return queryset
+    pruned = Q()
+    for field in fields:
+        pruned |= Q(match_scope__icontains=f'"{field}"')
+    if not pruned:
+        return queryset
+    candidates = list(queryset.filter(pruned).values_list("pk", "match_scope"))
+    wanted = set(fields)
+    pks = [pk for pk, scope in candidates if wanted & scope_field_names(scope)]
+    return queryset.filter(pk__in=pks)
+
+
 class RiskWhitelistMeta(AuditMixinResource, abc.ABC):
     tags = ["RiskWhitelist"]
     audit_action = None
@@ -107,6 +128,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
         queryset = _filter_any_icontains(queryset, "reason", validated_request_data.get("reason"))
         queryset = _filter_any_icontains(queryset, "updated_by", validated_request_data.get("updated_by"))
         queryset = _filter_any_icontains(queryset, "match_scope", validated_request_data.get("match_scope"))
+        queryset = _filter_contains_fields(queryset, validated_request_data.get("contains_fields"))
         if validated_request_data.get("keyword"):
             queryset = queryset.filter(match_scope__icontains=validated_request_data["keyword"])
         total = queryset.count()

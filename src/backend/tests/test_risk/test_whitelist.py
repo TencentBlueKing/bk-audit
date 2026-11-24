@@ -2,8 +2,9 @@
 import datetime
 from contextlib import contextmanager
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from django.db.models import Q
 from django.test import SimpleTestCase
 from rest_framework.exceptions import ValidationError
 
@@ -305,6 +306,8 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         _submit_itsm_ticket(rule, operator="alice", callback_token="token")
         form_data = ticket_create.call_args.kwargs["form_data"]
         self.assertEqual(form_data["approver"], ["scene-admin"])
+        # 工单里的匹配范围给人看：压成一行可读文案，而不是 JSON 条件树
+        self.assertEqual(form_data["match_scope"], "责任人 = alice")
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
@@ -1126,6 +1129,135 @@ class WhitelistListQueryTests(SimpleTestCase):
         serializer = ListRiskWhitelistReqSerializer(data={})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["order_fields"], ["-id"])
+
+    def test_contains_fields_filter_accepts_arbitrary_names(self):
+        from services.web.risk.whitelist.serializers import (
+            ListRiskWhitelistReqSerializer,
+        )
+
+        serializer = ListRiskWhitelistReqSerializer(data={"contains_fields": ["strategy_id", "raw_event_id"]})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["contains_fields"], ["strategy_id", "raw_event_id"])
+
+
+def _group_leaf(name, value, operator="eq", field_name=None):
+    return {"field": name, "field_name": field_name or name, "operator": operator, "value": value}
+
+
+def _group_scope(*items):
+    return {"connector": "and", "groups": [{"connector": "and", "conditions": list(items)}]}
+
+
+def _tree_leaf(name, value, operator="eq"):
+    field = {"table": "event", "raw_name": name, "display_name": name, "field_type": "string"}
+    return {"condition": {"field": field, "operator": operator, "filter": value}}
+
+
+def _tree_scope(*nodes):
+    return {"connector": "and", "conditions": list(nodes)}
+
+
+class WhitelistScopeFieldNamesTests(SimpleTestCase):
+    def test_group_scope_collects_fields_with_value(self):
+        from services.web.risk.whitelist.match import scope_field_names
+
+        scope = _group_scope(
+            _group_leaf("strategy_id", "9"),
+            _group_leaf("operator", ""),
+            _group_leaf("raw_event_id", [], operator="in"),
+        )
+        # 值为空的条件不算包含，和 append_risk_match_fields 的写入口径一致
+        self.assertEqual(scope_field_names(scope), {"strategy_id"})
+
+    def test_tree_scope_keeps_neq_and_supports_group_scope(self):
+        from services.web.risk.whitelist.match import scope_field_names
+
+        neq = _tree_scope(_tree_leaf("raw_event_id", "keep", operator="neq"))
+        # 任意 operator 都算包含，neq 条件同样能筛出
+        self.assertEqual(scope_field_names(neq), {"raw_event_id"})
+        self.assertEqual(
+            scope_field_names(_group_scope(_group_leaf("strategy_id", "9", operator="neq"))),
+            {"strategy_id"},
+        )
+
+    def test_tree_scope_requires_value(self):
+        from services.web.risk.whitelist.match import scope_field_names
+
+        empty = _tree_scope(_tree_leaf("strategy_id", ""))
+        self.assertEqual(scope_field_names(empty), set())
+        self.assertEqual(scope_field_names({}), set())
+        self.assertEqual(scope_field_names({"connector": "and", "conditions": "坏数据"}), set())
+
+
+class WhitelistScopeReadableTests(SimpleTestCase):
+    def test_group_scope_prefers_frontend_field_name(self):
+        from services.web.risk.whitelist.match import format_scope_readable
+
+        scope = _group_scope(
+            _group_leaf("strategy_id", "9", field_name="命中策略(ID)"),
+            _group_leaf("operator", ["alice", "bob"], operator="include"),
+        )
+        # 前端 field_name 优先；没带中文名的走标准字段兜底
+        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 and 责任人 in alice、bob")
+
+    def test_tree_scope_falls_back_to_standard_names(self):
+        from services.web.risk.whitelist.match import format_scope_readable
+
+        # append_risk_match_fields 补的条件 display_name 就是 raw_name，走兜底中文名
+        scope = _tree_scope(_tree_leaf("strategy_id", "9"), _tree_leaf("raw_event_id", "e-1"))
+        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 and 原始事件ID = e-1")
+        # 未知字段（如 event_data 自定义列）兜底不到，回退 raw_name
+        self.assertEqual(
+            format_scope_readable(_tree_scope(_tree_leaf("cost_center", "x", operator="neq"))),
+            "cost_center != x",
+        )
+
+    def test_nested_connector_groups_add_brackets(self):
+        from services.web.risk.whitelist.match import format_scope_readable
+
+        scope = _tree_scope(
+            _tree_scope(_tree_leaf("strategy_id", "9")),
+            _tree_leaf("raw_event_id", "keep", operator="neq"),
+        )
+        scope = {"connector": "or", "conditions": scope["conditions"]}
+        self.assertEqual(format_scope_readable(scope), "(命中策略(ID) = 9) or 原始事件ID != keep")
+
+    def test_invalid_scope_falls_back_to_json(self):
+        import json
+
+        from services.web.risk.whitelist.match import format_scope_readable
+
+        self.assertEqual(format_scope_readable({}), "{}")
+        broken = {"connector": "and", "conditions": "坏数据"}
+        # 审批信息不能缺失：解析失败降级为原 JSON
+        self.assertEqual(format_scope_readable(broken), json.dumps(broken, ensure_ascii=False))
+
+
+class WhitelistContainsFieldsFilterTests(SimpleTestCase):
+    def test_filters_rows_by_field_names(self):
+        from services.web.risk.resources.whitelist import _filter_contains_fields
+
+        scopes = {
+            1: _group_scope(_group_leaf("strategy_id", "9")),
+            2: _tree_scope(_tree_leaf("operator", "alice")),
+            3: _group_scope(_group_leaf("raw_event_id", "")),
+        }
+        queryset = MagicMock()
+        pruned = queryset.filter.return_value
+        pruned.values_list.return_value = [(1, scopes[1]), (2, scopes[2])]
+        # 只有 1 的匹配范围真的包含该字段；icontains 剪枝命中 2 也会被剔除
+        result = _filter_contains_fields(queryset, ["strategy_id"])
+        self.assertEqual(result, queryset.filter.return_value)
+        queryset.filter.assert_any_call(Q(match_scope__icontains='"strategy_id"'))
+        queryset.filter.assert_called_with(pk__in=[1])
+
+    def test_empty_values_skip_filtering(self):
+        from services.web.risk.resources.whitelist import _filter_contains_fields
+
+        queryset = MagicMock()
+        self.assertIs(_filter_contains_fields(queryset, None), queryset)
+        self.assertIs(_filter_contains_fields(queryset, ["", None]), queryset)
+        queryset.filter.assert_not_called()
 
 
 class WhitelistApproveCloseTests(SimpleTestCase):

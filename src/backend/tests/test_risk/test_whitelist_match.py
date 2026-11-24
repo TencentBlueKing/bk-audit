@@ -9,12 +9,12 @@ from services.web.risk.whitelist.match import (
 )
 
 
-def _field(name):
-    return {"table": "event", "raw_name": name, "display_name": name, "field_type": "string"}
+def _field(name, field_type="string"):
+    return {"table": "event", "raw_name": name, "display_name": name, "field_type": field_type}
 
 
-def _leaf(name, value, operator="eq"):
-    return {"condition": {"field": _field(name), "operator": operator, "filter": value}}
+def _leaf(name, value, operator="eq", field_type="string"):
+    return {"condition": {"field": _field(name, field_type), "operator": operator, "filter": value}}
 
 
 def _scope(*nodes, connector="and"):
@@ -47,10 +47,35 @@ class WhitelistMatchTests(SimpleTestCase):
         self.assertEqual(validate_match_scope(scope, WhitelistType.RISK_ACCEPTANCE), "")
 
     def test_compare_operator_is_not_limited_to_eq(self):
-        scope = _scope(_leaf("strategy_id", "1"), _leaf("count", "5", operator="gt"))
+        # count 是数值字段，比较类运算符可用（口径同审计策略）
+        scope = _scope(_leaf("strategy_id", "1"), _leaf("count", "5", operator="gt", field_type="long"))
         self.assertEqual(validate_match_scope(scope, WhitelistType.RISK_ACCEPTANCE), "")
         self.assertTrue(match_scope(scope, {"strategy_id": "1", "count": 8}))
         self.assertFalse(match_scope(scope, {"strategy_id": "1", "count": 3}))
+
+    def test_validate_requires_strategy_eq_with_value(self):
+        # 其它条件依赖命中策略取值：策略条件固定等于且不能为空
+        neq = _scope(_leaf("strategy_id", "1", operator="neq"), _leaf("operator", "alice"))
+        self.assertEqual(validate_match_scope(neq, WhitelistType.RISK_ACCEPTANCE), "命中策略条件的操作符只能为等于")
+        empty = _scope(_leaf("strategy_id", ""), _leaf("operator", "alice"))
+        self.assertEqual(validate_match_scope(empty, WhitelistType.RISK_ACCEPTANCE), "命中策略条件不能为空")
+
+    def test_validate_operator_matches_field_type(self):
+        # 字符串字段不允许比较类运算符；数值字段不允许模糊匹配（与审计策略类型口径一致）
+        gt_text = _scope(_leaf("strategy_id", "1"), _leaf("operator", "a", operator="gt"))
+        self.assertEqual(validate_match_scope(gt_text, WhitelistType.RISK_ACCEPTANCE), "条件操作符不支持当前字段类型")
+        like_number = _scope(
+            _leaf("strategy_id", "1"),
+            _leaf("count", "5", operator="like", field_type="long"),
+        )
+        self.assertEqual(validate_match_scope(like_number, WhitelistType.RISK_ACCEPTANCE), "条件操作符不支持当前字段类型")
+        in_text = _scope(_leaf("strategy_id", "1"), _leaf("operator", "a", operator="include"))
+        self.assertEqual(validate_match_scope(in_text, WhitelistType.RISK_ACCEPTANCE), "")
+
+    def test_validate_operator_within_rule_audit_scope(self):
+        # match_all 不在审计策略条件操作符（RuleAuditConditionOperator）范围内
+        scope = _scope(_leaf("strategy_id", "1"), _leaf("operator", "a", operator="match_all"))
+        self.assertEqual(validate_match_scope(scope, WhitelistType.RISK_ACCEPTANCE), "条件操作符不支持当前字段类型")
 
     def test_single_risk_appends_strategy_and_event(self):
         scope = append_risk_match_fields(_scope(_leaf("operator", "alice")), strategy_id=9, raw_event_id="evt-1")

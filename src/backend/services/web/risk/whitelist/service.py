@@ -37,7 +37,9 @@ from services.web.risk.whitelist.constants import (
 )
 from services.web.risk.whitelist.match import (
     append_risk_match_fields,
+    format_scope_readable,
     match_scope,
+    scope_field_names,
     validate_match_scope,
 )
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
@@ -689,7 +691,8 @@ def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: s
         "scene_id": str(rule.scene_id),
         "whitelist_type": rule.whitelist_type,
         "reason": rule.reason if reason is None else reason,
-        "match_scope": json.dumps(scope, ensure_ascii=False),
+        # 审批单里给人看的匹配范围，条件树太长放不下，压成一行可读文本
+        "match_scope": format_scope_readable(scope),
         "risk_id": rule.risk_id,
         "applicant": operator or rule.created_by or "",
         "approver": _whitelist_approvers(rule.scene_id),
@@ -1309,6 +1312,8 @@ def serialize_rule(
         "scene_id": rule.scene_id,
         "risk_id": rule.risk_id,
         "match_scope": rule.match_scope,
+        # 匹配范围里实际带值的条件字段名，列表“包含条件”筛选和展示共用
+        "contains_fields": sorted(scope_field_names(rule.match_scope)),
         "whitelist_type": rule.whitelist_type,
         "expire_at": _format_expire(rule.expire_at) or None,
         "is_permanent": rule.is_permanent,
