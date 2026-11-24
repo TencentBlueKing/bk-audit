@@ -304,10 +304,20 @@ class StorageAssetCreate(DatasetResource):
         return super().before_request(kwargs)
 
     def parse_response(self, response):
-        """重定向不能证明资产注册成功。"""
+        """保留结构化错误码，供登记续跑判断请求是否到过 BKBase。"""
         if 300 <= response.status_code < 400:
             raise APIRequestError(module_name=self.module_name, url=self.action, result="Redis registration redirected")
-        return super().parse_response(response)
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            # bk_resource 会将 HTTP 错误压成消息。只提取原始错误码，不解析异常文本或保存响应体。
+            if response.status_code != 200:
+                try:
+                    failure = response.json()
+                except ValueError:
+                    failure = None
+                error.gateway_error_code = str(failure.get("code", "")) if isinstance(failure, dict) else ""
+            raise
 
 
 class StorageAssetGet(DatasetResource):
@@ -318,6 +328,29 @@ class StorageAssetGet(DatasetResource):
     url_keys = ["project_name", "sub_type", "asset_name"]
     RequestSerializer = StorageAssetGetRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+
+    def before_request(self, kwargs):
+        """资产存在性只信任原始租户与项目的详情端点，不跟随重定向。"""
+        kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """区分查询失败和确认资产不存在，避免把网关 404 当成查无资产。"""
+        if 300 <= response.status_code < 400:
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Redis asset lookup redirected")
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            payload = error.data
+            # 详情接口仅以 HTTP 200 / 业务码 1553002 / data=null 表示资源确实不存在。
+            error.asset_not_found = (
+                response.status_code == 200
+                and payload.get("result") is False
+                and str(payload.get("code")) == "1553002"
+                and "data" in payload
+                and payload["data"] is None
+            )
+            raise
 
 
 class StorageAssetList(DatasetResource):
