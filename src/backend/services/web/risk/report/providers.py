@@ -31,6 +31,8 @@ from jinja2 import nodes
 from jinja2.nodes import Expr
 
 from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+from apps.feature.constants import FeatureTypeChoices
+from apps.feature.handlers import FeatureHandler
 from core.sql.constants import FieldType
 from services.web.bkbase import query as bkbase_query
 from services.web.risk.constants import (
@@ -134,6 +136,22 @@ class AIProvider(Provider):
         self.enable_cache = enable_cache
         self.enable_agent_rate_limit = enable_agent_rate_limit
 
+    def _ai_agent_available(self) -> bool:
+        """判断 AI 能力是否可用（全局 AI 开关）
+
+        AI 变量仅在 AI 能力开启时才会真正调用 Agent 生成。
+        关闭时返回 False，调用方退回占位内容，保证纯文本模板仍可生成。
+        """
+        # 测试注入自定义执行器时，视为可用（由测试决定行为）
+        if self._ai_executor is not None:
+            return True
+        try:
+            return FeatureHandler(FeatureTypeChoices.AI_CAPABILITY).check()
+        except Exception:
+            # 开关判定异常时保守关闭，避免误调未就绪的 Agent
+            logger.exception("[AIProvider] 检查 AI 能力开关失败，按关闭处理")
+            return False
+
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是AI变量访问
 
@@ -190,6 +208,11 @@ class AIProvider(Provider):
 
         if not prompt:
             return f"[AI变量 {name} 未配置prompt]"
+
+        # AI 能力全局关闭时，不调用 Agent，退回占位内容（纯文本部分仍正常渲染）。
+        # 与前端 AI 开关口径一致：仅禁用 AI 变量的远程生成，不影响非 AI 模板。
+        if not self._ai_agent_available():
+            return f"[AI变量 {name} 未生成：AI能力未开启]"
 
         # 根据 enable_cache 动态包装 _execute_ai_agent
         if self.enable_cache:

@@ -504,7 +504,7 @@ class TestAIProviderQualityCheck(TestCase):
         # 即使有质量问题，结果仍然返回
         self.assertEqual(result, error_content)
 
-    @mock.patch("services.web.risk.report.providers.check_and_report_quality")
+    @mock.patch("services.web.risk.report.providers.check_and_report_result_quality")
     def test_check_and_report_result_quality_handles_none_result(self, mock_check):
         """测试 None 结果时的质量检测"""
         mock_check.return_value = []
@@ -520,3 +520,61 @@ class TestAIProviderQualityCheck(TestCase):
             content="",
             risk_id="quality_test_006",
         )
+
+
+class TestAIProviderCapabilitySwitch(TestCase):
+    """测试 AIProvider 受全局 AI 能力开关约束"""
+
+    @override_settings(FEATURE_TOGGLE={"ai_capability": "deny"})
+    def test_get_skips_agent_when_ai_capability_disabled(self):
+        """AI 能力关闭时，get() 不调用 Agent，返回占位内容"""
+        from apps.feature.handlers import get_entry_feature_toggle
+
+        get_entry_feature_toggle.cache_clear()
+
+        def mock_executor(prompt):
+            raise AssertionError("AI Agent 不应被调用")
+
+        provider = AIProvider(
+            context={"risk_id": "ai_switch_off_001"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=mock_executor,
+        )
+        result = provider.get(name="summary")
+        self.assertIn("AI能力未开启", result)
+
+    @override_settings(FEATURE_TOGGLE={"ai_capability": "available"})
+    def test_get_calls_agent_when_ai_capability_enabled(self):
+        """AI 能力开启时，get() 正常调用 Agent 生成内容"""
+        from apps.feature.handlers import get_entry_feature_toggle
+
+        get_entry_feature_toggle.cache_clear()
+
+        def mock_executor(prompt):
+            return MOCK_AI_RESPONSE["content"]
+
+        provider = AIProvider(
+            context={"risk_id": "ai_switch_on_001"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=mock_executor,
+        )
+        result = provider.get(name="summary")
+        self.assertIn("2025年12月17日", result)
+
+    def test_ai_executor_overrides_switch(self):
+        """自定义执行器（测试注入）时忽略开关，按执行器行为返回"""
+        from apps.feature.handlers import get_entry_feature_toggle
+
+        get_entry_feature_toggle.cache_clear()
+
+        def mock_executor(prompt):
+            return "自定义执行器结果"
+
+        provider = AIProvider(
+            context={"risk_id": "ai_exec_override_001"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=mock_executor,
+        )
+        # 即使 _ai_agent_available 因开关判定异常返回 False，自定义执行器仍应被使用
+        result = provider.get(name="summary")
+        self.assertEqual(result, "自定义执行器结果")
