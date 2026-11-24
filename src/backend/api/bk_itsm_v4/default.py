@@ -33,6 +33,7 @@ class BKITSMV4(AuditBkApiResource, abc.ABC):
 
     module_name = "bk_itsm_v4"
     platform_authorization = True
+    use_admin_username = True
 
     @property
     def base_url(self):
