@@ -23,7 +23,12 @@ from django.conf import settings
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
+from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.resource_types import ResourceEnum
+from services.web.bkbase.exceptions import (
+    BKBaseFlowOperationPending,
+    BKBaseResourceMappingError,
+)
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     JoinDataType,
@@ -44,6 +49,11 @@ from services.web.entry.constants import (
 from services.web.entry.init.base import SystemInitHandler
 from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
+from services.web.strategy_v2.constants import (
+    StrategySource,
+    StrategyStatusChoices,
+    StrategyType,
+)
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -251,46 +261,199 @@ class SystemInitRuleAuditTests(TestCase):
         self.handler = SystemInitHandler()
         Scene.objects.get_or_create(name='系统默认场景', defaults={"description": "测试场景"})
 
-    @mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy")
-    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
-    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
-    def test_init_system_rule_audit_create(self, mock_get, mock_set, mock_create):
-        mock_get.return_value = False
-        snapshot = Snapshot.objects.create(
+    def _snapshot(self, *, status=SnapshotRunningStatus.RUNNING.value, table="test_rt_id"):
+        return Snapshot.objects.create(
             system_id=ResourceEnum.MANUAL_EVENT.system_id,
             resource_type_id=ResourceEnum.MANUAL_EVENT.id,
-            bkbase_table_id="test_rt_id",
-            status=SnapshotRunningStatus.RUNNING.value,
+            bkbase_table_id=table,
+            status=status,
             join_data_type=JoinDataType.ASSET.value,
         )
 
-        self.handler.init_system_rule_audit()
+    def _registered_strategy(self, status=StrategyStatusChoices.START_FAILED):
+        strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="手动新建风险",
+            strategy_type=StrategyType.RULE,
+            source=StrategySource.SYSTEM,
+            status=status,
+            backend_data={"flow_id": 91},
+            configs={"data_source": {"rt_id": "test_rt_id"}},
+        )
+        GlobalMetaConfig.set("init_system_rule_audit_strategy_id", strategy.strategy_id)
+        return strategy
 
-        mock_create.assert_called_once()
-        params = mock_create.call_args.kwargs
+    def test_init_default_rule_retries_existing_failed_id(self):
+        self._snapshot()
+        strategy = self._registered_strategy()
+        with mock.patch(
+            "services.web.strategy_v2.resources.RetryStrategy.retry_existing", create=True
+        ) as retry, mock.patch(
+            "services.web.strategy_v2.resources.CreateStrategy.request_for_init", create=True
+        ) as create:
+            self.handler.init_system_rule_audit()
+        retry.assert_called_once_with(strategy, allow_create=False)
+        create.assert_not_called()
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+
+    def test_unmanaged_same_name_never_counts_as_finished(self):
+        self._snapshot()
+        Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="手动新建风险",
+            strategy_type=StrategyType.RULE,
+            source=StrategySource.USER,
+            status=StrategyStatusChoices.RUNNING,
+        )
+        with mock.patch(
+            "services.web.strategy_v2.resources.RetryStrategy.retry_existing", create=True
+        ) as retry, mock.patch(
+            "services.web.strategy_v2.resources.CreateStrategy.request_for_init", create=True
+        ) as create:
+            self.handler.init_system_rule_audit()
+        retry.assert_not_called()
+        create.assert_not_called()
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+        self.assertIsNone(GlobalMetaConfig.get("init_system_rule_audit_strategy_id", default=None))
+
+    def test_registered_running_strategy_is_the_only_new_completion(self):
+        self._snapshot()
+        self._registered_strategy(StrategyStatusChoices.RUNNING)
+        self.handler.init_system_rule_audit()
+        self.assertIs(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False), True)
+
+    def test_default_rule_create_keeps_scene_and_manual_event_table_parameters(self):
+        snapshot = self._snapshot()
+
+        def create(params):
+            strategy = self._registered_strategy(StrategyStatusChoices.STARTING)
+            # 模拟另一轮 init 在控制器调度前读取到已持久化的归属，不得再次创建。
+            self.handler.init_system_rule_audit()
+            return {"strategy_id": strategy.strategy_id}
+
+        with mock.patch(
+            "services.web.strategy_v2.resources.CreateStrategy.request_for_init", create=True, side_effect=create
+        ) as request, mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy") as public_create:
+            self.handler.init_system_rule_audit()
+        request.assert_called_once()
+        params = request.call_args.args[0]
         self.assertEqual(params["binding_type"], BindingType.SCENE_BINDING)
-        self.assertIn("scene_id", params)
+        scene = Scene.objects.get(scene_id=params["scene_id"])
+        self.assertEqual(scene.name, DEFAULT_SCENE_NAME)
         self.assertEqual(params["configs"]["data_source"]["rt_id"], snapshot.bkbase_table_id)
-        self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
+        self.assertEqual(params["source"], StrategySource.SYSTEM)
+        public_create.assert_not_called()
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
 
-    @mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy")
-    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
-    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
-    def test_init_system_rule_audit_skip_when_exists(self, mock_get, mock_set, mock_create):
-        mock_get.return_value = False
-        Snapshot.objects.create(
-            system_id=ResourceEnum.MANUAL_EVENT.system_id,
-            resource_type_id=ResourceEnum.MANUAL_EVENT.id,
-            bkbase_table_id="test_rt_id",
-            status=SnapshotRunningStatus.RUNNING.value,
-            join_data_type=JoinDataType.ASSET.value,
-        )
-        Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name="手动新建风险", strategy_type="rule")
+    def test_pending_default_rule_keeps_original_id_without_retry(self):
+        self._snapshot()
+        strategy = self._registered_strategy(StrategyStatusChoices.STARTING)
+        for status in (StrategyStatusChoices.STARTING, StrategyStatusChoices.UPDATING):
+            strategy.status = status
+            strategy.save(update_fields=["status"])
+            with mock.patch("services.web.strategy_v2.resources.RetryStrategy.retry_existing", create=True) as retry:
+                self.handler.init_system_rule_audit()
+            retry.assert_not_called()
+            self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+        self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), strategy.strategy_id)
 
+    def test_unready_asset_snapshot_does_not_create_or_retry_default_rule(self):
+        self._registered_strategy()
+        snapshot = self._snapshot(table="")
+        with mock.patch(
+            "services.web.strategy_v2.resources.RetryStrategy.retry_existing", create=True
+        ) as retry, mock.patch(
+            "services.web.strategy_v2.resources.CreateStrategy.request_for_init", create=True
+        ) as create:
+            self.handler.init_system_rule_audit()
+            snapshot.bkbase_table_id = "test_rt_id"
+            snapshot.status = SnapshotRunningStatus.PREPARING
+            snapshot.save(update_fields=["bkbase_table_id", "status"])
+            self.handler.init_system_rule_audit()
+        create.assert_not_called()
+        retry.assert_not_called()
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+
+    def test_default_rule_retry_hard_error_is_not_silenced(self):
+        self._snapshot()
+        self._registered_strategy()
+        failure = RuntimeError("synthetic controller rejection")
+        with mock.patch(
+            "services.web.strategy_v2.resources.RetryStrategy.retry_existing", create=True, side_effect=failure
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                self.handler.init_system_rule_audit()
+        self.assertIs(caught.exception, failure)
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+
+    def test_default_rule_missing_flow_is_a_hard_block(self):
+        self._snapshot()
+        strategy = self._registered_strategy()
+        strategy.backend_data = {}
+        strategy.save(update_fields=["backend_data"])
+        for version in ("v3", "v4"):
+            with self.subTest(version=version), override_settings(BKBASE_API_VERSION=version):
+                with self.assertRaises(BKBaseResourceMappingError):
+                    self.handler.init_system_rule_audit()
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+        self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), strategy.strategy_id)
+
+    def test_default_rule_genuinely_pending_recovery_is_only_observed(self):
+        self._snapshot()
+        strategy = self._registered_strategy()
+        with mock.patch(
+            "services.web.strategy_v2.resources.RetryStrategy.retry_existing",
+            side_effect=BKBaseFlowOperationPending(message="synthetic operation in progress"),
+        ):
+            self.handler.init_system_rule_audit()
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+        self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), strategy.strategy_id)
+
+    def test_renamed_registered_default_rule_keeps_original_ownership(self):
+        self._snapshot()
+        strategy = self._registered_strategy()
+        strategy.strategy_name = "renamed builtin rule"
+        strategy.save(update_fields=["strategy_name"])
+        with mock.patch("services.web.strategy_v2.resources.RetryStrategy.retry_existing") as retry:
+            self.handler.init_system_rule_audit()
+        retry.assert_called_once_with(strategy, allow_create=False)
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+
+    def test_default_rule_changed_input_table_is_not_automatically_retried(self):
+        self._snapshot()
+        strategy = self._registered_strategy()
+        strategy.configs = {"data_source": {"rt_id": "another_table"}}
+        strategy.save(update_fields=["configs"])
+        with mock.patch("services.web.strategy_v2.resources.RetryStrategy.retry_existing") as retry:
+            self.handler.init_system_rule_audit()
+        retry.assert_not_called()
+        strategy.refresh_from_db()
+        self.assertEqual(strategy.status, StrategyStatusChoices.START_FAILED)
+        self.assertEqual(strategy.configs["data_source"]["rt_id"], "another_table")
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+
+    def test_old_finished_marker_does_not_backfill_strategy_ownership(self):
+        GlobalMetaConfig.set(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, True)
         self.handler.init_system_rule_audit()
+        self.assertIsNone(GlobalMetaConfig.get("init_system_rule_audit_strategy_id", default=None))
 
-        mock_create.assert_not_called()
-        self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
+    def test_registered_strategy_scope_mismatch_never_operates_or_finishes(self):
+        self._snapshot()
+        strategy = self._registered_strategy(StrategyStatusChoices.RUNNING)
+        for field, value in (
+            ("namespace", "another_namespace"),
+            ("source", StrategySource.USER),
+            ("strategy_type", StrategyType.MODEL),
+        ):
+            original = getattr(strategy, field)
+            setattr(strategy, field, value)
+            strategy.save(update_fields=[field])
+            with mock.patch("services.web.strategy_v2.resources.RetryStrategy.retry_existing") as retry:
+                self.handler.init_system_rule_audit()
+            retry.assert_not_called()
+            self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
+            setattr(strategy, field, original)
+            strategy.save(update_fields=[field])
 
 
 @override_settings(BKAPP_INIT_SYSTEM="True")

@@ -22,7 +22,9 @@ from unittest import mock
 from bk_resource import resource
 from bk_resource.exceptions import ValidateException
 from django.conf import settings
+from django.db import connection
 from django.http import Http404
+from django.test import override_settings
 from rest_framework import serializers
 
 from api.bk_base.default import GetResultTable
@@ -32,6 +34,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.models import NoticeGroup
 from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
+from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import ResourceBinding, Scene
@@ -43,6 +46,7 @@ from services.web.strategy_v2.constants import (
     StrategyReportStatus,
     StrategySource,
     StrategyStatusChoices,
+    StrategyType,
 )
 from services.web.strategy_v2.models import Strategy, StrategyTool
 from services.web.strategy_v2.resources import (
@@ -313,6 +317,190 @@ class StrategyTest(TestCase):
         mock_system_list.return_value.request.return_value = [{"system_id": "bklog"}, {"system_id": "bkmonitor"}]
         params = self._build_rule_strategy_payload(name_suffix)
         return CreateStrategy()(**params)
+
+    def _init_rule_payload(self, suffix):
+        """沿用真实规则校验，显式隔离来源查询、系统列表、SQL 构建及审计上报边界。"""
+        systems = self.enterContext(mock.patch("apps.meta.resources.SystemListAllResource"))
+        systems.return_value.request.return_value = [{"system_id": "bklog"}, {"system_id": "bkmonitor"}]
+        self.enterContext(
+            mock.patch(
+                "services.web.strategy_v2.resources.resource.strategy_v2.rule_audit_source_type_check",
+                return_value={"support_source_types": [RuleAuditSourceType.REALTIME.value]},
+            )
+        )
+        self.enterContext(mock.patch.object(CreateStrategy, "_enabled_audit_report", return_value=False))
+        self.enterContext(mock.patch("services.web.strategy_v2.resources.get_request_username", return_value=None))
+        self.enterContext(
+            mock.patch("services.web.strategy_v2.resources.RuleAuditSQLBuilder.build_sql", return_value="SELECT 1")
+        )
+        params = self._build_rule_strategy_payload(name_suffix=suffix)
+        params["source"] = StrategySource.SYSTEM
+        return params
+
+    def test_init_strategy_id_is_saved_before_controller_dispatch(self):
+        params = self._init_rule_payload("init_claim")
+        savepoints = len(connection.savepoint_ids)
+        observed = []
+
+        def dispatch(action, strategy_id, *args, **kwargs):
+            self.assertEqual(len(connection.savepoint_ids), savepoints)
+            self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), strategy_id)
+            strategy = Strategy.objects.get(strategy_id=strategy_id)
+            self.assertEqual(strategy.status, StrategyStatusChoices.STARTING)
+            observed.append(strategy_id)
+
+        with mock.patch("services.web.strategy_v2.resources.call_controller", side_effect=dispatch):
+            result = CreateStrategy().request_for_init(params)
+        self.assertEqual(observed, [result["strategy_id"]])
+
+    def test_init_strategy_local_failure_rolls_back_strategy_and_claim(self):
+        params = self._init_rule_payload("init_rollback")
+        failure = RuntimeError("synthetic local persistence failure")
+        with mock.patch.object(CreateStrategy, "_save_tags", side_effect=failure), mock.patch(
+            "services.web.strategy_v2.resources.call_controller"
+        ) as dispatch:
+            with self.assertRaises(RuntimeError):
+                CreateStrategy().request_for_init(params)
+        self.assertFalse(Strategy.objects.filter(strategy_name=params["strategy_name"]).exists())
+        self.assertIsNone(GlobalMetaConfig.get("init_system_rule_audit_strategy_id", default=None))
+        dispatch.assert_not_called()
+
+    def test_init_strategy_dispatch_failure_keeps_recorded_original_id(self):
+        params = self._init_rule_payload("init_dispatch_failure")
+        failure = RuntimeError("synthetic controller dispatch failure")
+        with mock.patch("services.web.strategy_v2.resources.call_controller", side_effect=failure):
+            with self.assertRaises(RuntimeError) as caught:
+                CreateStrategy().request_for_init(params)
+        self.assertIs(caught.exception, failure)
+        strategy_id = GlobalMetaConfig.get("init_system_rule_audit_strategy_id")
+        strategy = Strategy.objects.get(strategy_id=strategy_id)
+        self.assertEqual(strategy.strategy_name, params["strategy_name"])
+        self.assertEqual(strategy.status, StrategyStatusChoices.START_FAILED)
+
+    def test_public_strategy_request_cannot_claim_init_with_private_looking_params(self):
+        params = self._init_rule_payload("unmanaged_claim")
+        params.update(_for_init=True, _init_strategy=True, init_system_rule_audit_strategy_id=999)
+        with mock.patch("services.web.strategy_v2.resources.call_controller"):
+            result = CreateStrategy().request(params)
+        self.assertTrue(Strategy.objects.filter(strategy_id=result["strategy_id"]).exists())
+        self.assertIsNone(GlobalMetaConfig.get("init_system_rule_audit_strategy_id", default=None))
+
+    def test_init_capability_is_consumed_before_nested_public_request(self):
+        params = self._init_rule_payload("outer_init")
+        nested = copy.deepcopy(params)
+        nested["strategy_name"] = "nested_public_request"
+        endpoint = CreateStrategy()
+        dispatched = []
+
+        def dispatch(action, strategy_id, *args, **kwargs):
+            dispatched.append(strategy_id)
+            if len(dispatched) == 1:
+                ordinary = endpoint.request(nested)
+                self.assertNotEqual(ordinary["strategy_id"], strategy_id)
+                self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), strategy_id)
+
+        with mock.patch("services.web.strategy_v2.resources.call_controller", side_effect=dispatch):
+            result = endpoint.request_for_init(params)
+        self.assertEqual(len(dispatched), 2)
+        self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), result["strategy_id"])
+
+    @override_settings(BKBASE_API_VERSION="v3")
+    def test_init_retry_requires_v3_flow_id_even_with_other_controller_id(self):
+        for backend in ({}, {"id": 7}):
+            strategy = Strategy.objects.create(
+                namespace=self.namespace,
+                strategy_name="unproven init flow",
+                strategy_type=StrategyType.RULE,
+                status=StrategyStatusChoices.START_FAILED,
+                backend_data=backend,
+            )
+            with mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch:
+                with self.assertRaises(BKBaseResourceMappingError):
+                    RetryStrategy().retry_existing(strategy, allow_create=False)
+            dispatch.assert_not_called()
+
+    @override_settings(BKBASE_API_VERSION="v3")
+    def test_init_retry_updates_recorded_v3_flow_without_creating(self):
+        strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="known init flow",
+            strategy_type=StrategyType.RULE,
+            status=StrategyStatusChoices.START_FAILED,
+            backend_data={"flow_id": 91},
+        )
+        with mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch:
+            RetryStrategy().retry_existing(strategy, allow_create=False)
+        self.assertEqual(dispatch.call_args.args[:2], ("update", strategy.strategy_id))
+        strategy.refresh_from_db()
+        self.assertEqual(strategy.backend_data["flow_id"], 91)
+
+    @override_settings(BKBASE_API_VERSION="v4")
+    def test_init_retry_never_falls_back_from_unhandled_v4_pure_recovery(self):
+        ref = {"kind": "Flow", "tenant": "tenant_a", "namespace": "audit", "name": "original"}
+        for backend in (
+            {},
+            {"bkbase_v4": {"flow": ref}},
+            {"bkbase_v4": {"flow": ref, "operation": "create", "pending_spec": {"nodes": ["original"]}}},
+        ):
+            strategy = Strategy.objects.create(
+                namespace=self.namespace,
+                strategy_name="pending init flow",
+                strategy_type=StrategyType.RULE,
+                status=StrategyStatusChoices.START_FAILED,
+                backend_data=backend,
+            )
+
+            def unhandled(value):
+                value._bkbase_missing_create_expected = ("original", "configuration")
+                return False
+
+            with mock.patch(
+                "services.web.strategy_v2.resources.bkbase_flow.retry_failed_pure", side_effect=unhandled
+            ), mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch, mock.patch(
+                "services.web.strategy_v2.resources.bkbase_flow.prepare_controller_update"
+            ) as prepare:
+                with self.assertRaises(BKBaseResourceMappingError):
+                    RetryStrategy().retry_existing(strategy, allow_create=False)
+            dispatch.assert_not_called()
+            prepare.assert_not_called()
+            strategy.refresh_from_db()
+            self.assertEqual(strategy.backend_data, backend)
+            self.assertEqual(strategy.status, StrategyStatusChoices.START_FAILED)
+
+    @override_settings(BKBASE_API_VERSION="v4")
+    def test_init_retry_uses_existing_v4_pure_recovery_only(self):
+        strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="failed owned flow",
+            strategy_type=StrategyType.RULE,
+            status=StrategyStatusChoices.START_FAILED,
+        )
+        with mock.patch(
+            "services.web.strategy_v2.resources.bkbase_flow.retry_failed_pure", return_value=True
+        ) as pure, mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch:
+            RetryStrategy().retry_existing(strategy, allow_create=False)
+        pure.assert_called_once_with(strategy)
+        dispatch.assert_not_called()
+
+    @override_settings(BKBASE_API_VERSION="v3")
+    def test_public_retry_keeps_create_fallback_and_draft_rejection(self):
+        strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="public retry",
+            strategy_type=StrategyType.RULE,
+            status=StrategyStatusChoices.START_FAILED,
+        )
+        self._bind_strategy_to_scene(strategy.strategy_id)
+        with mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch:
+            RetryStrategy().request(strategy_id=strategy.strategy_id)
+        self.assertEqual(dispatch.call_args.args[:2], ("create", strategy.strategy_id))
+        strategy.status = StrategyStatusChoices.DRAFT
+        strategy.save(update_fields=["status"])
+        with mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch, self.assertRaises(
+            serializers.ValidationError
+        ):
+            RetryStrategy().perform_request({"strategy_id": strategy.strategy_id})
+        dispatch.assert_not_called()
 
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def test_update_bkm_strategy(self) -> None:

@@ -41,6 +41,7 @@ from core.sql.constants import Operator
 from core.utils.distutils import strtobool
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.exceptions import BKBaseFlowOperationPending
 from services.web.databus.collector.snapshot.system.base import (
     create_iam_data_link,
     init_itsm_v4,
@@ -74,6 +75,7 @@ from services.web.entry.constants import (
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+    INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY,
     SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
@@ -85,7 +87,13 @@ from services.web.risk.constants import (
 from services.web.risk.handlers import EventHandler
 from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
+from services.web.strategy_v2.constants import (
+    StrategySource,
+    StrategyStatusChoices,
+    StrategyType,
+)
 from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.resources import CreateStrategy, RetryStrategy
 
 
 class SystemInitHelper:
@@ -541,7 +549,7 @@ class SystemInitHandler:
             .order_by("-updated_at")
             .first()
         )
-        if not snapshot:
+        if not snapshot or not snapshot.bkbase_table_id.strip():
             print("[InitSystemRuleAudit] Snapshot Not Ready, Skip")
             return
 
@@ -555,16 +563,43 @@ class SystemInitHandler:
         if not strategy_name:
             print("[InitSystemRuleAudit] Strategy Name Missing")
             return
-        if Strategy.objects.filter(strategy_name=strategy_name, namespace=namespace).exists():
-            print(f"[InitSystemRuleAudit] Strategy Already Exists => {strategy_name}")
+        strategy_id = GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY, default=None)
+        created = False
+        if strategy_id is None:
+            if Strategy.objects.filter(strategy_name=strategy_name).exists():
+                print(f"[InitSystemRuleAudit] 同名策略未登记初始化归属，拒绝认领 => {strategy_name}")
+                return
+            CreateStrategy().request_for_init(params)
+            strategy_id = GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY, default=None)
+            created = True
+        strategy = None
+        if type(strategy_id) is int and strategy_id > 0:
+            strategy = Strategy.objects.filter(
+                strategy_id=strategy_id,
+                namespace=namespace,
+                strategy_type=StrategyType.RULE,
+                source=StrategySource.SYSTEM,
+            ).first()
+        if strategy is None:
+            print("[InitSystemRuleAudit] 已登记策略缺失或归属不匹配，保留记录，禁止另建")
+            return
+        data_source = (strategy.configs or {}).get("data_source") or {}
+        if data_source.get("rt_id") != snapshot.bkbase_table_id:
+            print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} 输入 RT 已变化，保留现状，禁止自动部署")
+            return
+        if not created and strategy.status in (
+            StrategyStatusChoices.START_FAILED,
+            StrategyStatusChoices.UPDATE_FAILED,
+            StrategyStatusChoices.FAILED,
+        ):
+            try:
+                RetryStrategy().retry_existing(strategy, allow_create=False)
+            except BKBaseFlowOperationPending as error:
+                print(f"[InitSystemRuleAudit] Pending => {error}")
+                return
+            strategy.refresh_from_db()
+        if strategy.status == StrategyStatusChoices.RUNNING:
             self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
-            return
-
-        try:
-            resource.strategy_v2.create_strategy(**params)
-        except Exception as err:  # pylint: disable=broad-except
-            print(f"[InitSystemRuleAudit] Failed => {err}")
-            return
-
-        self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
-        print("[InitSystemRuleAudit] Finished")
+            print("[InitSystemRuleAudit] Finished")
+        else:
+            print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} pending: {strategy.status}")
