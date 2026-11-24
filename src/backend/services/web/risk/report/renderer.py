@@ -25,6 +25,7 @@ from typing import Any, Type
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from django.conf import settings
+from django.core.cache import cache
 from jinja2 import nodes
 from markupsafe import Markup
 
@@ -166,25 +167,33 @@ def _parse_template(template: str, providers: list[Provider] = None) -> list[Pro
     return parser.parse()
 
 
-def _execute_provider_call(call: ProviderCall) -> tuple[ProviderCall, Any]:
+def _execute_provider_call(call: ProviderCall) -> tuple[ProviderCall, Any, bool]:
     """执行单个Provider调用
 
     Args:
         call: Provider调用信息（包含provider实例和调用参数）
 
     Returns:
-        (调用信息, 结果) 元组
+        (调用信息, 结果, 是否成功) 元组
     """
     try:
         # 直接使用存储的provider实例和调用参数
         result = call.provider.get(**call.call_args)
-        return call, result
+        return call, result, True
     except AgentRateLimited:
         # 限流必须交给 Celery 任务边界退避重投，不能降级成普通错误文本。
         raise
     except Exception as e:
         logger_celery.exception("[RenderTemplate] Provider call failed: %s - %s", call.original_expr, e)
-        return call, f"[Error: {e}]"
+        return call, f"[Error: {e}]", False
+
+
+_CHECKPOINT_PREFIX = "risk:render_template:checkpoint"
+_CHECKPOINT_TIMEOUT = int(settings.AI_AGENT_TASK_RETRY_DEADLINE_SECONDS + settings.RENDER_TASK_TIMEOUT + 60)
+
+
+def _checkpoint_cache_key(task_id: str) -> str:
+    return f"{_CHECKPOINT_PREFIX}:{task_id}"
 
 
 def _compute_args_hash(args: list, kwargs: dict) -> str:
@@ -293,7 +302,13 @@ def _build_render_context(
     return context
 
 
-def _render_template(template: str, providers: list[Provider], variables: dict[str, Any], max_workers: int = 10) -> str:
+def _render_template(
+    template: str,
+    providers: list[Provider],
+    variables: dict[str, Any],
+    max_workers: int = 10,
+    checkpoint_key: str | None = None,
+) -> str:
     """渲染模板
 
     该函数会：
@@ -307,6 +322,7 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
         providers: Provider列表
         variables: 普通变量字典，会直接传递给Jinja2渲染
         max_workers: 线程池最大工作线程数
+        checkpoint_key: 渲染任务标识；传入时按任务复用已完成变量结果，避免限流重投重复调用
 
     Returns:
         渲染后的字符串
@@ -324,29 +340,52 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
             logger_celery.exception("[RenderTemplate] Jinja2 render failed: %s", e)
             return f"[Render Error: {e}]"
 
-    # 2. 使用线程池并发执行Provider调用
-    results: dict[str, Any] = {}  # original_expr -> result
+    # 2. 使用线程池并发执行Provider调用；已完成变量从当前渲染任务复用
+    checkpoint_results: dict[str, Any] = {}
+    if checkpoint_key:
+        try:
+            cached = cache.get(_checkpoint_cache_key(checkpoint_key))
+        except Exception:  # NOCC:broad-except(缓存异常降级为无 checkpoint，不影响渲染)
+            logger_celery.exception("[RenderTemplate] checkpoint load failed")
+            cached = None
+        if isinstance(cached, dict):
+            checkpoint_results.update(cached)
+    results: dict[str, Any] = dict(checkpoint_results)
+    pending_calls = [call for call in provider_calls if call.original_expr not in results]
+    rate_limit_error: AgentRateLimited | None = None
 
-    with ThreadPoolExecutor(max_workers=min(max_workers, len(provider_calls))) as executor:
-        # 提交所有任务，直接使用call中的provider实例
-        future_to_call: dict[Future, ProviderCall] = {
-            submit_with_observation_context(executor, _execute_provider_call, call): call for call in provider_calls
-        }
+    if pending_calls:
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(pending_calls))) as executor:
+            # 提交所有任务，直接使用call中的provider实例
+            future_to_call: dict[Future, ProviderCall] = {
+                submit_with_observation_context(executor, _execute_provider_call, call): call for call in pending_calls
+            }
 
-        # 收集结果
-        for future in as_completed(future_to_call):
+            # 收集结果：遇到限流先记录，继续收完本轮其他变量，落盘后再抛给任务边界重投
+            for future in as_completed(future_to_call):
+                try:
+                    call, result, succeeded = future.result()
+                    # 将列表结果转换为字符串
+                    if isinstance(result, list):
+                        result = ", ".join(str(v) for v in result)
+                    results[call.original_expr] = result
+                    if succeeded:
+                        checkpoint_results[call.original_expr] = result
+                except AgentRateLimited as exc:
+                    rate_limit_error = rate_limit_error or exc
+                except Exception as e:
+                    call = future_to_call[future]
+                    logger_celery.exception("[RenderTemplate] Future failed for %s: %s", call.original_expr, e)
+                    results[call.original_expr] = f"[Error: {e}]"
+
+    if rate_limit_error is not None:
+        # 成功变量一次性写入 checkpoint，重投时不会再执行；限流异常交给 AIAgentTask 退避重投
+        if checkpoint_key:
             try:
-                call, result = future.result()
-                # 将列表结果转换为字符串
-                if isinstance(result, list):
-                    result = ", ".join(str(v) for v in result)
-                results[call.original_expr] = result
-            except AgentRateLimited:
-                raise
-            except Exception as e:
-                call = future_to_call[future]
-                logger_celery.exception("[RenderTemplate] Future failed for %s: %s", call.original_expr, e)
-                results[call.original_expr] = f"[Error: {e}]"
+                cache.set(_checkpoint_cache_key(checkpoint_key), checkpoint_results, timeout=_CHECKPOINT_TIMEOUT)
+            except Exception:  # NOCC:broad-except(写入失败不能覆盖限流异常，否则重投语义丢失)
+                logger_celery.exception("[RenderTemplate] checkpoint save failed")
+        raise rate_limit_error
 
     # 3. 构建渲染上下文
     context = _build_render_context(provider_calls, results, variables)
@@ -359,10 +398,17 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
         # 如果Jinja2渲染失败，尝试返回部分渲染结果
         final_result = f"[Render Error: {e}]"
 
+    if checkpoint_key:
+        try:
+            cache.delete(_checkpoint_cache_key(checkpoint_key))
+        except Exception:  # NOCC:broad-except(清理失败不能影响已完成的渲染结果)
+            logger_celery.exception("[RenderTemplate] checkpoint clear failed")
+
     return final_result
 
 
 @celery_app.task(
+    bind=True,
     base=AIAgentTask,
     queue=AIWorkloadQueue.RISK_SINGLE,
     rate_limit=settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT,
@@ -370,7 +416,7 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
     acks_late=True,
     time_limit=settings.RENDER_TASK_TIMEOUT,
 )
-def render_template(*args, **kwargs) -> str:
+def render_template(self, *args, **kwargs) -> str:
     """Celery任务：渲染报告模板
 
     Args:
@@ -379,4 +425,5 @@ def render_template(*args, **kwargs) -> str:
     Returns:
         渲染后的字符串
     """
-    return _render_template(*args, **kwargs)
+    # 同一 Celery 任务重投时 task id 不变，用它隔离并复用本次渲染已完成的变量结果
+    return _render_template(*args, checkpoint_key=self.request.id, **kwargs)

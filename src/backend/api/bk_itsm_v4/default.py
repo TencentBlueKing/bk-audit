@@ -32,12 +32,15 @@ class BKITSMV4(BkApiResource, abc.ABC):
     module_name = "bk_itsm_v4"
     base_url = BK_ITSM_V4_API_URL
     platform_authorization = True
+    # 读写分桶：读操作（单据详情/日志）一把桶、写操作（建单/操作）一把桶。
+    # 链式 process_one_risk 与补偿走同一 perform_request，天然同 key，禁止两套限流。
+    throttle_scope = "read"
 
     def perform_request(self, validated_request_data):
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
-                key=f"{self.__module__}.{self.__class__.__name__}",
+                key=f"{self.__module__}.{self.throttle_scope}",
                 rate=settings.ITSM_API_RATE_LIMIT,
             )
         )(validated_request_data)
@@ -46,6 +49,7 @@ class BKITSMV4(BkApiResource, abc.ABC):
 class TicketCreate(BKITSMV4):
     """创建审批单据"""
 
+    throttle_scope = "write"
     name = gettext_lazy("V4-创建审批单据")
     method = "POST"
     action = "/api/v1/ticket/create/"
@@ -99,6 +103,8 @@ class ApprovalTasks(BKITSMV4):
 
 
 class TicketHandle(BKITSMV4):
+    throttle_scope = "write"
+
     # 对应 itsm 的 OperateTicket（操作单据）
     name = gettext_lazy("V4-操作单据")
     method = "POST"
@@ -112,12 +118,14 @@ class FullTextSearch(BKITSMV4):
 
 
 class SystemCreate(BKITSMV4):
+    throttle_scope = "write"
     name = gettext_lazy("创建系统)")
     method = "POST"
     action = "/api/v1/system/create/"
 
 
 class SystemWorkflowCreate(BKITSMV4):
+    throttle_scope = "write"
     name = gettext_lazy("创建系统流程)")
     method = "POST"
     action = "/api/v1/system_workflow/create/"
