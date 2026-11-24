@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:2b253920dbb6df5e3c5aa2d605a393c126afb3c48666da348532eeddd1170038"
+content_hash = "sha256:514c48a6085e66157f62fe253dfa631d770c965da1974ab1f024588d9e52f316"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -1720,16 +1720,16 @@ files = [
 
 [[package]]
 name = "mistune"
-version = "3.2.0"
-requires_python = ">=3.8"
+version = "3.4.0"
+requires_python = ">=3.10"
 summary = "A sane and fast Markdown parser with useful plugins and renderers"
 groups = ["default"]
 dependencies = [
     "typing-extensions; python_version < \"3.11\"",
 ]
 files = [
-    {file = "mistune-3.2.0-py3-none-any.whl", hash = "sha256:febdc629a3c78616b94393c6580551e0e34cc289987ec6c35ed3f4be42d0eee1"},
-    {file = "mistune-3.2.0.tar.gz", hash = "sha256:708487c8a8cdd99c9d90eb3ed4c3ed961246ff78ac82f03418f5183ab70e398a"},
+    {file = "mistune-3.4.0-py3-none-any.whl", hash = "sha256:d03cec4c8620f21517a996d82d14f3b59c30d79bda2cc6c56bd32b839f18ce6b"},
+    {file = "mistune-3.4.0.tar.gz", hash = "sha256:2eaf7952af928ca8d33b779762effc1da517b62c6ad85ec8ca957e3b07b9782a"},
 ]
 
 [[package]]
