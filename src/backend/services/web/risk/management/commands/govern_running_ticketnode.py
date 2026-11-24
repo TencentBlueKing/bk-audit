@@ -53,13 +53,16 @@ DEFAULT_GOVERN_ACTIONS = [ForApprove.__name__, AutoProcess.__name__]
 # 三维交叉表最多展示行数，避免输出过长
 CROSS_TABLE_LIMIT = 80
 
+# SOPS 写实际观测窗口：统计最近窗口内新建的 AutoProcess 任务
+SOPS_WRITE_OBSERVE_WINDOW_SECONDS = 600
+
 
 class Command(BaseCommand):
     help = "TicketNode RUNNING 存量统计与遗留治理（一次性数据治理，默认只读）"
 
     def add_arguments(self, parser):
         parser.add_argument("--apply", action="store_true", help="执行清理；默认只统计，不写库")
-        parser.add_argument("--out", type=str, default="", help="落盘本次被修改的节点记录（JSON），用于核对/回滚")
+        parser.add_argument("--out", type=str, default="", help="按批落盘变更记录（JSONL），用于核对/回滚")
         parser.add_argument("--batch-size", type=int, default=500, help="每批更新条数，默认 500")
         parser.add_argument("--max-rounds", type=int, default=0, help="最大清理轮次，0 表示不限")
         parser.add_argument("--actions", type=str, default="", help="治理的 action，逗号分隔；默认审批+套餐")
@@ -82,9 +85,16 @@ class Command(BaseCommand):
             metrics = self.stats(ctx)
             self.capacity_stats(ctx, metrics)
 
-        changed = self.clean(ctx, options["apply"], options["batch_size"], options["max_rounds"])
-        if changed and options["out"]:
-            self.dump_changed(changed, options["out"])
+        # 写库前先验证输出文件可写，避免节点已更新但无法落盘回滚明细。
+        out_fh = None
+        if options["apply"] and options["out"]:
+            out_fh = open(options["out"], "w", encoding="utf-8")
+        try:
+            self.clean(ctx, options["apply"], options["batch_size"], options["max_rounds"], out_fh)
+        finally:
+            if out_fh is not None:
+                out_fh.close()
+                self.stdout.write("变更明细已按批写入 {}（回滚即把 status 改回 {}）。".format(options["out"], TicketNodeStatus.RUNNING))
 
     # ------------------------------------------------------------------ 统计
 
@@ -276,7 +286,20 @@ class Command(BaseCommand):
         process_approve_per_second = process_by_status.get(RiskStatus.FOR_APPROVE, 0) / process_period_seconds
         itsm_demand = sync_approve_per_second + process_approve_per_second
         sops_demand = sync_auto_per_second + process_auto_per_second
-        sops_write_upper = 2 * max(sync_auto_per_second, process_auto_per_second)
+
+        # 实际写观测：每条新建 AutoProcess 节点通常对应 create_task + start_task。
+        # 这是基于 TicketNode 的近似值，不含 create/start 重试和 operate 调用。
+        observed_window_start = time.time() - SOPS_WRITE_OBSERVE_WINDOW_SECONDS
+        observed_auto_nodes = TicketNode.objects.filter(
+            action=AutoProcess.__name__,
+            is_test=False,
+            timestamp__gte=observed_window_start,
+        ).values_list("process_result", flat=True)
+        observed_task_count = 0
+        for result in observed_auto_nodes.iterator():
+            if (result or {}).get("task", {}).get("task_id"):
+                observed_task_count += 1
+        observed_write_per_second = observed_task_count * 2 / SOPS_WRITE_OBSERVE_WINDOW_SECONDS
 
         self.stdout.write("")
         self.stdout.write(
@@ -313,17 +336,17 @@ class Command(BaseCommand):
             )
         )
         self.stdout.write(
-            "    SOPS 写上限（假设所有 AutoProcess 都需要 create+start，取 max）: "
-            "需求 %.4f 次/s（2 × max(sync %.4f, process %.4f)），速率 %s -> %s"
+            "    SOPS 写实际观测（最近 %ss 新建 AutoProcess × 2）: "
+            "任务 %s 个，需求 %.4f 次/s，速率 %s -> %s"
             % (
-                sops_write_upper,
-                sync_auto_per_second,
-                process_auto_per_second,
+                SOPS_WRITE_OBSERVE_WINDOW_SECONDS,
+                observed_task_count,
+                observed_write_per_second,
                 getattr(settings, "SOPS_OPERATE_API_RATE_LIMIT", "?"),
-                self._fmt_capacity(sops_write_upper, sops_write_rate),
+                self._fmt_capacity(observed_write_per_second, sops_write_rate),
             )
         )
-        self.stdout.write("      说明：已有 task_id 的 AutoProcess 实际只读不写，所以这是上限。")
+        self.stdout.write("      说明：实际观测不含 create/start 重试和 operate 调用。")
         self.stdout.write(
             "    ITSM 读（get_ticket_status/ticket_detail/workflows 等）: "
             "需求 %.4f 次/s（sync %.4f + process %.4f），速率 %s -> %s"
@@ -338,7 +361,7 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ 治理
 
-    def clean(self, ctx, apply, batch_size, max_rounds):
+    def clean(self, ctx, apply, batch_size, max_rounds, out_fh=None):
         """仅清理「风险已关闭」的遗留 running 节点
 
         每轮只取「当前仍匹配」的一批并更新，更新后这些行不再匹配，
@@ -373,17 +396,18 @@ class Command(BaseCommand):
         self.stdout.write("=" * 72)
         self.stdout.write("待清理 TicketNode 记录数: %s" % to_clean)
 
-        changed = []
         if not apply:
             self.stdout.write("当前为只读模式，未写入任何数据；确认后加 --apply 执行。")
             self.stdout.write("")
-            return changed
+            return 0
 
         if not to_clean:
             self.stdout.write("无待清理节点，跳过。")
             self.stdout.write("")
-            return changed
+            return 0
 
+        # 治理必须包含软删除的 closed 风险：sync_auto_result 按 TicketNode 扫描，
+        risk_manager = getattr(Risk, "_objects", Risk.objects)
         total_updated = 0
         rounds = 0
         no_progress_rounds = 0
@@ -414,7 +438,7 @@ class Command(BaseCommand):
                 group_changed = []
                 try:
                     with transaction.atomic():
-                        risk = Risk.objects.select_for_update().only("status").filter(risk_id=risk_id).first()
+                        risk = risk_manager.select_for_update().only("status").filter(risk_id=risk_id).first()
                         if risk is None or risk.status != RiskStatus.CLOSED:
                             skipped += len(items)
                             continue
@@ -448,7 +472,10 @@ class Command(BaseCommand):
                         continue
                     raise
                 updated += group_updated
-                changed.extend(group_changed)
+                if out_fh is not None:
+                    for record in group_changed:
+                        out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    out_fh.flush()
 
             total_updated += updated
             rounds += 1
@@ -491,7 +518,7 @@ class Command(BaseCommand):
             b, a = before[key], after[key]
             self.stdout.write("    {:<28} {:>12} {:>12} {:>12}".format(label, b, a, a - b))
         self.stdout.write("")
-        return changed
+        return total_updated
 
     def snapshot(self, ctx):
         """取关键指标快照，用于治理前后对比"""
@@ -500,15 +527,3 @@ class Command(BaseCommand):
             "total": running.count(),
             "candidate": running.filter(action__in=ctx["actions"]).count(),
         }
-
-    def dump_changed(self, changed, path):
-        """落盘被修改记录，用于核对与回滚"""
-        payload = {
-            "finished_status": TicketNodeStatus.FINISHED,
-            "rolled_back_to": TicketNodeStatus.RUNNING,
-            "count": len(changed),
-            "records": changed,
-        }
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-        self.stdout.write("已落盘 {} 条变更记录到 {}（回滚即把 status 改回 {}）。".format(len(changed), path, TicketNodeStatus.RUNNING))
