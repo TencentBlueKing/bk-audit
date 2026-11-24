@@ -232,10 +232,7 @@
     type Ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import {
-    onBeforeRouteLeave,
-    useRouter,
-  } from 'vue-router';
+  import { onBeforeRouteLeave } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import ProcessApplicationManageService from '@service/process-application-manage';
@@ -262,7 +259,6 @@
     isUserInput,
     syncPaParamVisibility,
   } from '@/utils/assist/pa-param-submit';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
     riskId: string,
@@ -305,7 +301,6 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const router = useRouter();
   const dockEditorExpand = inject<(expanded: boolean) => void>('dockEditorExpand', () => {});
   const dockBoostState = inject<{
     isEditorBoosted: Ref<boolean>;
@@ -496,25 +491,7 @@
     formRef.value?.clearValidate?.();
   };
 
-  const goWhitelistList = () => {
-    // 与侧栏一致：仅平台管理员 / 场景管理员可进风险白名单；无权限不跳转
-    if (!roleText.isAdmin.value) {
-      return;
-    }
-    const sceneId = String(props.detailData.scene_id || getSceneSystemParams().scope_id || '');
-    router.push({
-      name: 'riskWhitelistList',
-      query: sceneId
-        ? {
-          scene_id: sceneId,
-          scope_id: sceneId,
-          scope_type: 'scene',
-        }
-        : {},
-    });
-  };
-
-  const handleSubmitSuccess = (message: string, shouldCollapse = false, jumpWhitelist = false) => {
+  const handleSubmitSuccess = (message: string, shouldCollapse = false) => {
     handleEditorExpandChange(false);
     resetForm();
     if (shouldCollapse) {
@@ -522,9 +499,6 @@
     }
     emits('update');
     messageSuccess(message);
-    if (jumpWhitelist) {
-      goWhitelistList();
-    }
   };
 
   // 标记误报
@@ -594,8 +568,6 @@
         withMisreport
           ? t(roleText.text.value.misreportSuccess)
           : t(getWhitelistApplySuccess(lastWhitelistType.value, roleText.isAdmin.value)),
-        false,
-        true,
       );
     },
   });
