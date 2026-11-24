@@ -127,7 +127,7 @@
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
 
-  const groupColumnWidth = computed(() => (locale.value === 'en-US' ? '140px' : '76px'));
+  const groupColumnWidth = computed(() => (locale.value === 'en-US' ? '140px' : '96px'));
   const groupColumnStyle = computed(() => ({
     width: groupColumnWidth.value,
     flex: `0 0 ${groupColumnWidth.value}`,
@@ -175,9 +175,9 @@
 
   const eventDataColumns = computed<TableColumn[]>(() => {
     const columns: TableColumn[] = [
-      { key: 'field_name', label: t('字段名称'), width: '130px' },
+      { key: 'field_name', label: t('字段名称'), width: '168px' },
       { key: 'display_name', label: t('字段显示名'), width: '130px' },
-      { key: 'is_show', label: t('在单据中展示'), width: '110px' },
+      { key: 'is_show', label: t('在单据中展示'), width: '128px' },
       {
         key: 'is_priority',
         label: t('重点展示'),

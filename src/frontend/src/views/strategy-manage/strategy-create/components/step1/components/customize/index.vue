@@ -2226,10 +2226,12 @@
       display: flex;
       width: 428px;
       max-width: 100%;
-      align-items: center;
+      align-items: flex-start;
+      gap: 0;
 
       :deep(.bk-form-item) {
         flex: none;
+        margin-bottom: 0;
       }
 
       :deep(.bk-form-content) {
@@ -2238,10 +2240,10 @@
 
       .schedule-input {
         width: 360px;
-        max-width: calc(100% - 68px);
+        max-width: calc(100% - 67px);
 
+        &.bk-input,
         :deep(.bk-input) {
-          border-right: 0;
           border-radius: var(--bk-theme-control-radius) 0 0 var(--bk-theme-control-radius);
         }
       }
@@ -2249,10 +2251,19 @@
       .schedule-select {
         width: 68px;
         flex: none;
+        margin-left: -1px;
 
+        :deep(.bk-select-trigger),
+        :deep(.bk-select-trigger .bk-select-tag),
         :deep(.bk-input) {
           border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
         }
+      }
+
+      .schedule-input:focus-within,
+      .schedule-select:focus-within {
+        position: relative;
+        z-index: 1;
       }
     }
   }
