@@ -1,5 +1,7 @@
 **API Endpoint 环境变量说明**
 
+要申请接口授权或核对调用身份，先看[审计外部 API 与授权清单](api_authorization.md)。
+
 - 目的：支持不同环境相同 API 来源的 `api_name` 不一致，通过环境变量统一覆盖，各服务默认值与当前环境保持兼容。
 - 位置：集中定义于 `config/default.py` 的“API Endpoint Names (env overrides)”区块；在 `api/domains.py` 中统一读取
   `settings` 并构造各服务的基础 API URL。
