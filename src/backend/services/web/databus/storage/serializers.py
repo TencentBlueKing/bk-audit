@@ -164,10 +164,35 @@ class CreateRedisRequestSerializer(serializers.Serializer):
     version = serializers.CharField(label=gettext_lazy("版本"))
 
 
+class RedisConnectionInfoResponseSerializer(serializers.Serializer):
+    """Redis 连接信息响应白名单（BKSEC 1578945）：password 不声明即彻底剔除；
+    全字段 required=False，兼容存量记录缺少哨兵键的情况（DRF 对缺失键 SkipField）。"""
+
+    enable_sentinel = serializers.BooleanField(required=False)
+    name_sentinel = serializers.CharField(required=False)
+    host_sentinel = serializers.CharField(required=False)
+    port_sentinel = serializers.IntegerField(required=False)
+    host = serializers.CharField(required=False)
+    port = serializers.IntegerField(required=False)
+
+
 class CreateRedisResponseSerializer(serializers.ModelSerializer):
+    connection_info = RedisConnectionInfoResponseSerializer()
+
     class Meta:
         model = RedisConfig
-        exclude = ["updated_at", "updated_by", "created_at", "created_by"]
+        # 显式字段白名单：模型未来新增字段默认不回显（工单建议②）
+        fields = [
+            "redis_id",
+            "namespace",
+            "redis_name_en",
+            "redis_name",
+            "admin",
+            "connection_info",
+            "version",
+            "extra",
+            "is_deleted",
+        ]
 
 
 class StorageCreateRequestSerializer(serializers.Serializer):

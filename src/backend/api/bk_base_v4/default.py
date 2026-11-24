@@ -4,12 +4,14 @@
 平台及个人鉴权复用BkApiResource既有机制。
 """
 import abc
+import json
 from contextvars import ContextVar
 from time import monotonic
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
+from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
@@ -46,6 +48,7 @@ from api.bk_base_v4.serializers import (
     UserTablesRequestSerializer,
 )
 from api.domains import BK_BASE_API_URL
+from core.sensitive import redact_secrets
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
 READ_MAX_TIMEOUT = 30.0
@@ -255,6 +258,30 @@ class StorageAssetCreate(DatasetResource):
     method = "POST"
     RequestSerializer = RedisAssetCreateRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+    # BKSEC 1578945：请求体含 Redis 连接密码明文，框架日志无脱敏能力，关闭；
+    # 排障日志由本资源 request() 以脱敏形式自记录（对齐 CreateOrUpdateRedisResource 同款方案）
+    support_data_collect = False
+
+    def request(self, request_data=None, **kwargs):
+        """脱敏版请求日志：完整保留注册排障上下文，仅敏感键名值打码"""
+        # APIResource.request 内部以 request_data or kwargs 归一化，这里保持同口径
+        log_request_data = request_data if request_data is not None else kwargs
+        try:
+            response_data = super().request(request_data=request_data, **kwargs)
+        except Exception as err:
+            self._log_redacted(log_request_data, {"error": str(err)})
+            raise
+        self._log_redacted(log_request_data, response_data)
+        return response_data
+
+    @staticmethod
+    def _log_redacted(request_data, response_data):
+        logger.info(
+            "[ResourceRequestLog][Redacted]\nResource => api.bk_base_v4.default.StorageAssetCreate\n"
+            "RequestData => %s\nResponseData => %s",
+            json.dumps(redact_secrets(request_data), ensure_ascii=False, default=str),
+            json.dumps(redact_secrets(response_data), ensure_ascii=False, default=str),
+        )
 
     def before_request(self, kwargs):
         """禁止重定向重发注册请求。"""

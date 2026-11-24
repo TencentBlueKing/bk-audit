@@ -172,7 +172,6 @@ CREATE_OR_UPDATE_REDIS_DATA = {
         "port_sentinel": 0,
         "host": "host",
         "port": 0,
-        "password": "password",
     },
     "version": "V1.0.0",
     "extra": {},
