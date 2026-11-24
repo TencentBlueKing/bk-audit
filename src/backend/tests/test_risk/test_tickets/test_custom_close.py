@@ -151,9 +151,7 @@ class InternalClosePathTest(TicketTest):
             risk.status = RiskStatus.AUTO_PROCESS
             risk.display_status = RiskDisplayStatus.AUTO_PROCESS
             risk.save()
-            MisReport(risk_id=risk.risk_id, operator="misreport-tester").run(
-                description="标记误报", revoke_process=True
-            )
+            MisReport(risk_id=risk.risk_id, operator="misreport-tester").run(description="标记误报", revoke_process=True)
             risk.refresh_from_db()
             self.assertEqual(risk.status, RiskStatus.CLOSED)
             self.assertEqual(risk.risk_label, RiskLabel.MISREPORT)

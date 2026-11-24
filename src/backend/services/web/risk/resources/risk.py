@@ -1214,8 +1214,7 @@ class CustomCloseRisk(RiskMeta):
         risk = get_object_or_404(Risk.objects.select_for_update(), risk_id=validated_request_data["risk_id"])
         if not _manual_close_allowed(risk):
             raise RiskStatusInvalid(
-                message=gettext("风险单为%(status)s，不支持人工关单，可通过标记误报或强制终止处理套餐结束流程")
-                % {"status": _status_label(risk)}
+                message=gettext("风险单为%(status)s，不支持人工关单，可通过标记误报或强制终止处理套餐结束流程") % {"status": _status_label(risk)}
             )
         origin_data = RiskInfoSerializer(risk).data
         CustomProcess(risk_id=risk.risk_id, operator=username).run(
