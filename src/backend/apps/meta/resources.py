@@ -177,6 +177,7 @@ from core.constants import OrderTypeChoices
 from core.models import get_request_username
 from core.utils.cache import CacheMixin
 from core.utils.tools import get_app_info
+from core.utils.url_security import URLSecurityError, mask_authorization, validate_request_url
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 
 
@@ -893,15 +894,34 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
             return cache_data
         #  拼接请求参数
         request_url = resource_type.resource_request_url(system)
+        # 发送前安全校验：拦截非法 scheme / 高危端口 / 畸形 URL（含存量脏数据兜底）
+        try:
+            validate_request_url(request_url)
+        except URLSecurityError as err:
+            logger.warning(
+                "[Get ResourceType Schema Blocked] System => %s; ResourceType => %s; Err => %s",
+                system.system_id,
+                resource_type.resource_type_id,
+                err,
+            )
+            return []
         request_body = {"type": resource_type.resource_type_id, "method": FETCH_INSTANCE_SCHEMA_METHOD}
         request_header = {"Authorization": system.base64_token}
         # 请求数据
         web = requests.session()
         try:
-            resp = web.post(url=request_url, json=request_body, headers=request_header).json()
+            # 禁止跟随重定向（杜绝跨域凭证外泄） + 请求超时（杜绝无限挂起）
+            resp = web.post(
+                url=request_url,
+                json=request_body,
+                headers=request_header,
+                allow_redirects=False,
+                timeout=settings.FETCH_INSTANCE_SCHEMA_TIMEOUT,
+            ).json()
             logger.info("[Get ResourceType Schema Success] Response => %s", resp)
             data = resp["data"]["properties"]
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            # 日志脱敏：Authorization 仅保留认证类型前缀
             logger.exception(
                 "[Get ResourceType Schema Failed] "
                 "RequestURL => %s; "
@@ -909,7 +929,7 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
                 "RequestBody => %s; "
                 "Err => %s",
                 request_url,
-                request_header,
+                mask_authorization(request_header),
                 request_body,
                 err,
             )
