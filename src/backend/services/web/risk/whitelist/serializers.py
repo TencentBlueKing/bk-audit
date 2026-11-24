@@ -64,7 +64,8 @@ class BatchCreateRiskWhitelistReqSerializer(BulkRiskSelectionSerializer, RiskWhi
 
 
 class ListRiskWhitelistReqSerializer(SortSerializerMixin, serializers.Serializer):
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
+    # 列表只允许单场景查询，场景管理权限由 viewset InstanceActionPermission(MANAGE_SCENE) 校验
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
     id = FlexibleListField(child=serializers.IntegerField(), required=False, label=gettext_lazy("白名单ID"))
     status = FlexibleListField(
         child=serializers.ChoiceField(choices=WhitelistStatus.choices),
@@ -100,6 +101,12 @@ class ListRiskWhitelistReqSerializer(SortSerializerMixin, serializers.Serializer
     )
 
 
+class ListWhitelistContainsFieldsReqSerializer(serializers.Serializer):
+    """包含条件枚举入参。列表筛选默认带场景ID，这里要求必传并校验权限。"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
+
+
 class UpdateRiskWhitelistReqSerializer(serializers.Serializer):
     id = serializers.IntegerField(label=gettext_lazy("白名单ID"))
     match_scope = serializers.JSONField(label=gettext_lazy("匹配范围"))
@@ -111,6 +118,12 @@ class UpdateRiskWhitelistReqSerializer(serializers.Serializer):
 
 class RiskWhitelistIdReqSerializer(serializers.Serializer):
     id = serializers.IntegerField(label=gettext_lazy("白名单ID"))
+
+
+class RiskWhitelistDetailReqSerializer(RiskWhitelistIdReqSerializer):
+    """详情入参。scene_id 供 viewset 做场景管理权限校验，与命中记录用同一份主键。"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
 
 
 class RejectRiskWhitelistReqSerializer(RiskWhitelistIdReqSerializer):

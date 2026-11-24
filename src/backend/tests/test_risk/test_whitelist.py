@@ -14,7 +14,6 @@ from services.web.risk.resources.whitelist import (
     RiskWhitelistCallback,
 )
 from services.web.risk.whitelist.constants import (
-    FLOW_STATUS,
     HitAction,
     WhitelistStatus,
     WhitelistType,
@@ -477,8 +476,8 @@ class WhitelistDurationTests(SimpleTestCase):
         self.assertEqual(flow["current_steps"], [{"name": "审批"}])
 
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_list_echoes_itsm_ticket(self, ticket_detail):
-        from services.web.risk.whitelist.service import _load_ticket_details
+    def test_detail_echoes_itsm_ticket(self, ticket_detail):
+        from services.web.risk.whitelist.service import _load_ticket_detail
 
         ticket_detail.return_value = {
             "id": "102026111108334100059701",
@@ -500,7 +499,7 @@ class WhitelistDurationTests(SimpleTestCase):
             reject_reason="",
             updated_at=None,
         )
-        echoed = _load_ticket_details([rule])["1"]
+        echoed = _load_ticket_detail(rule)
         flow = flow_of(rule, echoed)
         ticket_detail.assert_called_once_with(id="102026111108334100059701")
         self.assertEqual(flow["itsm_sn"], "DE2026111108334100059701")
@@ -512,10 +511,10 @@ class WhitelistDurationTests(SimpleTestCase):
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_list_detail_is_read_only_when_ticket_is_finished(self, ticket_detail, apply_result):
-        """列表回显只读：工单已终态也不改状态，状态推进交给回调和轮询。"""
+    def test_detail_is_read_only_when_ticket_is_finished(self, ticket_detail, apply_result):
+        """详情回显只读：工单已终态也不改状态，状态推进交给回调和轮询。"""
 
-        from services.web.risk.whitelist.service import _load_ticket_details
+        from services.web.risk.whitelist.service import _load_ticket_detail
 
         ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
         rule = SimpleNamespace(
@@ -526,21 +525,19 @@ class WhitelistDurationTests(SimpleTestCase):
             reject_reason="",
             risk_id="",
         )
-        _load_ticket_details([rule])
+        _load_ticket_detail(rule)
         apply_result.assert_not_called()
         self.assertEqual(rule.status, WhitelistStatus.PENDING)
 
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_list_loads_pending_and_rejected_tickets_together(self, ticket_detail):
-        from services.web.risk.whitelist.service import _load_ticket_details
+    def test_detail_loads_single_ticket_once(self, ticket_detail):
+        from services.web.risk.whitelist.service import _load_ticket_detail
 
-        ticket_detail.side_effect = lambda id: {"id": id, "status": "running"}
+        ticket_detail.return_value = {"id": "ticket-1", "status": "running"}
         pending = SimpleNamespace(id=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
-        rejected = SimpleNamespace(id=2, status=WhitelistStatus.REJECTED, itsm_ticket_id="ticket-2")
-        active = SimpleNamespace(id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="ticket-3")
-        found = _load_ticket_details([r for r in (pending, rejected, active) if r.status in FLOW_STATUS])
-        self.assertEqual(set(found), {"1", "2"})
-        self.assertEqual(ticket_detail.call_count, 2)
+        found = _load_ticket_detail(pending)
+        self.assertEqual(found["id"], "ticket-1")
+        ticket_detail.assert_called_once_with(id="ticket-1")
 
     @patch("services.web.risk.whitelist.service._close_source_risk")
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects")
@@ -1060,6 +1057,7 @@ class WhitelistListQueryTests(SimpleTestCase):
 
         serializer = ListRiskWhitelistReqSerializer(
             data={
+                "scene_id": 1,
                 "status": "active,disabled",
                 "whitelist_type": ["false_positive", "risk_acceptance"],
                 "updated_by": ["alice", "bob"],
@@ -1122,7 +1120,7 @@ class WhitelistListQueryTests(SimpleTestCase):
         )
 
         serializer = ListRiskWhitelistReqSerializer(
-            data={"match_scope": ["存储", "原始事件ID(event_id)", "命中策略(ID)(strategy_id)"]}
+            data={"scene_id": 1, "match_scope": ["存储", "原始事件ID(event_id)", "命中策略(ID)(strategy_id)"]}
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(
@@ -1135,7 +1133,7 @@ class WhitelistListQueryTests(SimpleTestCase):
             ListRiskWhitelistReqSerializer,
         )
 
-        serializer = ListRiskWhitelistReqSerializer(data={})
+        serializer = ListRiskWhitelistReqSerializer(data={"scene_id": 1})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["order_fields"], ["-id"])
 
@@ -1144,7 +1142,9 @@ class WhitelistListQueryTests(SimpleTestCase):
             ListRiskWhitelistReqSerializer,
         )
 
-        serializer = ListRiskWhitelistReqSerializer(data={"contains_fields": ["strategy_id", "raw_event_id"]})
+        serializer = ListRiskWhitelistReqSerializer(
+            data={"scene_id": 1, "contains_fields": ["strategy_id", "raw_event_id"]}
+        )
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["contains_fields"], ["strategy_id", "raw_event_id"])
 
@@ -1267,6 +1267,163 @@ class WhitelistContainsFieldsFilterTests(SimpleTestCase):
         self.assertIs(_filter_contains_fields(queryset, None), queryset)
         self.assertIs(_filter_contains_fields(queryset, ["", None]), queryset)
         queryset.filter.assert_not_called()
+
+
+class WhitelistScopeFieldOptionsTests(SimpleTestCase):
+    def test_group_scope_pairs_field_with_field_name(self):
+        from services.web.risk.whitelist.match import scope_field_options
+
+        scope = _group_scope(
+            _group_leaf("strategy_id", "9", field_name="命中策略(ID)"),
+            _group_leaf("operator", ""),
+            _group_leaf("raw_event_id", "e-1"),
+        )
+        # 带值才算包含；field_name 缺失走标准字段中文名兜底，兜底不到回退 field
+        self.assertEqual(
+            scope_field_options(scope),
+            [("strategy_id", "命中策略(ID)"), ("raw_event_id", "原始事件ID")],
+        )
+
+    def test_tree_scope_falls_back_to_standard_field_name(self):
+        from services.web.risk.whitelist.match import scope_field_options
+
+        # append 补的条件 display_name 就是 raw_name，走标准字段中文名兜底
+        scope = _tree_scope(_tree_leaf("strategy_id", "9"), _tree_leaf("cost_center", "x", operator="neq"))
+        self.assertEqual(
+            scope_field_options(scope),
+            [("strategy_id", "命中策略(ID)"), ("cost_center", "cost_center")],
+        )
+
+    def test_dedupe_keeps_first_non_empty_field_name(self):
+        from services.web.risk.whitelist.match import scope_field_options
+
+        scope = _group_scope(
+            _group_leaf("operator", "a", field_name="操作人"),
+            _group_leaf("operator", "b", field_name="处理人"),
+        )
+        # 同一 field 去重，field_name 取首次出现的非空展示名
+        self.assertEqual(scope_field_options(scope), [("operator", "操作人")])
+
+    def test_empty_scope_returns_empty(self):
+        from services.web.risk.whitelist.match import scope_field_options
+
+        self.assertEqual(scope_field_options({}), [])
+        self.assertEqual(scope_field_options({"connector": "and", "conditions": "坏数据"}), [])
+
+
+class WhitelistContainsFieldsEnumTests(SimpleTestCase):
+    # 场景管理权限已移到 viewset InstanceActionPermission(MANAGE_SCENE)，资源层不再校验
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    def test_aggregates_and_dedupes_fields_by_scene(self, objects):
+        from services.web.risk.resources.whitelist import ListWhitelistContainsFields
+
+        objects.filter.return_value.values_list.return_value = [
+            _group_scope(_group_leaf("strategy_id", "9", field_name="命中策略(ID)")),
+            _tree_scope(_tree_leaf("strategy_id", "9"), _tree_leaf("operator", "alice")),
+            _group_scope(_group_leaf("raw_event_id", "")),
+        ]
+        result = ListWhitelistContainsFields().perform_request({"scene_id": 1})
+        # 跨行按 field 去重、排序；空值条件不计入
+        self.assertEqual(
+            result,
+            {
+                "results": [
+                    {"field": "operator", "field_name": "责任人"},
+                    {"field": "strategy_id", "field_name": "命中策略(ID)"},
+                ]
+            },
+        )
+        objects.filter.assert_called_once_with(scene_id=1)
+
+    def test_serializer_requires_scene_id(self):
+        from services.web.risk.whitelist.serializers import (
+            ListWhitelistContainsFieldsReqSerializer,
+        )
+
+        self.assertFalse(ListWhitelistContainsFieldsReqSerializer(data={}).is_valid())
+        self.assertTrue(ListWhitelistContainsFieldsReqSerializer(data={"scene_id": 1}).is_valid())
+
+
+class WhitelistDetailTests(SimpleTestCase):
+    @patch("services.web.risk.resources.whitelist.serialize_rule")
+    @patch("services.web.risk.resources.whitelist._load_ticket_detail")
+    @patch("services.web.risk.resources.whitelist.RiskWhitelistHit.objects")
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
+    def test_detail_pulls_ticket_once_and_marks_admin(self, _user, objects, hits, load_detail, serialize):
+        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
+
+        rule = SimpleNamespace(id=7, scene_id=3, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
+        objects.filter.return_value.first.return_value = rule
+        hits.filter.return_value.count.return_value = 5
+        load_detail.return_value = {"id": "ticket-1", "current_steps": [{"name": "审批"}]}
+        serialize.return_value = {"id": "7"}
+
+        result = RetrieveRiskWhitelist().perform_request({"id": 7, "scene_id": 3})
+
+        self.assertEqual(result, {"id": "7"})
+        load_detail.assert_called_once_with(rule)
+        # 详情回显实时 flow，且能进来即场景管理员（is_admin=True）
+        kwargs = serialize.call_args.kwargs
+        self.assertEqual(kwargs["progress"], {"id": "ticket-1", "current_steps": [{"name": "审批"}]})
+        self.assertTrue(kwargs["is_admin"])
+        self.assertEqual(serialize.call_args.args[1], 5)
+
+    @patch("services.web.risk.resources.whitelist.serialize_rule")
+    @patch("services.web.risk.resources.whitelist._load_ticket_detail")
+    @patch("services.web.risk.resources.whitelist.RiskWhitelistHit.objects")
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
+    def test_detail_skips_ticket_for_active(self, _user, objects, hits, load_detail, serialize):
+        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
+
+        rule = SimpleNamespace(id=8, scene_id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="ticket-1")
+        objects.filter.return_value.first.return_value = rule
+        hits.filter.return_value.count.return_value = 0
+        serialize.return_value = {"id": "8"}
+
+        RetrieveRiskWhitelist().perform_request({"id": 8, "scene_id": 3})
+
+        # 生效中没有流转可回显，不外呼工单详情
+        load_detail.assert_not_called()
+        self.assertEqual(serialize.call_args.kwargs["progress"], {})
+
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    def test_detail_missing_raises(self, objects):
+        from core.exceptions import ValidationError as CoreValidationError
+        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
+
+        objects.filter.return_value.first.return_value = None
+        with self.assertRaises(CoreValidationError):
+            RetrieveRiskWhitelist().perform_request({"id": 404, "scene_id": 3})
+
+    @patch("services.web.risk.whitelist.service.list_actions", return_value=[])
+    def test_serialize_rule_include_flow_controls_flow_key(self, _actions):
+        from services.web.risk.whitelist.service import serialize_rule
+
+        rule = SimpleNamespace(
+            id=1,
+            scene_id=3,
+            risk_id="",
+            match_scope={},
+            whitelist_type="false_positive",
+            is_permanent=False,
+            expire_at=None,
+            status=WhitelistStatus.ACTIVE,
+            reason="",
+            updated_by="",
+            created_by="",
+            updated_at=None,
+            created_at=None,
+            itsm_ticket_id="",
+            itsm_sn="",
+            itsm_ticket_url="",
+            reject_reason="",
+        )
+        with_flow = serialize_rule(rule, username="tester", is_admin=True)
+        no_flow = serialize_rule(rule, username="tester", is_admin=True, include_flow=False)
+        self.assertIn("flow", with_flow)
+        self.assertNotIn("flow", no_flow)
 
 
 class WhitelistApproveCloseTests(SimpleTestCase):

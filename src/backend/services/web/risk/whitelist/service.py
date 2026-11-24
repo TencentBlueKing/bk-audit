@@ -6,7 +6,6 @@ import json
 import logging
 import re
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 
 from bk_resource import api
 from dateutil.relativedelta import relativedelta
@@ -1180,33 +1179,6 @@ def flow_of(rule: RiskWhitelist, ticket: dict = None):
     }
 
 
-def _load_ticket_details(rules) -> dict:
-    if not rules:
-        return {}
-    if len(rules) == 1:
-        return {str(rules[0].id): _load_ticket_detail(rules[0])}
-
-    def _load(rule):
-        from django.db import close_old_connections
-
-        close_old_connections()
-        try:
-            return _load_ticket_detail(rule)
-        finally:
-            close_old_connections()
-
-    found = {}
-    with ThreadPoolExecutor(max_workers=len(rules)) as pool:
-        futures = {pool.submit(_load, rule): rule for rule in rules}
-        for future, rule in futures.items():
-            try:
-                found[str(rule.id)] = future.result()
-            except Exception:
-                logger.exception("[RiskWhitelist] list ticket_detail failed, id=%s", rule.id)
-                found[str(rule.id)] = {}
-    return found
-
-
 def _write_terminal_status(rule: RiskWhitelist, ticket: dict) -> None:
     """flow 映射成生效中或已驳回时，把同一个结果写到白名单 status。"""
 
@@ -1289,10 +1261,11 @@ def serialize_rule(
     progress: dict = None,
     username: str = "",
     is_admin=None,
+    include_flow: bool = True,
 ) -> dict:
     if progress is None:
         progress = getattr(rule, "_itsm_progress", None)
-    return {
+    data = {
         "id": str(rule.id),
         "rule_code": str(rule.id),
         "scene_id": rule.scene_id,
@@ -1317,6 +1290,10 @@ def serialize_rule(
         "flow": flow_of(rule, progress),
         "actions": list_actions(rule, username, is_admin=is_admin),
     }
+    # 列表不回显工单流转：去掉 flow 键，避免逐条外呼工单详情拖慢列表
+    if not include_flow:
+        data.pop("flow")
+    return data
 
 
 def ensure_admin(username: str, scene_id: int) -> None:

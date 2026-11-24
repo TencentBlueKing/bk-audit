@@ -119,6 +119,50 @@ def scope_field_names(scope: dict) -> set:
         return set()
 
 
+def scope_field_options(scope: dict) -> "list[tuple[str, str]]":
+    """列出实际带值的条件字段的 (field, field_name) 配对，供“包含条件”下拉枚举。
+
+    与 scope_field_names 的带值判定一致（值非空才算），兼容 groups 和条件树两种结构。
+    单份 scope 内按 field 去重，field_name 取首次出现的非空展示名，
+    展示名缺失时按标准字段中文名兜底（与 _display_field 口径一致），兜底不到回退 field。
+    """
+
+    pairs: "list[tuple[str, str]]" = []
+    if _is_group_scope(scope):
+        fallbacks = _fallback_field_names()
+        for group in scope.get("groups") or []:
+            for item in group.get("conditions") or []:
+                if item.get("field") and item.get("value") not in (None, "", []):
+                    field = str(item.get("field"))
+                    display = str(item.get("field_name") or "")
+                    field_name = display if display and display != field else (fallbacks.get(field) or field)
+                    pairs.append((field, field_name))
+        return _dedupe_field_options(pairs)
+    try:
+        for condition in _leaves(to_condition_tree(scope)):
+            field = condition.field
+            if not (field and field.raw_name):
+                continue
+            if not (getattr(condition, "filter", None) not in (None, "", []) or getattr(condition, "filters", None)):
+                continue
+            pairs.append((field.raw_name, _display_field(field)))
+    except Exception:
+        return []
+    return _dedupe_field_options(pairs)
+
+
+def _dedupe_field_options(pairs: "list[tuple[str, str]]") -> "list[tuple[str, str]]":
+    """按 field 去重，保留首次出现的非空 field_name，全空则回退 field。"""
+
+    picked: "dict[str, str]" = {}
+    for field, field_name in pairs:
+        if field not in picked:
+            picked[field] = field_name or field
+        elif not picked[field] and field_name:
+            picked[field] = field_name
+    return list(picked.items())
+
+
 # 工单展示用：core Operator 的 choices 是 SQL 口径（eq 的 label 是 "等于 ="），这里取纯符号
 OPERATOR_DISPLAY = {
     "eq": "=",

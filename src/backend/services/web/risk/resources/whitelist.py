@@ -29,31 +29,35 @@ from services.web.risk.whitelist.constants import (
     FLOW_STATUS,
     WhitelistStatus,
 )
-from services.web.risk.whitelist.match import scope_field_names, validate_match_scope
+from services.web.risk.whitelist.match import (
+    scope_field_names,
+    scope_field_options,
+    validate_match_scope,
+)
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.whitelist.serializers import (
     BatchCreateRiskWhitelistReqSerializer,
     CreateRiskWhitelistReqSerializer,
     FetchWhitelistHitEventReqSerializer,
     ListRiskWhitelistReqSerializer,
+    ListWhitelistContainsFieldsReqSerializer,
     ListWhitelistHitRecordReqSerializer,
     RejectRiskWhitelistReqSerializer,
     RenewRiskWhitelistReqSerializer,
     RiskWhitelistCallbackReqSerializer,
+    RiskWhitelistDetailReqSerializer,
     RiskWhitelistIdReqSerializer,
     UpdateRiskWhitelistReqSerializer,
 )
 from services.web.risk.whitelist.service import (
     _bind_ticket,
     _format_dt,
-    _load_ticket_details,
+    _load_ticket_detail,
     _save_rule,
     apply_whitelist_result,
     build_hit_event_fields,
     ensure_same_strategy_scene,
     get_rule_for_admin,
-    is_scene_admin,
-    managed_scene_ids,
     order_whitelist_queryset,
     prepare_callback_ticket,
     refresh_whitelist_nodes,
@@ -109,15 +113,9 @@ class ListRiskWhitelists(RiskWhitelistMeta):
 
     def perform_request(self, validated_request_data):
         username = get_request_username()
-        scene_ids = managed_scene_ids(username)
-        if not scene_ids:
-            raise ValidationError(gettext("没有白名单权限"))
-        queryset = RiskWhitelist.objects.filter(scene_id__in=scene_ids)
-        scene_id = validated_request_data.get("scene_id")
-        if scene_id:
-            if scene_id not in set(scene_ids):
-                raise ValidationError(gettext("没有该场景的白名单管理权限"))
-            queryset = queryset.filter(scene_id=scene_id)
+        # 场景管理权限由 viewset InstanceActionPermission(MANAGE_SCENE) 校验，这里只按场景过滤
+        scene_id = validated_request_data["scene_id"]
+        queryset = RiskWhitelist.objects.filter(scene_id=scene_id)
         rule_id = validated_request_data.get("id")
         if rule_id:
             queryset = queryset.filter(pk__in=rule_id)
@@ -140,10 +138,8 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                 validated_request_data["order_fields"],
             )[(page - 1) * page_size : page * page_size]
         )
-        # 列表只读库里的状态，不会把待审批改成生效中。续期谁都可以申请。
-        # 通过和驳回只给该场景 managers 里的场景管理员，平台管理员不给。
-        # 待审批/已驳回并发查工单详情做 flow 回显（当前处理人、步骤），只读不回写。
-        progresses = _load_ticket_details([row for row in rows if row.status in FLOW_STATUS and row.itsm_ticket_id])
+        # 列表只读库里的状态，不回显工单流转（flow 在详情接口按需实时拉，避免逐条外呼拖慢列表）。
+        # 列表入口能进来即该场景管理员（viewset 已校验），actions 按场景管理员处理。
         return {
             "page": page,
             "page_size": page_size,
@@ -152,13 +148,61 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                 serialize_rule(
                     row,
                     getattr(row, "hit_count", 0),
-                    progresses.get(str(row.id), {}),
-                    username,
-                    is_admin=is_scene_admin(username, row.scene_id),
+                    username=username,
+                    is_admin=True,
+                    include_flow=False,
                 )
                 for row in rows
             ],
         }
+
+
+class ListWhitelistContainsFields(RiskWhitelistMeta):
+    """枚举某场景下所有白名单匹配范围里去重后的条件字段，供列表“包含条件”下拉。
+
+    match_scope 是 JSON，字段名要在 Python 侧遍历每行求并集去重（白名单表规模小）。
+    """
+
+    name = gettext_lazy("白名单包含条件字段")
+    RequestSerializer = ListWhitelistContainsFieldsReqSerializer
+
+    def perform_request(self, validated_request_data):
+        # 场景管理权限由 viewset InstanceActionPermission(MANAGE_SCENE) 校验，scene_id 已由序列化器必传
+        # 跨行按 field 去重，field_name 取首次出现的非空展示名，全空回退 field
+        scene_id = validated_request_data["scene_id"]
+        picked: dict = {}
+        scopes = RiskWhitelist.objects.filter(scene_id=scene_id).values_list("match_scope", flat=True)
+        for scope in scopes:
+            for field, field_name in scope_field_options(scope):
+                if field not in picked:
+                    picked[field] = field_name
+                elif not picked[field] and field_name:
+                    picked[field] = field_name
+        return {"results": [{"field": field, "field_name": picked[field]} for field in sorted(picked)]}
+
+
+class RetrieveRiskWhitelist(RiskWhitelistMeta):
+    """白名单详情：返回全字段，并实时拉一次工单详情回显 flow（当前处理人、步骤、意见）。
+
+    仅详情接口外呼工单，列表不再逐条拉取；能进来即该场景管理员（viewset 已校验），actions 按管理员处理。
+    """
+
+    name = gettext_lazy("风险白名单详情")
+    RequestSerializer = RiskWhitelistDetailReqSerializer
+
+    def perform_request(self, validated_request_data):
+        rule = RiskWhitelist.objects.filter(pk=validated_request_data["id"]).first()
+        if rule is None:
+            raise ValidationError(gettext("白名单不存在"))
+        hit_count = RiskWhitelistHit.objects.filter(whitelist=rule, is_deleted=False).count()
+        progress = _load_ticket_detail(rule) if rule.status in FLOW_STATUS and rule.itsm_ticket_id else {}
+        return serialize_rule(
+            rule,
+            hit_count,
+            progress=progress,
+            username=get_request_username(),
+            is_admin=True,
+        )
 
 
 class CreateRiskWhitelist(RiskWhitelistMeta):

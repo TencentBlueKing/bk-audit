@@ -599,8 +599,25 @@ class RiskEventSubscriptionAdminViewSet(ResourceViewSet):
 class RiskWhitelistsViewSet(ResourceViewSet):
     """风险白名单。"""
 
+    def get_instance_scene_id(self) -> str:
+        # 列表/枚举/详情的场景管理权限统一在此校验，path 与 query 取同一份 scene_id
+        return get_value_by_request_or_path(self.request, "scene_id")
+
+    def get_permissions(self):
+        if self.action in ["list", "contains_fields", "detail"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.MANAGE_SCENE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_instance_scene_id,
+                )
+            ]
+        return []
+
     resource_routes = [
         ResourceRoute("GET", resource.risk.list_risk_whitelists),
+        ResourceRoute("GET", resource.risk.list_whitelist_contains_fields, endpoint="contains_fields"),
+        ResourceRoute("GET", resource.risk.retrieve_risk_whitelist, pk_field="id", endpoint="detail"),
         ResourceRoute("POST", resource.risk.create_risk_whitelist),
         ResourceRoute("POST", resource.risk.batch_create_risk_whitelist, endpoint="batch"),
         ResourceRoute("PUT", resource.risk.update_risk_whitelist, pk_field="id"),
