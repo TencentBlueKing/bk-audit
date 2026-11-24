@@ -8,7 +8,7 @@ import requests
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase, override_settings
 
-from api.bk_base_v4.default import DataConnGet
+from api.bk_base_v4.default import DataConnCreate, DataConnGet
 from services.web.bkbase import source
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.snapshot.system import provision, pull
@@ -359,6 +359,180 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self._settle()
         self._complete("action")
         self.assertEqual([kind for kind, _ in self.posts].count("DataConn"), 1)
+
+    def test_pre_dispatch_rejection_reuses_same_snapshot_ref(self):
+        resource = DataConnCreate()
+        self.sdk.data_conn_create.side_effect = resource.request
+        sent = []
+
+        def transport(**kwargs):
+            self.assertFalse(self.in_transaction)
+            sent.append(deepcopy(kwargs["json"]))
+            response = requests.Response()
+            response.url = kwargs["url"]
+            response.request = requests.Request("POST", response.url).prepare()
+            if len(sent) == 1:
+                response.status_code = 404
+                payload = {"code": 1640401, "message": "synthetic route rejection"}
+            else:
+                response.status_code = 200
+                payload = {"result": True, "code": "00", "data": self._creator("DataConn")(**kwargs["json"])}
+            response._content = json.dumps(payload).encode()
+            return response
+
+        with mock.patch.object(resource, "build_header", return_value={}), mock.patch.object(
+            requests.sessions.Session, "request", side_effect=transport
+        ):
+            with self.assertRaises(APIRequestError) as caught:
+                provision.ensure_system_snapshot("action")
+            self.assertEqual(caught.exception.gateway_error_code, "1640401")
+            self.assertEqual(len(sent), 1)
+            key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+            first = deepcopy(self.rows[key].config_value["bkbase_v4"]["default"]["audit"])
+            self.assertEqual(first["creation"]["steps"]["connection"]["attempt"], 1)
+            self.assertIs(first["creation"]["steps"]["connection"]["not_dispatched"], True)
+            self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+            self.assertEqual(len(sent), 2)
+            second = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]
+            self.assertEqual(second["creation"]["steps"]["connection"]["attempt"], 2)
+            self.assertIs(second["creation"]["steps"]["connection"]["not_dispatched"], False)
+            self._settle()
+            self._complete("action")
+            self.assertIsNone(provision.ensure_system_snapshot("action"))
+        self.assertEqual(sent[0]["metadata"], sent[1]["metadata"])
+        self.assertEqual(sent[0]["spec"], sent[1]["spec"])
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(second["creation"]["operation_id"], first["creation"]["operation_id"])
+        self.assertEqual(second["creation"]["refs"], first["creation"]["refs"])
+
+    def _connection_claim(self, **step):
+        """准备持久化声明，允许覆盖尝试字段以复现旧记录和并发快照。"""
+        context = bindings._system_context()
+        redis = provision._create_config("action", context)
+        record = provision._new_record("action", context, redis)
+        desired, _ = provision._source_spec(provision._params("action", record["creation"]), record["creation"])
+        record["creation"]["steps"]["connection"] = {"target_digest": source._replay_digest(desired), **step}
+        provision._save("action", context, None, record)
+        return context, record, desired
+
+    def test_old_target_digest_claim_does_not_repost(self):
+        context, record, desired = self._connection_claim()
+        create = mock.Mock()
+        with self.assertLogs("app", level="WARNING") as captured:
+            current, observed = provision._ensure_resource(
+                "action", context, record, "connection", desired, self._getter("DataConn"), create
+            )
+        self.assertIsNone(current)
+        self.assertEqual(observed, record)
+        create.assert_not_called()
+        self.assertEqual(len(captured.output), 1)
+        self.assertIn("DataConn", captured.output[0])
+        self.assertIn(record["creation"]["refs"]["connection"]["name"], captured.output[0])
+        self.assertNotIn("Authorization", captured.output[0])
+        self.assertNotIn("fixture_token", captured.output[0])
+
+    def test_unknown_snapshot_write_errors_do_not_allow_retry(self):
+        for status, code in ((404, None), (403, "1640401"), (500, "1640401"), (None, None)):
+            with self.subTest(status=status, code=code):
+                self.rows.clear()
+                context, record, desired = self._connection_claim(attempt=1, not_dispatched=True)
+                failure = APIRequestError(result={"message": "[1640401] synthetic uncertain outcome"})
+                failure.http_status = status
+                if code:
+                    failure.gateway_error_code = code
+                create = mock.Mock(side_effect=failure)
+                with self.assertRaises(APIRequestError) as caught:
+                    provision._ensure_resource(
+                        "action", context, record, "connection", desired, self._getter("DataConn"), create
+                    )
+                self.assertIs(caught.exception, failure)
+                key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+                saved = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]
+                self.assertIs(saved["creation"]["steps"]["connection"]["not_dispatched"], False)
+                current, _ = provision._ensure_resource(
+                    "action", context, saved, "connection", desired, self._getter("DataConn"), create
+                )
+                self.assertIsNone(current)
+                create.assert_called_once()
+
+    def test_old_or_superseded_snapshot_claim_does_not_repost(self):
+        context, stale, desired = self._connection_claim(attempt=1, not_dispatched=True)
+        rejection = APIRequestError(result={"message": "synthetic route rejection"})
+        rejection.http_status = 404
+        rejection.gateway_error_code = "1640401"
+        newer_create = mock.Mock(side_effect=rejection)
+        stale_create = mock.Mock()
+
+        def after_newer_rejection(**params):
+            with self.assertRaises(APIRequestError) as caught:
+                provision._ensure_resource(
+                    "action", context, stale, "connection", desired, self._getter("DataConn"), newer_create
+                )
+            self.assertIs(caught.exception, rejection)
+            return self._getter("DataConn")(**params)
+
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "changed concurrently"):
+            provision._ensure_resource(
+                "action", context, stale, "connection", desired, after_newer_rejection, stale_create
+            )
+        newer_create.assert_called_once()
+        stale_create.assert_not_called()
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        step = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]["creation"]["steps"]["connection"]
+        self.assertEqual(step["attempt"], 2)
+        self.assertIs(step["not_dispatched"], True)
+
+    def test_superseded_snapshot_claim_cannot_overwrite_newer_rejection(self):
+        context, record, desired = self._connection_claim(attempt=1, not_dispatched=True)
+        rejection = APIRequestError(result={"message": "synthetic delayed rejection"})
+        rejection.http_status = 404
+        rejection.gateway_error_code = "1640401"
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+
+        def late_rejection(**params):
+            claimed = deepcopy(self.rows[key].config_value["bkbase_v4"]["default"]["audit"])
+            confirmed = deepcopy(claimed)
+            confirmed["creation"]["steps"]["connection"]["not_dispatched"] = True
+            provision._save("action", context, claimed, confirmed)
+            with self.assertRaises(APIRequestError):
+                provision._ensure_resource(
+                    "action",
+                    context,
+                    confirmed,
+                    "connection",
+                    desired,
+                    self._getter("DataConn"),
+                    mock.Mock(side_effect=rejection),
+                )
+            raise rejection
+
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "changed concurrently") as caught:
+            provision._ensure_resource(
+                "action", context, record, "connection", desired, self._getter("DataConn"), late_rejection
+            )
+        self.assertIs(caught.exception.__context__, rejection)
+        saved = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]
+        self.assertEqual(saved["creation"]["steps"]["connection"]["attempt"], 3)
+        self.assertIs(saved["creation"]["steps"]["connection"]["not_dispatched"], True)
+
+    def test_unknown_exception_after_retry_claim_does_not_repost(self):
+        context, record, desired = self._connection_claim(attempt=1, not_dispatched=True)
+        failure = RuntimeError("synthetic unknown outcome")
+        create = mock.Mock(side_effect=failure)
+        with self.assertRaises(RuntimeError) as caught:
+            provision._ensure_resource(
+                "action", context, record, "connection", desired, self._getter("DataConn"), create
+            )
+        self.assertIs(caught.exception, failure)
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        saved = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]
+        self.assertEqual(saved["creation"]["steps"]["connection"]["attempt"], 2)
+        self.assertIs(saved["creation"]["steps"]["connection"]["not_dispatched"], False)
+        current, _ = provision._ensure_resource(
+            "action", context, saved, "connection", desired, self._getter("DataConn"), create
+        )
+        self.assertIsNone(current)
+        create.assert_called_once()
 
     def test_existing_unclaimed_source_is_never_adopted(self):
         provision.ensure_system_snapshot("action")

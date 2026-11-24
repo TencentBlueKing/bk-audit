@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
 
@@ -167,6 +168,7 @@ def _ready(resource, ref, expected_state=None):
 
 
 def _ensure_resource(kind, context, record, key, desired, getter, creator, expected_state=None):
+    """先按原引用观察，仅有明确未下发证据时通过 CAS 认领下一次原样创建。"""
     operation = record["creation"]
     ref = operation["refs"][key]
     step = operation["steps"].get(key)
@@ -176,22 +178,43 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
     if step is None:
         if current is not None:
             raise BKBaseResourceMappingError(message=f"IAM V4 {ref['kind']} exists without this creation claim")
-        operation = deepcopy(operation)
-        operation["steps"][key] = {"target_digest": digest}
-        record = _save(kind, context, record, {**record, "creation": operation})
-        metadata_value = {**params, "annotations": {OWNER_ANNOTATION: operation["operation_id"]}}
+    else:
+        if step.get("target_digest") != digest:
+            raise BKBaseResourceMappingError(message=f"IAM V4 {ref['kind']} creation inputs changed")
+        if current is not None:
+            _owned(context, operation, ref, current)
+            if not _matches_spec(ref["kind"], desired, current):
+                raise BKBaseResourceMappingError(message=f"IAM V4 created {ref['kind']} no longer matches its target")
+            return (current if _ready(current, ref, expected_state) else None), record
+        if step.get("not_dispatched", False) is not True:
+            logger.warning(
+                "IAM V4 创建结果未确认，仅观察原 %s：tenant=%s namespace=%s name=%s",
+                ref["kind"],
+                ref["tenant"],
+                ref["namespace"],
+                ref["name"],
+            )
+            return None, record
+    operation = deepcopy(operation)
+    operation["steps"][key] = {
+        **(step or {}),
+        "target_digest": digest,
+        "attempt": (step or {}).get("attempt", 0) + 1,
+        "not_dispatched": False,
+    }
+    record = _save(kind, context, record, {**record, "creation": operation})
+    metadata_value = {**params, "annotations": {OWNER_ANNOTATION: operation["operation_id"]}}
+    try:
         creator(
             tenant=context["tenant"], namespace=context["namespace"], metadata=metadata_value, spec=desired, status=None
         )
-        return None, record
-    if step.get("target_digest") != digest:
-        raise BKBaseResourceMappingError(message=f"IAM V4 {ref['kind']} creation inputs changed")
-    if current is None:
-        return None, record
-    _owned(context, operation, ref, current)
-    if not _matches_spec(ref["kind"], desired, current):
-        raise BKBaseResourceMappingError(message=f"IAM V4 created {ref['kind']} no longer matches its target")
-    return (current if _ready(current, ref, expected_state) else None), record
+    except APIRequestError as error:
+        if getattr(error, "http_status", None) == 404 and getattr(error, "gateway_error_code", None) == "1640401":
+            operation = deepcopy(operation)
+            operation["steps"][key]["not_dispatched"] = True
+            _save(kind, context, record, {**record, "creation": operation})
+        raise
+    return None, record
 
 
 def _source_spec(params, operation, *, report_config=None):
