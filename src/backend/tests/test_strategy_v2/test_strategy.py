@@ -33,7 +33,10 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.models import NoticeGroup
 from core.utils.data import ordered_dict_to_json
+from services.web.analyze.controls.rule_audit import RuleAuditController
 from services.web.analyze.models import Control, ControlVersion
+from services.web.analyze.tasks import call_controller
+from services.web.bkbase import flow as bkbase_flow
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
@@ -420,19 +423,39 @@ class StrategyTest(TestCase):
             dispatch.assert_not_called()
 
     @override_settings(BKBASE_API_VERSION="v3")
-    def test_init_retry_updates_recorded_v3_flow_without_creating(self):
+    def test_init_retry_v3_worker_updates_the_recorded_flow_without_creating_one(self):
         strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="known init flow",
             strategy_type=StrategyType.RULE,
             status=StrategyStatusChoices.START_FAILED,
-            backend_data={"flow_id": 91},
+            configs={"config_type": RuleAuditConfigType.BUILD_ID_ASSET, "data_source": {"rt_id": "2_test_rt"}},
+            backend_data={"flow_id": 91, "sql_node_id": 17},
         )
-        with mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch:
+        # 同步执行真实 Celery 任务，只替换外部节点操作和节点配置依赖。
+        with mock.patch.object(call_controller, "delay", side_effect=call_controller.run), mock.patch.object(
+            bkbase_flow, "create_flow"
+        ) as create, mock.patch.object(
+            bkbase_flow, "get_flow_deploy_data", return_value={"flow_status": "no-start"}
+        ), mock.patch.object(
+            bkbase_flow, "toggle_controller"
+        ), mock.patch.object(
+            RuleAuditController, "create_or_update_data_source_nodes", return_value=[31]
+        ), mock.patch.object(
+            RuleAuditController, "_build_sql_node_config", return_value={"node_type": "batch_sql"}
+        ), mock.patch.object(
+            RuleAuditController, "storage_nodes", []
+        ), mock.patch.object(
+            bkbase_flow, "update_flow_node", return_value={"node_id": 17}
+        ) as update:
             RetryStrategy().retry_existing(strategy, allow_create=False)
-        self.assertEqual(dispatch.call_args.args[:2], ("update", strategy.strategy_id))
+        create.assert_not_called()
+        update.assert_called_once()
+        self.assertEqual(update.call_args.kwargs["flow_id"], 91)
+        self.assertEqual(update.call_args.kwargs["node_id"], 17)
         strategy.refresh_from_db()
-        self.assertEqual(strategy.backend_data["flow_id"], 91)
+        self.assertEqual(strategy.backend_data.get("flow_id"), 91)
+        self.assertEqual(strategy.status, StrategyStatusChoices.UPDATING)
 
     @override_settings(BKBASE_API_VERSION="v4")
     def test_init_retry_never_falls_back_from_unhandled_v4_pure_recovery(self):

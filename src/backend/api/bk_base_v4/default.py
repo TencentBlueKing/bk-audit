@@ -430,7 +430,7 @@ class UserCheck(UserBkBaseV4Resource):
 
 
 class _SnapshotResource(BkBaseV4Resource):
-    """仅给命名快照详情和显式写端保留直达请求证据，不影响继承的列表与其他写端。"""
+    """快照续跑使用的直达证据；同一 SDK 端点的其他调用方也不会跟随重定向。"""
 
     snapshot_write = False
 

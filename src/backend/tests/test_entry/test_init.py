@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from contextlib import redirect_stdout
+from io import StringIO
 from typing import Dict
 from unittest import mock
 
@@ -356,6 +358,21 @@ class SystemInitRuleAuditTests(TestCase):
             retry.assert_not_called()
             self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
         self.assertEqual(GlobalMetaConfig.get("init_system_rule_audit_strategy_id"), strategy.strategy_id)
+
+    def test_default_rule_starting_without_flow_reports_how_to_check_dispatch(self):
+        self._snapshot()
+        # 模拟 ID 已落库，但进程在投递前退出后的持久状态。
+        strategy = self._registered_strategy(StrategyStatusChoices.STARTING)
+        strategy.backend_data = {}
+        strategy.save(update_fields=["backend_data"])
+        output = StringIO()
+        with redirect_stdout(output), mock.patch("services.web.strategy_v2.resources.call_controller") as dispatch:
+            self.handler.init_system_rule_audit()
+        self.assertIn(str(strategy.strategy_id), output.getvalue())
+        self.assertIn("核对队列任务和原 Flow", output.getvalue())
+        dispatch.assert_not_called()
+        self.assertEqual(Strategy.objects.filter(strategy_name=strategy.strategy_name).count(), 1)
+        self.assertFalse(GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY, default=False))
 
     def test_unready_asset_snapshot_does_not_create_or_retry_default_rule(self):
         self._registered_strategy()

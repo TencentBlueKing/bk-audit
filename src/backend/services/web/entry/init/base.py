@@ -569,8 +569,7 @@ class SystemInitHandler:
             if Strategy.objects.filter(strategy_name=strategy_name).exists():
                 print(f"[InitSystemRuleAudit] 同名策略未登记初始化归属，拒绝认领 => {strategy_name}")
                 return
-            CreateStrategy().request_for_init(params)
-            strategy_id = GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY, default=None)
+            strategy_id = CreateStrategy().request_for_init(params)["strategy_id"]
             created = True
         strategy = None
         if type(strategy_id) is int and strategy_id > 0:
@@ -601,5 +600,7 @@ class SystemInitHandler:
         if strategy.status == StrategyStatusChoices.RUNNING:
             self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
             print("[InitSystemRuleAudit] Finished")
+        elif strategy.status == StrategyStatusChoices.STARTING:
+            print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} 仍在启动；若长期未就绪，请按策略 ID 核对队列任务和原 Flow，不自动补投")
         else:
             print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} pending: {strategy.status}")
