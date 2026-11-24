@@ -411,23 +411,23 @@ class RedisRegistrationTests(TransactionTestCase):
         }
         with self.assertLogs(logger, level="WARNING") as emitted:
             result = CreateOrUpdateRedisResource().request(changed)
-        self.assertEqual(
-            result,
-            {
-                key: old[key]
-                for key in [
-                    "redis_id",
-                    "namespace",
-                    "redis_name_en",
-                    "redis_name",
-                    "admin",
-                    "connection_info",
-                    "version",
-                    "extra",
-                    "is_deleted",
-                ]
-            },
-        )
+        expected = {
+            key: old[key]
+            for key in [
+                "redis_id",
+                "namespace",
+                "redis_name_en",
+                "redis_name",
+                "admin",
+                "connection_info",
+                "version",
+                "extra",
+                "is_deleted",
+            ]
+        }
+        # BKSEC 1578945：响应白名单剔除连接密码，其余字段仍与库内原记录一致
+        expected["connection_info"] = {key: value for key, value in old["connection_info"].items() if key != "password"}
+        self.assertEqual(result, expected)
         row.refresh_from_db()
         self.assertEqual(RedisConfig.objects.filter(pk=row.pk).values().get(), old)
         self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "bound")

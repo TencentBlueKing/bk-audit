@@ -18,21 +18,22 @@ to the current version of the project delivered to anyone in the future.
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.meta.models import ResourceType, System
-from core.utils.url_security import URLSecurityError, validate_request_url, validate_resource_path
+from core.utils.url_security import (
+    URLSecurityError,
+    validate_request_url,
+    validate_resource_path,
+)
 
 
 class Command(BaseCommand):
-    help = (
-        "扫描存量 System.callback_url 与 ResourceType.path 是否命中 URL 安全校验规则"
-        "（只读，不修改数据）；用于发布门禁：命中数必须为 0 或已逐条确认豁免"
-    )
+    help = "扫描存量 System.callback_url 与 ResourceType.path 是否命中 URL 安全校验规则" "（只读，不修改数据）；用于发布门禁：命中数必须为 0 或已逐条确认豁免"
 
     def handle(self, *args, **options):
         problems = []
 
         # 1. 扫描系统回调地址（非空值需通过 URL 安全校验）
-        for system in System.objects.exclude(callback_url__isnull=True).exclude(callback_url="").only(
-            "system_id", "callback_url"
+        for system in (
+            System.objects.exclude(callback_url__isnull=True).exclude(callback_url="").only("system_id", "callback_url")
         ):
             try:
                 validate_request_url(system.callback_url)
@@ -53,9 +54,9 @@ class Command(BaseCommand):
         # 3. 扫描拼接后最终 URL（callback_url 非空系统的非空 path 组合，拼接方式与线上 resource_request_url 一致）
         systems_with_callback = {
             system.system_id: system
-            for system in System.objects.exclude(callback_url__isnull=True).exclude(callback_url="").only(
-                "system_id", "callback_url"
-            )
+            for system in System.objects.exclude(callback_url__isnull=True)
+            .exclude(callback_url="")
+            .only("system_id", "callback_url")
         }
         for resource_type in ResourceType.objects.exclude(path="").only(
             "system_id", "unique_id", "resource_type_id", "path"
@@ -70,8 +71,5 @@ class Command(BaseCommand):
                 problems.append(f"[Combined] unique_id={resource_type.unique_id} url={url!r} => {err}")
 
         if problems:
-            raise CommandError(
-                f"URL 安全校验存量扫描命中 {len(problems)} 条（发布门禁要求清零或逐条确认豁免）：\n"
-                + "\n".join(problems)
-            )
+            raise CommandError(f"URL 安全校验存量扫描命中 {len(problems)} 条（发布门禁要求清零或逐条确认豁免）：\n" + "\n".join(problems))
         self.stdout.write(self.style.SUCCESS("URL 安全校验存量扫描通过：0 命中"))
