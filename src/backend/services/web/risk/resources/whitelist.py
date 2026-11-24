@@ -24,7 +24,11 @@ from apps.audit.resources import AuditMixinResource
 from core.exceptions import ValidationError
 from core.models import get_request_username
 from services.web.risk.models import Risk
-from services.web.risk.whitelist.constants import DELETABLE_STATUS, WhitelistStatus
+from services.web.risk.whitelist.constants import (
+    DELETABLE_STATUS,
+    FLOW_STATUS,
+    WhitelistStatus,
+)
 from services.web.risk.whitelist.match import scope_field_names, validate_match_scope
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.whitelist.serializers import (
@@ -42,6 +46,7 @@ from services.web.risk.whitelist.serializers import (
 from services.web.risk.whitelist.service import (
     _bind_ticket,
     _format_dt,
+    _load_ticket_details,
     _save_rule,
     apply_whitelist_result,
     build_hit_event_fields,
@@ -137,6 +142,8 @@ class ListRiskWhitelists(RiskWhitelistMeta):
         )
         # 列表只读库里的状态，不会把待审批改成生效中。续期谁都可以申请。
         # 通过和驳回只给该场景 managers 里的场景管理员，平台管理员不给。
+        # 待审批/已驳回并发查工单详情做 flow 回显（当前处理人、步骤），只读不回写。
+        progresses = _load_ticket_details([row for row in rows if row.status in FLOW_STATUS and row.itsm_ticket_id])
         return {
             "page": page,
             "page_size": page_size,
@@ -145,7 +152,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                 serialize_rule(
                     row,
                     getattr(row, "hit_count", 0),
-                    {},
+                    progresses.get(str(row.id), {}),
                     username,
                     is_admin=is_scene_admin(username, row.scene_id),
                 )

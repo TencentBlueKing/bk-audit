@@ -14,6 +14,7 @@ from services.web.risk.resources.whitelist import (
     RiskWhitelistCallback,
 )
 from services.web.risk.whitelist.constants import (
+    FLOW_STATUS,
     HitAction,
     WhitelistStatus,
     WhitelistType,
@@ -29,7 +30,6 @@ from services.web.risk.whitelist.service import (
     flow_of,
     format_snapshot_value,
     intercept_whitelist,
-    progress_map,
     renew_whitelist,
     resolve_duration,
     resolve_expire_at,
@@ -478,9 +478,11 @@ class WhitelistDurationTests(SimpleTestCase):
 
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     def test_list_echoes_itsm_ticket(self, ticket_detail):
+        from services.web.risk.whitelist.service import _load_ticket_details
+
         ticket_detail.return_value = {
             "id": "102026111108334100059701",
-            "sn": "DE2026111100000001",
+            "sn": "DE2026111108334100059701",
             "frontend_url": "http://itsm/1",
             "status": "running",
             "status_display": "审批中",
@@ -498,10 +500,10 @@ class WhitelistDurationTests(SimpleTestCase):
             reject_reason="",
             updated_at=None,
         )
-        echoed = progress_map([rule])["1"]
+        echoed = _load_ticket_details([rule])["1"]
         flow = flow_of(rule, echoed)
         ticket_detail.assert_called_once_with(id="102026111108334100059701")
-        self.assertEqual(flow["itsm_sn"], "DE2026111100000001")
+        self.assertEqual(flow["itsm_sn"], "DE2026111108334100059701")
         self.assertEqual(flow["itsm_url"], "http://itsm/1")
         self.assertEqual(flow["status"], WhitelistStatus.PENDING)
         self.assertEqual(flow["status_display"], "待审批")
@@ -510,9 +512,12 @@ class WhitelistDurationTests(SimpleTestCase):
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_list_writes_active_when_ticket_is_finished(self, ticket_detail, apply_result):
+    def test_list_detail_is_read_only_when_ticket_is_finished(self, ticket_detail, apply_result):
+        """列表回显只读：工单已终态也不改状态，状态推进交给回调和轮询。"""
+
+        from services.web.risk.whitelist.service import _load_ticket_details
+
         ticket_detail.return_value = {"id": "ticket-1", "status": "finished", "approve_result": True}
-        apply_result.return_value = SimpleNamespace(status=WhitelistStatus.ACTIVE, reject_reason="")
         rule = SimpleNamespace(
             id=1,
             pk=1,
@@ -521,21 +526,21 @@ class WhitelistDurationTests(SimpleTestCase):
             reject_reason="",
             risk_id="",
         )
-        progress_map([rule])
-        apply_result.assert_called_once()
-        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        _load_ticket_details([rule])
+        apply_result.assert_not_called()
+        self.assertEqual(rule.status, WhitelistStatus.PENDING)
 
-    @patch("services.web.risk.whitelist.service._write_terminal_status")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    def test_list_loads_pending_and_rejected_tickets_together(self, ticket_detail, write_status):
+    def test_list_loads_pending_and_rejected_tickets_together(self, ticket_detail):
+        from services.web.risk.whitelist.service import _load_ticket_details
+
         ticket_detail.side_effect = lambda id: {"id": id, "status": "running"}
         pending = SimpleNamespace(id=1, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
         rejected = SimpleNamespace(id=2, status=WhitelistStatus.REJECTED, itsm_ticket_id="ticket-2")
         active = SimpleNamespace(id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="ticket-3")
-        found = progress_map([pending, rejected, active])
+        found = _load_ticket_details([r for r in (pending, rejected, active) if r.status in FLOW_STATUS])
         self.assertEqual(set(found), {"1", "2"})
         self.assertEqual(ticket_detail.call_count, 2)
-        write_status.assert_called_once()
 
     @patch("services.web.risk.whitelist.service._close_source_risk")
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects")

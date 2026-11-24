@@ -1180,18 +1180,6 @@ def flow_of(rule: RiskWhitelist, ticket: dict = None):
     }
 
 
-def progress_map(rules) -> dict:
-    """待审批、已驳回同时查工单。工单已通过或已驳回时，把同一个结果写回待审批记录。"""
-
-    targets = [rule for rule in rules if rule.status in FLOW_STATUS and rule.itsm_ticket_id]
-    found = _load_ticket_details(targets)
-    for rule in targets:
-        if rule.status != WhitelistStatus.PENDING:
-            continue
-        _write_terminal_status(rule, found.get(str(rule.id)) or {})
-    return found
-
-
 def _load_ticket_details(rules) -> dict:
     if not rules:
         return {}
@@ -1304,8 +1292,6 @@ def serialize_rule(
 ) -> dict:
     if progress is None:
         progress = getattr(rule, "_itsm_progress", None)
-    if progress is None and rule.status in FLOW_STATUS:
-        progress = progress_map([rule]).get(str(rule.id))
     return {
         "id": str(rule.id),
         "rule_code": str(rule.id),
