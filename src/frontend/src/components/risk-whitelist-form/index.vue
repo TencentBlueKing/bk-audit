@@ -80,16 +80,24 @@
                     theme="dark">
                     <span class="locked-select-wrap">
                       <bk-select
+                        v-if="isStrategyRow(groupIndex, conditionIndex)"
                         class="field-select"
-                        :disabled="isPrefillLocked(groupIndex, conditionIndex) || isStrategyRow(groupIndex, conditionIndex)"
-                        :model-value="condition.field"
-                        @change="(value: string) => changeField(groupIndex, conditionIndex, value)">
+                        disabled
+                        :model-value="condition.field">
                         <bk-option
-                          v-for="field in selectableFields(groupIndex, conditionIndex)"
-                          :key="field.field"
-                          :label="field.label"
-                          :value="field.field" />
+                          :label="condition.field_label || condition.field_name || condition.field"
+                          :value="condition.field" />
                       </bk-select>
+                      <match-scope-field-select
+                        v-else
+                        :disabled="isPrefillLocked(groupIndex, conditionIndex)"
+                        :event-fields="eventFieldsByGroup(groupIndex)"
+                        :event-loading="eventFieldsLoadingByGroup(groupIndex)"
+                        :label="condition.field_label || condition.field_name || condition.field"
+                        :model-value="condition.field"
+                        :risk-fields="RISK_CONDITION_FIELDS"
+                        :strategy-id="groupStrategyId(groupIndex)"
+                        @change="(payload) => changeField(groupIndex, conditionIndex, payload)" />
                     </span>
                   </bk-popover>
                   <bk-popover
@@ -331,6 +339,7 @@
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RiskManageService from '@service/risk-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type RiskWhitelist from '@model/risk-whitelist/whitelist';
@@ -356,7 +365,12 @@
     getFirstStrategySeed,
     hasStrategyOnlyGroup,
     OPERATOR_OPTIONS,
+    RISK_CONDITION_FIELDS,
   } from '@components/risk-whitelist/constants';
+  import MatchScopeFieldSelect, {
+    type EventFieldOption,
+    type FieldSelectPayload,
+  } from '@components/risk-whitelist/match-scope-field-select.vue';
 
   interface Props {
     record?: RiskWhitelist | null;
@@ -396,6 +410,9 @@
   const renewEditing = ref(false);
   const strategyLoading = ref(false);
   const strategyOptions = ref<Array<{ id: string; name: string }>>([]);
+  /** 按命中策略缓存事件字段全量（与场景风险搜索同源接口） */
+  const eventFieldsCache = ref<Record<string, EventFieldOption[]>>({});
+  const eventFieldsLoadingMap = ref<Record<string, boolean>>({});
   /** 风险单带入的 strategy_id / raw_event_id，按设计稿整行禁用 */
   const lockedPrefillKeys = ref<Set<string>>(new Set());
 
@@ -744,12 +761,83 @@
     conditionIndex === 0 && scope.value.groups[groupIndex].conditions[0].field === 'strategy_id'
   );
 
-  const selectableFields = (groupIndex: number, conditionIndex: number) => {
-    if (isStrategyRow(groupIndex, conditionIndex)) {
-      return FALLBACK_CONDITION_FIELDS.filter(item => item.field === 'strategy_id');
-    }
-    return FALLBACK_CONDITION_FIELDS.filter(item => item.field !== 'strategy_id');
+  const groupStrategyId = (groupIndex: number) => {
+    const strategy = scope.value.groups[groupIndex]?.conditions
+      .find(item => item.field === 'strategy_id' && item.value);
+    return strategy ? String(strategy.value) : '';
   };
+
+  const normalizeEventFieldItem = (item: Record<string, any>): EventFieldOption => {
+    const fieldName = String(item.field_name || item.field || '');
+    const displayName = String(item.display_name || item.name || fieldName);
+    return {
+      id: String(item.id || `${fieldName}:${displayName}`),
+      field_name: fieldName,
+      display_name: displayName,
+      ...(item.type === 'basic_event_field' ? { type: item.type } : {}),
+    };
+  };
+
+  const ensureEventFields = (strategyId: string) => {
+    if (
+      !strategyId
+      || Object.prototype.hasOwnProperty.call(eventFieldsCache.value, strategyId)
+      || eventFieldsLoadingMap.value[strategyId]
+    ) {
+      return;
+    }
+    eventFieldsLoadingMap.value = {
+      ...eventFieldsLoadingMap.value,
+      [strategyId]: true,
+    };
+    RiskManageService.fetchEventFields({ strategy_ids: [strategyId] })
+      .then((data) => {
+        const list = (Array.isArray(data) ? data : [])
+          .map(item => normalizeEventFieldItem(item))
+          .filter(item => item.field_name);
+        eventFieldsCache.value = {
+          ...eventFieldsCache.value,
+          [strategyId]: list,
+        };
+      })
+      .catch(() => {
+        eventFieldsCache.value = {
+          ...eventFieldsCache.value,
+          [strategyId]: [],
+        };
+      })
+      .finally(() => {
+        eventFieldsLoadingMap.value = {
+          ...eventFieldsLoadingMap.value,
+          [strategyId]: false,
+        };
+      });
+  };
+
+  const syncEventFieldsForScope = () => {
+    scope.value.groups.forEach((_, index) => {
+      const strategyId = groupStrategyId(index);
+      if (strategyId) ensureEventFields(strategyId);
+    });
+  };
+
+  const eventFieldsByGroup = (groupIndex: number) => {
+    const strategyId = groupStrategyId(groupIndex);
+    return strategyId ? (eventFieldsCache.value[strategyId] || []) : [];
+  };
+
+  const eventFieldsLoadingByGroup = (groupIndex: number) => {
+    const strategyId = groupStrategyId(groupIndex);
+    return Boolean(strategyId && eventFieldsLoadingMap.value[strategyId]);
+  };
+
+  watch(
+    () => scope.value.groups.map((group, index) => `${index}:${groupStrategyId(index)}`).join('|'),
+    () => {
+      syncEventFieldsForScope();
+    },
+    { immediate: true },
+  );
 
   const patchGroup = (groupIndex: number, patch: Partial<MatchScope['groups'][number]>) => {
     scope.value = {
@@ -824,15 +912,14 @@
     clearReasonError();
   };
 
-  const changeField = (groupIndex: number, conditionIndex: number, field: string) => {
-    const meta = FALLBACK_CONDITION_FIELDS.find(item => item.field === field);
-    if (!meta) return;
+  const changeField = (groupIndex: number, conditionIndex: number, payload: FieldSelectPayload) => {
+    if (!payload?.field) return;
     markDirty();
     clearScopeError();
     patchCondition(groupIndex, conditionIndex, normalizeCondition({
-      field: meta.field,
-      field_name: meta.name,
-      field_label: meta.label,
+      field: payload.field,
+      field_name: payload.field_name,
+      field_label: payload.field_label,
       operator: 'eq',
       value: '',
       value_display: '',
@@ -849,6 +936,7 @@
       value,
       value_display: option?.name || value,
     });
+    if (value) ensureEventFields(String(value));
   };
 
   const changeTextValue = (groupIndex: number, conditionIndex: number, value: string) => {
@@ -1226,16 +1314,20 @@
     border-left: 1px dashed var(--bk-theme-border-default);
   }
 
+  /* 字段/操作符共用 wrap，宽度跟各自 grid 列走，不能写死 260px（会撑破操作符列叠到 value） */
   .locked-select-wrap {
-    display: inline-flex;
+    display: block;
+    width: 100%;
+    min-width: 0;
   }
 
-  .field-select {
-    width: 260px;
-  }
-
+  .field-select,
   .operator-select {
-    width: 180px;
+    width: 100%;
+  }
+
+  .locked-select-wrap :deep(.match-scope-field-trigger) {
+    width: 100%;
   }
 
   /* V1 操作符恒禁用：置灰已够，不必再显示禁止光标 */
