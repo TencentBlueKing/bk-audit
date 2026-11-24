@@ -41,6 +41,11 @@ def _get_snapshot_resource_or_none(getter: Callable, **params) -> dict | None:
         raise
 
 
+def _proven_not_dispatched(error: APIRequestError) -> bool:
+    """只接受直达写端保留的原始网关路由拒绝证据，不解析异常消息。"""
+    return getattr(error, "http_status", None) == 404 and getattr(error, "gateway_error_code", None) == "1640401"
+
+
 def _create_config(kind, context):
     config = getattr(settings, "BKBASE_V4_SYSTEM_SNAPSHOT_CREATE", {})
     if isinstance(config, str):
@@ -209,7 +214,7 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
             tenant=context["tenant"], namespace=context["namespace"], metadata=metadata_value, spec=desired, status=None
         )
     except APIRequestError as error:
-        if getattr(error, "http_status", None) == 404 and getattr(error, "gateway_error_code", None) == "1640401":
+        if _proven_not_dispatched(error):
             operation = deepcopy(operation)
             operation["steps"][key]["not_dispatched"] = True
             _save(kind, context, record, {**record, "creation": operation})
@@ -252,16 +257,95 @@ def _source_spec(params, operation, *, report_config=None):
     return connection, spec
 
 
+def _verify_activation_binding(context, record, current):
+    """启用意图不能重绑已登记的 RawData、DataId 或 DataSource。"""
+    observed = source._source_binding(context, current, record["source_raw_data_id"])
+    if any(record.get(key) != value for key, value in observed.items()):
+        raise BKBaseResourceMappingError(message="IAM V4 Source binding changed after its activation claim")
+
+
 def _running_source(context, record):
+    """观察目标态；只有原配置确认未下发且已停稳时才允许继续复查下游。"""
     operation = record["creation"]
     ref = operation["refs"]["data_source"]
     current = _get_snapshot_resource_or_none(api.bk_base_v4.data_source_get, **resource_params(context, ref))
     if current is None:
         return None
     _owned(context, operation, ref, current)
-    if source._replay_resource_digest(current) != operation["source_start"]["target_digest"]:
+    _verify_activation_binding(context, record, current)
+    intent = operation["source_start"]
+    digest = source._replay_resource_digest(current)
+    if digest == intent["target_digest"]:
+        expected_state = TaskState.RUNNING
+    elif not intent.get("before_digest"):
+        return None
+    elif digest != intent["before_digest"]:
         raise BKBaseResourceMappingError(message="IAM V4 Source changed after its activation claim")
-    return current if _ready(current, ref, TaskState.RUNNING) else None
+    elif intent.get("not_dispatched", False) is True:
+        expected_state = TaskState.STOPPED
+    else:
+        return None
+    if not _ready(current, ref):
+        return None
+    return current if operation_result(current, ref, "observe")["task_state"] == expected_state else None
+
+
+def _request_source_activation(kind, context, record, current):
+    """下游复核后重读原来源，通过本地 CAS 认领并发送唯一一次启用请求。"""
+    operation = record["creation"]
+    intent = operation.get("source_start")
+    before_digest = source._replay_resource_digest(current)
+    desired = deepcopy(current)
+    desired["spec"]["desired_status"] = "Running"
+    target_digest = source._replay_resource_digest(desired)
+    if intent and (
+        intent.get("not_dispatched", False) is not True
+        or before_digest != intent.get("before_digest")
+        or target_digest != intent["target_digest"]
+    ):
+        raise BKBaseResourceMappingError(message="IAM V4 Source activation intent changed")
+    ref = operation["refs"]["data_source"]
+    latest = _get_snapshot_resource_or_none(api.bk_base_v4.data_source_get, **resource_params(context, ref))
+    if latest is None:
+        return "DataSource"
+    _owned(context, operation, ref, latest)
+    _verify_activation_binding(context, record, latest)
+    latest_digest = source._replay_resource_digest(latest)
+    if latest_digest != before_digest:
+        if latest_digest == target_digest:
+            return "DataSource"
+        raise BKBaseResourceMappingError(message="IAM V4 Source changed before its activation request")
+    if not _ready(latest, ref) or operation_result(latest, ref, "observe")["task_state"] != TaskState.STOPPED:
+        return "DataSource"
+    desired = deepcopy(latest)
+    desired["spec"]["desired_status"] = "Running"
+    operation = {
+        **operation,
+        "source_start": {
+            **(intent or {}),
+            "target_digest": target_digest,
+            "before_digest": before_digest,
+            "attempt": (intent or {}).get("attempt", 0) + 1,
+            "not_dispatched": False,
+        },
+    }
+    record = _save(kind, context, record, {**record, "creation": operation})
+    try:
+        api.bk_base_v4.data_source_update(
+            **resource_params(context, ref),
+            metadata=desired["metadata"],
+            spec=desired["spec"],
+            status=None,
+        )
+    except APIRequestError as error:
+        if _proven_not_dispatched(error):
+            operation = {
+                **operation,
+                "source_start": {**operation["source_start"], "not_dispatched": True},
+            }
+            _save(kind, context, record, {**record, "creation": operation})
+        raise
+    return "DataSource"
 
 
 def _advance(kind, context, record, redis):
@@ -326,6 +410,8 @@ def _advance(kind, context, record, redis):
         raise BKBaseResourceMappingError(message="IAM V4 Clean output resolved to another result table")
     updates = {"clean": operation["refs"]["clean"], "result_table_id": logical_id, "result_table": table}
     if any(record.get(key) != value for key, value in updates.items()):
+        if operation.get("source_start"):
+            raise BKBaseResourceMappingError(message="IAM V4 ResultTable changed after its activation claim")
         record = _save(kind, context, record, {**record, **updates})
     storage_spec = storage.convert_storage_config(
         {"expires": "-1", "fields": PullCleanHandler.get_fields(kind), "config": {"storage_type": "join"}}
@@ -340,18 +426,9 @@ def _advance(kind, context, record, redis):
     if redis_binding is None:
         return "RedisBinding"
     operation = record["creation"]
-    if not operation.get("source_start"):
-        desired = deepcopy(current)
-        desired["spec"]["desired_status"] = "Running"
-        operation = {**operation, "source_start": {"target_digest": source._replay_resource_digest(desired)}}
-        record = _save(kind, context, record, {**record, "creation": operation})
-        sdk.data_source_update(
-            **resource_params(context, operation["refs"]["data_source"]),
-            metadata=desired["metadata"],
-            spec=desired["spec"],
-            status=None,
-        )
-        return "DataSource"
+    intent = operation.get("source_start")
+    if not intent or source._replay_resource_digest(current) != intent["target_digest"]:
+        return _request_source_activation(kind, context, record, current)
     keys = bindings._redis_keys(kind, stored["spec"]["taskFieldSetting"]["key_fields"])
     final = {
         **record,

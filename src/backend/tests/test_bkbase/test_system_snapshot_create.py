@@ -8,7 +8,7 @@ import requests
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase, override_settings
 
-from api.bk_base_v4.default import DataConnCreate, DataConnGet
+from api.bk_base_v4.default import DataConnCreate, DataConnGet, DataSourceUpdate
 from services.web.bkbase import source
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.snapshot.system import provision, pull
@@ -171,7 +171,7 @@ class SystemSnapshotCreationTests(SimpleTestCase):
                 resource["metadata"].setdefault("labels", {})["raw_data_id"] = "73"
                 resource["spec"]["data_id"] = {
                     "kind": "DataId",
-                    "tenant": "default",
+                    "tenant": kwargs["metadata"]["tenant"],
                     "namespace": "audit",
                     "name": "actual_dataid_" + kwargs["metadata"]["name"],
                 }
@@ -616,6 +616,239 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self._settle()
         self._complete("action")
         self.assertEqual(len(self.updates), 1)
+
+    def _activation_failure(self, failure):
+        """推进真实编排至第一次启用失败，保留原来源和下游资源。"""
+        self.sdk.data_source_update.side_effect = failure
+        for _ in range(15):
+            try:
+                provision.ensure_system_snapshot("action")
+            except type(failure) as caught:
+                self.assertIs(caught, failure)
+                key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+                return deepcopy(self.rows[key].config_value["bkbase_v4"][bindings._system_context()["tenant"]]["audit"])
+            self._settle()
+        self.fail("activation was not reached")
+
+    def _activation_rejection(self):
+        failure = APIRequestError(result={"message": "synthetic activation route rejection"})
+        failure.http_status = 404
+        failure.gateway_error_code = "1640401"
+        return failure
+
+    def _assert_activation_rejection_resumes(self):
+        resource = DataSourceUpdate()
+        self.sdk.data_source_update.side_effect = resource.request
+        sent = []
+
+        def transport(**kwargs):
+            self.assertFalse(self.in_transaction)
+            sent.append(deepcopy(kwargs["json"]))
+            response = requests.Response()
+            response.url = kwargs["url"]
+            response.request = requests.Request("PUT", response.url).prepare()
+            if len(sent) == 1:
+                response.status_code = 404
+                payload = {"code": 1640401, "message": "synthetic route rejection"}
+            else:
+                response.status_code = 200
+                data = kwargs["json"]
+                payload = {
+                    "result": True,
+                    "code": "00",
+                    "data": self._update_source(name=data["metadata"]["name"], **data),
+                }
+            response._content = json.dumps(payload).encode()
+            return response
+
+        with mock.patch.object(resource, "build_header", return_value={}), mock.patch.object(
+            requests.sessions.Session, "request", side_effect=transport
+        ):
+            for _ in range(15):
+                try:
+                    provision.ensure_system_snapshot("action")
+                except APIRequestError as error:
+                    self.assertEqual(error.gateway_error_code, "1640401")
+                    break
+                self._settle()
+            else:
+                self.fail("activation was not reached")
+            key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+            tenant = bindings._system_context()["tenant"]
+            first = deepcopy(self.rows[key].config_value["bkbase_v4"][tenant]["audit"])
+            intent = first["creation"]["source_start"]
+            self.assertEqual(intent["attempt"], 1)
+            self.assertIs(intent["not_dispatched"], True)
+            self.assertNotEqual(intent["before_digest"], intent["target_digest"])
+            self.assertEqual(len(sent), 1)
+            self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+            self.assertEqual(len(sent), 2)
+            current = self.resources[("DataSource", first["creation"]["refs"]["data_source"]["name"])]
+            current["status"]["phase"] = "Ok"
+            self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+            self.assertEqual(len(sent), 2)
+            self._settle()
+            self._complete("action")
+            self.assertIsNone(provision.ensure_system_snapshot("action"))
+        self.assertEqual(sent[0], sent[1])
+        self.assertEqual(sent[1]["spec"]["desired_status"], "Running")
+        self.assertEqual(len(sent), 2)
+        final = self.rows[key].config_value["bkbase_v4"][tenant]["audit"]
+        self.assertEqual(final["creation"]["operation_id"], first["creation"]["operation_id"])
+        self.assertEqual(final["creation"]["refs"], first["creation"]["refs"])
+        self.assertEqual(final["creation"]["source_start"]["attempt"], 2)
+        self.assertIs(final["creation"]["source_start"]["not_dispatched"], False)
+
+    def test_resume_source_activation_after_proven_route_rejection(self):
+        self._assert_activation_rejection_resumes()
+
+    @override_settings(
+        BKPAAS_MULTI_TENANT_MODE=True,
+        BK_TENANT_ID="tencent",
+        BKBASE_V4_TENANT="tencent",
+        BKBASE_V4_SYSTEM_SNAPSHOT_CREATE={
+            "action": {"redis": {"kind": "Redis", "tenant": "tencent", "namespace": "clusters", "name": "iam_redis"}}
+        },
+    )
+    def test_resume_source_activation_in_multitenant_mode(self):
+        self._assert_activation_rejection_resumes()
+
+    def test_source_activation_never_overwrites_changed_source_or_replays_legacy_intent(self):
+        record = self._activation_failure(self._activation_rejection())
+        current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
+        original = deepcopy(current)
+        current["spec"]["basic_info"]["description"] = "human changed"
+        with self.assertRaises(BKBaseResourceMappingError):
+            provision.ensure_system_snapshot("action")
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+        current.clear()
+        current.update(original)
+        record["creation"]["source_start"] = {"target_digest": record["creation"]["source_start"]["target_digest"]}
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        self.rows[key].config_value["bkbase_v4"]["default"]["audit"] = deepcopy(record)
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+        current["spec"].update(desired_status="Running", current_status="Running")
+        self.assertIsNone(provision.ensure_system_snapshot("action"))
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_unknown_source_activation_waits_without_rewriting_unchanged_source(self):
+        record = self._activation_failure(APIRequestError(result={"message": "synthetic unknown outcome"}))
+        for _ in range(2):
+            self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        saved = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]
+        self.assertFalse(saved["ready"])
+        self.assertEqual(
+            saved["creation"]["source_start"]["before_digest"], record["creation"]["source_start"]["before_digest"]
+        )
+        self.assertIs(saved["creation"]["source_start"]["not_dispatched"], False)
+
+    def test_resume_source_activation_rechecks_real_downstream_readiness(self):
+        record = self._activation_failure(self._activation_rejection())
+        cleaner = self.resources[("Clean", record["creation"]["refs"]["clean"]["name"])]
+        cleaner["status"]["phase"] = "Pending"
+        self.assertEqual(provision.ensure_system_snapshot("action"), "Clean")
+        cleaner["status"]["phase"] = "Ok"
+        stored = self.resources[("DataStorage", record["creation"]["refs"]["storage"]["name"])]
+        stored["status"]["phase"] = "Pending"
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataStorage")
+        stored["status"]["phase"] = "Ok"
+
+        def pending_table(**kwargs):
+            table = self._table(**kwargs)
+            table["status"]["phase"] = "Pending"
+            return table
+
+        def pending_redis(**kwargs):
+            table = self._table(**kwargs)
+            table["status"]["related"][0]["status"]["related"][0]["status"]["phase"] = "Pending"
+            return table
+
+        for getter in (pending_table, pending_redis):
+            self.sdk.result_table_info.side_effect = getter
+            self.assertEqual(provision.ensure_system_snapshot("action"), "RedisBinding")
+        self.sdk.result_table_info.side_effect = self._table
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_resume_source_activation_waits_for_actual_stopped_source(self):
+        record = self._activation_failure(self._activation_rejection())
+        current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
+        current["status"]["phase"] = "Pending"
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        current["status"]["phase"] = "Ok"
+        current["spec"]["current_status"] = "Running"
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_resume_source_activation_rechecks_source_before_put(self):
+        record = self._activation_failure(self._activation_rejection())
+        current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
+        reads = []
+
+        def changed_during_downstream_check(**params):
+            reads.append(params)
+            if len(reads) == 2:
+                current["spec"]["basic_info"]["description"] = "human changed after first read"
+            return self._getter("DataSource")(**params)
+
+        self.sdk.data_source_get.side_effect = changed_during_downstream_check
+        with self.assertRaises(BKBaseResourceMappingError):
+            provision.ensure_system_snapshot("action")
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_resume_source_activation_cannot_rebind_changed_raw_data_id(self):
+        record = self._activation_failure(self._activation_rejection())
+        current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
+        current["metadata"]["labels"]["raw_data_id"] = "99"
+        with self.assertRaises(BKBaseResourceMappingError):
+            provision.ensure_system_snapshot("action")
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        self.assertEqual(self.rows[key].config_value["bkbase_v4"]["default"]["audit"], record)
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_resume_source_activation_cannot_rebind_changed_data_id(self):
+        record = self._activation_failure(self._activation_rejection())
+        current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
+        current["spec"]["data_id"]["name"] = "another_data_id"
+        with self.assertRaises(BKBaseResourceMappingError):
+            provision.ensure_system_snapshot("action")
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        self.assertEqual(self.rows[key].config_value["bkbase_v4"]["default"]["audit"], record)
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_resume_source_activation_cannot_rebind_changed_result_table(self):
+        record = self._activation_failure(self._activation_rejection())
+
+        def changed_table(**params):
+            table = self._table(**params)
+            table["metadata"]["name"] = "another_result_table"
+            return table
+
+        self.sdk.result_table_info.side_effect = changed_table
+        with self.assertRaises(BKBaseResourceMappingError):
+            provision.ensure_system_snapshot("action")
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        self.assertEqual(self.rows[key].config_value["bkbase_v4"]["default"]["audit"], record)
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_superseded_source_activation_claim_cannot_put_again(self):
+        failure = self._activation_rejection()
+        stale = self._activation_failure(failure)
+        with self.assertRaises(APIRequestError) as caught:
+            provision.ensure_system_snapshot("action")
+        self.assertIs(caught.exception, failure)
+        self.assertEqual(self.sdk.data_source_update.call_count, 2)
+        context = bindings._system_context()
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "changed concurrently"):
+            provision._advance("action", context, stale, stale["creation"]["redis"])
+        self.assertEqual(self.sdk.data_source_update.call_count, 2)
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        intent = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]["creation"]["source_start"]
+        self.assertEqual(intent["attempt"], 2)
+        self.assertIs(intent["not_dispatched"], True)
 
     def test_v4_callback_token_reuses_atomic_record_and_v3_keeps_legacy_path(self):
         token = pull.GlobalMetaConfig

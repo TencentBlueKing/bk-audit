@@ -20,6 +20,7 @@ from typing import Dict
 from unittest import mock
 
 from django.conf import settings
+from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 from apps.permission.handlers.resource_types import ResourceEnum
@@ -45,6 +46,48 @@ from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
+
+
+class SystemSnapshotInitGateTests(SimpleTestCase):
+    def test_init_stops_before_event_when_snapshot_is_pending(self):
+        for multi_tenant in (False, True):
+            with self.subTest(multi_tenant=multi_tenant), override_settings(
+                BKBASE_API_VERSION="v4",
+                BKPAAS_MULTI_TENANT_MODE=multi_tenant,
+                SNAPSHOT_USERINFO_RESOURCE_URL="",
+            ), mock.patch.multiple(
+                SystemInitHandler,
+                pre_init=mock.DEFAULT,
+                init_standard_fields=mock.DEFAULT,
+                init_es=mock.DEFAULT,
+                init_doris=mock.DEFAULT,
+                init_redis=mock.DEFAULT,
+            ), mock.patch(
+                "services.web.entry.init.base.create_iam_data_link", side_effect=["DataSource", None]
+            ), mock.patch.object(
+                SystemInitHandler, "init_event"
+            ) as init_event:
+                self.assertIs(SystemInitHandler().init(), False)
+            init_event.assert_not_called()
+
+    @override_settings(BKBASE_API_VERSION="v4", SNAPSHOT_USERINFO_RESOURCE_URL="")
+    def test_init_stops_before_event_when_snapshot_raises(self):
+        failure = RuntimeError("synthetic snapshot activation failure")
+        with mock.patch.multiple(
+            SystemInitHandler,
+            pre_init=mock.DEFAULT,
+            init_standard_fields=mock.DEFAULT,
+            init_es=mock.DEFAULT,
+            init_doris=mock.DEFAULT,
+            init_redis=mock.DEFAULT,
+        ), mock.patch("services.web.entry.init.base.create_iam_data_link", side_effect=failure), mock.patch.object(
+            SystemInitHandler, "init_event"
+        ) as init_event, self.assertRaises(
+            RuntimeError
+        ) as caught:
+            SystemInitHandler().init()
+        self.assertIs(caught.exception, failure)
+        init_event.assert_not_called()
 
 
 @override_settings(BKAPP_INIT_SYSTEM="True")
