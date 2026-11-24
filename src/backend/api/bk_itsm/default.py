@@ -30,12 +30,15 @@ class BKITSM(BkApiResource, abc.ABC):
     module_name = "bk_itsm"
     base_url = BK_ITSM_API_URL
     platform_authorization = True
+    # 读写分桶：读操作（查状态/服务）一把桶、写操作（建单/操作）一把桶。
+    # 链式 process_one_risk 与补偿走同一 perform_request，天然同 key，禁止两套限流。
+    throttle_scope = "read"
 
     def perform_request(self, validated_request_data):
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
-                key=f"{self.__module__}.{self.__class__.__name__}",
+                key=f"{self.__module__}.{self.throttle_scope}",
                 rate=settings.ITSM_API_RATE_LIMIT,
             )
         )(validated_request_data)
@@ -54,6 +57,7 @@ class GetServiceDetail(BKITSM):
 
 
 class CreateTicket(BKITSM):
+    throttle_scope = "write"
     name = gettext_lazy("创建单据")
     method = "POST"
     action = "/create_ticket/" if not APIGW_ENABLED else "/v2/itsm/create_ticket/"
@@ -72,6 +76,7 @@ class TicketApproveResult(BKITSM):
 
 
 class OperateTicket(BKITSM):
+    throttle_scope = "write"
     name = gettext_lazy("操作单据")
     method = "POST"
     action = "/operate_ticket/" if not APIGW_ENABLED else "/v2/itsm/operate_ticket/"

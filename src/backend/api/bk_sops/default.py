@@ -33,12 +33,15 @@ class BKSOps(BkApiResource, abc.ABC):
     base_url = BK_SOPS_API_URL
     platform_authorization = True
     rate_limit = settings.SOPS_API_RATE_LIMIT
+    # 读写分桶：读操作（查状态/模板）一把桶、写操作（建/启/操作任务）一把桶。
+    # 链式 process_one_risk 与补偿走同一 perform_request，天然同 key，禁止两套限流。
+    throttle_scope = "read"
 
     def perform_request(self, validated_request_data):
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
-                key=f"{self.__module__}.{self.__class__.__name__}",
+                key=f"{self.__module__}.{self.throttle_scope}",
                 rate=self.rate_limit,
             )
         )(validated_request_data)
@@ -59,6 +62,7 @@ class GetTemplateInfo(BKSOps):
 
 
 class CreateTask(BKSOps):
+    throttle_scope = "write"
     name = gettext_lazy("通过业务流程模板创建任务")
     method = "POST"
     action = "/create_task/{template_id}/{bk_biz_id}/"
@@ -67,6 +71,7 @@ class CreateTask(BKSOps):
 
 
 class StartTask(BKSOps):
+    throttle_scope = "write"
     name = gettext_lazy("开始执行任务")
     method = "POST"
     action = "/start_task/{task_id}/{bk_biz_id}/"
@@ -88,6 +93,7 @@ class GetTaskStatus(BKSOps):
 
 
 class OperateTask(BKSOps):
+    throttle_scope = "write"
     name = gettext_lazy("操作任务")
     method = "POST"
     action = "/operate_task/{task_id}/{bk_biz_id}/"
@@ -103,6 +109,7 @@ class GetNodeData(BKSOps):
 
 
 class OperateNode(BKSOps):
+    throttle_scope = "write"
     name = gettext_lazy("操作节点")
     method = "POST"
     action = "/operate_node/{bk_biz_id}/{task_id}/"
