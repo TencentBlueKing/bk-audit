@@ -21,7 +21,6 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 |--------------------------------|----------|--------------------------------------------------------------------|--------------------------|--------------------------------------------------|
 | `DatabusStoragesPost`          | `POST`   | `/v3/databus/data_storages/`                                       | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)     |
 | `DatabusStoragesPut`           | `PUT`    | `/v3/databus/data_storages/{result_table_id}/`                     | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)     |
-| `DatabusStoragesDelete`        | `DELETE` | `/v3/databus/data_storages/{result_table_id}/`                     | 多：租户管理员；单：平台 | 待确认                                           |
 | `DatabusCleansPost`            | `POST`   | `/v3/databus/cleans/`                                              | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/clean.py)       |
 | `DatabusCleansPut`             | `PUT`    | `/v3/databus/cleans/{processing_id}/`                              | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/clean.py)       |
 | `DatabusCleansDelete`          | `DELETE` | `/v3/databus/cleans/{processing_id}/`                              | 平台                     | [代码](../../services/web/bkbase/clean.py)       |
@@ -30,20 +29,16 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 | `CreateResourceSet`            | `POST`   | `/v3/resourcecenter/resource_sets/`                                | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)     |
 | `UpdateResourceSet`            | `PATCH`  | `/v3/resourcecenter/resource_sets/{resource_set_id}/`              | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)     |
 | `CleanPreview`                 | `POST`   | `/v3/databus/cleans/verify/`                                       | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/clean.py)       |
-| `GetDeployPlan`                | `GET`    | `/v3/access/deploy_plan/{bkbase_data_id}/`                         | 多：租户管理员；单：平台 | 待确认                                           |
 | `CreateDeployPlan`             | `POST`   | `/v3/access/deploy_plan/`                                          | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/source.py)      |
 | `UpdateDeployPlan`             | `PUT`    | `/v3/access/deploy_plan/{bkbase_data_id}/`                         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/source.py)      |
-| `StartCollector`               | `POST`   | `/v3/access/collectorhub/{bkbase_data_id}/start/`                  | 多：租户管理员；单：平台 | 待确认                                           |
 | `StopCollector`                | `POST`   | `/v3/access/collectorhub/{bkbase_data_id}/stop/`                   | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/source.py)      |
-| `GetScenePlans`                | `GET`    | `/v3/aiops/scene_service/plans/`                                   | 平台                     | [代码](../../services/web/bkbase/deprecated.py)  |
+| `GetScenePlans` / `CheckAiops` | `GET` | `/v3/aiops/scene_service/plans/` | 平台 | [方案列表／能力探测](../../services/web/bkbase/deprecated.py) |
 | `GetPlanDetail`                | `GET`    | `/v3/aiops/scene_service/plans/{plan_id}/`                         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/deprecated.py)  |
-| `CheckAiops`                   | `GET`    | `/v3/aiops/scene_service/plans/`                                   | 平台                     | [代码](../../services/web/bkbase/deprecated.py)  |
-| `AuthTickets`                  | `POST`   | `/v3/auth/tickets/`                                                | 平台                     | 待确认                                           |
+| `AuthTickets` | `POST` | `/v3/auth/tickets/` | 平台 | [仅 V3，AIOps 结果表授权](../../services/web/analyze/controls/auth.py#L54) |
 | `CreateFlow`                   | `POST`   | `/v3/dataflow/flow/flows/`                                         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `StartFlow`                    | `POST`   | `/v3/dataflow/flow/flows/{flow_id}/start/`                         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `RestartFlow`                  | `POST`   | `/v3/dataflow/flow/flows/{flow_id}/restart/`                       | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `StopFlow`                     | `POST`   | `/v3/dataflow/flow/flows/{flow_id}/stop/`                          | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
-| `GetFlow`                      | `GET`    | `/v3/dataflow/flow/flows/{flow_id}/`                               | 多：租户管理员；单：平台 | 待确认                                           |
 | `GetFlowGraph`                 | `GET`    | `/v3/dataflow/flow/flows/{flow_id}/graph/`                         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `CreateFlowNode`               | `POST`   | `/v3/dataflow/flow/flows/{flow_id}/nodes/`                         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `UpdateFlowNode`               | `PUT`    | `/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/`               | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
@@ -57,17 +52,15 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 | `GetResultTables`              | `GET`    | `/v3/meta/result_tables/`                                          | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/metadata.py)    |
 | `GetMineResultTables`          | `GET`    | `/v3/meta/result_tables/mine/`                                     | 个人                     | [代码](../../services/web/bkbase/permissions.py) |
 | `GetResultTable`               | `GET`    | `/v3/meta/result_tables/{result_table_id}/`                        | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/metadata.py)    |
-| `GetRtStorages`                | `GET`    | `/v3/meta/result_tables/{result_table_id}/storages/`               | 多：租户管理员；单：平台 | 待确认                                           |
 | `GetProjectData`               | `GET`    | `/v3/auth/projects/{project_id}/data/`                             | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/permissions.py) |
-| `ProjectDataBatchCheck`        | `POST`   | `/v3/auth/projects/{project_id}/data/batch_check/`                 | 多：租户管理员；单：平台 | 待确认                                           |
-| `ProjectDataBatchAdd`          | `POST`   | `/v3/auth/projects/{project_id}/data/batch_add/`                   | 多：租户管理员；单：平台 | 待确认                                           |
+| `ProjectDataBatchCheck` | `POST` | `/v3/auth/projects/{project_id}/data/batch_check/` | 多：租户管理员；单：平台 | [仅 V3，检查结果表项目授权](../../services/web/bkbase/permissions.py#L285) |
+| `ProjectDataBatchAdd` | `POST` | `/v3/auth/projects/{project_id}/data/batch_add/` | 多：租户管理员；单：平台 | [仅 V3，将结果表授权给策略项目](../../services/web/bkbase/permissions.py#L290) |
 | `GetAlertConfigs`              | `GET`    | `/v3/datamanage/dmonitor/alert_configs/{object_type}/{object_id}/` | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `EditAlertConfigs`             | `PATCH`  | `/v3/datamanage/dmonitor/alert_configs/{alert_config_id}/`         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `GetRoleUsersList`             | `GET`    | `/v3/auth/roles/{role_id}/users/`                                  | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/permissions.py) |
 | `GetSensitivityInfoViaDataset` | `GET`    | `/v3/auth/sensitivity/retrieve_dataset/`                           | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/metadata.py)    |
-| `QuerySyncResource`            | `POST`   | `BKAPP_BKBASE_QUERY_SYNC_ACTION`                                   | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/query.py)       |
-| `SafeQuerySyncResource`        | `POST`   | `BKAPP_BKBASE_QUERY_SYNC_ACTION`                                   | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/query.py)       |
-| `DebugQuerySyncResource`       | `POST`   | `BKAPP_BKBASE_QUERY_SYNC_ACTION`                                   | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/query.py)       |
+| `QuerySyncResource` / `SafeQuerySyncResource` | `POST` | `BKAPP_BKBASE_QUERY_SYNC_ACTION` | 多：租户管理员；单：平台 | [普通／受控查询](../../services/web/bkbase/query.py) |
+| `DebugQuerySyncResource` | `POST` | `BKAPP_BKBASE_QUERY_SYNC_ACTION` | 多：租户管理员；单：平台 | [调试查询](../../services/web/bkbase/query.py)；单租户配置独立 Debug 地址时，按实际网关单独核对 |
 | `DataflowBatchStatusList`      | `GET`    | `/v3/dataflow/batch/data_makeup/status_list/`                      | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)        |
 | `UserAuthCheck`                | `POST`   | `/v3/auth/users/{user_id}/check/`                                  | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/permissions.py) |
 | `UserAuthBatchCheck`           | `POST`   | `/v3/auth/users/batch_check/`                                      | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/permissions.py) |
@@ -84,25 +77,17 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 |----------------------------|----------|--------------------------------------------------------------------|--------------------------|------------------------------------------------------------|
 | `DirectAuthByResources`    | `POST`   | `/v4/auth/users/direct_auth_by_resources/`                         | 应用                     | [代码](../../services/web/bkbase/permissions.py)           |
 | `BatchStatusList`          | `GET`    | `/v4/dataflow/batch/jobs/{job_id}/status_list/`                    | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)                  |
-| `ResultTable`              | `GET`    | `/v4/mcp/result_tables/{result_table_id}/`                         | 多：租户管理员；单：平台 | 待确认                                                     |
 | `ResultTableInfo`          | `GET`    | `/v4/result_tables/{result_table_id}/`                             | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/metadata.py)              |
 | `DatasetDetail`            | `GET`    | `/v4/databus/dataset/{namespace}/detail/{dataset_name}/`           | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/metadata.py)              |
-| `DatasetList`              | `GET`    | `/v4/databus/dataset/{namespace}/dataset_list/`                    | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/metadata.py)              |
+| `DatasetList` / `UserDatasetList` | `GET` | `/v4/databus/dataset/{namespace}/dataset_list/` | 普通：平台（多租户用租户管理员）；个人：当前用户 | [Dataset 查询](../../services/web/bkbase/metadata.py#L424) |
 | `StorageAssetCreate`       | `POST`   | `/v4/res_manage/assets/storage/`                                   | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)               |
 | `StorageAssetGet`          | `GET`    | `/v4/res_manage/assets/{project_name}/{sub_type}/{asset_name}/`    | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)               |
 | `StorageAssetList`         | `GET`    | `/v4/res_manage/assets/`                                           | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/storage.py)               |
-| `NamespacesList`           | `GET`    | `/v4/tenants/{tenant}/namespaces`                                  | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/permissions.py)           |
-| `UserNamespacesList`       | `GET`    | `/v4/tenants/{tenant}/namespaces`                                  | 个人                     | [代码](../../services/web/bkbase/permissions.py)           |
-| `UserDatasetList`          | `GET`    | `/v4/databus/dataset/{namespace}/dataset_list/`                    | 个人                     | [代码](../../services/web/bkbase/metadata.py)              |
-| `UserResultTables`         | `GET`    | `/v4/mcp/result_tables/mine/`                                      | 个人                     | 待确认                                                     |
-| `UserScopes`               | `GET`    | `/v4/mcp/auth/users/scopes/`                                       | 个人                     | 待确认                                                     |
-| `UserCheck`                | `POST`   | `/v4/mcp/auth/users/check/`                                        | 个人                     | 待确认                                                     |
-| `DataSourceList`           | `GET`    | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/`         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/source.py)                |
-| `DataSourceGet`            | `GET`    | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/`  | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/asset_etl_maintenance.py) |
+| `NamespacesList` / `UserNamespacesList` | `GET` | `/v4/tenants/{tenant}/namespaces` | 普通：平台（多租户用租户管理员）；个人：当前用户 | [项目查询](../../services/web/bkbase/permissions.py#L45) |
+| `DataSourceList` / `UserDataSourceList` | `GET` | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/` | 普通：平台（多租户用租户管理员）；个人：当前用户 | [数据源查询](../../services/web/bkbase/source.py) |
+| `DataSourceGet` / `UserDataSourceGet` | `GET` | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/` | 普通：平台（多租户用租户管理员）；个人：当前用户 | [数据源详情](../../services/web/bkbase/source.py) |
 | `DataSourceCreate`         | `POST`   | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/`         | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/source.py)                |
 | `DataConnCreate`           | `POST`   | `/v4/tenants/{tenant}/namespaces/{namespace}/dataconns/`           | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/source.py)                |
-| `UserDataSourceList`       | `GET`    | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/`         | 个人                     | [代码](../../services/web/bkbase/source.py)                |
-| `UserDataSourceGet`        | `GET`    | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/`  | 个人                     | [代码](../../services/web/bkbase/source.py)                |
 | `DataSourceUpdate`         | `PUT`    | `/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/`  | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/snapshot_restore.py)      |
 | `DataConnGet`              | `GET`    | `/v4/tenants/{tenant}/namespaces/{namespace}/dataconns/{name}/`    | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/snapshot_restore.py)      |
 | `DataConnUpdate`           | `PUT`    | `/v4/tenants/{tenant}/namespaces/{namespace}/dataconns/{name}/`    | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/snapshot_restore.py)      |
@@ -124,10 +109,6 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 | `FlowGet`                  | `GET`    | `/v4/tenants/{tenant}/namespaces/{namespace}/flows/{name}/`        | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)                  |
 | `FlowCreate`               | `POST`   | `/v4/tenants/{tenant}/namespaces/{namespace}/flows/`               | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)                  |
 | `FlowUpdate`               | `PUT`    | `/v4/tenants/{tenant}/namespaces/{namespace}/flows/{name}/`        | 多：租户管理员；单：平台 | [代码](../../services/web/bkbase/flow.py)                  |
-| `Flows`                    | `GET`    | `/v4/mcp/flows/`                                                   | 多：租户管理员；单：平台 | 待确认                                                     |
-| `FlowStatus`               | `GET`    | `/v4/mcp/flows/{flow_id}/status/`                                  | 多：租户管理员；单：平台 | 待确认                                                     |
-| `FlowLatestDeploy`         | `GET`    | `/v4/mcp/flows/{flow_id}/latest_deploy_data/`                      | 多：租户管理员；单：平台 | 待确认                                                     |
-| `FlowRestart`              | `POST`   | `/v4/mcp/flows/{flow_id}/restart/`                                 | 多：租户管理员；单：平台 | 待确认                                                     |
 
 ## bk_log
 
@@ -139,7 +120,6 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 
 | Resource                      | 方法     | 相对路径或配置项                                                                                   | 审计侧身份                   | 已见引用                                                         |
 |-------------------------------|----------|----------------------------------------------------------------------------------------------------|------------------------------|------------------------------------------------------------------|
-| `GetOperators`                | `GET`    | `/search_index_set/operators/`                                                                     | 多：租户管理员；单：SDK 默认 | 待确认                                                           |
 | `CreateStorage`               | `POST`   | `/databus_storage/`                                                                                | 多：租户管理员；单：平台     | [代码](../../services/web/databus/storage/resources.py)          |
 | `UpdateStorage`               | `PUT`    | `/databus_storage/{cluster_id}/`                                                                   | 多：租户管理员；单：平台     | [代码](../../services/web/databus/storage/resources.py)          |
 | `DeleteStorage`               | `DELETE` | `/databus_storage/{cluster_id}/`                                                                   | 多：租户管理员；单：平台     | [代码](../../services/web/databus/storage/resources.py)          |
@@ -161,14 +141,12 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 | `CreateCollectorNormal`       | `POST`   | `/databus_collectors/`                                                                             | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/resources.py)        |
 | `UpdateCollectorNormal`       | `PUT`    | `/databus_collectors/{collector_config_id}/`                                                       | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/resources.py)        |
 | `GetCollector`                | `GET`    | `/databus_collectors/{collector_config_id}/`                                                       | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/resources.py)        |
-| `CreateCollectorEtl`          | `POST`   | `/databus_collector_plugins/instance_etl/`                                                         | 多：租户管理员；单：SDK 默认 | 待确认                                                           |
 | `GetSubscriptTaskStatus`      | `GET`    | `/databus_collectors/{collector_config_id}/task_status/?task_id_list={task_id_list}`               | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/views.py)            |
 | `GetSubscriptTaskDetail`      | `GET`    | `/databus_collectors/{collector_config_id}/task_detail/?instance_id={instance_id}`                 | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/views.py)            |
 | `RetrySubscriptTask`          | `POST`   | `/databus_collectors/{collector_config_id}/retry/`                                                 | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/views.py)            |
 | `GetSubscriptionStatus`       | `GET`    | `/databus_collectors/{collector_config_id}/subscription_status/`                                   | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/views.py)            |
 | `BatchSubscriptionStatus`     | `GET`    | `/databus_collectors/batch_subscription_status/`                                                   | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/views.py)            |
-| `GetCollectorTailLog`         | `GET`    | `/databus_collectors/{collector_config_id}/tail/`                                                  | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/handlers.py)         |
-| `GetEtlPreview`               | `POST`   | `/databus_collectors/{collector_config_id}/etl_preview/`                                           | 多：租户管理员；单：SDK 默认 | 待确认                                                           |
+| `GetCollectorTailLog` / `GetApiPushTailLog` | `GET` | `/databus_collectors/{collector_config_id}/tail/` | 多：租户管理员；单：普通 SDK 默认，直报平台 | [采集日志](../../services/web/databus/collector/handlers.py) · [直报日志](../../services/web/databus/collector/resources.py) |
 | `StopSubscription`            | `POST`   | `/databus_collectors/{collector_config_id}/stop/`                                                  | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/databus/collector/resources.py)        |
 | `GetGlobals`                  | `GET`    | `/meta/globals/`                                                                                   | 多：租户管理员；单：SDK 默认 | [代码](../../apps/meta/utils/globals.py)                         |
 | `CreateCollectorPlugin`       | `POST`   | `/databus_collector_plugins/`                                                                      | 多：租户管理员；单：平台     | [代码](../../services/web/databus/collector_plugin/resources.py) |
@@ -177,12 +155,10 @@ V3 平台 Resource 仍可能在业务参数中附带平台用户名，即使多�
 | `EsQuerySearchResource`       | `POST`   | `/esquery_search/`                                                                                 | 多：租户管理员；单：平台     | [代码](../../services/web/query/resources/es.py)                 |
 | `EsQueryScroll`               | `POST`   | `/esquery_scroll/`                                                                                 | 多：租户管理员；单：平台     | [代码](../../services/web/risk/handlers/event.py)                |
 | `IndexSetReplace`             | `POST`   | `/index_set/replace/`                                                                              | 多：租户管理员；单：平台     | [代码](../../services/web/databus/collector_plugin/resources.py) |
-| `IndexSetOperators`           | `GET`    | `/search_index_set/operators/`                                                                     | 多：租户管理员；单：SDK 默认 | [代码](../../services/web/query/views.py)                        |
+| `IndexSetOperators` | `GET` | `/search_index_set/operators/` | 多：租户管理员；单：SDK 默认 | [检索操作符](../../services/web/query/views.py#L28) |
 | `CheckAllowed`                | `POST`   | `/iam/meta/check_allowed/`                                                                         | 个人                         | [代码](../../apps/permission/resources.py)                       |
 | `GetApplyData`                | `POST`   | `/iam/meta/get_apply_data/`                                                                        | 个人                         | [代码](../../apps/permission/resources.py)                       |
 | `GetSpacesMine`               | `GET`    | `/meta/spaces/mine/`                                                                               | 个人                         | [代码](../../apps/meta/resources.py)                             |
-| `CreateCustomCollector`       | `POST`   | `/databus_custom_create/`                                                                          | 多：租户管理员；单：SDK 默认 | 待确认                                                           |
-| `CreateApiPush`               | `POST`   | `/databus_custom_create/`                                                                          | 多：租户管理员；单：平台     | [代码](../../services/web/databus/collector/resources.py)        |
-| `GetApiPushTailLog`           | `GET`    | `/databus_collectors/{collector_config_id}/tail/`                                                  | 多：租户管理员；单：平台     | [代码](../../services/web/databus/collector/resources.py)        |
+| `CreateApiPush` | `POST` | `/databus_custom_create/` | 多：租户管理员；单：平台 | [创建 API Push](../../services/web/databus/collector/resources.py#L844)；继承 `CreateCustomCollector`，同一路径只申请一次 |
 | `GetReportToken`              | `GET`    | `/databus_collectors/{collector_config_id}/report_token/`                                          | 平台                         | [代码](../../services/web/databus/collector/resources.py)        |
 | `GetReportHost`               | `GET`    | `/databus_collectors/report_host/`                                                                 | 平台                         | [代码](../../apps/feature/plugins.py)                            |

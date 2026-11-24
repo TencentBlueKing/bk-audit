@@ -35,9 +35,7 @@ IAM V4 并不保证所有 V3 授权都可撤掉；兼容入口和影子对比以
 | `{system_id}/{resource-types、actions 或 roles}/{item_id}/` | PUT、DELETE  | 更新或移除已登记条目。                     |
 | `{system_id}/roles/{role_id}/actions/`                      | POST、DELETE | 增删角色操作关系。                         |
 
-预览只读，应用模式可能删除模型条目；不要以“授权接口都在 IAM
-V4”为由给常驻服务配置模型写权限。运行时有动态授权业务时，另核对 [
-`authorizations` 接口](identity-and-workflow.md#bk_iam_v4)。
+预览只读，应用模式可能删除模型条目。角色创建和删除已并入上表，只在需要写入的模型同步任务中申请，不计入常驻服务。运行时动态授权另核对 [`authorizations` 接口](identity-and-workflow.md#bk_iam_v4)。
 
 ## IAM 入站资源回调
 

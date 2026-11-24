@@ -4,6 +4,8 @@
 
 详细路径见 [API 明细索引](../api/docs/README.md)；地址的默认值和覆盖方式见 [API Endpoint 环境变量](api_endpoints_env.md)。
 
+明细已排除未使用的封装。只在特定版本或初始化任务中使用的接口单独标注；仓库外的部署脚本如果还有额外 API 调用，由对应负责人另行确认。
+
 ## 按业务模块选授权范围
 
 | 审计模块                       | 依赖                                                                                                                      | 申请时要分开核对                                                                                                  |
@@ -30,6 +32,7 @@
   Token／Host 是平台态，不能用 `use_admin_username=False` 判断为个人态。[接口明细](../api/docs/data-platform.md#bk_log)
 - **BKBase／策略**：个人列表和平台查询需要不同的边界；结果表样本预览走共用
   QuerySync，应明确策略权限是否足够，还是要另查目标表查询权限。[预览代码](../services/web/strategy_v2/resources.py#L2151) · [QuerySync 入口](../services/web/bkbase/query.py)
+- **BKBase V3／平台接口**：多租户网关头用租户管理员，但部分请求的业务参数仍填平台账号。先确认上游按哪个字段判权，避免一个请求里出现两个身份。[请求构造](../api/bk_base/default.py#L67)
 - **IAM／部署**：V4 常规 API 按实例租户调用；共享回调令牌读取和模型同步按注册租户（默认 `system`）。运行态不因为启用了 IAM V4
   就必须申请模型写入权限。[专项说明](../api/docs/direct-integrations.md#iam-v4-模型同步)
 - **ITSM V4／SOPS**：SDK 平台态与租户管理员是两回事。确认各环境可接受的调用 appcode、平台凭据及流程专属

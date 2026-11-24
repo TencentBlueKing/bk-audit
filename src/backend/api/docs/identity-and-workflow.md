@@ -35,15 +35,12 @@
 | Resource                           | 方法     | 相对路径或配置项                                                                     | 审计侧身份          | 已见引用                                         |
 |------------------------------------|----------|--------------------------------------------------------------------------------------|---------------------|--------------------------------------------------|
 | `ListSystemResource`               | `GET`    | `/api/v1/open/rbac/share/model/systems/`                                             | SDK 默认            | [代码](../../apps/meta/handlers/system_sync.py)  |
-| `RetrieveSystemResource`           | `GET`    | `/api/v1/open/rabc/share/model/systems/{system_id}/`                                 | SDK 默认            | [代码](../../apps/meta/handlers/system_sync.py)  |
-| `RetrieveCallbackSystemResource`   | `GET`    | `/api/v1/open/rabc/share/model/systems/{system_id}/`                                 | 应用（注册租户）    | [代码](../../apps/permission/handlers/iam_v4.py) |
+| `RetrieveSystemResource` / `RetrieveCallbackSystemResource` | `GET` | `/api/v1/open/rabc/share/model/systems/{system_id}/` | 系统详情：SDK 默认；回调取 Token：应用（注册租户） | [系统详情](../../apps/meta/handlers/system_sync.py) · [回调取 Token](../../apps/permission/handlers/iam_v4.py) |
 | `DirectAuthResource`               | `POST`   | `/api/v1/open/rbac/authorization/systems/{system_id}/auth/`                          | SDK 默认            | [代码](../../apps/permission/handlers/iam_v4.py) |
 | `DirectAuthByActionsResource`      | `POST`   | `/api/v1/open/rbac/authorization/systems/{system_id}/auth-by-actions/`               | SDK 默认            | [代码](../../apps/permission/handlers/iam_v4.py) |
 | `DirectAuthByResourcesResource`    | `POST`   | `/api/v1/open/rbac/authorization/systems/{system_id}/auth-by-resources/`             | SDK 默认            | [代码](../../apps/permission/handlers/iam_v4.py) |
 | `ListAuthorizedResourceResource`   | `POST`   | `/api/v1/open/rbac/authorization/systems/{system_id}/relation/authorized-resources/` | SDK 默认            | [代码](../../apps/permission/handlers/iam_v4.py) |
 | `GeneratePermApplyUrlResource`     | `POST`   | `/api/v1/open/application/permission-apply-urls/`                                    | SDK 默认            | [代码](../../apps/permission/handlers/iam_v4.py) |
-| `BatchCreateRoleResource`          | `POST`   | `/api/v1/open/rbac/model/systems/{system_id}/roles/`                                 | SDK 默认            | 待确认                                           |
-| `DeleteRoleResource`               | `DELETE` | `/api/v1/open/rbac/model/systems/{system_id}/roles/{role_id}/`                       | SDK 默认            | 待确认                                           |
 | `AddAuthorizationResource`         | `POST`   | `/api/v1/open/rbac/mgmt/systems/{system_id}/authorizations/`                         | SDK 默认 + operator | [代码](../../apps/permission/handlers/iam_v4.py) |
 | `RevokeAuthorizationResource`      | `DELETE` | `/api/v1/open/rbac/mgmt/systems/{system_id}/authorizations/`                         | SDK 默认 + operator | [代码](../../apps/permission/handlers/iam_v4.py) |
 | `ListAuthorizationSubjectResource` | `POST`   | `/api/v1/open/rbac/mgmt/systems/{system_id}/authorizations/query-subject/`           | SDK 默认 + operator | [代码](../../apps/permission/handlers/iam_v4.py) |
@@ -87,7 +84,6 @@ SDK 继承 GET。用户快照 Schema 是独立的配置地址与 Basic 凭据，
 | `GetServices`         | `GET`  | APIGW `/v2/itsm/get_services/`；ESB `/get_services/`                     | 平台       | [代码](../../apps/itsm/resources.py)               |
 | `GetServiceDetail`    | `GET`  | APIGW `/v2/itsm/get_service_detail/`；ESB `/get_service_detail/`         | 平台       | [代码](../../apps/itsm/resources.py)               |
 | `CreateTicket`        | `POST` | APIGW `/v2/itsm/create_ticket/`；ESB `/create_ticket/`                   | 平台       | [代码](../../services/web/risk/handlers/ticket.py) |
-| `GetTicketStatus`     | `GET`  | APIGW `/v2/itsm/get_ticket_status/`；ESB `/get_ticket_status/`           | 平台       | 待确认                                             |
 | `TicketApproveResult` | `POST` | APIGW `/v2/itsm/ticket_approval_result/`；ESB `/ticket_approval_result/` | 平台       | [代码](../../services/web/risk/handlers/ticket.py) |
 | `OperateTicket`       | `POST` | APIGW `/v2/itsm/operate_ticket/`；ESB `/operate_ticket/`                 | 平台       | [代码](../../services/web/risk/resources/risk.py)  |
 
@@ -105,11 +101,7 @@ SDK 继承 GET。用户快照 Schema 是独立的配置地址与 Basic 凭据，
 | `SystemWorkflowList`   | `GET`  | `/api/v1/system_workflow/list/`           | 平台 + 可选 SYSTEM-TOKEN | [代码](../../apps/itsm/resources.py)               |
 | `Workflows`            | `GET`  | `/api/v1/workflows/`                      | 平台                     | [代码](../../apps/itsm/resources.py)               |
 | `TicketDetail`         | `GET`  | `/api/v1/ticket/detail/`                  | 平台                     | [代码](../../services/web/risk/handlers/ticket.py) |
-| `ApprovalTasks`        | `POST` | `/api/v1/approval_tasks/`                 | 平台                     | 待确认                                             |
 | `TicketHandle`         | `POST` | `/api/v1/ticket/handle/`                  | 平台                     | [代码](../../services/web/risk/resources/risk.py)  |
-| `FullTextSearch`       | `POST` | `/api/v1/ticket_search/full_text_search/` | 平台                     | 待确认                                             |
-| `SystemCreate`         | `POST` | `/api/v1/system/create/`                  | 平台                     | 待确认                                             |
-| `SystemWorkflowCreate` | `POST` | `/api/v1/system_workflow/create/`         | 平台                     | 待确认                                             |
 
 ## bk_sops
 

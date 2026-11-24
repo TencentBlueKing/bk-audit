@@ -16,19 +16,13 @@ data_id／通道 token，单独配通道而非套用常规网关权限。
 
 | Resource              | 方法   | 相对路径或配置项                                                              | 审计侧身份 | 已见引用                                            |
 |-----------------------|--------|-------------------------------------------------------------------------------|------------|-----------------------------------------------------|
-| `SearchAlarmStrategy` | `POST` | 单 `/search_alarm_strategy_v3/`；多 `/app/alarm_strategy/search/`             | 平台       | 待确认                                              |
 | `SaveAlarmStrategy`   | `POST` | 单 `/save_alarm_strategy_v3/`；多 `/app/alarm_strategy/save/`                 | 平台       | [代码](../../services/web/analyze/controls/bkm.py)  |
 | `DeleteAlarmStrategy` | `POST` | 单 `/delete_alarm_strategy_v3/`；多 `/app/alarm_strategy/delete/`             | 平台       | [代码](../../services/web/analyze/controls/bkm.py)  |
 | `SwitchAlarmStrategy` | `POST` | 单 `/switch_alarm_strategy/`；多 `/app/alarm_strategy/switch/`                | 平台       | [代码](../../services/web/analyze/controls/bkm.py)  |
-| `UnifyQuery`          | `POST` | 单 `/time_series/unify_query/`；多 `/app/data_query/time_series_unify_query/` | 平台       | 待确认                                              |
-| `GetVariableValue`    | `POST` | 单 `/get_variable_value/`；多 `/app/data_query/get_variable_value/`           | 平台       | 待确认                                              |
 | `SearchNoticeGroup`   | `POST` | 单 `/search_notice_group/`；多 `/app/user_group/search/`                      | 平台       | [代码](../../services/web/entry/handler/healthz.py) |
-| `SaveNoticeGroup`     | `POST` | 单 `/save_notice_group/`；多 `/app/user_group/save/`                          | 平台       | 待确认                                              |
-| `DeleteNoticeGroup`   | `POST` | 单 `/delete_notice_group/`；多 `/app/user_group/delete/`                      | 平台       | 待确认                                              |
 | `SearchAlert`         | `POST` | 单 `/search_alert/`；多 `/app/alert/search/`                                  | 平台       | [代码](../../services/web/risk/handlers/bkm.py)     |
 | `GetClusterInfo`      | `GET`  | 单 `/metadata_get_cluster_info/`；多 `/app/metadata/get_cluster_info/`        | 平台       | [代码](../../services/web/query/utils/elastic.py)   |
-| `ReportMetric`        | `POST` | `/v2/push/`                                                                   | 通道 Token | [代码](../../core/monitor.py)                       |
-| `ReportEvent`         | `POST` | `/v2/push/`                                                                   | 通道 Token | [代码](../../core/monitor.py)                       |
+| `ReportMetric` / `ReportEvent` | `POST` | `/v2/push/` | 通道 Token | [指标／事件上报](../../core/monitor.py) |
 
 ## bk_sec
 
@@ -40,8 +34,7 @@ SDK，不走审计统一租户头注入；个人风险类型与平台风险类�
 | Resource                   | 方法   | 相对路径或配置项                      | 审计侧身份 | 已见引用                                           |
 |----------------------------|--------|---------------------------------------|------------|----------------------------------------------------|
 | `ProjectChoices`           | `GET`  | `/api/v1/project/choices/`            | 个人       | [代码](../../services/web/risk/resources/bksec.py) |
-| `RiskAccessList`           | `GET`  | `/api/v1/risk/risk_access/`           | 个人       | [代码](../../services/web/risk/bksec/service.py)   |
-| `RiskAccessListAsPlatform` | `GET`  | `/api/v1/risk/risk_access/`           | 平台       | [代码](../../services/web/risk/bksec/service.py)   |
+| `RiskAccessList` / `RiskAccessListAsPlatform` | `GET` | `/api/v1/risk/risk_access/` | 个人查询：当前用户；平台查询：平台 | [风险类型查询](../../services/web/risk/bksec/service.py) |
 | `PreviewTicketFields`      | `POST` | `/api/v1/risk/preview_ticket_fields/` | 个人       | [代码](../../services/web/risk/bksec/service.py)   |
 
 ## bk_sec_send_plugin
@@ -65,8 +58,6 @@ SDK，不走审计统一租户头注入；个人风险类型与平台风险类�
 | Resource               | 方法     | 相对路径或配置项                               | 审计侧身份 | 已见引用                                             |
 |------------------------|----------|------------------------------------------------|------------|------------------------------------------------------|
 | `QueryMeta`            | `GET`    | `/api/v1/meta/query/`                          | 平台       | [代码](../../services/web/tool/tasks.py)             |
-| `GetPanel`             | `GET`    | `/api/v1/panel/`                               | 平台       | 待确认                                               |
-| `QueryData`            | `POST`   | `/api/v1/datasource/query/`                    | 平台       | 待确认                                               |
 | `QueryVariableData`    | `POST`   | `/api/v1/variable/query/`                      | 平台       | [代码](../../services/web/vision/handlers/query.py)  |
 | `QueryDataset`         | `POST`   | `/api/v1/dataset/query/`                       | 平台       | [代码](../../services/web/vision/handlers/query.py)  |
 | `QueryFieldData`       | `POST`   | `/api/v1/field/{uid}/preview_data/`            | 平台       | [代码](../../services/web/vision/handlers/query.py)  |
