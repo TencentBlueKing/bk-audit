@@ -1209,7 +1209,14 @@ class CustomCloseRisk(RiskMeta):
     @transaction.atomic()
     def perform_request(self, validated_request_data):
         username = get_request_username()
-        risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        # 行锁获取：校验通过到事务提交期间，后台状态机（审批/套餐回写）不会并发改写本单状态（BKSEC 1578946）。
+        # 仅收口人工入口：内部自动关单路径（套餐成功/误报/确认误报）不经过此处，共用 CloseRisk 不受影响。
+        risk = get_object_or_404(Risk.objects.select_for_update(), risk_id=validated_request_data["risk_id"])
+        if not _manual_close_allowed(risk):
+            raise RiskStatusInvalid(
+                message=gettext("风险单为%(status)s，不支持人工关单，可通过标记误报或强制终止处理套餐结束流程")
+                % {"status": _status_label(risk)}
+            )
         origin_data = RiskInfoSerializer(risk).data
         CustomProcess(risk_id=risk.risk_id, operator=username).run(
             custom_action=CloseRisk.__name__, description=validated_request_data["description"]
@@ -2374,6 +2381,16 @@ def _risk_batch_actions(risk: Risk) -> Optional[Set[str]]:
             return set(_MISREPORT_CLOSED_ACTIONS)
         return set(_CLOSED_ACTIONS)
     return set()
+
+
+def _manual_close_allowed(risk: Risk) -> bool:
+    """单笔人工关单与批量关单共用同一套状态规则（BKSEC 1578946），避免两处口径漂移。
+
+    _risk_batch_actions 内部已做 status/display_status 双查（防历史数据两字段
+    不一致绕过），此处不重复实现。
+    """
+    actions = _risk_batch_actions(risk)
+    return actions is not None and "close" in actions
 
 
 def _status_label(risk: Risk) -> str:

@@ -501,6 +501,20 @@ class RiskFlowBaseHandler:
         RiskHandler.send_notice(risk=self.risk, notice_groups=[notice_group], is_todo=True)
 
 
+def _skip_status_update_if_closed(risk_id: str, flow: str) -> bool:
+    """行锁复检风险单是否已在流转期间被人工关闭。
+
+    关单后状态机不再驱动（process_one_risk 对 CLOSED 不分派），但在途的
+    审批/套餐流转仍可能执行到状态回写；此时跳过写回，避免已关单被拉回处理中（BKSEC 1578946）。
+    select_for_update 与人工关单入口的行锁互斥，保证读到的是对方事务提交后的最终状态。
+    """
+    locked = Risk.objects.select_for_update().filter(risk_id=risk_id).only("status").first()
+    if locked is not None and locked.status == RiskStatus.CLOSED:
+        logger.warning("[%s] risk closed during flow, skip status update, risk_id=%s", flow, risk_id)
+        return True
+    return False
+
+
 class NewRisk(RiskFlowBaseHandler):
     """
     新风险
@@ -817,6 +831,9 @@ class ForApprove(RiskFlowBaseHandler):
         return self.risk.last_history.process_result.get("ticket", {}).get("sn", "") or ""
 
     def update_status(self, process_result: dict, **kwargs) -> None:
+        # 审批状态回写前复查：期间被人工关闭则跳过（BKSEC 1578946 并发一致性）
+        if _skip_status_update_if_closed(self.risk.risk_id, self.__class__.__name__):
+            return
         status = process_result.get("status", {})
         current_status = status.get("current_status")
         approve_result = status.get("approve_result")
@@ -1044,6 +1061,9 @@ class AutoProcess(RiskFlowBaseHandler):
         self.risk.save(update_fields=["current_operator"])
 
     def update_status(self, process_result: dict, **kwargs) -> None:
+        # 套餐状态回写前复查：期间被人工关闭则跳过（BKSEC 1578946 并发一致性）
+        if _skip_status_update_if_closed(self.risk.risk_id, self.__class__.__name__):
+            return
         auto_close_risk = self.get_auto_close_risk(pa_config=kwargs.get("pa_config"))
         # 执行失败 或 处理成功且不自动关单，转给安全责任人
         if "status" in process_result and (
