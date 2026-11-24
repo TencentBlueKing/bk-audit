@@ -51,8 +51,8 @@
         :key="index"
         class="match-scope-tag__row">
         <span
-          v-if="row.showAnd"
-          class="match-scope-tag__op">and</span>
+          v-if="row.op"
+          class="match-scope-tag__op">{{ row.op }}</span>
         <span class="match-scope-tag__chip is-field">{{ row.field }}</span>
         <span class="match-scope-tag__symbol">{{ row.operator }}</span>
         <span class="match-scope-tag__chip is-value">{{ row.value }}</span>
@@ -87,7 +87,7 @@
     field: string;
     operator: string;
     value: string;
-    showAnd: boolean;
+    op: string;
     showToggle: boolean;
   }
 
@@ -162,18 +162,19 @@
     const rows: TagRow[] = [];
     source.forEach((group, groupIndex) => {
       group.conditions.forEach((condition, conditionIndex) => {
+        // 组首行：有左侧 group rail 时由 rail 展示组间连接符，行内不再重复；
+        // 组内后续行：展示真实 connector（and/or），与 tip/编辑页一致
+        const op = conditionIndex === 0
+          ? (groupIndex > 0 && !showRail.value ? (group.connector || 'and') : '')
+          : (condition.connector || 'and');
         rows.push({
           field: condition.field_label || condition.field,
           operator: operatorText(condition.operator),
           value: condition.value_display || condition.value || '--',
-          showAnd: conditionIndex > 0,
+          op,
           showToggle: false,
         });
       });
-      if (groupIndex > 0 && showRail.value && rows.length) {
-        const firstOfGroup = rows.length - group.conditions.length;
-        if (firstOfGroup >= 0) rows[firstOfGroup].showAnd = false;
-      }
     });
     if (canToggle.value && rows.length) rows[rows.length - 1].showToggle = true;
     return rows;

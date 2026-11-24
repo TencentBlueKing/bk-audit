@@ -7,7 +7,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-    10|  software distributed under the License is distributed on
+  software distributed under the License is distributed on
   an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
@@ -97,9 +97,9 @@ const buildField = (
 });
 
 /**
- * 条件字段与场景风险搜索对齐：
- * - 风险字段：风险ID / 标题 / 等级 / 命中策略 / 标签 / 责任人 / 当前处理人
- * - 事件字段：原始事件ID / 操作IP / 账号
+ * 匹配范围字段：
+ * - 风险字段：仅保留生成/命中时可稳定求值的属性（不含工单处理态字段）
+ * - 事件字段：按命中策略动态拉取全量；下列三项仅作默认新增/展示回退
  */
 export const FALLBACK_CONDITION_FIELDS: ConditionFieldOption[] = [
   buildField('strategy_id', '风险命中策略(ID)', 'strategy', 'risk'),
@@ -113,6 +113,11 @@ export const FALLBACK_CONDITION_FIELDS: ConditionFieldOption[] = [
   buildField('src_ip', '操作IP', 'text', 'event'),
   buildField('account', '账号', 'text', 'event'),
 ];
+
+/** 字段选择器「风险字段」Tab（不含锁定的命中策略） */
+export const RISK_CONDITION_FIELDS = FALLBACK_CONDITION_FIELDS.filter(item => (
+  item.field_group === 'risk' && item.field !== 'strategy_id'
+));
 
 export const getFieldMeta = (field: string) => (
   FALLBACK_CONDITION_FIELDS.find(item => item.field === field)

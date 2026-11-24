@@ -43,6 +43,7 @@ declare module 'vue' {
     KeepAliveRouterView: typeof import('./src/components/keep-alive-router-view/index.vue')['default']
     ListCheck: typeof import('./src/components/ip-selector/selector-box/components/list-check.vue')['default']
     MatchScopeExpression: typeof import('./src/components/risk-whitelist/match-scope-expression.vue')['default']
+    MatchScopeFieldSelect: typeof import('./src/components/risk-whitelist/match-scope-field-select.vue')['default']
     MultipleLineClamp: typeof import('./src/components/multiple-line-clamp/index.vue')['default']
     NoticeGroup: typeof import('./src/components/skeleton-loading/components/notice-group.vue')['default']
     Option: typeof import('./src/components/auth/option.vue')['default']
