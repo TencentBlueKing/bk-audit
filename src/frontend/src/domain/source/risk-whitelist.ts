@@ -14,7 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-import type { EventFieldRow } from '@model/risk-whitelist/whitelist';
+import type { ContainsFieldOption, EventFieldRow } from '@model/risk-whitelist/whitelist';
 
 import Request, {
   type IRequestPayload,
@@ -87,6 +87,14 @@ class RiskWhitelistSource extends ModuleBase {
   getHitEvents(params: { id: number | string; hit_id: number | string }) {
     const { id, ...rest } = params;
     return Request.get<{ fields: EventFieldRow[] }>(`${this.module}/${id}/hit_events/`, { params: rest });
+  }
+
+  /** 当前场景白名单 match_scope 中出现过的条件字段（去重） */
+  getContainsFields(params: { scene_id: number }, payload = {} as IRequestPayload) {
+    return Request.get<{ results: ContainsFieldOption[] }>(`${this.module}/contains_fields/`, {
+      params,
+      payload,
+    });
   }
 }
 

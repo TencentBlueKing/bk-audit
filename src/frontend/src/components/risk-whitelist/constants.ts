@@ -69,17 +69,59 @@ export const RENEW_DURATION_OPTIONS = DURATION_OPTIONS.filter(
 );
 
 /**
- * V1：匹配范围所有字段操作符仅允许等于（面聊结论，安全优先）。
- * string/number 差异表达式延后到后续版本再评估。
+ * 操作符展示文案：与策略 rule_audit_condition_operator 中文翻译保持一致
+ *（见 backend locale zh_CN：=  等于 / in  属于 / like  包含(模糊匹配) …）
  */
-export const OPERATOR_LABEL_MAP: Partial<Record<CompareOperator, string>> & { eq: string } = {
-  eq: '=等于',
+export const OPERATOR_LABEL_MAP: Record<CompareOperator, string> = {
+  eq: '=  等于',
+  neq: '!=  不等于',
+  gt: '>  大于',
+  lt: '<  小于',
+  gte: '>=  大于等于',
+  lte: '<=  小于等于',
+  include: 'in  属于',
+  exclude: 'not in  不属于',
+  like: 'like  包含(模糊匹配)',
+  not_like: 'not like  不包含(模糊匹配)',
+  isnull: 'is null  为空',
+  notnull: 'is not null  不为空',
 };
 
-/** V1 唯一可选操作符 */
-export const OPERATOR_OPTIONS: Array<{ value: CompareOperator; label: string }> = [
-  { value: 'eq', label: OPERATOR_LABEL_MAP.eq },
-];
+const toOperatorOptions = (values: CompareOperator[]) => values.map(value => ({
+  value,
+  label: OPERATOR_LABEL_MAP[value],
+}));
+
+/**
+ * 与 RuleAuditConditionOperator 对齐，并按类型分流：
+ * - string：等于/不等于/包含/模糊/空值
+ * - number：比较与包含，不含 like
+ * - strategy（命中策略）：仅等于
+ */
+export const STRING_OPERATOR_OPTIONS = toOperatorOptions([
+  'eq', 'neq', 'include', 'exclude', 'like', 'not_like', 'isnull', 'notnull',
+]);
+
+export const NUMBER_OPERATOR_OPTIONS = toOperatorOptions([
+  'eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'include', 'exclude', 'isnull', 'notnull',
+]);
+
+export const STRATEGY_OPERATOR_OPTIONS = toOperatorOptions(['eq']);
+
+/** @deprecated 兼容旧引用，默认按 string 操作符 */
+export const OPERATOR_OPTIONS = STRING_OPERATOR_OPTIONS;
+
+export const VALUELESS_OPERATORS: CompareOperator[] = ['isnull', 'notnull'];
+
+export const isValuelessOperator = (operator?: string) => (
+  VALUELESS_OPERATORS.includes(operator as CompareOperator)
+);
+
+export const getOperatorsForValueType = (valueType?: ConditionFieldOption['value_type']) => {
+  if (valueType === 'strategy') return STRATEGY_OPERATOR_OPTIONS;
+  if (valueType === 'number') return NUMBER_OPERATOR_OPTIONS;
+  return STRING_OPERATOR_OPTIONS;
+};
 
 const buildField = (
   field: string,
@@ -93,7 +135,7 @@ const buildField = (
   label: `${name}(${field})`,
   value_type: valueType,
   field_group: fieldGroup,
-  operators: OPERATOR_OPTIONS,
+  operators: getOperatorsForValueType(valueType),
 });
 
 /**
@@ -123,8 +165,12 @@ export const getFieldMeta = (field: string) => (
   FALLBACK_CONDITION_FIELDS.find(item => item.field === field)
 );
 
-/** V1 统一返回等于；保留方法签名便于后续放开 */
-export const getOperatorsForField = (_field?: string) => OPERATOR_OPTIONS;
+/** 命中策略仅等于；未知动态事件字段默认按 string */
+export const getOperatorsForField = (field?: string) => {
+  const meta = field ? getFieldMeta(field) : undefined;
+  if (!meta) return STRING_OPERATOR_OPTIONS;
+  return meta.operators;
+};
 
 export const createCondition = (
   field = FALLBACK_CONDITION_FIELDS.find(item => item.field === 'raw_event_id')
@@ -134,7 +180,7 @@ export const createCondition = (
   field: field.field,
   field_name: field.name,
   field_label: field.label,
-  operator: 'eq',
+  operator: field.operators[0]?.value || 'eq',
   value: '',
   value_display: '',
   connector,

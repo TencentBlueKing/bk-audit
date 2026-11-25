@@ -125,7 +125,6 @@
           v-model:filter-value="tableFilterValue"
           :active-row-keys="[]"
           active-row-type="multiple"
-          :allow-multiple-sort="allowMultipleSort"
           :bordered="border"
           class="tdesign-list"
           :columns="tableColumns"
@@ -140,6 +139,8 @@
           :row-key="rowKey as any"
           :selected-row-keys="selectedRowKeys"
           v-bind="$attrs"
+          :multiple-sort="allowMultipleSort"
+          :sort="tableSort"
           @filter-change="handleFilterChange"
           @select-change="handleSelectChange"
           @sort-change="handleSortChange"
@@ -532,6 +533,14 @@
   });
 
   const tableFilterValue = ref<Record<string, any>>({});
+  /**
+   * 受控排序状态：刷新后根据 URL 恢复表头排序 icon。
+   * 空态必须是 [] 而不是 undefined/null：
+   * 1) 蓝鲸 PrimaryTable 会 deleteUndefinedProps，首屏缺 sort 会让内层走非受控；
+   * 2) 不用 v-model:sort，避免 loading/列重绘时 update:sort 空值把 URL 恢复结果冲掉。
+   */
+  type TableSortInfo = { sortBy: string; descending: boolean };
+  const tableSort = ref<TableSortInfo | TableSortInfo[]>([]);
 
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
@@ -758,18 +767,23 @@
         ...urlSortParams,
         ...params,
       };
+      // 仅当入参显式带了表头筛选字段时才更新/清空；
+      // 场景就绪 refresh / 搜索条件刷新不能误删 URL 已恢复的表头筛选
       tableFilterKeys.forEach((key) => {
+        if (!Object.prototype.hasOwnProperty.call(params, key)) {
+          return;
+        }
         const value = params[key];
         if (value === '' || value === undefined || value === null
           || (Array.isArray(value) && value.length === 0)) {
           delete paramsMemo[key];
         } else if (Array.isArray(value)) {
           paramsMemo[key] = value.length === 1 ? value[0] : value.join(',');
-        } else if (Object.prototype.hasOwnProperty.call(params, key)) {
+        } else {
           paramsMemo[key] = value;
         }
       });
-      syncTableFilterValueFromParams(params);
+      syncTableFilterValueFromParams(getTableFilterParamsFromMemo());
     }
 
     Object.keys(params).forEach((key) => {
@@ -1136,11 +1150,9 @@
     };
     const nextParams: Record<string, any> = {};
     let hasFilter = false;
+    const filterCols = collectAllColumns(tableColumns.value).filter(col => col.colKey && col.filter);
 
-    collectAllColumns(tableColumns.value).forEach((col) => {
-      if (!col.colKey || !col.filter) {
-        return;
-      }
+    filterCols.forEach((col) => {
       const urlValue = urlParams[col.colKey];
       if (!urlValue) {
         return;
@@ -1293,6 +1305,42 @@
     isLoading.value = true;
     fetchListData();
   };
+  const parseSortParam = (sort?: string | string[]) => {
+    if (!sort) return undefined;
+    if (Array.isArray(sort)) return sort.map(String).filter(Boolean);
+    try {
+      const parsedSort = JSON.parse(sort);
+      return Array.isArray(parsedSort) ? parsedSort.map(String).filter(Boolean) : undefined;
+    } catch {
+      return String(sort).split(',').filter(Boolean);
+    }
+  };
+
+  /** 将 URL / paramsMemo 中的 sort 转为受控表头高亮状态 */
+  const syncTableSortFromParam = (sort?: string | string[] | null) => {
+    const sortArray = parseSortParam(sort || undefined);
+    if (!sortArray?.length) {
+      tableSort.value = [];
+      return;
+    }
+    const infos: TableSortInfo[] = sortArray.map((item) => {
+      const raw = String(item);
+      const descending = raw.startsWith('-');
+      const sortBy = descending ? raw.slice(1) : raw;
+      let uiDescending = descending;
+      if (props.reverseSortFields?.includes(sortBy)) {
+        uiDescending = !uiDescending;
+      }
+      return { sortBy, descending: uiDescending };
+    });
+    if (props.allowMultipleSort) {
+      tableSort.value = infos;
+      return;
+    }
+    // 单列高亮永远看 URL/params 的第一个 sort；后面的是 secondarySortField 自动追加，不能拿来点亮
+    tableSort.value = infos[0];
+  };
+
   // 解析 URL 上面的分页信息
   const parseURL = () => {
     if (props.disableUrlSync) {
@@ -1318,6 +1366,9 @@
         ...paramsMemo,
         sort: [sort],
       };
+      syncTableSortFromParam(sort);
+    } else if (!paramsMemo.sort) {
+      syncTableSortFromParam(null);
     }
     isReady = false;
   };
@@ -1335,6 +1386,11 @@
         }];
       }
     }
+
+    // 只在用户点击排序时更新；避免 loading/列重绘的空 update 冲掉 URL 恢复结果
+    tableSort.value = sortInfo.length === 0
+      ? []
+      : (props.allowMultipleSort ? sortInfo : sortInfo[0]);
 
     if (sortInfo.length === 0) {
       // 清除排序
@@ -1470,13 +1526,15 @@
   onMounted(() => {
     const pageReloaded = isPageReload();
     if (pageReloaded && props.persistTableFilters) {
+      // F5：丢弃 session 快照，改以 URL 为准（避免旧筛选覆盖地址栏）
       sessionStorage.removeItem(getTableFilterStorageKey());
-      tableFilterValue.value = getColumnsResetValue(tableColumns.value);
-      paramsMemo = {};
     }
     // 分页/排序始终从 URL 恢复；刷新时也要保留用户选的 page_size
     parseURL();
-    if (!pageReloaded) {
+    if (pageReloaded) {
+      // 硬刷新：表头筛选也从 URL 恢复，否则 fetchListData 会把 URL 里的筛选清掉
+      restoreTableFiltersFromUrl();
+    } else {
       const restoredFromStorage = restoreTableFilterState();
       if (!restoredFromStorage) {
         restoreTableFiltersFromUrl();
@@ -1650,6 +1708,11 @@
         }
       }
       mergeParamsMemo(params, urlSortParams, options);
+      // 保留 / 恢复 URL 排序时同步表头 icon（params 显式传 sort 时以 params 为准）
+      const nextSort = Object.prototype.hasOwnProperty.call(params, 'sort')
+        ? params.sort
+        : (urlSortParams.sort || paramsMemo.sort);
+      syncTableSortFromParam(nextSort);
       if (isReady) {
         pagination.current = 1;
       }

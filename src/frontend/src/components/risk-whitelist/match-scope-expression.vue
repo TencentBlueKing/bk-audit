@@ -55,7 +55,9 @@
           class="match-scope-tag__op">{{ row.op }}</span>
         <span class="match-scope-tag__chip is-field">{{ row.field }}</span>
         <span class="match-scope-tag__symbol">{{ row.operator }}</span>
-        <span class="match-scope-tag__chip is-value">{{ row.value }}</span>
+        <span
+          v-if="row.value"
+          class="match-scope-tag__chip is-value">{{ row.value }}</span>
         <button
           v-if="row.showToggle"
           class="match-scope-tag__toggle"
@@ -74,7 +76,11 @@
 
   import type { CompareOperator, MatchGroup } from '@model/risk-whitelist/whitelist';
 
-  import { FALLBACK_CONDITION_FIELDS, OPERATOR_LABEL_MAP } from './constants';
+  import {
+    FALLBACK_CONDITION_FIELDS,
+    isValuelessOperator,
+    OPERATOR_LABEL_MAP,
+  } from './constants';
 
   interface Props {
     scope?: Record<string, any> | null;
@@ -135,8 +141,9 @@
   const showRail = computed(() => multipleGroups.value && (!canToggle.value || expanded.value));
   const groupLabel = computed(() => (groups.value[1]?.connector || 'and').toUpperCase());
 
-  // V1 仅等于；历史脏数据也按等于展示
-  const operatorText = (_operator?: CompareOperator) => OPERATOR_LABEL_MAP.eq;
+  const operatorText = (operator?: CompareOperator) => (
+    (operator && OPERATOR_LABEL_MAP[operator]) || OPERATOR_LABEL_MAP.eq
+  );
 
   const isEllipsisOverflow = (el: HTMLElement) => el.scrollWidth > el.clientWidth + 1;
 
@@ -170,7 +177,9 @@
         rows.push({
           field: condition.field_label || condition.field,
           operator: operatorText(condition.operator),
-          value: condition.value_display || condition.value || '--',
+          value: isValuelessOperator(condition.operator)
+            ? ''
+            : (condition.value_display || condition.value || '--'),
           op,
           showToggle: false,
         });
@@ -187,12 +196,13 @@
         const op = groupIndex === 0 && conditionIndex === 0
           ? ''
           : (conditionIndex === 0 ? group.connector : condition.connector || 'and').toUpperCase();
-        const shown = condition.value_display || condition.value || '--';
         const fieldName = condition.field === 'strategy_id'
           ? (condition.field_name || '风险命中策略(ID)')
           : (condition.field_label || condition.field);
-        // 文本/ tip 统一「字段 = 值」，避免有的条件有空格、有的没有
-        const text = `${fieldName} = ${shown}`;
+        const symbol = operatorText(condition.operator);
+        const text = isValuelessOperator(condition.operator)
+          ? `${fieldName} ${symbol}`
+          : `${fieldName} ${symbol} ${condition.value_display || condition.value || '--'}`;
         lines.push({ op, text });
       });
     });

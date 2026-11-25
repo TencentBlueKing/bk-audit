@@ -15,57 +15,48 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-popover
-    ref="popoverRef"
-    :arrow="false"
-    :disabled="disabled"
-    ext-cls="match-scope-field-select-popover"
-    :is-show="isShow"
-    placement="bottom-start"
-    theme="light"
-    trigger="manual"
-    @after-hidden="handleAfterHidden">
+  <div class="match-scope-field-select">
     <button
       ref="triggerRef"
       class="match-scope-field-trigger"
       :class="{ 'is-disabled': disabled, 'is-open': isShow }"
       :disabled="disabled"
       type="button"
-      @click.stop="handleTogglePopover"
-      @mousedown.stop>
-      <span
-        v-bk-tooltips="{
-          content: displayLabel,
-          disabled: !labelOverflow,
-        }"
-        class="match-scope-field-trigger__text"
-        @mouseenter="checkTriggerOverflow">
+      :title="displayLabel"
+      @click.stop="handleToggle">
+      <span class="match-scope-field-trigger__text">
         {{ displayLabel }}
       </span>
       <audit-icon
         class="match-scope-field-trigger__arrow"
         type="angle-line-down" />
     </button>
-    <template #content>
+    <teleport to="body">
       <div
+        v-if="isShow"
+        ref="panelRef"
         class="match-scope-field-panel"
-        @click.stop
-        @mousedown.stop>
+        data-match-scope-field-panel="1"
+        :style="panelStyle"
+        @mousedown.stop
+        @click.stop>
         <div class="panel-tabs">
           <span
             class="panel-tab-item"
             :class="{ active: activeTab === 'risk' }"
-            @click="activeTab = 'risk'">
+            @click.stop="activeTab = 'risk'">
             {{ t('风险字段') }}
           </span>
           <span
             class="panel-tab-item"
             :class="{ active: activeTab === 'event' }"
-            @click="activeTab = 'event'">
+            @click.stop="activeTab = 'event'">
             {{ t('事件字段') }}
           </span>
         </div>
-        <div class="panel-search">
+        <div
+          class="panel-search"
+          @mousedown.stop>
           <audit-icon
             class="panel-search-icon"
             type="search1" />
@@ -75,40 +66,42 @@
             :placeholder="t('搜索字段名称')"
             size="small" />
         </div>
-        <div
-          v-bkloading="{ loading: activeTab === 'event' && eventLoading, opacity: 1 }"
-          class="panel-field-list"
-          :class="{ 'is-loading': activeTab === 'event' && eventLoading }">
-          <template v-if="activeTab === 'risk'">
+        <div class="panel-field-list">
+          <!-- loading 单独占位，避免 v-bkloading 遮罩盖住可选项导致点不中、光标不变小手 -->
+          <div
+            v-if="activeTab === 'event' && eventLoading"
+            class="field-list-loading">
+            <bk-loading
+              :loading="true"
+              mode="spin"
+              size="small"
+              theme="primary">
+              <div class="field-list-loading__slot" />
+            </bk-loading>
+          </div>
+          <template v-else-if="activeTab === 'risk'">
             <div
               v-for="item in filteredRiskFields"
               :key="item.field"
               class="field-item"
               :class="{ 'is-selected': item.field === modelValue }"
-              @click="handleSelectRisk(item)">
-              <span
-                v-bk-tooltips="{
-                  content: item.label,
-                  disabled: !overflowFlags[`risk_${item.field}`],
-                }"
-                class="field-item-label"
-                @mouseenter="(e: MouseEvent) => checkOverflow(`risk_${item.field}`, e)">
-                {{ item.label }}
-              </span>
+              :title="item.label"
+              @mousedown.prevent.stop="handleSelectRisk(item)">
+              <span class="field-item-label">{{ item.label }}</span>
             </div>
           </template>
-          <template v-else-if="!strategyId">
-            <div class="field-list-empty">
-              {{ t('请先选择命中策略') }}
-            </div>
-          </template>
+          <div
+            v-else-if="!strategyId"
+            class="field-list-empty">
+            {{ t('请先选择命中策略') }}
+          </div>
           <template v-else>
             <template
               v-for="group in eventFieldGroups"
               :key="group.label">
               <div
                 class="field-group-header"
-                @click="toggleGroup(group.label)">
+                @mousedown.prevent.stop="toggleGroup(group.label)">
                 <audit-icon
                   class="field-group-arrow"
                   :class="{ 'is-collapsed': collapsedGroups[group.label] }"
@@ -121,34 +114,36 @@
                   :key="item.id"
                   class="field-item field-item-indent"
                   :class="{ 'is-selected': item.field_name === modelValue }"
-                  @click="handleSelectEvent(item)">
-                  <span
-                    v-bk-tooltips="{
-                      content: `${item.display_name}[${item.field_name}]`,
-                      disabled: !overflowFlags[`event_${item.id}`],
-                    }"
-                    class="field-item-label"
-                    @mouseenter="(e: MouseEvent) => checkOverflow(`event_${item.id}`, e)">
+                  :title="`${item.display_name}[${item.field_name}]`"
+                  @mousedown.prevent.stop="handleSelectEvent(item)">
+                  <span class="field-item-label">
                     {{ `${item.display_name}[${item.field_name}]` }}
                   </span>
                 </div>
               </template>
             </template>
+            <div
+              v-if="isListEmpty"
+              class="field-list-empty">
+              {{ t('暂无匹配字段') }}
+            </div>
           </template>
           <div
-            v-if="isListEmpty && !(activeTab === 'event' && eventLoading)"
+            v-if="activeTab === 'risk' && isListEmpty"
             class="field-list-empty">
             {{ t('暂无匹配字段') }}
           </div>
         </div>
       </div>
-    </template>
-  </bk-popover>
+    </teleport>
+  </div>
 </template>
 <script setup lang="ts">
   import {
     computed,
+    nextTick,
     onBeforeUnmount,
+    reactive,
     ref,
     watch,
   } from 'vue';
@@ -197,15 +192,18 @@
   }>();
 
   const { t } = useI18n();
-  const popoverRef = ref<{ hide?:() => void }>();
   const triggerRef = ref<HTMLElement>();
+  const panelRef = ref<HTMLElement>();
   const isShow = ref(false);
   const activeTab = ref<'risk' | 'event'>('risk');
   const searchKeyword = ref('');
-  const labelOverflow = ref(false);
-  const overflowFlags = ref<Record<string, boolean>>({});
   const collapsedGroups = ref<Record<string, boolean>>({});
-  const pendingSelection = ref<FieldSelectPayload | null>(null);
+  const panelStyle = reactive({
+    top: '0px',
+    left: '0px',
+    minWidth: '260px',
+  });
+  let ignoreCloseBefore = 0;
 
   const displayLabel = computed(() => props.label || props.modelValue || t('请选择字段'));
 
@@ -260,93 +258,97 @@
     return eventFieldGroups.value.length === 0;
   });
 
-  const checkOverflow = (key: string, e: MouseEvent) => {
-    const el = e.target as HTMLElement;
-    if (el) {
-      overflowFlags.value[key] = el.scrollWidth > el.clientWidth;
+  const updatePanelPosition = () => {
+    const rect = triggerRef.value?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(rect.width, 260);
+    const left = Math.min(rect.left, window.innerWidth - width - 8);
+    let top = rect.bottom + 4;
+    const estimatedHeight = 320;
+    if (top + estimatedHeight > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - estimatedHeight - 4);
     }
+    panelStyle.top = `${top}px`;
+    panelStyle.left = `${Math.max(8, left)}px`;
+    panelStyle.minWidth = `${width}px`;
   };
 
-  const checkTriggerOverflow = (e: MouseEvent) => {
-    const el = e.target as HTMLElement;
-    labelOverflow.value = Boolean(el && el.scrollWidth > el.clientWidth);
+  const closePanel = () => {
+    document.removeEventListener('mousedown', handleDocumentMousedown, true);
+    window.removeEventListener('resize', updatePanelPosition);
+    window.removeEventListener('scroll', updatePanelPosition, true);
+    isShow.value = false;
+  };
+
+  const handleDocumentMousedown = (event: MouseEvent) => {
+    if (!isShow.value || Date.now() < ignoreCloseBefore) return;
+    const target = event.target as Node | null;
+    if (!target) return;
+    if (triggerRef.value?.contains(target as HTMLElement)) return;
+    if (panelRef.value?.contains(target as HTMLElement)) return;
+    closePanel();
+  };
+
+  const handleToggle = async () => {
+    if (props.disabled) return;
+    if (isShow.value) {
+      closePanel();
+      return;
+    }
+    searchKeyword.value = '';
+    const currentIsEvent = props.eventFields.some(item => item.field_name === props.modelValue);
+    activeTab.value = currentIsEvent ? 'event' : 'risk';
+    updatePanelPosition();
+    isShow.value = true;
+    ignoreCloseBefore = Date.now() + 150;
+    await nextTick();
+    updatePanelPosition();
+    document.addEventListener('mousedown', handleDocumentMousedown, true);
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
   };
 
   const toggleGroup = (label: string) => {
     collapsedGroups.value[label] = !collapsedGroups.value[label];
   };
 
-  const closePopover = () => {
-    document.removeEventListener('mousedown', handleDocumentClick, true);
-    isShow.value = false;
-    popoverRef.value?.hide?.();
-  };
-
-  const isInPopoverLayer = (target: Node) => {
-    const el = target as HTMLElement;
-    if (!el?.closest) return false;
-    return !!el.closest('.match-scope-field-select-popover, .tippy-box, .bk-popover, .bk-pop2-content, .bk-popover2');
-  };
-
-  const handleDocumentClick = (event: MouseEvent) => {
-    if (!isShow.value) return;
-    const target = event.target as Node | null;
-    if (!target) return;
-    if (triggerRef.value?.contains(target as HTMLElement)) return;
-    if (isInPopoverLayer(target)) return;
-    closePopover();
-  };
-
-  const handleTogglePopover = () => {
-    if (props.disabled) return;
-    isShow.value = !isShow.value;
+  const commitSelection = (payload: FieldSelectPayload) => {
+    emit('change', payload);
+    closePanel();
   };
 
   const handleSelectRisk = (item: ConditionFieldOption) => {
-    pendingSelection.value = {
+    commitSelection({
       field: item.field,
       field_name: item.name,
       field_label: item.label,
       field_group: 'risk',
-    };
-    closePopover();
+    });
   };
 
   const handleSelectEvent = (item: EventFieldOption) => {
-    pendingSelection.value = {
+    commitSelection({
       field: item.field_name,
       field_name: item.display_name,
       field_label: `${item.display_name}(${item.field_name})`,
       field_group: 'event',
-    };
-    closePopover();
+    });
   };
 
-  const handleAfterHidden = () => {
-    isShow.value = false;
-    if (!pendingSelection.value) return;
-    emit('change', pendingSelection.value);
-    pendingSelection.value = null;
-  };
-
-  watch(isShow, (value) => {
-    if (value) {
-      searchKeyword.value = '';
-      const currentIsEvent = props.eventFields.some(item => item.field_name === props.modelValue);
-      activeTab.value = currentIsEvent ? 'event' : 'risk';
-      setTimeout(() => {
-        document.addEventListener('mousedown', handleDocumentClick, true);
-      });
-      return;
-    }
-    document.removeEventListener('mousedown', handleDocumentClick, true);
+  watch(() => props.disabled, (disabled) => {
+    if (disabled && isShow.value) closePanel();
   });
 
   onBeforeUnmount(() => {
-    document.removeEventListener('mousedown', handleDocumentClick, true);
+    closePanel();
   });
 </script>
 <style lang="postcss" scoped>
+  .match-scope-field-select {
+    display: block;
+    width: 100%;
+  }
+
   .match-scope-field-trigger {
     display: inline-flex;
     width: 100%;
@@ -394,10 +396,16 @@
 </style>
 <style lang="postcss">
   .match-scope-field-panel {
+    position: fixed;
+    z-index: 5000;
     width: 300px;
-    max-width: calc(100vw - 24px);
-    min-width: 240px;
-    padding: 0;
+    max-width: calc(100vw - 16px);
+    padding: var(--bk-theme-space-6);
+    pointer-events: auto;
+    background: var(--bk-theme-surface-default);
+    border: 1px solid var(--bk-theme-border-default);
+    border-radius: var(--bk-theme-tag-radius);
+    box-shadow: 0 2px 12px rgb(0 0 0 / 12%);
     box-sizing: border-box;
 
     .panel-tabs {
@@ -453,10 +461,6 @@
       padding-bottom: var(--bk-theme-space-4);
       overflow: hidden auto;
 
-      &.is-loading {
-        min-height: 160px;
-      }
-
       &::-webkit-scrollbar {
         width: 4px;
         height: 4px;
@@ -469,6 +473,18 @@
 
       &::-webkit-scrollbar-track {
         background: transparent;
+      }
+
+      .field-list-loading {
+        display: flex;
+        min-height: 160px;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .field-list-loading__slot {
+        width: 100%;
+        height: 120px;
       }
 
       .field-group-header {
@@ -506,9 +522,11 @@
         padding: var(--bk-theme-space-6) var(--bk-theme-space-16);
         font-size: 12px;
         color: var(--bk-theme-text-default);
-        cursor: pointer;
+        cursor: pointer !important;
         align-items: center;
         transition: background .15s;
+        position: relative;
+        z-index: 1;
 
         &:hover {
           background: var(--bk-theme-surface-subtle);
@@ -527,6 +545,7 @@
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          pointer-events: none;
           flex: 1;
         }
       }
@@ -538,9 +557,5 @@
         text-align: center;
       }
     }
-  }
-
-  .match-scope-field-select-popover.bk-popover.bk-pop2-content {
-    padding: var(--bk-theme-space-6);
   }
 </style>

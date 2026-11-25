@@ -17,7 +17,7 @@
 <template>
   <audit-sideslider
     v-model:isShow="isShow"
-    :quick-close="false"
+    quick-close
     :show-footer="false"
     show-header-slot
     :width="960">
