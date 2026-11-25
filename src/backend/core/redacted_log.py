@@ -16,11 +16,14 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import logging
+import re
+import traceback as traceback_module
 
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_or_create_local_request_id
 
-from core.sensitive import redact_secrets
+from core.sensitive import REDACTED, redact_secrets
 
 
 class RedactedRequestLogMixin:
@@ -70,3 +73,53 @@ class RedactedRequestLogMixin:
             getattr(err, "code", None) or getattr(err, "ERROR_CODE", "") or "",
             json.dumps(redact_secrets(request_data), ensure_ascii=False, default=str),
         )
+
+
+# 自由文本凭据形态：password=xxx / "password": "xxx" / token: xxx 等（BKSEC 1578945 SDK 残余平替）
+FREE_TEXT_SECRET_PATTERN = re.compile(
+    r"(?i)[\"']?(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credential)[\"']?\s*[=:]\s*"
+    r"(\"[^\"]*\"|'[^']*'|[^\s,;&，；\)）】>]+)"
+)
+
+
+def redact_free_text(text: str) -> str:
+    """自由文本凭据打码：匹配 key=value / key: value / "key": "value" 形态的疑似凭据片段"""
+    return FREE_TEXT_SECRET_PATTERN.sub(lambda m: "{}={}".format(m.group(1), REDACTED), text)
+
+
+class BkResourceLogRedactionFilter(logging.Filter):
+    """bk_resource SDK 失败日志脱敏平替（BKSEC 1578945 SDK 残余）。
+
+    锁定依赖 bk-resource==0.4.11 在异常到达应用层 mixin 前打印上游错误原文
+    （contrib/api.py L150/L188/L194/L218-224），不受 support_data_collect 控制、
+    资源层无法拦截。本过滤器对 bk_resource logger 的消息文本与异常 traceback
+    做疑似凭据打码，日志上下文（错误消息/URL/traceback）完整保留；SDK 修复后可移除。
+    """
+
+    def filter(self, record):
+        try:
+            message = record.getMessage()
+            redacted = redact_free_text(message)
+            if redacted != message:
+                record.msg = redacted
+                record.args = None
+            if record.exc_info:
+                exc_text = "".join(traceback_module.format_exception(*record.exc_info))
+                redacted_exc_text = redact_free_text(exc_text)
+                if redacted_exc_text != exc_text:
+                    # 仅当 traceback 含疑似凭据时替换（formatter 优先使用 exc_text，输出等价）
+                    record.exc_text = redacted_exc_text
+                    record.exc_info = None
+        except Exception:  # NOCC:broad-except(脱敏失败不得阻断日志记录)
+            pass
+        return True
+
+
+def install_bk_resource_log_redaction():
+    """幂等安装 SDK 日志脱敏过滤器（模块加载即生效，SDK 修复版本后可移除）"""
+    bk_logger = logging.getLogger("bk_resource")
+    if not any(isinstance(f, BkResourceLogRedactionFilter) for f in bk_logger.filters):
+        bk_logger.addFilter(BkResourceLogRedactionFilter())
+
+
+install_bk_resource_log_redaction()
