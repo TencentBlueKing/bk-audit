@@ -23,6 +23,7 @@ from apps.meta.models import ResourceType, System
 from core.exceptions import LockError
 from core.models import get_request_username
 from services.web.bkbase.common import (
+    build_resource_name,
     get_bkbase_context,
     get_bkbase_version,
     legacy_call,
@@ -1823,8 +1824,8 @@ def prepare_source_provision(snapshot, params):
             "operation_id": operation_id,
             "stage": "new",
             "digest": _provision_digest(current, params, context),
-            "conn_name": "audit_conn_" + operation_id,
-            "source_name": "audit_source_" + operation_id,
+            "conn_name": build_resource_name("audit_conn", operation_id, max_length=60),
+            "source_name": build_resource_name("audit_source", operation_id, max_length=60),
         }
         current.bkbase_v4_resources = binding
         current.save(update_fields=["bkbase_v4_resources"])

@@ -17,7 +17,11 @@ from django.conf import settings
 from django.db import transaction
 
 from services.web.bkbase import clean, metadata, source, storage
-from services.web.bkbase.common import operation_result, resource_params
+from services.web.bkbase.common import (
+    build_resource_name,
+    operation_result,
+    resource_params,
+)
 from services.web.bkbase.constants import (
     BKBASE_V4_PULL_RESULTS_PATH,
     CleanRole,
@@ -104,9 +108,18 @@ def _planned_pull_report(kind, params, operation, redis):
 
 def _new_record(kind, context, redis):
     operation_id = uuid.uuid4().hex
-    # BKBase 资源名最多 60 字符；缩短类型前缀，给最长的 _source 后缀留空间并保留完整 UUID。
     name_kind = "rtype" if kind == "resource_type" else kind
-    name = f"audit_iam_{name_kind}_{operation_id}"
+    resource_specs = (
+        ("connection", "DataConn", "_conn"),
+        ("data_source", "DataSource", "_source"),
+        ("clean", "Clean", "_clean"),
+        ("storage", "DataStorage", "_redis"),
+    )
+    name = build_resource_name(
+        f"audit_iam_{name_kind}",
+        operation_id,
+        max_length=60 - max(len(suffix) for _, _, suffix in resource_specs),
+    )
     refs = {
         key: {
             "kind": resource_kind,
@@ -114,12 +127,7 @@ def _new_record(kind, context, redis):
             "namespace": context["namespace"],
             "name": name + suffix,
         }
-        for key, resource_kind, suffix in (
-            ("connection", "DataConn", "_conn"),
-            ("data_source", "DataSource", "_source"),
-            ("clean", "Clean", "_clean"),
-            ("storage", "DataStorage", "_redis"),
-        )
+        for key, resource_kind, suffix in resource_specs
     }
     operation = {
         "operation_id": operation_id,

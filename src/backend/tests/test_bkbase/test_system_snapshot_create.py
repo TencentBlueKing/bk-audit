@@ -319,6 +319,34 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertEqual(bindings.system_snapshot_table("resource_type"), ("47_" + stem, ["id", "system_id"]))
         self.assertEqual(self.posts[2][1]["spec"]["result_table_id"], "47_" + stem)
 
+    def test_long_snapshot_kind_shares_bounded_stem(self):
+        kind = "kind/with:*illegal" * 8
+        operation_id = UUID("0123456789abcdef0123456789abcdef")
+        context = bindings._system_context()
+        redis = {"kind": "Redis", "tenant": "default", "namespace": "clusters", "name": "iam_redis"}
+        with mock.patch.object(provision.uuid, "uuid4", return_value=operation_id), mock.patch.object(
+            provision, "_params", return_value={}
+        ), mock.patch.object(provision, "_input_digest", return_value="synthetic-digest"):
+            creation = provision._new_record(kind, context, redis)["creation"]
+
+        self.assertEqual(creation["operation_id"], operation_id.hex)
+        self.assertTrue(creation["name"].endswith("_" + operation_id.hex))
+        self.assertEqual(creation["logical_id"], "47_" + creation["name"])
+        suffixes = {
+            "connection": "_conn",
+            "data_source": "_source",
+            "clean": "_clean",
+            "storage": "_redis",
+        }
+        for key, suffix in suffixes.items():
+            name = creation["refs"][key]["name"]
+            with self.subTest(key=key):
+                self.assertRegex(name, r"^[_A-Za-z0-9][_A-Za-z0-9-]*$")
+                self.assertLessEqual(len(name), 60)
+                self.assertTrue(name.endswith(suffix))
+                self.assertEqual(name[: -len(suffix)], creation["name"])
+        self.assertEqual(len(creation["refs"]["data_source"]["name"]), 60)
+
     def test_pending_long_resource_type_claim_keeps_original_ref_without_repost(self):
         operation_id = "0123456789abcdef0123456789abcdef"
         name = "audit_iam_resource_type_" + operation_id
@@ -366,22 +394,48 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertEqual(row.config_value, original)
 
     def test_three_schemas_create_once_and_use_formal_refs_and_binding(self):
+        operation_id = "0123456789abcdef0123456789abcdef"
+        expected_lengths = {
+            "action": (54, 56, 55, 55),
+            "resource_type": (53, 55, 54, 54),
+            "user": (52, 54, 53, 53),
+        }
         for kind in ("action", "resource_type", "user"):
             with self.subTest(kind=kind):
                 config_key = bindings.SYSTEM_SNAPSHOT_KEYS[kind][0]
                 self.rows[config_key] = mock.Mock(config_value={"config_name": "legacy_" + kind, "bkbase_data_id": 12})
                 before = len(self.posts)
-                self._complete(kind)
+                with mock.patch.object(provision.uuid, "uuid4", return_value=UUID(operation_id)):
+                    self._complete(kind)
                 self.assertEqual(
                     [kind for kind, _ in self.posts[before:]], ["DataConn", "DataSource", "Clean", "DataStorage"]
                 )
                 record = self.rows[config_key].config_value["bkbase_v4"]["default"]["audit"]
+                name_kind = "rtype" if kind == "resource_type" else kind
+                stem = f"audit_iam_{name_kind}_{operation_id}"
+                self.assertEqual(record["creation"]["operation_id"], operation_id)
+                for (key, resource_kind, suffix), expected_length, (posted_kind, post) in zip(
+                    (
+                        ("connection", "DataConn", "_conn"),
+                        ("data_source", "DataSource", "_source"),
+                        ("clean", "Clean", "_clean"),
+                        ("storage", "DataStorage", "_redis"),
+                    ),
+                    expected_lengths[kind],
+                    self.posts[before : before + 4],
+                    strict=True,
+                ):
+                    expected_name = stem + suffix
+                    with self.subTest(resource_kind=resource_kind):
+                        self.assertEqual(posted_kind, resource_kind)
+                        self.assertEqual(record["creation"]["refs"][key]["name"], expected_name)
+                        self.assertEqual(post["metadata"]["name"], expected_name)
+                        self.assertEqual(len(expected_name), expected_length)
                 source_name = record["creation"]["refs"]["data_source"]["name"]
                 created_source = self.resources[("DataSource", source_name)]
-                if kind in ("action", "user"):
-                    self.assertTrue(source_name.startswith(f"audit_iam_{kind}_"))
                 self.assertIsNone(created_source["spec"]["report_config"]["data_path"])
                 logical_id, keys = bindings.system_snapshot_table(kind)
+                self.assertEqual(logical_id, "47_" + stem)
                 self.assertEqual(set(keys), {"id"} if kind == "user" else {"id", "system_id"})
                 source_request = self.posts[before + 1][1]["spec"]
                 self.assertEqual(source_request["desired_status"], "Stopped")

@@ -114,12 +114,35 @@ def reference(resource, context, kind):
     return ref
 
 
+def build_resource_name(readable: str, token: str, *, max_length: int, suffix: str = "") -> str:
+    """保留完整固定标识与后缀，只截短并规范化可读部分。"""
+    if not isinstance(max_length, int) or isinstance(max_length, bool) or max_length <= 0:
+        raise ValueError("max_length must be a positive integer")
+    if not isinstance(readable, str):
+        raise ValueError("readable must be a string")
+    if not isinstance(token, str) or not token or re.fullmatch(r"[A-Za-z0-9_-]+", token) is None:
+        raise ValueError("token must contain only resource name characters")
+    if not isinstance(suffix, str) or re.fullmatch(r"[A-Za-z0-9_-]*", suffix) is None:
+        raise ValueError("suffix must contain only resource name characters")
+
+    readable_length = max_length - 1 - len(token) - len(suffix)
+    if readable_length < 1:
+        raise ValueError("max_length cannot fit a readable part and fixed resource name parts")
+
+    normalized = re.sub(r"[^A-Za-z0-9_-]", "_", readable)
+    if not re.search(r"[A-Za-z0-9]", normalized):
+        normalized = "resource"
+    if normalized.startswith("-"):
+        normalized = "_" + normalized[1:]
+    return f"{normalized[:readable_length]}_{token}{suffix}"
+
+
 def stable_name(prefix, *parts):
     """稳定资源名保留摘要，截断不会导致不同业务资源同名。"""
     text = "_".join(str(p) for p in parts)
     digest = hashlib.sha256(text.encode()).hexdigest()[:12]
     readable = re.sub(r"[^A-Za-z0-9_-]", "_", text)
-    return f"{prefix}_{readable[:44-len(prefix)]}_{digest}"
+    return build_resource_name(f"{prefix}_{readable}", digest, max_length=58)
 
 
 @contextmanager
