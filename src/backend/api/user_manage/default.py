@@ -18,7 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import base64
-import copy
 import os
 
 from bk_resource.utils.cache import CacheTypeItem
@@ -93,9 +92,7 @@ class ListUserDepartments(UserManageResource):
             and "id" in validated_request_data
             and "bk_username" not in validated_request_data
         ):
-            data = copy.deepcopy(validated_request_data)
-            data["bk_username"] = data.pop("id")
-            return super().build_url(data)
+            validated_request_data["bk_username"] = validated_request_data.pop("id")
         return super().build_url(validated_request_data)
 
     cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60, user_related=False)
@@ -139,9 +136,7 @@ class RetrieveDepartment(UserManageResource):
             and "id" in validated_request_data
             and "department_id" not in validated_request_data
         ):
-            data = copy.deepcopy(validated_request_data)
-            data["department_id"] = data.pop("id")
-            return super().build_url(data)
+            validated_request_data["department_id"] = validated_request_data.pop("id")
         return super().build_url(validated_request_data)
 
     cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
