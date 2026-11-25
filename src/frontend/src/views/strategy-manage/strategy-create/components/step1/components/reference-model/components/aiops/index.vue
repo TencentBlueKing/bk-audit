@@ -430,9 +430,21 @@
     padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
     .flex-center {
-      display: flex;
-      align-items: center;
-      justify-content: left;
+      display: inline-flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      width: max-content;
+      max-width: 100%;
+
+      .bk-form-item {
+        flex: 0 0 auto;
+        width: auto;
+        margin-bottom: 0;
+      }
+
+      .bk-form-item:last-child {
+        margin-left: -1px;
+      }
     }
   }
 }

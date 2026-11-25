@@ -2132,24 +2132,40 @@
     }
 
     .schedule-period-row {
-      display: flex;
-      width: 428px;
+      display: inline-flex;
+      width: max-content;
       max-width: 100%;
       align-items: flex-start;
+      align-self: flex-start;
       gap: 0;
 
-      :deep(.bk-form-item) {
-        flex: none;
+      :deep(.bk-form-item.no-label) {
+        flex: 0 0 auto;
+        width: auto;
+        max-width: none;
         margin-bottom: 0;
+      }
+
+      :deep(.bk-form-item.no-label:first-child) {
+        flex-basis: 360px;
+        width: 360px;
+        max-width: calc(100% - 67px);
+      }
+
+      :deep(.bk-form-item.no-label:last-child) {
+        flex-basis: 68px;
+        width: 68px;
+        margin-left: -1px;
       }
 
       :deep(.bk-form-content) {
         width: auto;
+        max-width: none;
       }
 
       .schedule-input {
-        width: 360px;
-        max-width: calc(100% - 67px);
+        width: 100%;
+        max-width: 100%;
 
         &.bk-input,
         :deep(.bk-input) {
@@ -2160,7 +2176,6 @@
       .schedule-select {
         width: 68px;
         flex: none;
-        margin-left: -1px;
 
         :deep(.bk-select-trigger),
         :deep(.bk-select-trigger .bk-select-tag),
