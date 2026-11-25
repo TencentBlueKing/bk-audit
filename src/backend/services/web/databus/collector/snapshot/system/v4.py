@@ -180,7 +180,11 @@ def _verified_redis_binding(resource, table, redis):
         if not isinstance(item, dict) or item.get("kind") != TableBindingKind.REDIS:
             continue
         spec = item.get("spec")
-        if isinstance(spec, dict) and spec.get("data") == table and spec.get("storage") == redis:
+        if (
+            isinstance(spec, dict)
+            and _matches_nested_ref(spec.get("data"), table)
+            and _matches_nested_ref(spec.get("storage"), redis)
+        ):
             matches.append(item)
     if len(matches) != 1:
         return None

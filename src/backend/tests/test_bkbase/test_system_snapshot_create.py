@@ -457,7 +457,7 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertNotIn("fixture_token", saved)
         self.assertNotIn("encrypted_fixture", saved)
 
-    def test_action_snapshot_resumes_when_data_source_readback_adds_platform_fields(self):
+    def test_action_snapshot_resumes_when_data_source_spec_readback_differs(self):
         self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
         self._settle()
         self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
@@ -465,6 +465,8 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         ref = deepcopy(row.config_value["bkbase_v4"]["default"]["audit"]["creation"]["refs"]["data_source"])
         observed = self.resources[("DataSource", ref["name"])]["spec"]
         observed["basic_info"].update(access_channel="bkbase", access_channel_alias="计算平台", data_source_alias="平台展示名")
+        observed["data_conn"].pop("tenant")
+        observed["report_config"]["method"] = "POST"
         observed["report_config"]["pagination"]["platform_default"] = True
         self._settle()
 
@@ -475,7 +477,7 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertEqual(record["creation"]["refs"]["data_source"], ref)
         self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean", "DataStorage"])
 
-    def test_action_snapshot_does_not_resume_when_data_source_key_fields_drift(self):
+    def test_action_snapshot_does_not_resume_when_data_source_identity_changes(self):
         self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
         self._settle()
         self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
@@ -484,23 +486,14 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         original_record = deepcopy(row.config_value)
         ref = original_record["bkbase_v4"]["default"]["audit"]["creation"]["refs"]["data_source"]
         source_value = self.resources[("DataSource", ref["name"])]
-        original_spec = deepcopy(source_value["spec"])
-        for section, field, value in (
-            ("basic_info", "bk_biz_id", 123),
-            ("data_conn", "name", "wrong_conn"),
-            ("report_config", "path", "/another/"),
-            ("report_config", "data_path", ".data.results"),
-            ("report_config", "data_path", None),
+        for scope, updates in (
+            (source_value, {"kind": "DataConn"}),
+            (source_value["metadata"], {"name": "wrong_source"}),
+            (source_value["metadata"], {"tenant": "other_tenant"}),
+            (source_value["metadata"], {"namespace": "other_project"}),
         ):
-            with self.subTest(field=field, value=value):
-                source_value["spec"] = deepcopy(original_spec)
-                observed = source_value["spec"][section]
-                if value is None:
-                    observed.pop(field)
-                else:
-                    observed[field] = value
-
-                with self.assertRaisesRegex(BKBaseResourceMappingError, "no longer matches its target"):
+            with self.subTest(updates=updates), mock.patch.dict(scope, updates):
+                with self.assertRaises(BKBaseResourceMappingError):
                     provision.ensure_system_snapshot("action")
 
                 self.assertEqual(row.config_value, original_record)
@@ -586,6 +579,24 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertEqual(len(sent), 2)
         self.assertEqual(second["creation"]["operation_id"], first["creation"]["operation_id"])
         self.assertEqual(second["creation"]["refs"], first["creation"]["refs"])
+
+    def test_create_digest_is_only_checked_when_resending_a_write(self):
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+        self._settle()
+        row = self.rows["bkaudit_action_config_data"]
+        record = row.config_value["bkbase_v4"]["default"]["audit"]
+        attempt = record["creation"]["steps"]["connection"]
+        attempt.update(target_digest="older-create-payload", not_dispatched=True)
+        conn_ref = record["creation"]["refs"]["connection"]
+        key = ("DataConn", conn_ref["name"])
+        existing = self.resources.pop(key)
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "creation inputs changed"):
+            provision.ensure_system_snapshot("action")
+        self.assertEqual([kind for kind, _ in self.posts], ["DataConn"])
+
+        self.resources[key] = existing
+        self._complete("action")
+        self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean", "DataStorage"])
 
     def _connection_claim(self, **step):
         """准备持久化声明，允许覆盖尝试字段以复现旧记录和并发快照。"""
@@ -795,6 +806,10 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         else:
             self.fail("activation was not reached")
         self.assertEqual(len(self.updates), 1)
+        current = self.resources[("DataSource", self.updates[0]["metadata"]["name"])]
+        current["metadata"]["annotations"]["platform_observation"] = "accepted"
+        current["spec"]["basic_info"]["description"] = "platform display description"
+        current["spec"]["report_config"]["method"] = "POST"
         self._settle()
         self._complete("action")
         self.assertEqual(len(self.updates), 1)
@@ -895,22 +910,79 @@ class SystemSnapshotCreationTests(SimpleTestCase):
     def test_resume_source_activation_in_multitenant_mode(self):
         self._assert_activation_rejection_resumes()
 
-    def test_source_activation_never_overwrites_changed_source_or_replays_legacy_intent(self):
+    def test_snapshot_resumes_when_asset_specs_readback_differs(self):
+        record = self._activation_failure(self._activation_rejection())
+        refs = record["creation"]["refs"]
+        conn = self.resources[("DataConn", refs["connection"]["name"])]["spec"]
+        conn["data_conn_alias"] = "platform display name"
+        conn["conn_info"]["platform_default"] = True
+        conn["conn_info"]["headers"]["X-Platform-Default"] = "true"
+        headers = conn["conn_info"]["headers"]
+        headers["Content-Type"] = headers.pop("Content-type")
+        cleaner = self.resources[("Clean", refs["clean"]["name"])]["spec"]
+        cleaner["alias"] = "platform display name"
+        cleaner["deploy_revision"] += 1
+        cleaner["data_id"].pop("tenant")
+        cleaner["data_id"]["platform_default"] = True
+        stored = self.resources[("DataStorage", refs["storage"]["name"])]["spec"]
+        stored["tableInfo"]["storage"]["platform_default"] = True
+        stored["tableInfo"]["expire"] = 1
+        stored["taskFieldSetting"]["key_fields"] = ["system_id", "id"]
+
+        def table_with_platform_fields(**kwargs):
+            table = self._table(**kwargs)
+            spec = table["status"]["related"][0]["spec"]
+            spec["data"] = {**spec["data"], "platform_default": True}
+            spec["storage"] = {key: value for key, value in spec["storage"].items() if key != "tenant"}
+            return table
+
+        self.sdk.result_table_info.side_effect = table_with_platform_fields
+        self.sdk.data_source_update.side_effect = self._update_source
+        self._complete("action")
+
+        final = self.rows["bkaudit_action_config_data"].config_value["bkbase_v4"]["default"]["audit"]
+        self.assertTrue(final["ready"])
+        self.assertEqual(final["creation"]["refs"], refs)
+        self.assertEqual(final["redis_key_fields"], ["system_id", "id"])
+        self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean", "DataStorage"])
+        self.assertEqual(self.sdk.data_source_update.call_count, 2)
+
+    def test_snapshot_checks_usable_redis_keys_before_activating_source(self):
+        record = self._activation_failure(self._activation_rejection())
+        ref = record["creation"]["refs"]["storage"]
+        stored = self.resources[("DataStorage", ref["name"])]["spec"]
+        stored["taskFieldSetting"]["key_fields"] = ["id"]
+
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "Redis Join key fields mismatch"):
+            provision.ensure_system_snapshot("action")
+
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_asset_readback_rejects_different_resource_identity_before_activation(self):
+        record = self._activation_failure(self._activation_rejection())
+        refs = record["creation"]["refs"]
+        for kind, key in (
+            ("DataConn", "connection"),
+            ("Clean", "clean"),
+            ("DataStorage", "storage"),
+        ):
+            metadata = self.resources[(kind, refs[key]["name"])]["metadata"]
+            with self.subTest(kind=kind), mock.patch.dict(metadata, name="another_ref"):
+                with self.assertRaisesMessage(BKBaseResourceMappingError, "resource identity changed"):
+                    provision.ensure_system_snapshot("action")
+        self.assertEqual(self.sdk.data_source_update.call_count, 1)
+        self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean", "DataStorage"])
+
+    def test_legacy_source_activation_only_observes_state_without_replay(self):
         record = self._activation_failure(self._activation_rejection())
         current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
-        original = deepcopy(current)
-        current["spec"]["basic_info"]["description"] = "human changed"
-        with self.assertRaises(BKBaseResourceMappingError):
-            provision.ensure_system_snapshot("action")
-        self.assertEqual(self.sdk.data_source_update.call_count, 1)
-        current.clear()
-        current.update(original)
-        record["creation"]["source_start"] = {"target_digest": record["creation"]["source_start"]["target_digest"]}
+        record["creation"]["source_start"] = {"target_digest": "old-format-digest"}
         key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
         self.rows[key].config_value["bkbase_v4"]["default"]["audit"] = deepcopy(record)
         self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
         self.assertEqual(self.sdk.data_source_update.call_count, 1)
-        current["spec"].update(desired_status="Running", current_status="Running")
+        current["spec"]["current_status"] = "Running"
+        current["spec"].pop("desired_status")
         self.assertIsNone(provision.ensure_system_snapshot("action"))
         self.assertEqual(self.sdk.data_source_update.call_count, 1)
 
@@ -972,14 +1044,56 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         def changed_during_downstream_check(**params):
             reads.append(params)
             if len(reads) == 2:
-                current["spec"]["basic_info"]["description"] = "human changed after first read"
+                current["spec"]["desired_status"] = "Running"
             return self._getter("DataSource")(**params)
 
         self.sdk.data_source_get.side_effect = changed_during_downstream_check
-        with self.assertRaises(BKBaseResourceMappingError):
-            provision.ensure_system_snapshot("action")
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
         self.assertEqual(len(reads), 2)
         self.assertEqual(self.sdk.data_source_update.call_count, 1)
+
+    def test_resume_source_activation_preserves_latest_spec_from_the_same_resource(self):
+        record = self._activation_failure(self._activation_rejection())
+        current = self.resources[("DataSource", record["creation"]["refs"]["data_source"]["name"])]
+        reads = []
+
+        def changed_during_downstream_check(**params):
+            reads.append(params)
+            if len(reads) == 2:
+                current["spec"]["report_config"]["method"] = "POST"
+            return self._getter("DataSource")(**params)
+
+        self.sdk.data_source_get.side_effect = changed_during_downstream_check
+        self.sdk.data_source_update.side_effect = self._update_source
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        self.assertEqual(self.sdk.data_source_update.call_count, 2)
+        self.assertEqual(self.updates[0]["spec"]["report_config"]["method"], "POST")
+        self.assertEqual(self.updates[0]["spec"]["desired_status"], "Running")
+        self._settle()
+        self._complete("action")
+        self.assertEqual(self.sdk.data_source_update.call_count, 2)
+
+    def test_snapshot_cannot_rebind_source_before_first_activation(self):
+        for pending in ("DataConn", "DataSource", "Clean"):
+            self.assertEqual(provision.ensure_system_snapshot("action"), pending)
+            self._settle()
+
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        row = self.rows[key]
+        record = deepcopy(row.config_value["bkbase_v4"]["default"]["audit"])
+        self.assertNotIn("source_start", record["creation"])
+        ref = record["creation"]["refs"]["data_source"]
+        current = self.resources[("DataSource", ref["name"])]
+        for fields, change in (
+            (current["spec"]["data_id"], {"name": "another_data_id"}),
+            (current["metadata"]["labels"], {"raw_data_id": "99"}),
+        ):
+            with self.subTest(change=change), mock.patch.dict(fields, change):
+                with self.assertRaises(BKBaseResourceMappingError):
+                    provision.ensure_system_snapshot("action")
+            self.assertEqual(row.config_value["bkbase_v4"]["default"]["audit"], record)
+            self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean"])
+            self.sdk.data_source_update.assert_not_called()
 
     def test_resume_source_activation_cannot_rebind_changed_raw_data_id(self):
         record = self._activation_failure(self._activation_rejection())
