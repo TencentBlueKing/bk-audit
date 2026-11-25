@@ -143,7 +143,31 @@ def _owned(context, operation, ref, resource):
     return resource
 
 
+def _matches_data_source_spec(desired, actual):
+    """回读只核对业务归属、连接和拉取契约，平台补充字段不影响续跑。"""
+    report = actual.get("report_config")
+    if not isinstance(report, dict):
+        return False
+    wanted = desired["report_config"]
+    for expected, observed, fields in (
+        (desired, actual, ("desired_status",)),
+        (desired["basic_info"], actual.get("basic_info"), ("bk_biz_id",)),
+        (desired["data_conn"], actual.get("data_conn"), ("kind", "tenant", "namespace", "name")),
+        (wanted, report, ("type", "http_mode", "data_conn_name", "method", "path", "body", "data_path")),
+        (wanted["increment_field"], report.get("increment_field"), ("type", "time_format")),
+        (wanted["pagination"], report.get("pagination"), ("start_offset", "limit", "total_path")),
+    ):
+        # data_path 缺失和显式 null 的含义不同，不能当作同一个值。
+        if not isinstance(observed, dict) or any(
+            key not in observed or observed[key] != expected[key] for key in fields
+        ):
+            return False
+    return True
+
+
 def _matches_spec(kind, desired, resource):
+    if kind == "DataSource":
+        return _matches_data_source_spec(desired, resource["spec"])
     actual, wanted = deepcopy(resource["spec"]), deepcopy(desired)
     if kind == "DataConn":
         headers = wanted["conn_info"]["headers"]

@@ -403,6 +403,56 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertNotIn("fixture_token", saved)
         self.assertNotIn("encrypted_fixture", saved)
 
+    def test_action_snapshot_resumes_when_data_source_readback_adds_platform_fields(self):
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+        self._settle()
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        row = self.rows["bkaudit_action_config_data"]
+        ref = deepcopy(row.config_value["bkbase_v4"]["default"]["audit"]["creation"]["refs"]["data_source"])
+        observed = self.resources[("DataSource", ref["name"])]["spec"]
+        observed["basic_info"].update(access_channel="bkbase", access_channel_alias="计算平台", data_source_alias="平台展示名")
+        observed["report_config"]["pagination"]["platform_default"] = True
+        self._settle()
+
+        self._complete("action")
+
+        record = row.config_value["bkbase_v4"]["default"]["audit"]
+        self.assertTrue(record["ready"])
+        self.assertEqual(record["creation"]["refs"]["data_source"], ref)
+        self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean", "DataStorage"])
+
+    def test_action_snapshot_does_not_resume_when_data_source_key_fields_drift(self):
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+        self._settle()
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataSource")
+        self._settle()
+        row = self.rows["bkaudit_action_config_data"]
+        original_record = deepcopy(row.config_value)
+        ref = original_record["bkbase_v4"]["default"]["audit"]["creation"]["refs"]["data_source"]
+        source_value = self.resources[("DataSource", ref["name"])]
+        original_spec = deepcopy(source_value["spec"])
+        for section, field, value in (
+            ("basic_info", "bk_biz_id", 123),
+            ("data_conn", "name", "wrong_conn"),
+            ("report_config", "path", "/another/"),
+            ("report_config", "data_path", ".data.results"),
+            ("report_config", "data_path", None),
+        ):
+            with self.subTest(field=field, value=value):
+                source_value["spec"] = deepcopy(original_spec)
+                observed = source_value["spec"][section]
+                if value is None:
+                    observed.pop(field)
+                else:
+                    observed[field] = value
+
+                with self.assertRaisesRegex(BKBaseResourceMappingError, "no longer matches its target"):
+                    provision.ensure_system_snapshot("action")
+
+                self.assertEqual(row.config_value, original_record)
+                self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource"])
+                self.assertEqual(self.updates, [])
+
     def test_old_list_plan_resumes_without_changing_source_or_clean_shape(self):
         kind = "action"
         config_key = bindings.SYSTEM_SNAPSHOT_KEYS[kind][0]
