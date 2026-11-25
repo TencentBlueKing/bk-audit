@@ -3,7 +3,6 @@ import json
 from contextlib import contextmanager
 from copy import deepcopy
 from unittest import mock
-from uuid import UUID
 
 import requests
 from bk_resource.exceptions import APIRequestError
@@ -288,24 +287,33 @@ class SystemSnapshotCreationTests(SimpleTestCase):
             provision.ensure_system_snapshot("action")
         self.assertEqual(self.posts, [])
 
+    def test_new_system_snapshot_id_is_16_hex_and_reused(self):
+        redis = {"kind": "Redis", "tenant": "default", "namespace": "clusters", "name": "iam_redis"}
+
+        creation = provision._new_record("action", bindings._system_context(), redis)["creation"]
+        operation_id = creation["operation_id"]
+
+        self.assertRegex(operation_id, r"^[0-9a-f]{16}$")
+        self.assertEqual(creation["refs"]["data_source"]["name"], f"iam_action_{operation_id}_source")
+        self.assertEqual(len(creation["refs"]["data_source"]["name"]), 34)
+
     def test_new_resource_type_resource_names_fit_bkbase_limit(self):
-        first_id = UUID("0123456789abcdef0123456789abcdef")
-        second_id = UUID("1123456789abcdef0123456789abcdef")
-        with mock.patch.object(provision, "uuid") as uuid_source:
-            uuid_source.uuid4.side_effect = [first_id, second_id]
+        first_id = "0123456789abcdef"
+        second_id = "1123456789abcdef"
+        with mock.patch("secrets.token_hex", side_effect=[first_id, second_id]):
             self._complete("resource_type")
             record = self.rows["bkaudit_resource_type_config_data"].config_value["bkbase_v4"]["default"]["audit"]
             fresh = provision._new_record("resource_type", bindings._system_context(), record["redis"])["creation"]
 
         creation = record["creation"]
-        self.assertEqual(creation["operation_id"], first_id.hex)
-        self.assertEqual(fresh["operation_id"], second_id.hex)
-        stem = "iam_rtype_0123456789abcdef0123456789abcdef"
+        self.assertEqual(creation["operation_id"], first_id)
+        self.assertEqual(fresh["operation_id"], second_id)
+        stem = f"iam_rtype_{first_id}"
         resources = (
-            ("connection", "DataConn", "_conn", 47),
-            ("data_source", "DataSource", "_source", 49),
-            ("clean", "Clean", "_clean", 48),
-            ("storage", "DataStorage", "_redis", 48),
+            ("connection", "DataConn", "_conn", 31),
+            ("data_source", "DataSource", "_source", 33),
+            ("clean", "Clean", "_clean", 32),
+            ("storage", "DataStorage", "_redis", 32),
         )
         for (observed_kind, post), (key, kind, suffix, size) in zip(self.posts, resources, strict=True):
             with self.subTest(kind=kind):
@@ -314,23 +322,23 @@ class SystemSnapshotCreationTests(SimpleTestCase):
                 ref = {"kind": kind, "tenant": "default", "namespace": "audit", "name": stem + suffix}
                 self.assertEqual(creation["refs"][key], ref)
                 self.assertEqual(post["metadata"]["name"], ref["name"])
-                self.assertEqual(post["metadata"]["annotations"]["bkaudit_iam_operation"], first_id.hex)
+                self.assertEqual(post["metadata"]["annotations"]["bkaudit_iam_operation"], first_id)
                 self.assertNotEqual(fresh["refs"][key]["name"], ref["name"])
         self.assertEqual(bindings.system_snapshot_table("resource_type"), ("47_" + stem, ["id", "system_id"]))
         self.assertEqual(self.posts[2][1]["spec"]["result_table_id"], "47_" + stem)
 
     def test_long_snapshot_kind_shares_bounded_stem(self):
         kind = "kind/with:*illegal" * 8
-        operation_id = UUID("0123456789abcdef0123456789abcdef")
+        operation_id = "0123456789abcdef"
         context = bindings._system_context()
         redis = {"kind": "Redis", "tenant": "default", "namespace": "clusters", "name": "iam_redis"}
-        with mock.patch.object(provision.uuid, "uuid4", return_value=operation_id), mock.patch.object(
+        with mock.patch("secrets.token_hex", return_value=operation_id), mock.patch.object(
             provision, "_params", return_value={}
         ), mock.patch.object(provision, "_input_digest", return_value="synthetic-digest"):
             creation = provision._new_record(kind, context, redis)["creation"]
 
-        self.assertEqual(creation["operation_id"], operation_id.hex)
-        self.assertTrue(creation["name"].endswith("_" + operation_id.hex))
+        self.assertEqual(creation["operation_id"], operation_id)
+        self.assertTrue(creation["name"].endswith("_" + operation_id))
         self.assertEqual(creation["logical_id"], "47_" + creation["name"])
         suffixes = {
             "connection": "_conn",
@@ -393,19 +401,34 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertEqual(self.posts, [])
         self.assertEqual(row.config_value, original)
 
+        connection_ref = refs["connection"]
+        self.resources[("DataConn", connection_ref["name"])] = {
+            "kind": "DataConn",
+            "metadata": {
+                **{key: connection_ref[key] for key in ("tenant", "namespace", "name")},
+                "annotations": {provision.OWNER_ANNOTATION: operation_id},
+            },
+            "spec": deepcopy(connection),
+            "status": {"phase": "Pending"},
+        }
+        self.assertEqual(provision.ensure_system_snapshot("resource_type"), "DataConn")
+        self.assertEqual(self.sdk.data_conn_get.call_count, 2)
+        self.assertEqual(self.posts, [])
+        self.assertEqual(row.config_value, original)
+
     def test_three_schemas_create_once_and_use_formal_refs_and_binding(self):
-        operation_id = "0123456789abcdef0123456789abcdef"
+        operation_id = "0123456789abcdef"
         expected_lengths = {
-            "action": (48, 50, 49, 49),
-            "resource_type": (47, 49, 48, 48),
-            "user": (46, 48, 47, 47),
+            "action": (32, 34, 33, 33),
+            "resource_type": (31, 33, 32, 32),
+            "user": (30, 32, 31, 31),
         }
         for kind in ("action", "resource_type", "user"):
             with self.subTest(kind=kind):
                 config_key = bindings.SYSTEM_SNAPSHOT_KEYS[kind][0]
                 self.rows[config_key] = mock.Mock(config_value={"config_name": "legacy_" + kind, "bkbase_data_id": 12})
                 before = len(self.posts)
-                with mock.patch.object(provision.uuid, "uuid4", return_value=UUID(operation_id)):
+                with mock.patch("secrets.token_hex", return_value=operation_id):
                     self._complete(kind)
                 self.assertEqual(
                     [kind for kind, _ in self.posts[before:]], ["DataConn", "DataSource", "Clean", "DataStorage"]
@@ -431,6 +454,7 @@ class SystemSnapshotCreationTests(SimpleTestCase):
                         self.assertEqual(record["creation"]["refs"][key]["name"], expected_name)
                         self.assertEqual(post["metadata"]["name"], expected_name)
                         self.assertEqual(len(expected_name), expected_length)
+                        self.assertEqual(post["metadata"]["annotations"][provision.OWNER_ANNOTATION], operation_id)
                 source_name = record["creation"]["refs"]["data_source"]["name"]
                 created_source = self.resources[("DataSource", source_name)]
                 self.assertIsNone(created_source["spec"]["report_config"]["data_path"])
@@ -739,9 +763,46 @@ class SystemSnapshotCreationTests(SimpleTestCase):
             "spec": {},
             "status": {"phase": "Ok"},
         }
+        original = deepcopy(self.rows[key].config_value)
         with self.assertRaisesMessage(BKBaseResourceMappingError, "exists without this creation claim"):
             provision.ensure_system_snapshot("action")
         self.assertEqual(len(self.posts), 1)
+        self.assertEqual(self.rows[key].config_value, original)
+
+        self.resources[("DataSource", ref["name"])]["metadata"]["annotations"] = {
+            provision.OWNER_ANNOTATION: record["creation"]["operation_id"]
+        }
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "exists without this creation claim"):
+            provision.ensure_system_snapshot("action")
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(self.rows[key].config_value, original)
+
+    def test_claimed_resource_with_different_operation_annotation_is_rejected(self):
+        context, record, desired = self._connection_claim()
+        ref = record["creation"]["refs"]["connection"]
+        resource = {
+            "kind": "DataConn",
+            "metadata": {
+                **{key: ref[key] for key in ("tenant", "namespace", "name")},
+                "annotations": {provision.OWNER_ANNOTATION: "different-operation"},
+            },
+            "spec": deepcopy(desired),
+            "status": {"phase": "Pending"},
+        }
+        self.resources[("DataConn", ref["name"])] = deepcopy(resource)
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        original = deepcopy(self.rows[key].config_value)
+        create = mock.Mock()
+
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "belongs to another creation operation"):
+            provision._ensure_resource(
+                "action", context, record, "connection", desired, self._getter("DataConn"), create
+            )
+
+        self.assertEqual(self.rows[key].config_value, original)
+        self.assertEqual(self.resources[("DataConn", ref["name"])], resource)
+        self.assertEqual(self.posts, [])
+        create.assert_not_called()
 
     def test_missing_binding_keeps_source_stopped_until_formal_binding_is_ready(self):
         table = self._table
@@ -770,10 +831,19 @@ class SystemSnapshotCreationTests(SimpleTestCase):
 
     def test_unknown_missing_post_outcome_does_not_retry_create(self):
         self.sdk.data_conn_create.side_effect = APIRequestError(result={"message": "unknown outcome"})
-        with self.assertRaises(APIRequestError):
-            provision.ensure_system_snapshot("action")
-        for _ in range(3):
-            self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+        with mock.patch("secrets.token_hex", return_value="0123456789abcdef") as token_hex:
+            with self.assertRaises(APIRequestError):
+                provision.ensure_system_snapshot("action")
+            key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+            initial = deepcopy(self.rows[key].config_value["bkbase_v4"]["default"]["audit"]["creation"])
+            for _ in range(3):
+                self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+
+            token_hex.assert_called_once_with(8)
+
+        saved = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]["creation"]
+        self.assertEqual(saved["operation_id"], initial["operation_id"])
+        self.assertEqual(saved["refs"], initial["refs"])
         self.sdk.data_conn_create.assert_called_once()
 
     def test_concurrent_reentry_during_post_observes_the_persisted_claim(self):

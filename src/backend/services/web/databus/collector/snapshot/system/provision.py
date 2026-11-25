@@ -4,8 +4,8 @@
 未知写结果只读回原引用，全部下游就绪后才首次启动来源。
 """
 import json
+import secrets
 import time
-import uuid
 from copy import deepcopy
 from typing import Callable
 from urllib.parse import urlsplit
@@ -108,7 +108,7 @@ def _planned_pull_report(kind, params, operation, redis):
 
 
 def _new_record(kind, context, redis):
-    operation_id = uuid.uuid4().hex
+    operation_id = secrets.token_hex(8)
     name_kind = "rtype" if kind == "resource_type" else kind
     resource_specs = (
         ("connection", "DataConn", "_conn"),
