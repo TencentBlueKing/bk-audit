@@ -287,12 +287,6 @@ def _scene_display(scene_id) -> str:
     return f"{name}({scene_id})"
 
 
-def _whitelist_type_display(whitelist_type) -> str:
-    """ITSM 展示用：把加白类型枚举值转成中文，例如 false_positive 转 误报加白。"""
-
-    return dict(WhitelistType.choices).get(whitelist_type, whitelist_type)
-
-
 def _kept(ticket: dict, previous: dict, key: str):
     """工单这次没带回的字段，沿用节点上一次的值。"""
 
@@ -740,8 +734,9 @@ def _submit_itsm_ticket(
     form_data = {
         "ticket__title": "【审计中心】风险白名单",
         # 工单展示给人看：场景带名称、加白类型用中文，仅展示层转换，不改动入库的 scene_id / 枚举值
+        # choices 的 label 是 gettext_lazy，必须 str() 否则建单请求体 json 序列化会抛 __proxy__ not JSON serializable
         "scene_id": _scene_display(rule.scene_id),
-        "whitelist_type": _whitelist_type_display(rule.whitelist_type),
+        "whitelist_type": str(dict(WhitelistType.choices).get(rule.whitelist_type, rule.whitelist_type)),
         "reason": rule.reason if reason is None else reason,
         # 审批单里给人看的匹配范围，条件树太长放不下，压成一行可读文本
         "match_scope": format_scope_readable(scope),
