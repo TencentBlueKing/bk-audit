@@ -3,6 +3,7 @@ import json
 from contextlib import contextmanager
 from copy import deepcopy
 from unittest import mock
+from uuid import UUID
 
 import requests
 from bk_resource.exceptions import APIRequestError
@@ -287,6 +288,83 @@ class SystemSnapshotCreationTests(SimpleTestCase):
             provision.ensure_system_snapshot("action")
         self.assertEqual(self.posts, [])
 
+    def test_new_resource_type_resource_names_fit_bkbase_limit(self):
+        first_id = UUID("0123456789abcdef0123456789abcdef")
+        second_id = UUID("1123456789abcdef0123456789abcdef")
+        with mock.patch.object(provision, "uuid") as uuid_source:
+            uuid_source.uuid4.side_effect = [first_id, second_id]
+            self._complete("resource_type")
+            record = self.rows["bkaudit_resource_type_config_data"].config_value["bkbase_v4"]["default"]["audit"]
+            fresh = provision._new_record("resource_type", bindings._system_context(), record["redis"])["creation"]
+
+        creation = record["creation"]
+        self.assertEqual(creation["operation_id"], first_id.hex)
+        self.assertEqual(fresh["operation_id"], second_id.hex)
+        stem = "audit_iam_rtype_0123456789abcdef0123456789abcdef"
+        resources = (
+            ("connection", "DataConn", "_conn", 53),
+            ("data_source", "DataSource", "_source", 55),
+            ("clean", "Clean", "_clean", 54),
+            ("storage", "DataStorage", "_redis", 54),
+        )
+        for (observed_kind, post), (key, kind, suffix, size) in zip(self.posts, resources, strict=True):
+            with self.subTest(kind=kind):
+                self.assertEqual(observed_kind, kind)
+                self.assertEqual(len(post["metadata"]["name"]), size)
+                ref = {"kind": kind, "tenant": "default", "namespace": "audit", "name": stem + suffix}
+                self.assertEqual(creation["refs"][key], ref)
+                self.assertEqual(post["metadata"]["name"], ref["name"])
+                self.assertEqual(post["metadata"]["annotations"]["bkaudit_iam_operation"], first_id.hex)
+                self.assertNotEqual(fresh["refs"][key]["name"], ref["name"])
+        self.assertEqual(bindings.system_snapshot_table("resource_type"), ("47_" + stem, ["id", "system_id"]))
+        self.assertEqual(self.posts[2][1]["spec"]["result_table_id"], "47_" + stem)
+
+    def test_pending_long_resource_type_claim_keeps_original_ref_without_repost(self):
+        operation_id = "0123456789abcdef0123456789abcdef"
+        name = "audit_iam_resource_type_" + operation_id
+        context = bindings._system_context()
+        redis = {"kind": "Redis", "tenant": "default", "namespace": "clusters", "name": "iam_redis"}
+        refs = {
+            key: {"kind": kind, "tenant": "default", "namespace": "audit", "name": name + suffix}
+            for key, kind, suffix in (
+                ("connection", "DataConn", "_conn"),
+                ("data_source", "DataSource", "_source"),
+                ("clean", "Clean", "_clean"),
+                ("storage", "DataStorage", "_redis"),
+            )
+        }
+        operation = {
+            "operation_id": operation_id,
+            "name": name,
+            "logical_id": "47_" + name,
+            "revision": 1234,
+            "redis": redis,
+            "refs": refs,
+        }
+        params = provision._params("resource_type", operation)
+        operation["input_digest"] = provision._input_digest("resource_type", params, redis)
+        connection, _ = provision._source_spec(params, operation)
+        operation["steps"] = {
+            "connection": {"target_digest": source._replay_digest(connection), "attempt": 1, "not_dispatched": False}
+        }
+        original = {
+            "config_name": "legacy_resource_type",
+            "bkbase_v4": {
+                context["tenant"]: {
+                    context["namespace"]: {"snapshot_type": "resource_type", "creation": operation, "ready": False},
+                    "other_project": {"ready": True},
+                }
+            },
+        }
+        row = mock.Mock(config_value=deepcopy(original))
+        self.rows["bkaudit_resource_type_config_data"] = row
+
+        self.assertEqual(provision.ensure_system_snapshot("resource_type"), "DataConn")
+
+        self.sdk.data_conn_get.assert_called_once_with(tenant="default", namespace="audit", name=name + "_conn")
+        self.assertEqual(self.posts, [])
+        self.assertEqual(row.config_value, original)
+
     def test_three_schemas_create_once_and_use_formal_refs_and_binding(self):
         for kind in ("action", "resource_type", "user"):
             with self.subTest(kind=kind):
@@ -297,11 +375,11 @@ class SystemSnapshotCreationTests(SimpleTestCase):
                 self.assertEqual(
                     [kind for kind, _ in self.posts[before:]], ["DataConn", "DataSource", "Clean", "DataStorage"]
                 )
-                [created_source] = [
-                    v
-                    for (resource_kind, _), v in self.resources.items()
-                    if resource_kind == "DataSource" and v["metadata"]["name"].startswith("audit_iam_" + kind + "_")
-                ]
+                record = self.rows[config_key].config_value["bkbase_v4"]["default"]["audit"]
+                source_name = record["creation"]["refs"]["data_source"]["name"]
+                created_source = self.resources[("DataSource", source_name)]
+                if kind in ("action", "user"):
+                    self.assertTrue(source_name.startswith(f"audit_iam_{kind}_"))
                 self.assertIsNone(created_source["spec"]["report_config"]["data_path"])
                 logical_id, keys = bindings.system_snapshot_table(kind)
                 self.assertEqual(set(keys), {"id"} if kind == "user" else {"id", "system_id"})

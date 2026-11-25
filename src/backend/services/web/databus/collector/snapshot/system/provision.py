@@ -104,7 +104,9 @@ def _planned_pull_report(kind, params, operation, redis):
 
 def _new_record(kind, context, redis):
     operation_id = uuid.uuid4().hex
-    name = f"audit_iam_{kind}_{operation_id}"
+    # BKBase 资源名最多 60 字符；缩短类型前缀，给最长的 _source 后缀留空间并保留完整 UUID。
+    name_kind = "rtype" if kind == "resource_type" else kind
+    name = f"audit_iam_{name_kind}_{operation_id}"
     refs = {
         key: {
             "kind": resource_kind,
