@@ -308,6 +308,11 @@ def _node_payload(rule: RiskWhitelist, ticket: dict = None, previous: dict = Non
     ticket = ticket or {}
     previous = previous or {}
     status, status_display, approved = _node_status(ticket)
+    # 驳回理由取本次工单意见，缺失回落白名单已落库值；驳回人取规则 updated_by，口径同 flow_of，
+    # 只在驳回态展示，保证时间线节点与详情对驳回的展示一致
+    rejected = status == WhitelistStatus.REJECTED
+    reject_reason = (ticket.get("comment") or getattr(rule, "reject_reason", "") or "") if rejected else ""
+    rejector = (getattr(rule, "updated_by", "") or "") if rejected else ""
     return {
         "rule_id": str(rule.id or ""),
         "match_scope": rule.match_scope,
@@ -322,6 +327,8 @@ def _node_payload(rule: RiskWhitelist, ticket: dict = None, previous: dict = Non
         "itsm_status": status,
         "itsm_status_display": status_display,
         "approve_result": approved,
+        "reject_reason": reject_reason,
+        "rejector": rejector,
         "current_processors": _kept(ticket, previous, "current_processors"),
         "current_steps": _kept(ticket, previous, "current_steps"),
     }
@@ -491,28 +498,39 @@ def submit_whitelist(
     risks,
     username: str,
 ):
-    """创建白名单。单条和批量都补策略、原始事件。批量逐条创建，并要求同一策略、同一场景。"""
+    """创建白名单。单条和批量都补策略、原始事件。批量逐条创建，并要求同一策略、同一场景。
+
+    批量时每条风险独立建单：全成功返回列表（保持既有契约），有失败则返回
+    ``{"succeeded": [...], "failed": [{"risk_id", "error"}]}`` 让调用方逐项展示。
+    """
 
     risks = list(risks or [])
     if len(risks) > 1:
         ensure_same_strategy_scene(risks)
-        return [
-            _create_whitelist(
-                scene_id=risk.scene_id,
-                match_scope=append_risk_match_fields(
-                    match_scope,
-                    strategy_id=risk.strategy_id,
-                    raw_event_id=risk.raw_event_id,
-                ),
-                whitelist_type=whitelist_type,
-                reason=reason,
-                duration_days=duration_days,
-                expire_at=expire_at,
-                risks=[risk],
-                username=username,
-            )
-            for risk in risks
-        ]
+        succeeded, failed = [], []
+        for risk in risks:
+            try:
+                rule = _create_whitelist(
+                    scene_id=risk.scene_id,
+                    match_scope=append_risk_match_fields(
+                        match_scope,
+                        strategy_id=risk.strategy_id,
+                        raw_event_id=risk.raw_event_id,
+                    ),
+                    whitelist_type=whitelist_type,
+                    reason=reason,
+                    duration_days=duration_days,
+                    expire_at=expire_at,
+                    risks=[risk],
+                    username=username,
+                )
+                succeeded.append(rule)
+            except Exception as exc:  # noqa: BLE001 - 单条失败不阻断整批，记录后继续
+                logger.exception("[RiskWhitelist] batch create failed, risk=%s", getattr(risk, "risk_id", ""))
+                failed.append({"risk_id": getattr(risk, "risk_id", ""), "error": str(exc)})
+        if failed:
+            return {"succeeded": succeeded, "failed": failed}
+        return succeeded
     if risks:
         risk = risks[0]
         match_scope = append_risk_match_fields(

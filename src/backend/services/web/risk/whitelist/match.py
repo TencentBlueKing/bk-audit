@@ -60,43 +60,42 @@ def _frontend_leaf(item: dict) -> dict | None:
     elif value not in (None, ""):
         condition["filter"] = value
     leaf = {"condition": condition}
-    # 保留前端叶子 connector（与下一叶子的连接符），供 _group_subtrees 切段；
-    # connector 一致的段折叠后叶子不再携带 connector，避免冗余。
+    # 保留前端叶子 connector：_group_subtrees 折叠时统一丢弃，
+    # 仅供 validate_match_scope 的 _group_connector_conflict 判定组内是否混合连接符。
     if item.get("connector"):
         leaf["connector"] = item["connector"]
     return leaf
 
 
 def _group_subtrees(leaves: list, group_connector: str) -> list:
-    """组内叶子按 connector 切段：连续相同 connector 的叶子合并为一个段（子树），
-    段 connector 取叶子真实连接符；全段 connector 与组一致时折叠回扁平结构。
+    """把组内叶子折叠成组子树，连接符统一用组 connector。
 
-    求值（dispatch.evaluate）只读取父节点 connector 作为其子节点间连接符，叶子自身 connector 不参与求值。
-    旧实现把组内所有叶子统一按组 connector 连接，导致叶子 connector 与组不一致时语义错误：
-    组 connector=and、叶子写 `a or b` 时，旧实现按 `a and b` 求值，把 or 错当成 and。
-    这里以段为最小求值单元：段节点带真实 connector 挂到组下，由组 connector 聚合各段。
-    单段折叠为“组直挂叶子”且 connector 不变（与旧结构一致，避免改变既有同 connector 语义）。
+    组内叶子必须同连接符（与组 connector 一致）：求值（dispatch.evaluate）只用父节点 connector
+    聚合子节点，叶子自身 connector 不参与求值。组内一旦混入与组不同的连接符，无法用一棵两层
+    树表达，按组 connector 求值必然与“叶子声明的连接符”语义不符（如组=and、叶子 a and b or c
+    会被求成 a and b and c，丢掉 or）。因此这里忽略叶子 connector，统一按组 connector 折叠成扁平段；
+    混合连接符由 validate_match_scope 在创建入口前置拒绝，不会走到求值，匹配与工单展示口径一致。
     """
 
-    segments: list = []
     for leaf in leaves:
-        connector = leaf.get("connector") or group_connector
-        if segments and segments[-1][0] == connector:
-            segments[-1][1].append(leaf)
-        else:
-            segments.append((connector, [leaf]))
-    if len(segments) == 1:
-        connector, seg_leaves = segments[0]
-        for leaf in seg_leaves:
-            leaf.pop("connector", None)
-        return [{"connector": connector, "conditions": seg_leaves}]
-    subtrees = []
-    for connector, seg_leaves in segments:
-        if len(seg_leaves) == 1:
-            subtrees.append(seg_leaves[0])
-        else:
-            subtrees.append({"connector": connector, "conditions": seg_leaves})
-    return subtrees
+        leaf.pop("connector", None)
+    return [{"connector": group_connector, "conditions": leaves}]
+
+
+def _group_connector_conflict(group: dict) -> bool:
+    """组内是否存在与组 connector 不一致的叶子连接符。
+
+    叶子 connector 表达“与下一叶子的连接符”，末位叶子 connector 无实际作用，忽略。
+    命中即说明组内混合了 and/or，两层条件树无法表达（见 _group_subtrees）。
+    """
+
+    group_connector = group.get("connector") or "and"
+    conditions = group.get("conditions") or []
+    for item in conditions[:-1]:
+        connector = item.get("connector") or group_connector
+        if connector != group_connector:
+            return True
+    return False
 
 
 def _group_leaves(group: dict) -> list:
@@ -450,11 +449,31 @@ def allowed_operators(field_type) -> set:
     return allowed
 
 
+def _validate_strategy_condition(condition, operator_cls) -> "str | None":
+    """校验单个策略条件：其它条件依赖命中策略取值，策略条件必须等于且有值。"""
+
+    if condition.operator != operator_cls.EQ:
+        return "命中策略条件的操作符只能为等于"
+    if (getattr(condition, "filter", None) in (None, "")) and not getattr(condition, "filters", None):
+        return "命中策略条件不能为空"
+    return None
+
+
 def validate_match_scope(scope: dict, whitelist_type: str) -> str:
-    """返回错误文案。通过时返回空字符串。"""
+    """返回错误文案。通过时返回空字符串。
+
+    策略约束按“可独立命中分支”校验：顶层 OR 的每个子分支都是一个独立命中入口，
+    只要有一个分支缺策略，该分支就能脱离策略约束命中其它策略数据。因此组间 OR 时
+    每个顶层组都必须含合法策略条件，不能只看整棵树出现过策略。
+    """
 
     from core.sql.constants import Operator
     from services.web.risk.whitelist.constants import WhitelistType
+
+    if _is_group_scope(scope):
+        for group in scope.get("groups") or []:
+            if _group_connector_conflict(group):
+                return "匹配范围同一分组内不支持混合使用“且 / 或”连接符"
 
     try:
         node = to_condition_tree(as_where_scope(scope))
@@ -462,27 +481,36 @@ def validate_match_scope(scope: dict, whitelist_type: str) -> str:
         return "匹配范围未完善"
     if evaluate_is_empty(node):
         return "匹配范围未完善"
-    conditions = list(_leaves(node))
-    if not conditions:
+    if not list(_leaves(node)):
         return "匹配范围未完善"
-    has_strategy = False
-    only_strategy = True
-    for condition in conditions:
-        field = condition.field.raw_name if condition.field else ""
-        if field in STRATEGY_FIELDS:
-            has_strategy = True
-            # 其它条件依赖命中策略的取值，策略条件必须固定等于且有值
-            if condition.operator != Operator.EQ:
-                return "命中策略条件的操作符只能为等于"
-            if (getattr(condition, "filter", None) in (None, "")) and not getattr(condition, "filters", None):
-                return "命中策略条件不能为空"
-        else:
-            only_strategy = False
-            field_type = getattr(condition.field, "field_type", None) if condition.field else None
-            if _operator_key(condition.operator) not in allowed_operators(field_type):
-                return "条件操作符不支持当前字段类型"
-    if not has_strategy:
-        return "匹配范围必须包含命中策略"
-    if whitelist_type == WhitelistType.FALSE_POSITIVE and only_strategy:
-        return "只有命中策略条件时不允许误报加白"
+
+    # 顶层 OR：每个直接子节点都是一个可独立命中分支，必须各自含策略；
+    # 其余（顶层 AND / 叶子）整棵树作为一个分支。
+    branches = list(node.conditions) if (node.conditions and node.connector == "or") else [node]
+
+    def check(branch) -> "str | None":
+        has_strategy = False
+        only_strategy = True
+        for condition in _leaves(branch):
+            field = condition.field.raw_name if condition.field else ""
+            if field in STRATEGY_FIELDS:
+                has_strategy = True
+                error = _validate_strategy_condition(condition, Operator)
+                if error:
+                    return error
+            else:
+                only_strategy = False
+                field_type = getattr(condition.field, "field_type", None) if condition.field else None
+                if _operator_key(condition.operator) not in allowed_operators(field_type):
+                    return "条件操作符不支持当前字段类型"
+        if not has_strategy:
+            return "匹配范围必须包含命中策略"
+        if whitelist_type == WhitelistType.FALSE_POSITIVE and only_strategy:
+            return "只有命中策略条件时不允许误报加白"
+        return None
+
+    for branch in branches:
+        error = check(branch)
+        if error:
+            return error
     return ""

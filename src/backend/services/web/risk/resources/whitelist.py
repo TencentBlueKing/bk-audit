@@ -24,6 +24,7 @@ from apps.audit.resources import AuditMixinResource
 from core.exceptions import ValidationError
 from core.models import get_request_username
 from services.web.risk.models import Risk
+from services.web.risk.permissions import ensure_user_may_confirm_risk
 from services.web.risk.whitelist.constants import DELETABLE_STATUS, WhitelistStatus
 from services.web.risk.whitelist.match import (
     scope_field_names,
@@ -198,7 +199,12 @@ class RetrieveRiskWhitelist(RiskWhitelistMeta):
 
 
 class CreateRiskWhitelist(RiskWhitelistMeta):
-    """新建白名单。"""
+    """新建白名单。
+
+    菜单直接新建（只带 scene_id，不关联风险）：建的是场景级规则，限场景管理员。
+    风险详情「申请加白」（带 risk_id，不标误报）：风险处理人即可发起，口径同「确认误报」，
+    提交后仍走 ITSM / 场景管理员审批，故放开到风险处理权限；批量入口仍限场景管理员。
+    """
 
     name = gettext_lazy("新建风险白名单")
     RequestSerializer = CreateRiskWhitelistReqSerializer
@@ -213,9 +219,13 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
             if not risks:
                 raise ValidationError(gettext("风险单不存在"))
             scene_id = risks[0].scene_id
-        elif not scene_id:
-            raise ValidationError(gettext("需要 scene_id"))
-        assert_can_manage_scene(username, scene_id)
+            # 风险处理人申请加白：口径同确认误报（确认人或平台管理员），不要求场景管理权限
+            ensure_user_may_confirm_risk(username, risks[0])
+        else:
+            if not scene_id:
+                raise ValidationError(gettext("需要 scene_id"))
+            # 菜单直接新建：场景级规则，保留场景管理员限制
+            assert_can_manage_scene(username, scene_id)
         return serialize_rule(
             _submit_created(
                 validated_request_data,
@@ -252,6 +262,14 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
             risks=risks,
             username=username,
         )
+        # 全成功：submit_whitelist 返回规则列表；部分失败：返回 {succeeded, failed} 供逐项展示
+        if isinstance(created, dict):
+            return {
+                "succeeded": [
+                    serialize_rule(item, progress={}, username=username) for item in created.get("succeeded", [])
+                ],
+                "failed": created.get("failed", []),
+            }
         if not isinstance(created, list):
             created = [created]
         return [serialize_rule(item, progress={}, username=username) for item in created]

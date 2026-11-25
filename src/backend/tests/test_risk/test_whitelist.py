@@ -186,6 +186,60 @@ class WhitelistCreateTests(SimpleTestCase):
         self.assertEqual(create_ticket.call_count, 2)
         self.assertEqual(admin_pass.call_count, 2)
 
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.create_itsm_ticket")
+    @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    def test_batch_continues_when_one_risk_fails(self, scene_filter, create, write_nodes, create_ticket, admin_pass):
+        # 批量中途某条建单失败，不中断整批：成功项照常返回，失败项进 failed
+        scene_filter.return_value.exists.return_value = True
+        created = []
+        rules_by_id = {}
+
+        def _create(**kwargs):
+            created.append(kwargs)
+            rule = SimpleNamespace(
+                id=len(created),
+                itsm_ticket_id="",
+                itsm_sn="",
+                itsm_ticket_url="",
+                **kwargs,
+            )
+            rule.refresh_from_db = lambda: None
+            rules_by_id[rule.id] = rule
+            return rule
+
+        def _create_ticket(rule_id):
+            # 第二条建单失败，模拟 ITSM 建单中途异常
+            if rule_id == 2:
+                raise RuntimeError("ITSM 建单失败")
+            rules_by_id[rule_id].itsm_ticket_id = f"ticket-{rule_id}"
+
+        create.side_effect = _create
+        create_ticket.side_effect = _create_ticket
+        risks = [
+            SimpleNamespace(strategy_id=9, raw_event_id="evt-1", risk_id="risk-1", scene_id=3, current_operator=[]),
+            SimpleNamespace(strategy_id=9, raw_event_id="evt-2", risk_id="risk-2", scene_id=3, current_operator=[]),
+            SimpleNamespace(strategy_id=9, raw_event_id="evt-3", risk_id="risk-3", scene_id=3, current_operator=[]),
+        ]
+        result = submit_whitelist(
+            scene_id=3,
+            match_scope=_scope(),
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            reason="批量接受",
+            duration_days=15,
+            risks=risks,
+            username="alice",
+        )
+        # 有失败 → 返回逐项结果结构；risk-2 失败，risk-1 / risk-3 成功
+        self.assertIn("succeeded", result)
+        self.assertIn("failed", result)
+        self.assertEqual([r.id for r in result["succeeded"]], [1, 3])
+        self.assertEqual([f["risk_id"] for f in result["failed"]], ["risk-2"])
+        # 失败项不阻断后续：三条都尝试建单
+        self.assertEqual(create_ticket.call_count, 3)
+
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
     @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
@@ -924,6 +978,55 @@ class WhitelistPollTests(SimpleTestCase):
         ticket = apply_result.call_args.args[1]
         self.assertEqual(ticket["status"], ITSMV4TicketStatus.FINISHED)
         self.assertTrue(ticket["approve_result"])
+
+
+class WhitelistNodeRejectPayloadTests(SimpleTestCase):
+    def test_node_payload_shows_reject_reason_and_updated_by_when_rejected(self):
+        # 驳回态：时间线节点透出驳回理由（工单意见优先）和驳回人（取规则 updated_by，口径同 flow_of）
+        from services.web.risk.whitelist.service import _node_payload
+
+        rule = SimpleNamespace(
+            id=1,
+            match_scope={},
+            created_by="alice",
+            whitelist_type="risk_acceptance",
+            reason="接受风险",
+            reject_reason="重复申请",
+            updated_by="reviewer",
+            expire_at=None,
+            itsm_ticket_id="ticket-1",
+            itsm_sn="",
+            itsm_ticket_url="",
+        )
+        ticket = {"id": "ticket-1", "status": "finished", "approve_result": False, "comment": "证据不足"}
+        payload = _node_payload(rule, ticket)
+        self.assertEqual(payload["reject_reason"], "证据不足")
+        self.assertEqual(payload["rejector"], "reviewer")
+
+    def test_node_payload_reject_reason_falls_back_to_rule(self):
+        # 工单没带意见时驳回理由回落白名单已落库值；非驳回态不展示驳回信息
+        from services.web.risk.whitelist.service import _node_payload
+
+        rule = SimpleNamespace(
+            id=2,
+            match_scope={},
+            created_by="alice",
+            whitelist_type="risk_acceptance",
+            reason="接受风险",
+            reject_reason="重复申请",
+            updated_by="reviewer",
+            expire_at=None,
+            itsm_ticket_id="ticket-2",
+            itsm_sn="",
+            itsm_ticket_url="",
+        )
+        rejected = _node_payload(rule, {"status": "finished", "approve_result": False})
+        self.assertEqual(rejected["reject_reason"], "重复申请")
+        self.assertEqual(rejected["rejector"], "reviewer")
+
+        active = _node_payload(rule, {"status": "finished", "approve_result": True})
+        self.assertEqual(active["reject_reason"], "")
+        self.assertEqual(active["rejector"], "")
 
 
 class WhitelistRenewTests(SimpleTestCase):
@@ -1694,7 +1797,6 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
             renewed_at=None,
         )
 
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service._pass_if_admin")
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
     @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
@@ -1704,7 +1806,12 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
     @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
     def test_false_positive_with_risk_id_does_not_misreport(self, _username, risk_filter, *_service_mocks):
         risk = SimpleNamespace(
-            risk_id="whitelist_fp_risk", strategy_id=9, raw_event_id="fp_evt_1", scene_id=1, current_operator=[]
+            risk_id="whitelist_fp_risk",
+            strategy_id=9,
+            raw_event_id="fp_evt_1",
+            scene_id=1,
+            current_operator=[],
+            confirmer=["tester"],
         )
         risk_filter.return_value = [risk]
         rule = self._rule()
@@ -1721,6 +1828,65 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
                 }
             )
         update_label.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.create_itsm_ticket")
+    @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    @patch("services.web.risk.resources.whitelist.Risk.objects.filter")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="handler")
+    def test_apply_whitelist_with_risk_uses_risk_permission(self, _username, risk_filter, *_mocks):
+        # 风险处理人「申请加白」（带 risk_id）按风险处理权限放行，不再要求场景管理权限
+        risk = SimpleNamespace(
+            risk_id="apply_risk", strategy_id=9, raw_event_id="evt", scene_id=1, current_operator=["handler"]
+        )
+        risk_filter.return_value = [risk]
+        rule = self._rule()
+        rule.refresh_from_db = lambda: None
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create", return_value=rule), patch(
+            "services.web.risk.resources.whitelist.ensure_user_may_confirm_risk"
+        ) as ensure_perm:
+            CreateRiskWhitelist().request(
+                {
+                    "risk_id": risk.risk_id,
+                    "match_scope": _scope(),
+                    "whitelist_type": WhitelistType.RISK_ACCEPTANCE,
+                    "reason": "处理人申请加白",
+                }
+            )
+        # 走的是风险处理权限口径，校验对象就是这条风险
+        ensure_perm.assert_called_once_with("handler", risk)
+
+    @patch("services.web.risk.whitelist.service._pass_if_admin")
+    @patch("services.web.risk.whitelist.service.create_itsm_ticket")
+    @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create")
+    @patch("services.web.risk.whitelist.service.Scene.objects.filter")
+    @patch("services.web.risk.resources.whitelist.Risk.objects.filter")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="outsider")
+    def test_apply_whitelist_denied_without_risk_permission(self, _username, risk_filter, *_mocks):
+        # 非处理人申请加白：风险处理权限校验拒绝，不会落库
+        from services.web.risk.permissions import RiskConfirmPermissionDenied
+
+        risk = SimpleNamespace(
+            risk_id="apply_risk", strategy_id=9, raw_event_id="evt", scene_id=1, current_operator=["handler"]
+        )
+        risk_filter.return_value = [risk]
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create") as create, patch(
+            "services.web.risk.resources.whitelist.ensure_user_may_confirm_risk",
+            side_effect=RiskConfirmPermissionDenied(),
+        ):
+            with self.assertRaises(RiskConfirmPermissionDenied):
+                CreateRiskWhitelist().request(
+                    {
+                        "risk_id": risk.risk_id,
+                        "match_scope": _scope(),
+                        "whitelist_type": WhitelistType.RISK_ACCEPTANCE,
+                        "reason": "非处理人申请加白",
+                    }
+                )
+        create.assert_not_called()
 
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service._pass_if_admin")

@@ -163,11 +163,8 @@ class WhitelistMatchTests(SimpleTestCase):
         scope = append_risk_match_fields({}, strategy_id=9, raw_event_id="")
         self.assertNotIn("raw_event_id", _operators(scope))
 
-    def test_mixed_connector_within_group(self):
-        # 组 connector=or 聚合各段，叶子 connector 表达组内线性连接：
-        # a(strategy=9) or b(operator=alice) and c(operator=bob)
-        # 切段为 [a](or)、[b and c](and) -> a or (b and c)。
-        # 旧实现统一按组 connector(or) 求值，会把 b and c 错当成 b or c。
+    def test_mixed_connector_within_group_rejected(self):
+        # 组内混合连接符无法用两层条件树表达（求值只认组 connector），创建入口前置拒绝
         scope = {
             "connector": "and",
             "groups": [
@@ -181,12 +178,64 @@ class WhitelistMatchTests(SimpleTestCase):
                 }
             ],
         }
-        # a 命中 -> 整组命中
-        self.assertTrue(match_scope(scope, {"strategy_id": "9", "operator": "carol"}))
-        # b 单独不成立（and 段需 b、c 同时满足，c 不同字段无法同时满足）
+        self.assertEqual(
+            validate_match_scope(scope, WhitelistType.RISK_ACCEPTANCE),
+            "匹配范围同一分组内不支持混合使用“且 / 或”连接符",
+        )
+
+    def test_uniform_connector_group_flat_match(self):
+        # 组内统一连接符：正常按组 connector 求值（正反例）
+        scope = {
+            "connector": "and",
+            "groups": [
+                {
+                    "connector": "and",
+                    "conditions": [
+                        {"field": "strategy_id", "operator": "eq", "value": "9"},
+                        {"field": "operator", "operator": "eq", "value": "alice"},
+                    ],
+                }
+            ],
+        }
+        self.assertEqual(validate_match_scope(scope, WhitelistType.FALSE_POSITIVE), "")
+        self.assertTrue(match_scope(scope, {"strategy_id": "9", "operator": "alice"}))
+        self.assertFalse(match_scope(scope, {"strategy_id": "9", "operator": "bob"}))
         self.assertFalse(match_scope(scope, {"strategy_id": "1", "operator": "alice"}))
-        # 既不满足 a，也不满足 (b and c)
-        self.assertFalse(match_scope(scope, {"strategy_id": "1", "operator": "carol"}))
+
+    def test_top_or_each_branch_requires_strategy(self):
+        # 顶层 OR：策略只出现在第一组时，第二组（无策略）会脱离策略约束单独命中其它策略数据 -> 拒绝
+        scope = {
+            "connector": "or",
+            "groups": [
+                {"connector": "and", "conditions": [{"field": "strategy_id", "operator": "eq", "value": "9"}]},
+                {"connector": "and", "conditions": [{"field": "operator", "operator": "eq", "value": "alice"}]},
+            ],
+        }
+        self.assertEqual(
+            validate_match_scope(scope, WhitelistType.RISK_ACCEPTANCE),
+            "匹配范围必须包含命中策略",
+        )
+        # 反例：两个分支都含策略则放行
+        ok = {
+            "connector": "or",
+            "groups": [
+                {
+                    "connector": "and",
+                    "conditions": [
+                        {"field": "strategy_id", "operator": "eq", "value": "9"},
+                        {"field": "operator", "operator": "eq", "value": "alice"},
+                    ],
+                },
+                {
+                    "connector": "and",
+                    "conditions": [
+                        {"field": "strategy_id", "operator": "eq", "value": "9"},
+                        {"field": "operator", "operator": "eq", "value": "bob"},
+                    ],
+                },
+            ],
+        }
+        self.assertEqual(validate_match_scope(ok, WhitelistType.FALSE_POSITIVE), "")
 
     def test_append_risk_fields_into_every_or_group(self):
         # 组间 OR：strategy_id 必须注入每个可命中分支，否则未注入分支脱离策略约束
