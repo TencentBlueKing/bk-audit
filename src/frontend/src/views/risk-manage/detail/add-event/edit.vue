@@ -128,7 +128,6 @@
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import Event from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
@@ -137,7 +136,6 @@
   import useRequest from '@hooks/use-request';
 
   import CardPartVue from '../../../scene-config/tool-manege/create-tool/components/card-part.vue';
-  import { selectManualEventFields } from '../../manual-event-fields';
 
   import fieldCom from './field-components.vue';
 
@@ -215,46 +213,26 @@
     },
     manual: true,
     onSuccess: (data) => {
-      const dataFields = data.event_data_field_configs || [];
-      const riskBasicFields = data.event_basic_field_configs || [];
-      const fillEventList = (basicFields: Array<Record<string, any>>) => {
-        const eventFields = selectManualEventFields(dataFields, basicFields);
-        eventList.value = eventFields.map((item:any) => {
-          let typeValueDefault = 'input';
-          if (item.field_type === 'string') {
-            typeValueDefault = 'input';
-          }
-          if (item.field_type === 'timestamp') {
-            typeValueDefault = 'date-picker';
-          }
-          if (item.field_type === 'text') {
-            typeValueDefault = 'textarea';
-          }
-          if (item.field_type === 'double' || item.field_type === 'float' || item.field_type === 'int' || item.field_type === 'long') {
-            typeValueDefault = 'number-input';
-          }
-          return {
-            ...item,
-            typeValue: typeValueDefault,
-            value: '',
-          };
-        });
-      };
-      const strategyId = Number(props.eventData.strategy_id);
-      if (!strategyId) {
-        fillEventList(riskBasicFields);
-        return;
-      }
-      // 风险上的策略信息没有基本信息的字段引用，引用关系在策略详情里。
-      StrategyManageService.fetchStrategyInfo({
-        strategy_id: strategyId,
-      }).then((strategy) => {
-        fillEventList([
-          ...(strategy?.event_basic_field_configs || []),
-          ...riskBasicFields,
-        ]);
-      })
-        .catch(() => fillEventList(riskBasicFields));
+      eventList.value = data.event_data_field_configs.map((item:any) => {
+        let typeValueDefault = 'input';
+        if (item.field_type === 'string') {
+          typeValueDefault = 'input';
+        }
+        if (item.field_type === 'timestamp') {
+          typeValueDefault = 'date-picker';
+        }
+        if (item.field_type === 'text') {
+          typeValueDefault = 'textarea';
+        }
+        if (item.field_type === 'double' || item.field_type === 'float' || item.field_type === 'int' || item.field_type === 'long') {
+          typeValueDefault = 'number-input';
+        }
+        return {
+          ...item,
+          typeValue: typeValueDefault,
+          value: '',
+        };
+      }).filter((e: Record<string, any>) => e.is_show);
     },
   });
 
