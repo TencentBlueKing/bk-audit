@@ -321,7 +321,18 @@
 
   display: flex;
   margin-bottom: var(--bk-theme-space-12);
+  font-size: var(--bk-theme-font-size-sm);
+  line-height: var(--bk-theme-line-height-sm);
   color: var(--bk-theme-text-default);
+
+  :deep(.bk-input),
+  :deep(.bk-input--text),
+  :deep(.bk-select),
+  :deep(.bk-select-tag),
+  :deep(.bk-select-tag-input),
+  :deep(.show-tooltips-text) {
+    font-size: var(--bk-theme-font-size-sm);
+  }
   border-top: 1px solid var(--bk-theme-border-default);
   border-left: 1px solid var(--bk-theme-border-default);
   flex-direction: column;

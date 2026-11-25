@@ -373,7 +373,7 @@
     }
 
     .renew-tips {
-      font-size: 14px;
+      font-size: var(--bk-theme-font-size-sm);
       line-height: 1;
       color: var(--bk-theme-color-brand-2);
     }

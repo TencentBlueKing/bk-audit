@@ -221,7 +221,7 @@
 
   .row-drag-handle {
     margin: 0 var(--bk-theme-space-12);
-    font-size: 13px;
+    font-size: var(--bk-theme-font-size-sm);
     color: var(--bk-theme-border-strong);
     cursor: move;
   }
