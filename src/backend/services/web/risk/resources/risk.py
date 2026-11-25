@@ -1382,25 +1382,24 @@ class RetryAutoProcess(RiskMeta):
             raise RiskStatusInvalid(
                 message=gettext("当前任务没有可重试的失败节点（SOPS状态：%s），请重新发起处理") % (status.get("state") or gettext("未知"))
             )
-        # 回源补齐各失败节点的 error_message，保证重试快照固化到真实的失败现场
-        fill_failure_info(status, task_id=task_id)
-        # 对每个失败的节点（含子流程内嵌套的失败节点），获取节点输入并重试
-        for item in iter_status_nodes(status):
-            if item["state"] != SOPSTaskStatus.FAILED:
-                continue
-            io_data = api.bk_sops.get_node_data(
-                task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=item["id"]
-            )
-            api.bk_sops.operate_node(
-                task_id=task_id,
-                bk_biz_id=settings.DEFAULT_BK_BIZ_ID,
-                node_id=item["id"],
-                action=SOPSTaskOperation.RETRY,
-                inputs=io_data["inputs"],
-            )
         with transaction.atomic():
+            # 统一加锁顺序：先锁风险单再锁套餐节点（与流转 run() 一致），
+            # 避免与 AutoProcess.run 并发时"持节点锁等风险单锁"的 AB-BA 死锁（BKSEC 1578946 复审）。
+            # 重试的外部动作与本地登记在同一把风险单锁内完成：已关单/待确认直接拒绝（不发起外部重试，
+            # 含锁外的失败原因回源——拒绝路径零外部交互），并发关单的撤销逻辑必能查到已登记为运行中的
+            # 节点，不会漏掉该次重试（复审 P1）。
+            risk_locked = (
+                Risk.objects.select_for_update().filter(risk_id=risk.risk_id).only("risk_id", "status").first()
+            )
+            if risk_locked is not None and risk_locked.status in (RiskStatus.CLOSED, RiskStatus.PENDING_CONFIRM):
+                raise RiskStatusInvalid(
+                    message=gettext("风险单为%(status)s，不支持重试处理套餐，请重新打开后操作")
+                    % {"status": value_to_label(RiskStatus, risk_locked.status)}
+                )
             # 行锁重取，避免并发点击重试互相覆盖
             node = TicketNode.objects.select_for_update().get(id=node.id)
+            # 回源补齐各失败节点的 error_message，保证重试快照固化到真实的失败现场（锁内、复检之后）
+            fill_failure_info(status, task_id=task_id)
             process_result = node.process_result or {}
             # 截至本次之前已被重试过的节点：快照是"上一轮执行"的现场，
             # 因此首次执行现场（第一条快照）不存在任何重试，标记全为 false
@@ -1422,6 +1421,21 @@ class RetryAutoProcess(RiskMeta):
             process_result["retry_history"] = retry_history
             # 累计被重试过的节点：本次重试并入，供后续快照与当前 attempts 标记使用
             process_result["retried_node_ids"] = sorted(retried_before | retried_node_ids)
+            # 对每个失败的节点（含子流程内嵌套的失败节点），获取节点输入并重试：
+            # 外部重试动作在风险单锁内发起，随后立即本地登记为运行中（复审 P1 并发约束）
+            for item in iter_status_nodes(status):
+                if item["state"] != SOPSTaskStatus.FAILED:
+                    continue
+                io_data = api.bk_sops.get_node_data(
+                    task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=item["id"]
+                )
+                api.bk_sops.operate_node(
+                    task_id=task_id,
+                    bk_biz_id=settings.DEFAULT_BK_BIZ_ID,
+                    node_id=item["id"],
+                    action=SOPSTaskOperation.RETRY,
+                    inputs=io_data["inputs"],
+                )
             node.status = TicketNodeStatus.RUNNING
             # 顶层 operator 更新为最新操作人（本次重试的人）；各轮现场的执行人已固化在对应快照中
             node.operator = get_request_username()
