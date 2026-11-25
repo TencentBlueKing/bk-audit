@@ -21,13 +21,13 @@ def _leaves(node):
         yield from _leaves(child)
 
 
-def _condition(raw_name: str, value) -> dict:
+def _condition(raw_name: str, value, display_name: "str | None" = None) -> dict:
     return {
         "condition": {
             "field": {
                 "table": "event",
                 "raw_name": raw_name,
-                "display_name": raw_name,
+                "display_name": display_name or raw_name,
                 "field_type": "string",
             },
             "operator": "eq",
@@ -171,7 +171,7 @@ def scope_field_options(scope: dict) -> "list[tuple[str, str]]":
 
     与 scope_field_names 的带值判定一致（值非空才算），兼容 groups 和条件树两种结构。
     单份 scope 内按 field 去重，field_name 取首次出现的非空展示名，
-    展示名缺失时按标准字段中文名兜底（与 _display_field 口径一致），兜底不到回退 field。
+    展示名缺失时按标准字段中文名兜底，兜底不到回退 field。
     """
 
     pairs: "list[tuple[str, str]]" = []
@@ -182,9 +182,10 @@ def scope_field_options(scope: dict) -> "list[tuple[str, str]]":
                 if item.get("field") and item.get("value") not in (None, "", []):
                     field = str(item.get("field"))
                     display = str(item.get("field_name") or "")
-                    field_name = _standard_field_name(field, fallbacks) or display or field
+                    field_name = display if display and display != field else (fallbacks.get(field) or field)
                     pairs.append((field, field_name))
         return _dedupe_field_options(pairs)
+    fallbacks = _fallback_field_names()
     try:
         for condition in _leaves(to_condition_tree(scope)):
             field = condition.field
@@ -192,7 +193,10 @@ def scope_field_options(scope: dict) -> "list[tuple[str, str]]":
                 continue
             if not (getattr(condition, "filter", None) not in (None, "", []) or getattr(condition, "filters", None)):
                 continue
-            pairs.append((field.raw_name, _display_field(field)))
+            raw_name = field.raw_name
+            display = getattr(field, "display_name", "") or ""
+            field_name = display if display and display != raw_name else (fallbacks.get(raw_name) or raw_name)
+            pairs.append((raw_name, field_name))
     except Exception:
         return []
     return _dedupe_field_options(pairs)
@@ -259,29 +263,12 @@ def _fallback_field_names() -> dict:
     return {f.field_name: str(f.description) for f in EventMappingFields().fields}
 
 
-def _standard_field_name(field: str, fallbacks: "dict | None" = None):
-    """标准事件字段的权威中文名（EventMappingFields.description，个别字段走白名单展示覆盖）。
-
-    命中返回中文名，非标准字段（如 event_data 自定义列、strategy_name）返回 None，由调用方决定回退。
-    个别标准字段（如 strategy_id）需对齐风险列表筛选页口径，优先取 WHITELIST_FIELD_NAME_OVERRIDES。
-    """
-
-    from services.web.risk.whitelist.constants import WHITELIST_FIELD_NAME_OVERRIDES
-
-    override = WHITELIST_FIELD_NAME_OVERRIDES.get(field)
-    if override:
-        return override
-    names = fallbacks if fallbacks is not None else _fallback_field_names()
-    return names.get(field)
-
-
 def _display_field(field) -> str:
-    """
-    非标准字段沿用条件自带中文名，兜底不到回退 raw_name。"""
+    """匹配范围回显：直接用建单时存进快照的字段中文名（与风险筛选选择器口径一致），缺失回退 raw_name。"""
 
     raw_name = getattr(field, "raw_name", "") or ""
     display_name = getattr(field, "display_name", "") or ""
-    return _standard_field_name(raw_name) or display_name or raw_name or "未知字段"
+    return display_name or raw_name or "未知字段"
 
 
 def _describe_tree(node, connector: str = "") -> str:
@@ -303,12 +290,12 @@ def _describe_tree(node, connector: str = "") -> str:
     return f"({text})" if connector and connector != joiner else text
 
 
-def _group_leaf_text(item: dict, fallbacks: dict) -> str:
-    """groups 条件转 "中文名 = 值"；标准字段用权威中文名，非标准字段用前端 field_name，兜底 field。"""
+def _group_leaf_text(item: dict) -> str:
+    """groups 条件转 "中文名 = 值"；直接用建单存进快照的 field_name（与风险筛选口径一致），缺失回退 field。"""
 
     raw_name = str(item.get("field") or "")
     display_name = str(item.get("field_name") or "")
-    field = _standard_field_name(raw_name, fallbacks) or display_name or raw_name
+    field = display_name or raw_name
     value = item.get("value")
     if not isinstance(value, list):
         value = [value]
@@ -320,11 +307,10 @@ def _describe_group_scope(scope: dict) -> str:
     """groups 结构按原始结构拼接，保留前端的条件中文名。"""
 
     connector = str(scope.get("connector") or "and").upper()
-    fallbacks = _fallback_field_names()
     parts = []
     for group in scope.get("groups") or []:
         joiner = str(group.get("connector") or "and").upper()
-        texts = [_group_leaf_text(item, fallbacks) for item in group.get("conditions") or [] if item.get("field")]
+        texts = [_group_leaf_text(item) for item in group.get("conditions") or [] if item.get("field")]
         texts = [t for t in texts if t]
         if not texts:
             continue
@@ -351,10 +337,10 @@ def format_scope_readable(scope: dict) -> str:
     return json.dumps(scope or {}, ensure_ascii=False)
 
 
-def _frontend_condition(raw_name: str, value) -> dict:
+def _frontend_condition(raw_name: str, value, display_name: "str | None" = None) -> dict:
     return {
         "field": raw_name,
-        "field_name": raw_name,
+        "field_name": display_name or raw_name,
         "operator": "eq",
         "value": str(value),
         "connector": "and",
@@ -366,6 +352,9 @@ def append_risk_match_fields(scope: dict, *, strategy_id, raw_event_id=None) -> 
 
     scope = dict(scope or {})
     existing = _field_names(scope)
+    # 注入字段（策略 / 原始事件）由后端补充，前端未带中文名；写标准中文名进快照，
+    # 否则纯回显快照 field_name 时这些字段会退回英文 raw_name（前端自带字段才直接回显）。
+    fallbacks = _fallback_field_names()
     additions = []
     for raw_name, value in (
         ("strategy_id", strategy_id),
@@ -373,7 +362,7 @@ def append_risk_match_fields(scope: dict, *, strategy_id, raw_event_id=None) -> 
     ):
         if value in (None, "") or raw_name in existing:
             continue
-        additions.append((raw_name, value))
+        additions.append((raw_name, value, fallbacks.get(raw_name) or raw_name))
     if not additions:
         return scope
     if _is_group_scope(scope):
@@ -386,14 +375,14 @@ def append_risk_match_fields(scope: dict, *, strategy_id, raw_event_id=None) -> 
         for group in groups:
             conditions = list(group.get("conditions") or [])
             field_names = {item.get("field") for item in conditions if isinstance(item, dict) and item.get("field")}
-            for raw_name, value in additions:
+            for raw_name, value, display_name in additions:
                 if raw_name not in field_names:
-                    conditions.append(_frontend_condition(raw_name, value))
+                    conditions.append(_frontend_condition(raw_name, value, display_name))
             group["conditions"] = conditions
             group["connector"] = group.get("connector") or "and"
         scope["groups"] = groups
         return scope
-    where_additions = [_condition(raw_name, value) for raw_name, value in additions]
+    where_additions = [_condition(raw_name, value, display_name) for raw_name, value, display_name in additions]
     if scope.get("condition") and not scope.get("conditions"):
         conditions = [{"condition": scope["condition"]}]
         scope = {"connector": scope.get("connector") or "and"}
