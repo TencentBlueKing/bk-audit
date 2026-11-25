@@ -73,6 +73,12 @@ class URLSecurityUtilsTest(TestCase):
         with self.assertRaises(URLSecurityError):
             validate_request_url("http://host:abc/path")
 
+    def test_validate_request_url_malformed_ipv6(self):
+        # urlparse 调用本身对畸形 IPv6 形式（缺右方括号）抛 ValueError，应统一转为 URLSecurityError
+        for url in ["http://[::1", "https://[invalid"]:
+            with self.assertRaises(URLSecurityError):
+                validate_request_url(url)
+
     def test_validate_resource_path_valid(self):
         validate_resource_path("")
         validate_resource_path("api/v1/resource/")
@@ -200,6 +206,13 @@ class SerializerURLSecurityTest(TestCase):
             self.assertFalse(serializer.is_valid(), bad_url)
             self.assertIn("callback_url", serializer.errors, bad_url)
 
+    def test_create_system_serializer_rejects_malformed_callback_url(self):
+        """urlparse 解析异常（畸形 IPv6）统一转为 400 参数错误而非 500"""
+        data = dict(self.CREATE_SYSTEM_DATA, callback_url="http://[::1")
+        serializer = CreateSystemReqSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("callback_url", serializer.errors)
+
     def test_create_system_serializer_accepts_valid_callback_url(self):
         data = dict(self.CREATE_SYSTEM_DATA, callback_url="https://host.example.com/")
         self.assertTrue(CreateSystemReqSerializer(data=data).is_valid())
@@ -293,6 +306,13 @@ class ScanURLSecurityCommandTest(TestCase):
         self._create_system("ftp://evil.example.com")
         with self.assertRaises(CommandError):
             call_command("scan_url_security")
+
+    def test_malformed_callback_url_scanned_not_crash(self):
+        """urlparse 解析异常（畸形 IPv6）在扫描中计入清单而非中断"""
+        self._create_system("http://[::1")
+        with self.assertRaises(CommandError) as ctx:
+            call_command("scan_url_security")
+        self.assertIn("bk_audit_urlsec", str(ctx.exception))
 
     def test_dirty_path_raises(self):
         system = self._create_system("https://callback.example.com")
