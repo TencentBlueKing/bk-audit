@@ -429,17 +429,39 @@
   .dispatch-wrap {
     padding: var(--bk-theme-space-16) var(--bk-theme-space-24);
 
+    .label-is-required {
+      display: flex;
+      width: max-content;
+      margin-bottom: var(--bk-theme-space-6);
+    }
+
     .flex-center {
-      display: inline-flex;
-      align-items: flex-start;
+      display: flex;
+      align-items: stretch;
       justify-content: flex-start;
       width: max-content;
       max-width: 100%;
 
       .bk-form-item {
+        display: flex;
         flex: 0 0 auto;
         width: auto;
+        height: 32px;
         margin-bottom: 0;
+        line-height: 0;
+
+        &::before,
+        &::after {
+          display: none;
+        }
+      }
+
+      .bk-form-content,
+      .schedule-input,
+      .schedule-select,
+      .schedule-select .bk-input {
+        display: flex;
+        height: 32px;
       }
 
       .bk-form-item:last-child {

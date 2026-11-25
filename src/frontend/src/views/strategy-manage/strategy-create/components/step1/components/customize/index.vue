@@ -2112,7 +2112,8 @@
     }
 
     .schedule-period-label {
-      display: inline-flex;
+      display: flex;
+      width: max-content;
       align-items: center;
       gap: var(--bk-theme-space-2);
       margin-bottom: var(--bk-theme-space-6);
@@ -2132,18 +2133,25 @@
     }
 
     .schedule-period-row {
-      display: inline-flex;
+      display: flex;
       width: max-content;
       max-width: 100%;
-      align-items: flex-start;
-      align-self: flex-start;
+      align-items: stretch;
       gap: 0;
 
       :deep(.bk-form-item.no-label) {
+        display: flex;
         flex: 0 0 auto;
         width: auto;
+        height: 32px;
         max-width: none;
         margin-bottom: 0;
+        line-height: 0;
+
+        &::before,
+        &::after {
+          display: none;
+        }
       }
 
       :deep(.bk-form-item.no-label:first-child) {
@@ -2159,12 +2167,19 @@
       }
 
       :deep(.bk-form-content) {
-        width: auto;
+        display: flex;
+        flex: 1 1 auto;
+        width: 100%;
+        height: 32px;
         max-width: none;
+        line-height: 0;
       }
 
       .schedule-input {
-        width: 100%;
+        display: flex;
+        flex: none;
+        width: 360px;
+        height: 32px;
         max-width: 100%;
 
         &.bk-input,
@@ -2174,12 +2189,16 @@
       }
 
       .schedule-select {
+        display: flex;
         width: 68px;
+        height: 32px;
         flex: none;
 
         :deep(.bk-select-trigger),
-        :deep(.bk-select-trigger .bk-select-tag),
         :deep(.bk-input) {
+          display: flex;
+          width: 68px;
+          height: 32px;
           border-radius: 0 var(--bk-theme-control-radius) var(--bk-theme-control-radius) 0;
         }
       }
