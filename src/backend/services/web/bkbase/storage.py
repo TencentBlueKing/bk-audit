@@ -98,6 +98,20 @@ def storage_ref(context, owner, *, rt_ref, cluster_ref, purpose):
     binding = deepcopy(owner.bkbase_v4_resources or {})
     ref = binding.get("storages", {}).get(purpose)
     if ref is None:
+        operation = binding.get("source_provision") or {}
+        if not isinstance(operation, dict):
+            raise BKBaseResourceMappingError(message="Invalid Snapshot provision operation")
+        if operation.get("stage") == "clean_ready" and not operation.get("completed"):
+            # 已有存储认领时沿用原引用；格式异常交给单快照的失败处理。
+            steps = operation.get("storage_steps", {})
+            if not isinstance(steps, dict):
+                raise BKBaseResourceMappingError(message="Invalid Snapshot storage claims")
+            step = steps.get(purpose)
+            if step is not None:
+                if not isinstance(step, dict):
+                    raise BKBaseResourceMappingError(message="Invalid Snapshot storage claim")
+                ref = step.get("ref")
+    if ref is None:
         ref = {
             "kind": "DataStorage",
             "tenant": context["tenant"],

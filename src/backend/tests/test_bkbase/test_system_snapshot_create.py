@@ -300,12 +300,12 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         creation = record["creation"]
         self.assertEqual(creation["operation_id"], first_id.hex)
         self.assertEqual(fresh["operation_id"], second_id.hex)
-        stem = "audit_iam_rtype_0123456789abcdef0123456789abcdef"
+        stem = "iam_rtype_0123456789abcdef0123456789abcdef"
         resources = (
-            ("connection", "DataConn", "_conn", 53),
-            ("data_source", "DataSource", "_source", 55),
-            ("clean", "Clean", "_clean", 54),
-            ("storage", "DataStorage", "_redis", 54),
+            ("connection", "DataConn", "_conn", 47),
+            ("data_source", "DataSource", "_source", 49),
+            ("clean", "Clean", "_clean", 48),
+            ("storage", "DataStorage", "_redis", 48),
         )
         for (observed_kind, post), (key, kind, suffix, size) in zip(self.posts, resources, strict=True):
             with self.subTest(kind=kind):
@@ -342,10 +342,10 @@ class SystemSnapshotCreationTests(SimpleTestCase):
             name = creation["refs"][key]["name"]
             with self.subTest(key=key):
                 self.assertRegex(name, r"^[_A-Za-z0-9][_A-Za-z0-9-]*$")
-                self.assertLessEqual(len(name), 60)
+                self.assertLessEqual(len(name), 50)
                 self.assertTrue(name.endswith(suffix))
                 self.assertEqual(name[: -len(suffix)], creation["name"])
-        self.assertEqual(len(creation["refs"]["data_source"]["name"]), 60)
+        self.assertEqual(len(creation["refs"]["data_source"]["name"]), 50)
 
     def test_pending_long_resource_type_claim_keeps_original_ref_without_repost(self):
         operation_id = "0123456789abcdef0123456789abcdef"
@@ -396,9 +396,9 @@ class SystemSnapshotCreationTests(SimpleTestCase):
     def test_three_schemas_create_once_and_use_formal_refs_and_binding(self):
         operation_id = "0123456789abcdef0123456789abcdef"
         expected_lengths = {
-            "action": (54, 56, 55, 55),
-            "resource_type": (53, 55, 54, 54),
-            "user": (52, 54, 53, 53),
+            "action": (48, 50, 49, 49),
+            "resource_type": (47, 49, 48, 48),
+            "user": (46, 48, 47, 47),
         }
         for kind in ("action", "resource_type", "user"):
             with self.subTest(kind=kind):
@@ -412,7 +412,7 @@ class SystemSnapshotCreationTests(SimpleTestCase):
                 )
                 record = self.rows[config_key].config_value["bkbase_v4"]["default"]["audit"]
                 name_kind = "rtype" if kind == "resource_type" else kind
-                stem = f"audit_iam_{name_kind}_{operation_id}"
+                stem = f"iam_{name_kind}_{operation_id}"
                 self.assertEqual(record["creation"]["operation_id"], operation_id)
                 for (key, resource_kind, suffix), expected_length, (posted_kind, post) in zip(
                     (

@@ -98,6 +98,7 @@ class TaskState(TextChoices):
 
 
 BKBASE_V4_FLOW_CONFIG = "bkbase_v4_flow_config"
+BKBASE_V4_RESOURCE_NAME_MAX_LENGTH = 50
 BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH = 50
 
 # V4两条ES写入链统一使用UTC切日；V3及事件时间解析沿用原约定。

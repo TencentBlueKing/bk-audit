@@ -63,11 +63,7 @@ from services.web.strategy_v2.models import Strategy
 
 def node_name(prefix, *parts):
     """仅缩短超出Flow上限的可读部分，保留既有短名及原稳定摘要。"""
-    name = stable_name(prefix, *parts)
-    if len(name) <= BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH:
-        return name
-    readable, _, digest = name.rpartition("_")
-    return f"{readable[:BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH - len(digest) - 1]}_{digest}"
+    return stable_name(prefix, *parts, max_length=BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH)
 
 
 def validate_graph(nodes):

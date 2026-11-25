@@ -24,6 +24,7 @@ from services.web.bkbase.common import (
 )
 from services.web.bkbase.constants import (
     BKBASE_V4_PULL_RESULTS_PATH,
+    BKBASE_V4_RESOURCE_NAME_MAX_LENGTH,
     CleanRole,
     TaskState,
 )
@@ -116,9 +117,9 @@ def _new_record(kind, context, redis):
         ("storage", "DataStorage", "_redis"),
     )
     name = build_resource_name(
-        f"audit_iam_{name_kind}",
+        f"iam_{name_kind}",
         operation_id,
-        max_length=60 - max(len(suffix) for _, _, suffix in resource_specs),
+        max_length=BKBASE_V4_RESOURCE_NAME_MAX_LENGTH - max(len(suffix) for _, _, suffix in resource_specs),
     )
     refs = {
         key: {

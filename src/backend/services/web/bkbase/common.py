@@ -20,7 +20,11 @@ from django.db import transaction
 from api.bk_base_v4.tenant import get_bkbase_v4_tenant
 from core.exceptions import LockError
 from core.utils.lock import RedisLock
-from services.web.bkbase.constants import BKBaseVersion, TaskState
+from services.web.bkbase.constants import (
+    BKBASE_V4_RESOURCE_NAME_MAX_LENGTH,
+    BKBaseVersion,
+    TaskState,
+)
 from services.web.bkbase.exceptions import (
     BKBaseCapabilityNotReady,
     BKBaseResourceMappingError,
@@ -137,12 +141,12 @@ def build_resource_name(readable: str, token: str, *, max_length: int, suffix: s
     return f"{normalized[:readable_length]}_{token}{suffix}"
 
 
-def stable_name(prefix, *parts):
+def stable_name(prefix, *parts, max_length=BKBASE_V4_RESOURCE_NAME_MAX_LENGTH):
     """稳定资源名保留摘要，截断不会导致不同业务资源同名。"""
     text = "_".join(str(p) for p in parts)
     digest = hashlib.sha256(text.encode()).hexdigest()[:12]
     readable = re.sub(r"[^A-Za-z0-9_-]", "_", text)
-    return build_resource_name(f"{prefix}_{readable}", digest, max_length=58)
+    return build_resource_name(f"{prefix}_{readable}", digest, max_length=max_length)
 
 
 @contextmanager

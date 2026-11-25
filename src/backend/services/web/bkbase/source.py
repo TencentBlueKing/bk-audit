@@ -36,6 +36,7 @@ from services.web.bkbase.common import (
 from services.web.bkbase.constants import (
     BKBASE_V4_MAX_POLLS,
     BKBASE_V4_PULL_RESULTS_PATH,
+    BKBASE_V4_RESOURCE_NAME_MAX_LENGTH,
     BKBASE_V4_STORAGE_CLUSTER_KINDS,
     BKBaseVersion,
     DataSourceDesiredState,
@@ -1824,8 +1825,10 @@ def prepare_source_provision(snapshot, params):
             "operation_id": operation_id,
             "stage": "new",
             "digest": _provision_digest(current, params, context),
-            "conn_name": build_resource_name("audit_conn", operation_id, max_length=60),
-            "source_name": build_resource_name("audit_source", operation_id, max_length=60),
+            "conn_name": build_resource_name("audit_conn", operation_id, max_length=BKBASE_V4_RESOURCE_NAME_MAX_LENGTH),
+            "source_name": build_resource_name(
+                "audit_source", operation_id, max_length=BKBASE_V4_RESOURCE_NAME_MAX_LENGTH
+            ),
         }
         current.bkbase_v4_resources = binding
         current.save(update_fields=["bkbase_v4_resources"])
