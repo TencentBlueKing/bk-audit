@@ -604,7 +604,7 @@ class RiskWhitelistsViewSet(ResourceViewSet):
         return get_value_by_request_or_path(self.request, "scene_id")
 
     def get_permissions(self):
-        if self.action in ["list", "contains_fields", "detail"]:
+        if self.action in ["list", "contains_fields", "detail_info"]:
             return [
                 InstanceActionPermission(
                     actions=[ActionEnum.MANAGE_SCENE],
@@ -617,7 +617,9 @@ class RiskWhitelistsViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.risk.list_risk_whitelists),
         ResourceRoute("GET", resource.risk.list_whitelist_contains_fields, endpoint="contains_fields"),
-        ResourceRoute("GET", resource.risk.retrieve_risk_whitelist, pk_field="id", endpoint="detail"),
+        # endpoint 不能叫 "detail"：与 DRF 保留 initkwarg detail(bool) 同名，会被路由 as_view
+        # 的 initkwargs={'detail': True} 覆盖成布尔，dispatch 取 self.get 时变成 True(request) 调用，必现 500
+        ResourceRoute("GET", resource.risk.retrieve_risk_whitelist, pk_field="id", endpoint="detail_info"),
         ResourceRoute("POST", resource.risk.create_risk_whitelist),
         ResourceRoute("POST", resource.risk.batch_create_risk_whitelist, endpoint="batch"),
         ResourceRoute("PUT", resource.risk.update_risk_whitelist, pk_field="id"),

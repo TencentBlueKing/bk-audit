@@ -56,7 +56,7 @@ DEFAULT_ACCEPTANCE_DAYS = 30
 
 
 def is_platform_admin(username: str) -> bool:
-    """平台管理员看 IAM 的平台管理权限。这个权限不能通过、驳回，可以编辑、启停和删除。"""
+    """平台管理员看 IAM 的平台管理权限。"""
 
     if not username:
         return False
@@ -64,7 +64,7 @@ def is_platform_admin(username: str) -> bool:
 
 
 def is_scene_admin(username: str, scene_id: int) -> bool:
-    """场景管理员是该场景 managers 里的人。平台管理员不在名单里不能立即通过，也不能通过、驳回。"""
+    """场景管理员是该场景 managers 里的人。"""
 
     if not username or not scene_id:
         return False
@@ -77,18 +77,24 @@ def managed_scene_ids(username: str):
     return ScopePermission(username).get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.MANAGE_SCENE)
 
 
+def _can_manage_whitelist(username: str, scene_id) -> bool:
+    """白名单统一鉴权口径：场景管理员，或有该场景管理权限的平台管理员，权限完全一致。"""
+
+    if not username:
+        return False
+    if is_scene_admin(username, scene_id):
+        return True
+    return is_platform_admin(username) and str(scene_id) in {str(sid) for sid in managed_scene_ids(username)}
+
+
 def assert_can_manage_scene(username: str, scene_id) -> None:
     """创建 / 批量创建白名单的前置鉴权：场景管理员或有该场景管理权限的平台管理员任一即可。
 
-    创建态尚无白名单实例，无法走 :func:`get_rule_for_admin` 的实例鉴权，
-    故按场景维度校验：命中场景管理员，或平台管理员且该场景在其可管理范围内。
+    创建态尚无白名单实例，无法走 :func:`get_rule_for_admin` 的实例鉴权，故按场景维度校验。
     """
 
-    if is_scene_admin(username, scene_id):
-        return
-    if is_platform_admin(username) and str(scene_id) in {str(sid) for sid in managed_scene_ids(username)}:
-        return
-    raise ValidationError(gettext("没有该场景的白名单管理权限"))
+    if not _can_manage_whitelist(username, scene_id):
+        raise ValidationError(gettext("没有该场景的白名单管理权限"))
 
 
 _PERIOD_PATTERN = re.compile(r"^(\d+)([dDmM])$")
@@ -593,9 +599,10 @@ def operate_itsm(rule: RiskWhitelist, method: str, operator: str):
 
 
 def review_whitelist(rule: RiskWhitelist, method: str, operator: str, reject_reason: str = "") -> RiskWhitelist:
-    """场景管理员点击通过或驳回。ITSM 返回 success 为 true 才改状态，为 false 不改。"""
+    """场景管理员或有该场景管理权限的平台管理员点击通过或驳回。ITSM 返回 success 为 true 才改状态，为 false 不改。"""
 
-    ensure_admin(operator, rule.scene_id)
+    if not _can_manage_whitelist(operator, rule.scene_id):
+        raise ValidationError(gettext("没有该场景的白名单管理权限"))
     payload = operate_itsm(rule, method, operator)
     if not (isinstance(payload, dict) and payload.get("success") is True):
         return rule
@@ -1180,13 +1187,12 @@ def order_whitelist_queryset(queryset, order_fields):
 
 
 def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list:
-    """通过和驳回只给该场景的场景管理员。续期是申请，看到这条白名单的人都可以发起。"""
+    """通过 / 驳回、编辑、启停、删除：场景管理员与有该场景管理权限的平台管理员一致。续期是申请，可见者皆可发起。"""
 
     if is_admin is None:
-        is_admin = bool(username and is_scene_admin(username, rule.scene_id))
+        is_admin = _can_manage_whitelist(username, rule.scene_id)
     if not is_admin:
-        actions = _maintenance_actions(rule) if username and is_platform_admin(username) else []
-        return _with_renew(actions, rule)
+        return _with_renew([], rule)
     if rule.status == WhitelistStatus.PENDING:
         return ["approve", "reject"]
     if rule.status == WhitelistStatus.ACTIVE:
@@ -1344,19 +1350,12 @@ def serialize_rule(
     return data
 
 
-def ensure_admin(username: str, scene_id: int) -> None:
-    if not is_scene_admin(username, scene_id):
-        raise ValidationError(gettext("没有该场景的白名单管理权限"))
-
-
-def get_rule_for_admin(rule_id: int, username: str, *, maintain: bool = False) -> RiskWhitelist:
-    """maintain 为真时，平台管理员也可以编辑、启停和删除。通过和驳回仍只认场景管理员。"""
+def get_rule_for_admin(rule_id: int, username: str) -> RiskWhitelist:
+    """实例鉴权：场景管理员或有该场景管理权限的平台管理员，白名单读写、通过 / 驳回权限一致。"""
 
     rule = RiskWhitelist.objects.filter(pk=rule_id).first()
     if rule is None:
         raise ValidationError(gettext("白名单不存在"))
-    if is_scene_admin(username, rule.scene_id):
-        return rule
-    if maintain and is_platform_admin(username) and rule.scene_id in set(managed_scene_ids(username)):
-        return rule
-    raise ValidationError(gettext("没有该场景的白名单管理权限"))
+    if not _can_manage_whitelist(username, rule.scene_id):
+        raise ValidationError(gettext("没有该场景的白名单管理权限"))
+    return rule

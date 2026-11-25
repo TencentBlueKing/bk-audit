@@ -284,7 +284,7 @@ class UpdateRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = UpdateRiskWhitelistReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         target_type = validated_request_data.get("whitelist_type") or rule.whitelist_type
         error = validate_match_scope(validated_request_data["match_scope"], target_type)
         if error:
@@ -342,7 +342,7 @@ class EnableRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = RiskWhitelistIdReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status != WhitelistStatus.DISABLED:
             raise ValidationError(gettext("只有已停用的规则可以启用"))
         if rule.expire_at and rule.expire_at <= timezone.now():
@@ -358,7 +358,7 @@ class DisableRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = RiskWhitelistIdReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status != WhitelistStatus.ACTIVE:
             raise ValidationError(gettext("只有生效中的规则可以停用"))
         rule.status = WhitelistStatus.DISABLED
@@ -371,7 +371,7 @@ class RenewRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = RenewRiskWhitelistReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         renewed = renew_whitelist(
             rule,
             match_scope=rule.match_scope,
@@ -388,7 +388,7 @@ class DeleteRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = RiskWhitelistIdReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         if rule.status not in DELETABLE_STATUS:
             raise ValidationError(gettext("只有已停用、已到期、已驳回的规则可以删除"))
         RiskWhitelistHit.objects.filter(whitelist=rule).update(is_deleted=True)
@@ -401,7 +401,7 @@ class ListWhitelistHitRecords(RiskWhitelistMeta):
     RequestSerializer = ListWhitelistHitRecordReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         queryset = RiskWhitelistHit.objects.filter(whitelist=rule)
         if validated_request_data.get("action"):
             queryset = queryset.filter(action=validated_request_data["action"])
@@ -435,7 +435,7 @@ class FetchWhitelistHitEvent(RiskWhitelistMeta):
     RequestSerializer = FetchWhitelistHitEventReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username())
         hit = RiskWhitelistHit.objects.filter(pk=validated_request_data["hit_id"], whitelist=rule).first()
         if hit is None:
             raise ValidationError(gettext("命中记录不存在"))
