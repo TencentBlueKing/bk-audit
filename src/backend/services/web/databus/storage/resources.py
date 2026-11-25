@@ -16,8 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import json
+
 from bk_resource import api, resource
 from bk_resource.utils.common_utils import ignored
+from blueapps.utils.logger import logger
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
@@ -31,7 +34,7 @@ from apps.exceptions import MetaConfigNotExistException, StorageChanging
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
-from core.redacted_log import RedactedRequestLogMixin
+from core.sensitive import redact_secrets
 from services.web.bkbase import plugin_storage_switch
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
@@ -259,14 +262,41 @@ class CreateStorageResource(StorageMeta):
         return data
 
 
-class CreateOrUpdateRedisResource(RedactedRequestLogMixin, StorageMeta):
+class CreateOrUpdateRedisResource(StorageMeta):
     name = gettext_lazy("创建或更新Redis")
     RequestSerializer = CreateRedisRequestSerializer
     ResponseSerializer = CreateRedisResponseSerializer
+    # BKSEC 1578945：框架 ResourceRequestLog 无脱敏能力（请求体含密码明文），关闭；
+    # 排障日志由本资源 request() 以脱敏形式自记录，非敏感排障字段全保留
+    support_data_collect = False
+
+    def request(self, request_data=None, **kwargs):
+        """脱敏版请求日志：完整保留排障上下文，仅敏感键名值打码"""
+        # viewset 路由经 request_data 传入；resource 直调（init_redis 等）走 **kwargs，需归一化
+        log_request_data = request_data if request_data is not None else kwargs
+        try:
+            response_data = super().request(request_data=request_data, **kwargs)
+        except Exception as err:
+            self._log_redacted(log_request_data, {"error": str(err)})
+            raise
+        self._log_redacted(log_request_data, response_data)
+        return response_data
+
+    @staticmethod
+    def _log_redacted(request_data, response_data):
+        logger.info(
+            "[ResourceRequestLog][Redacted]\nResource => %s\nRequestData => %s\nResponseData => %s",
+            "services.web.databus.storage.resources.CreateOrUpdateRedisResource",
+            json.dumps(redact_secrets(request_data), ensure_ascii=False, default=str),
+            json.dumps(redact_secrets(response_data), ensure_ascii=False, default=str),
+        )
 
     def perform_request(self, validated_request_data):
-        # 评审 P2（BKSEC 1578945）：不加 decrypt 对齐位——init_redis 以明文直传共用本资源，
-        # 开启 BKCRYPTO 时明文会被当密文解密导致初始化失败；ES 链路的 decrypt 前有
-        # adapt_auth_password 前置适配，Redis 无对应机制，保持明文传输与修复前行为一致
+        # 对齐 ES create/update 的 decrypt 预留位（resources.py:85-87,222-224 同款）：
+        # 默认部署 FakeAsymmetricCipher 恒等透传零行为变化；启用 BKAPP_ENABLE_BKCRYPTO 后要求密文提交
+        connection_info = validated_request_data.get("connection_info") or {}
+        password = connection_info.get("password")
+        if password:
+            connection_info["password"] = asymmetric_cipher.decrypt(password)
         redis_id = validated_request_data.get("redis_id")
         return RedisHandler(redis_id).update_or_create(validated_request_data)
