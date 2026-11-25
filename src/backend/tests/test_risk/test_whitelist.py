@@ -1408,48 +1408,35 @@ class WhitelistContainsFieldsEnumTests(SimpleTestCase):
 
 
 class WhitelistDetailTests(SimpleTestCase):
-    @patch("services.web.risk.resources.whitelist.serialize_rule")
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
-    @patch("services.web.risk.resources.whitelist.RiskWhitelistHit.objects")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
-    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
-    def test_detail_pulls_ticket_once_and_marks_admin(self, _user, objects, hits, load_detail, serialize):
+    def test_detail_returns_raw_ticket_detail(self, objects, load_detail):
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
         rule = SimpleNamespace(id=7, scene_id=3, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
         objects.filter.return_value.first.return_value = rule
-        hits.filter.return_value.count.return_value = 5
-        load_detail.return_value = {"id": "ticket-1", "current_steps": [{"name": "审批"}]}
-        serialize.return_value = {"id": "7"}
+        ticket_detail = {"id": "ticket-1", "sn": "SN-1", "current_steps": [{"name": "审批"}]}
+        load_detail.return_value = ticket_detail
 
         result = RetrieveRiskWhitelist().perform_request({"id": 7, "scene_id": 3})
 
-        self.assertEqual(result, {"id": "7"})
+        # 详情只作工单详情代理：原样返回 ticket_detail，不掺白名单列表字段
+        self.assertEqual(result, ticket_detail)
         load_detail.assert_called_once_with(rule)
-        # 详情回显实时 flow，且能进来即场景管理员（is_admin=True）
-        kwargs = serialize.call_args.kwargs
-        self.assertEqual(kwargs["progress"], {"id": "ticket-1", "current_steps": [{"name": "审批"}]})
-        self.assertTrue(kwargs["is_admin"])
-        self.assertEqual(serialize.call_args.args[1], 5)
 
-    @patch("services.web.risk.resources.whitelist.serialize_rule")
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
-    @patch("services.web.risk.resources.whitelist.RiskWhitelistHit.objects")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
-    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="tester")
-    def test_detail_skips_ticket_for_active(self, _user, objects, hits, load_detail, serialize):
+    def test_detail_returns_empty_without_ticket_id(self, objects, load_detail):
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
-        rule = SimpleNamespace(id=8, scene_id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="ticket-1")
+        rule = SimpleNamespace(id=8, scene_id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="")
         objects.filter.return_value.first.return_value = rule
-        hits.filter.return_value.count.return_value = 0
-        serialize.return_value = {"id": "8"}
 
-        RetrieveRiskWhitelist().perform_request({"id": 8, "scene_id": 3})
+        result = RetrieveRiskWhitelist().perform_request({"id": 8, "scene_id": 3})
 
-        # 生效中没有流转可回显，不外呼工单详情
+        # 无工单号时无从外呼，直接返回空 dict，不调用工单详情
+        self.assertEqual(result, {})
         load_detail.assert_not_called()
-        self.assertEqual(serialize.call_args.kwargs["progress"], {})
 
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
     def test_detail_missing_raises(self, objects):

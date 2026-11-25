@@ -24,11 +24,7 @@ from apps.audit.resources import AuditMixinResource
 from core.exceptions import ValidationError
 from core.models import get_request_username
 from services.web.risk.models import Risk
-from services.web.risk.whitelist.constants import (
-    DELETABLE_STATUS,
-    FLOW_STATUS,
-    WhitelistStatus,
-)
+from services.web.risk.whitelist.constants import DELETABLE_STATUS, WhitelistStatus
 from services.web.risk.whitelist.match import (
     scope_field_names,
     scope_field_options,
@@ -183,9 +179,10 @@ class ListWhitelistContainsFields(RiskWhitelistMeta):
 
 
 class RetrieveRiskWhitelist(RiskWhitelistMeta):
-    """白名单详情：返回全字段，并实时拉一次工单详情回显 flow（当前处理人、步骤、意见）。
+    """白名单详情：按白名单 ID 找到其 ITSM 工单，直接返回工单详情接口（ticket_detail）的响应。
 
-    仅详情接口外呼工单，列表不再逐条拉取；能进来即该场景管理员（viewset 已校验），actions 按管理员处理。
+    只作工单详情代理，不再回显白名单列表字段或本地 flow；与列表序列化相互独立。
+    能进来即该场景管理员（viewset 已校验）。无工单号或外呼失败时返回空 dict。
     """
 
     name = gettext_lazy("风险白名单详情")
@@ -195,15 +192,9 @@ class RetrieveRiskWhitelist(RiskWhitelistMeta):
         rule = RiskWhitelist.objects.filter(pk=validated_request_data["id"]).first()
         if rule is None:
             raise ValidationError(gettext("白名单不存在"))
-        hit_count = RiskWhitelistHit.objects.filter(whitelist=rule, is_deleted=False).count()
-        progress = _load_ticket_detail(rule) if rule.status in FLOW_STATUS and rule.itsm_ticket_id else {}
-        return serialize_rule(
-            rule,
-            hit_count,
-            progress=progress,
-            username=get_request_username(),
-            is_admin=True,
-        )
+        if not rule.itsm_ticket_id:
+            return {}
+        return _load_ticket_detail(rule)
 
 
 class CreateRiskWhitelist(RiskWhitelistMeta):
