@@ -37,7 +37,7 @@ from services.web.databus.constants import (
     SnapshotRunningStatus,
     SnapShotStorageChoices,
 )
-from services.web.databus.models import Snapshot
+from services.web.databus.models import RedisConfig, Snapshot
 from services.web.entry.constants import (
     AGENT_AUTH_KEY,
     AUDIT_DOC_CONFIG_KEY,
@@ -61,6 +61,53 @@ from tests.base import TestCase
 
 
 class SystemSnapshotInitGateTests(SimpleTestCase):
+    def test_init_snapshot_only_v4_passes_redis_fallback(self):
+        handler = SystemInitHandler()
+        for version in ("v3", "v4"):
+            with self.subTest(version=version), override_settings(
+                BKBASE_API_VERSION=version, SNAPSHOT_USERINFO_RESOURCE_URL=""
+            ), mock.patch(
+                "services.web.entry.init.base.create_iam_data_link", return_value=None
+            ) as create, mock.patch.object(
+                handler, "pre_check", return_value=False
+            ), mock.patch.object(
+                handler, "post_init"
+            ):
+                handler.init_snapshot()
+                expected = {"init_redis_fallback": handler._resolve_snapshot_redis} if version == "v4" else {}
+                self.assertEqual(
+                    create.call_args_list, [mock.call("action", **expected), mock.call("resource_type", **expected)]
+                )
+
+    def test_init_imports_strategy_storage_before_default_strategy(self):
+        calls = []
+        methods = (
+            "pre_init",
+            "init_standard_fields",
+            "init_es",
+            "init_doris",
+            "init_redis",
+            "init_snapshot",
+            "init_event",
+            "create_or_update_plugin_etl",
+            "init_system",
+            "init_asset",
+            "init_system_rule_audit",
+            "init_global_meta_config",
+            "init_itsm_v4",
+        )
+        with mock.patch.multiple(SystemInitHandler, **{name: mock.DEFAULT for name in methods}) as patched:
+            for name, method in patched.items():
+                method.side_effect = lambda *args, step=name: calls.append(step) or True
+            with mock.patch(
+                "services.web.entry.init.base.init_strategy_storage",
+                create=True,
+                side_effect=lambda: calls.append("strategy_storage"),
+            ):
+                self.assertTrue(SystemInitHandler().init())
+        self.assertEqual(calls[3:6], ["init_doris", "strategy_storage", "init_redis"])
+        self.assertLess(calls.index("strategy_storage"), calls.index("init_system_rule_audit"))
+
     def test_init_stops_before_event_when_snapshot_is_pending(self):
         for multi_tenant in (False, True):
             with self.subTest(multi_tenant=multi_tenant), override_settings(
@@ -100,6 +147,61 @@ class SystemSnapshotInitGateTests(SimpleTestCase):
             SystemInitHandler().init()
         self.assertIs(caught.exception, failure)
         init_event.assert_not_called()
+
+
+@override_settings(DEFAULT_NAMESPACE="default")
+class InitSnapshotRedisSelectionTests(TestCase):
+    def setUp(self):
+        self.enterContext(
+            mock.patch("requests.sessions.Session.request", side_effect=AssertionError("Unexpected HTTP"))
+        )
+
+    def test_init_fallback_rejects_malformed_declared_candidate_before_query(self):
+        declarations = [
+            {"namespace": "default", "redis_name_en": "registered"},
+            {"namespace": "default", "redis_name_en": ""},
+        ]
+        with mock.patch("services.web.entry.init.base.get_secret_json", return_value=declarations), mock.patch.object(
+            RedisConfig.objects, "filter"
+        ) as query:
+            with self.assertRaises(BKBaseResourceMappingError):
+                SystemInitHandler()._resolve_snapshot_redis({"tenant": "default", "namespace": "audit"})
+            query.assert_not_called()
+
+    def test_init_fallback_rejects_ambiguous_or_unbound_redis(self):
+        context = {"tenant": "default", "namespace": "audit"}
+        ref = {"kind": "Redis", "tenant": "default", "namespace": "audit", "name": "registered"}
+        row = RedisConfig.objects.create(
+            namespace="default",
+            redis_name_en="registered",
+            redis_name="fixture",
+            connection_info={},
+            version="6",
+            extra={"bkbase_v4": {"registration_state": "bound", "resource_ref": ref}},
+        )
+        declaration = {"namespace": "default", "redis_name_en": "registered"}
+        handler = SystemInitHandler()
+        for declarations in ([], [declaration, {**declaration, "redis_name_en": "unbound"}]):
+            with self.subTest(declarations=declarations), mock.patch(
+                "services.web.entry.init.base.get_secret_json", return_value=declarations
+            ), mock.patch.object(RedisConfig.objects, "filter") as query:
+                with self.assertRaises(BKBaseResourceMappingError) as caught:
+                    handler._resolve_snapshot_redis(context)
+                query.assert_not_called()
+                self.assertIn("BKAPP_BKBASE_V4_SYSTEM_SNAPSHOT_CREATE", str(caught.exception))
+        with mock.patch("services.web.entry.init.base.get_secret_json", return_value=[declaration]):
+            self.assertEqual(handler._resolve_snapshot_redis(context), ref)
+            for binding in (
+                {},
+                {"registration_state": "registering", "resource_ref": ref},
+                {"registration_state": "bound", "resource_ref": {**ref, "tenant": "other"}},
+                {"registration_state": "bound", "resource_ref": {**ref, "namespace": "other"}},
+                {"registration_state": "bound", "resource_ref": {**ref, "kind": "Kafka"}},
+            ):
+                row.extra = {"bkbase_v4": binding}
+                row.save(update_fields=["extra"])
+                with self.subTest(binding=binding), self.assertRaises(BKBaseResourceMappingError):
+                    handler._resolve_snapshot_redis(context)
 
 
 @override_settings(BKAPP_INIT_SYSTEM="True")

@@ -40,12 +40,20 @@ from core.kms import (
 from core.sql.constants import Operator
 from core.utils.distutils import strtobool
 from services.web.bkbase.common import get_bkbase_version
-from services.web.bkbase.constants import BKBaseVersion
-from services.web.bkbase.exceptions import BKBaseFlowOperationPending
+from services.web.bkbase.constants import (
+    BKBASE_V4_REDIS_BINDING,
+    BKBaseVersion,
+    RedisRegistrationState,
+)
+from services.web.bkbase.exceptions import (
+    BKBaseFlowOperationPending,
+    BKBaseResourceMappingError,
+)
 from services.web.databus.collector.snapshot.system.base import (
     create_iam_data_link,
     init_itsm_v4,
 )
+from services.web.databus.collector.snapshot.system.v4 import _explicit_ref
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     ClusterMode,
@@ -53,7 +61,7 @@ from services.web.databus.constants import (
     SnapshotRunningStatus,
     SnapShotStorageChoices,
 )
-from services.web.databus.models import Snapshot
+from services.web.databus.models import RedisConfig, Snapshot
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     StorageCreateRequestSerializer,
@@ -79,6 +87,7 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
+from services.web.entry.init.strategy_storage import init_strategy_storage
 from services.web.entry.serializers import AgentAuthConfigSerializer
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -166,6 +175,7 @@ class SystemInitHandler:
         self.init_standard_fields()
         self.init_es()
         self.init_doris()
+        init_strategy_storage()
         self.init_redis()
         if self.init_snapshot() is False:
             return False
@@ -282,7 +292,7 @@ class SystemInitHandler:
                 kinds.append("user")
             ready = True
             for kind in kinds:
-                waiting_for = create_iam_data_link(kind)
+                waiting_for = create_iam_data_link(kind, init_redis_fallback=self._resolve_snapshot_redis)
                 if waiting_for is not None:
                     print(f"[InitSnapshot] V4 {kind} pending: {waiting_for}")
                     ready = False
@@ -297,6 +307,37 @@ class SystemInitHandler:
         if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
             create_iam_data_link("user")
         self.post_init(INIT_SNAPSHOT_FINISHED_KEY)
+
+    def _resolve_snapshot_redis(self, context: dict) -> dict:
+        """仅复用本审计空间部署声明中唯一、已登记且属于当前租户和项目的 Redis。"""
+        message = (
+            "BKAPP_INIT_REDIS_CONFIG requires exactly one registered Redis in the snapshot space; "
+            "set BKAPP_BKBASE_V4_SYSTEM_SNAPSHOT_CREATE for an explicit Redis reference"
+        )
+        declarations = get_secret_json("BKAPP_INIT_REDIS_CONFIG", [])
+        if not isinstance(declarations, list) or any(not isinstance(item, dict) for item in declarations):
+            raise BKBaseResourceMappingError(message=message)
+        names = set()
+        for item in declarations:
+            if item.get("namespace") != settings.DEFAULT_NAMESPACE:
+                continue
+            name = item.get("redis_name_en")
+            if not isinstance(name, str) or not name.strip():
+                raise BKBaseResourceMappingError(message=message)
+            names.add(name)
+        # 必须先判断声明数量，不能将尚未登记的另一候选过滤掉后误选唯一项。
+        if len(names) != 1:
+            raise BKBaseResourceMappingError(message=message)
+        config = RedisConfig.objects.filter(
+            namespace=settings.DEFAULT_NAMESPACE, redis_name_en=next(iter(names)), is_deleted=False
+        ).first()
+        saved = (config.extra or {}).get(BKBASE_V4_REDIS_BINDING) if config and isinstance(config.extra, dict) else None
+        if not isinstance(saved, dict) or saved.get("registration_state") != RedisRegistrationState.BOUND:
+            raise BKBaseResourceMappingError(message=message)
+        try:
+            return _explicit_ref(context, saved.get("resource_ref"), "Redis")
+        except BKBaseResourceMappingError:
+            raise BKBaseResourceMappingError(message=message) from None
 
     def init_standard_fields(self):
         if self.pre_check(INIT_FIELDS_FINISHED_KEY):

@@ -110,7 +110,7 @@ class StorageConfigurationPathTests(TestCase):
         ):
             with self.subTest(purpose=purpose):
                 endpoint = DataStorageCreate()
-                response = mock.Mock()
+                response = mock.Mock(status_code=200, history=[])
                 response.raise_for_status.return_value = None
                 response.json.return_value = {"result": True, "code": "00", "data": {"status": {"phase": "Pending"}}}
                 endpoint.session.request = mock.Mock(return_value=response)

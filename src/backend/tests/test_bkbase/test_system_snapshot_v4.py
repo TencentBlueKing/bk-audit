@@ -440,15 +440,22 @@ class SystemSnapshotEntrypointTests(SimpleTestCase):
 
     @override_settings(BKBASE_API_VERSION="v4", SNAPSHOT_USERINFO_RESOURCE_URL="configured")
     def test_v4_release_ignores_old_marker_and_continues_other_kinds(self):
+        handler = SystemInitHandler()
         with (
             mock.patch.object(SystemInitHandler, "pre_check", return_value=True) as precheck,
             mock.patch.object(SystemInitHandler, "post_init") as post_init,
             mock.patch(f"{ENTRY_PATH}.create_iam_data_link", side_effect=["Clean", None, None]) as create,
         ):
-            self.assertIs(SystemInitHandler().init_snapshot(), False)
+            self.assertIs(handler.init_snapshot(), False)
         precheck.assert_not_called()
         post_init.assert_not_called()
-        self.assertEqual(create.call_args_list, [mock.call("action"), mock.call("resource_type"), mock.call("user")])
+        self.assertEqual(
+            create.call_args_list,
+            [
+                mock.call(kind, init_redis_fallback=handler._resolve_snapshot_redis)
+                for kind in ("action", "resource_type", "user")
+            ],
+        )
 
     @override_settings(BKBASE_API_VERSION="v4")
     def test_manual_command_propagates_pending_to_exit_status(self):

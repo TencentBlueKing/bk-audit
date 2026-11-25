@@ -477,7 +477,7 @@ def _advance(kind, context, record, redis):
     return None
 
 
-def ensure_system_snapshot(kind, migration_binding=None):
+def ensure_system_snapshot(kind, migration_binding=None, *, init_redis_fallback: Callable[[dict], dict] | None = None):
     """Route explicit migration, ongoing creation and enabled new creation through the real entrypoints."""
     context = bindings._system_context()
     config_key, _ = bindings.SYSTEM_SNAPSHOT_KEYS[kind]
@@ -490,6 +490,11 @@ def ensure_system_snapshot(kind, migration_binding=None):
     if (current is not None and not creation) or (creation and creation.get("completed")):
         return bindings.ensure_system_snapshot(kind)
     redis = _create_config(kind, context)
+    if redis is None and init_redis_fallback is not None:
+        if creation:
+            redis = bindings._explicit_ref(context, creation.get("redis"), "Redis", in_project=False)
+        elif current is None:
+            redis = init_redis_fallback(context)
     if redis is None:
         if creation:
             raise BKBaseResourceMappingError(message="IAM V4 creation target configuration was removed")

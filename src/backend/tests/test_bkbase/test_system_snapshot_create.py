@@ -1092,3 +1092,46 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         with self.assertRaises(BKBaseResourceMappingError):
             provision.ensure_system_snapshot("action", migration_binding={"snapshot_type": "action"})
         self.assertEqual(len(self.posts), 1)
+
+    def test_init_fallback_records_the_only_registered_redis(self):
+        redis_ref = {"kind": "Redis", "tenant": "default", "namespace": "audit", "name": "registered"}
+        fallback = mock.Mock(return_value=redis_ref)
+        with override_settings(BKBASE_V4_SYSTEM_SNAPSHOT_CREATE={}):
+            for _ in range(12):
+                waiting = provision.ensure_system_snapshot("action", init_redis_fallback=fallback)
+                self._settle()
+                if waiting is None:
+                    break
+        record = bindings._scoped_binding(
+            bindings._read_config(bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]), bindings._system_context()
+        )
+        self.assertEqual(record["creation"]["redis"], redis_ref)
+        storage_spec = next(params["spec"] for kind, params in self.posts if kind == "DataStorage")
+        self.assertEqual(storage_spec["tableInfo"]["storage"], redis_ref)
+        fallback.assert_called_once()
+        # 显式覆盖仍优先，且不因登记候选不同而触发选择器。
+        fallback.reset_mock()
+        provision.ensure_system_snapshot("user", init_redis_fallback=fallback)
+        fallback.assert_not_called()
+        record = bindings._scoped_binding(
+            bindings._read_config(bindings.SYSTEM_SNAPSHOT_KEYS["user"][0]), bindings._system_context()
+        )
+        self.assertEqual(record["creation"]["redis"]["name"], "iam_redis")
+
+    def test_init_resume_keeps_claimed_redis(self):
+        redis_ref = {"kind": "Redis", "tenant": "default", "namespace": "audit", "name": "registered"}
+        with override_settings(BKBASE_V4_SYSTEM_SNAPSHOT_CREATE={}):
+            provision.ensure_system_snapshot("action", init_redis_fallback=mock.Mock(return_value=redis_ref))
+            saved_before = deepcopy(self.rows[bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]].config_value)
+            fallback = mock.Mock(side_effect=AssertionError("must preserve claimed Redis"))
+            provision.ensure_system_snapshot("action", init_redis_fallback=fallback)
+            fallback.assert_not_called()
+        saved_after = self.rows[bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]].config_value
+        self.assertEqual(saved_after, saved_before)
+        with override_settings(
+            BKBASE_V4_SYSTEM_SNAPSHOT_CREATE={"action": {"redis": {**redis_ref, "name": "changed"}}}
+        ):
+            with self.assertRaises(BKBaseResourceMappingError):
+                provision.ensure_system_snapshot("action", init_redis_fallback=fallback)
+        self.assertEqual(self.rows[bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]].config_value, saved_before)
+        self.assertEqual(len(self.posts), 1)
