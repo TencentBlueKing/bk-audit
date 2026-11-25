@@ -259,6 +259,7 @@
     type RuleDisplayItem,
   } from '../../../strategy-manage/list/components/use-strategy-detail-rules';
   import { parseStrategyDetailToForm } from '../../../strategy-manage/strategy-create/utils/strategy-protocol';
+  import { selectManualEventFields } from '../../manual-event-fields';
 
   import fieldCom from './field-components.vue';
 
@@ -352,7 +353,11 @@
   )));
 
   const buildEventList = (strategy: Record<string, any>) => {
-    eventList.value = strategy?.event_data_field_configs?.map((item: Record<string, any>) => {
+    const eventFields = selectManualEventFields(
+      strategy?.event_data_field_configs || [],
+      strategy?.event_basic_field_configs || [],
+    );
+    eventList.value = eventFields.map((item: Record<string, any>) => {
       let typeValueDefault = 'input';
       if (item.field_type === 'string') {
         typeValueDefault = 'input';
@@ -373,7 +378,7 @@
         valueText: '',
         fieldTypeList: comTypeList(item.field_type),
       };
-    }).filter((e: Record<string, any>) => e.is_show) || [];
+    });
   };
 
   const resolveRuleOptions = (strategy: Record<string, any>): RuleDisplayItem[] => {
