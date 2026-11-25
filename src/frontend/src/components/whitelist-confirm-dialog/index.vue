@@ -53,7 +53,7 @@
         data-testid="risk-whitelist-confirm"
         theme="primary"
         @click="handleConfirm">
-        {{ t(roleText.text.value.confirmOk) }}
+        {{ t(confirmOkText) }}
       </bk-button>
       <bk-button
         class="dialog-cancel"
@@ -90,7 +90,7 @@
     customDays?: number;
     source?: 'menu' | 'risk';
     expireAt?: string;
-    /** 菜单编辑：标题改为「确定编辑白名单」 */
+    /** 菜单编辑：标题改为「确认修改白名单」，确认按钮为「确定」 */
     mode?: 'create' | 'edit';
   }
 
@@ -109,7 +109,10 @@
 
   const typeText = computed(() => WHITELIST_TYPE_TEXT[whitelistType.value]);
   const confirmTitle = computed(() => (
-    mode.value === 'edit' ? '确定编辑白名单？' : roleText.text.value.confirmTitle
+    mode.value === 'edit' ? '确认修改白名单？' : roleText.text.value.confirmTitle
+  ));
+  const confirmOkText = computed(() => (
+    mode.value === 'edit' ? '确定' : roleText.text.value.confirmOk
   ));
   const validityText = computed(() => {
     if (expireAt.value !== null) return expireAt.value || '--';

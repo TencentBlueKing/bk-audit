@@ -74,13 +74,12 @@
                     v-if="conditionIndex < group.conditions.length - 1"
                     class="inner-col-line" />
                   <bk-popover
+                    v-if="isStrategyRow(groupIndex, conditionIndex)"
                     :content="t('此条件为必要条件，禁止调整')"
-                    :disabled="!isStrategyRow(groupIndex, conditionIndex)"
                     placement="top"
                     theme="dark">
                     <span class="locked-select-wrap">
                       <bk-select
-                        v-if="isStrategyRow(groupIndex, conditionIndex)"
                         class="field-select"
                         disabled
                         :model-value="condition.field">
@@ -88,31 +87,36 @@
                           :label="condition.field_label || condition.field_name || condition.field"
                           :value="condition.field" />
                       </bk-select>
-                      <match-scope-field-select
-                        v-else
-                        :disabled="isPrefillLocked(groupIndex, conditionIndex)"
-                        :event-fields="eventFieldsByGroup(groupIndex)"
-                        :event-loading="eventFieldsLoadingByGroup(groupIndex)"
-                        :label="condition.field_label || condition.field_name || condition.field"
-                        :model-value="condition.field"
-                        :risk-fields="RISK_CONDITION_FIELDS"
-                        :strategy-id="groupStrategyId(groupIndex)"
-                        @change="(payload) => changeField(groupIndex, conditionIndex, payload)" />
                     </span>
                   </bk-popover>
+                  <span
+                    v-else
+                    class="locked-select-wrap">
+                    <match-scope-field-select
+                      :disabled="isPrefillLocked(groupIndex, conditionIndex)"
+                      :event-fields="eventFieldsByGroup(groupIndex)"
+                      :event-loading="eventFieldsLoadingByGroup(groupIndex)"
+                      :label="condition.field_label || condition.field_name || condition.field"
+                      :model-value="condition.field"
+                      :risk-fields="RISK_CONDITION_FIELDS"
+                      :strategy-id="groupStrategyId(groupIndex)"
+                      @change="(payload) => changeField(groupIndex, conditionIndex, payload)" />
+                  </span>
                   <bk-popover
                     :content="t('此条件为必要条件，禁止调整')"
                     :disabled="!isStrategyRow(groupIndex, conditionIndex)"
                     placement="top"
                     theme="dark">
                     <span class="locked-select-wrap">
-                      <!-- V1：所有字段操作符固定等于；仅命中策略行保留必要条件提示 -->
+                      <!-- 仅命中策略固定等于；其它字段按 string/number 给出操作符列表 -->
                       <bk-select
                         class="operator-select"
-                        disabled
-                        :model-value="condition.operator">
+                        :clearable="false"
+                        :disabled="isPrefillLocked(groupIndex, conditionIndex) || isStrategyRow(groupIndex, conditionIndex)"
+                        :model-value="condition.operator"
+                        @change="(value: string) => changeOperator(groupIndex, conditionIndex, value)">
                         <bk-option
-                          v-for="item in OPERATOR_OPTIONS"
+                          v-for="item in operatorsForCondition(condition)"
                           :key="item.value"
                           :label="item.label"
                           :value="item.value" />
@@ -135,6 +139,9 @@
                       :label="item.name"
                       :value="item.id" />
                   </bk-select>
+                  <span
+                    v-else-if="isValuelessOperator(condition.operator)"
+                    class="value-input value-input--empty" />
                   <bk-input
                     v-else
                     class="value-input"
@@ -344,6 +351,7 @@
 
   import type RiskWhitelist from '@model/risk-whitelist/whitelist';
   import type {
+    CompareOperator,
     LogicConnector,
     MatchCondition,
     MatchGroup,
@@ -363,8 +371,9 @@
     everyGroupHasStrategy,
     FALLBACK_CONDITION_FIELDS,
     getFirstStrategySeed,
+    getOperatorsForField,
     hasStrategyOnlyGroup,
-    OPERATOR_OPTIONS,
+    isValuelessOperator,
     RISK_CONDITION_FIELDS,
   } from '@components/risk-whitelist/constants';
   import MatchScopeFieldSelect, {
@@ -496,6 +505,7 @@
 
   const markDirty = () => {
     dirty.value = true;
+    window.changeConfirm = true;
   };
 
   /** 只清对应字段的校验，避免改加白原因时把匹配范围错误一并抹掉 */
@@ -509,17 +519,33 @@
     if (validityError.value) validityError.value = '';
   };
 
-  /** V1：所有条件操作符强制等于；命中策略补齐展示名 */
+  /** 命中策略强制等于；空值操作符清空 value；非法操作符回落到该字段首个可用项 */
   const normalizeCondition = (condition: MatchCondition): MatchCondition => {
-    const next: MatchCondition = {
-      ...condition,
-      operator: 'eq',
-    };
-    if (next.field === 'strategy_id') {
-      next.field_name = next.field_name || '风险命中策略(ID)';
-      next.field_label = next.field_label || '风险命中策略(ID)(strategy_id)';
+    if (condition.field === 'strategy_id') {
+      return {
+        ...condition,
+        operator: 'eq',
+        field_name: condition.field_name || '风险命中策略(ID)',
+        field_label: condition.field_label || '风险命中策略(ID)(strategy_id)',
+      };
     }
-    return next;
+    const operators = getOperatorsForField(condition.field);
+    const allowed = operators.some(item => item.value === condition.operator);
+    const nextOperator = allowed
+      ? condition.operator
+      : (operators[0]?.value || 'eq');
+    if (isValuelessOperator(nextOperator)) {
+      return {
+        ...condition,
+        operator: nextOperator,
+        value: '',
+        value_display: '',
+      };
+    }
+    return {
+      ...condition,
+      operator: nextOperator,
+    };
   };
 
   const normalizeScope = (input: MatchScope): MatchScope => ({
@@ -531,6 +557,10 @@
 
   const fillFromRecord = (record: RiskWhitelist | null) => {
     dirty.value = false;
+    // 表单重置时清离开确认；抽屉打开时 audit-sideslider 会再设为 popover
+    if (window.changeConfirm === true) {
+      window.changeConfirm = false;
+    }
     renewedExpire.value = '';
     renewedActive.value = false;
     renewEditing.value = false;
@@ -761,6 +791,8 @@
     conditionIndex === 0 && scope.value.groups[groupIndex].conditions[0].field === 'strategy_id'
   );
 
+  const operatorsForCondition = (condition: MatchCondition) => getOperatorsForField(condition.field);
+
   const groupStrategyId = (groupIndex: number) => {
     const strategy = scope.value.groups[groupIndex]?.conditions
       .find(item => item.field === 'strategy_id' && item.value);
@@ -916,14 +948,25 @@
     if (!payload?.field) return;
     markDirty();
     clearScopeError();
+    const operators = getOperatorsForField(payload.field);
     patchCondition(groupIndex, conditionIndex, normalizeCondition({
       field: payload.field,
       field_name: payload.field_name,
       field_label: payload.field_label,
-      operator: 'eq',
+      operator: operators[0]?.value || 'eq',
       value: '',
       value_display: '',
       connector: scope.value.groups[groupIndex].conditions[conditionIndex]?.connector || 'and',
+    }));
+  };
+
+  const changeOperator = (groupIndex: number, conditionIndex: number, value: string) => {
+    if (isStrategyRow(groupIndex, conditionIndex)) return;
+    markDirty();
+    clearScopeError();
+    patchCondition(groupIndex, conditionIndex, normalizeCondition({
+      ...scope.value.groups[groupIndex].conditions[conditionIndex],
+      operator: value as CompareOperator,
     }));
   };
 
@@ -956,7 +999,7 @@
       field: field.field,
       field_name: field.name,
       field_label: field.label,
-      operator: 'eq',
+      operator: field.operators[0]?.value || 'eq',
       value: '',
       value_display: '',
       connector: 'and',
@@ -1005,7 +1048,9 @@
     scopeError.value = '';
     validityError.value = '';
     reasonError.value = '';
-    const missingValue = scope.value.groups.some(group => group.conditions.some(item => !item.value));
+    const missingValue = scope.value.groups.some(group => group.conditions.some(item => (
+      !isValuelessOperator(item.operator) && !item.value
+    )));
     if (!scope.value.groups.length || missingValue) {
       scopeError.value = t('请完善匹配范围');
     } else if (!everyGroupHasStrategy(scope.value)) {
@@ -1330,7 +1375,7 @@
     width: 100%;
   }
 
-  /* V1 操作符恒禁用：置灰已够，不必再显示禁止光标 */
+  /* 命中策略行操作符禁用：置灰即可，不必再显示禁止光标 */
   .operator-select :deep(.is-disabled),
   .operator-select.is-disabled,
   .operator-select :deep(.bk-select-tag.is-disabled),
@@ -1340,6 +1385,11 @@
 
   .value-input {
     min-width: 0;
+  }
+
+  .value-input--empty {
+    display: block;
+    height: 32px;
   }
 
   .icon-group {

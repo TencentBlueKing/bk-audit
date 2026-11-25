@@ -26,10 +26,7 @@ export type InterceptAction = 'suppress_new' | 'suppress_append';
 
 export type LogicConnector = 'and' | 'or';
 
-/**
- * V1 白名单匹配范围仅允许等于（安全优先）。
- * 其它取值仅用于兼容历史脏数据，读写时会归一为 eq。
- */
+/** 与审计策略规则表达式 RuleAuditConditionOperator 对齐；命中策略仅允许 eq */
 export type CompareOperator =
   | 'eq'
   | 'neq'
@@ -135,6 +132,12 @@ export interface EventFieldRow {
   field_name: string;
   field_type: string;
   field_value: string;
+}
+
+/** 列表「包含条件」筛选项：场景下 match_scope 字段去重 */
+export interface ContainsFieldOption {
+  field: string;
+  field_name: string;
 }
 
 export interface WhitelistBody {

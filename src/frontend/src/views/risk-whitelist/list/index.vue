@@ -79,13 +79,13 @@
   import RiskWhitelistService from '@service/risk-whitelist';
 
   import type RiskWhitelist from '@model/risk-whitelist/whitelist';
+  import type { ContainsFieldOption } from '@model/risk-whitelist/whitelist';
 
   import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
 
   import MatchScopeExpression from '@components/risk-whitelist/match-scope-expression.vue';
   import {
-    FALLBACK_CONDITION_FIELDS,
     WHITELIST_STATUS_TEXT,
     WHITELIST_TYPE_TEXT,
   } from '@components/risk-whitelist/constants';
@@ -134,8 +134,11 @@
   const hitRef = ref<InstanceType<typeof HitRecordSideslider>>();
   const searchValue = ref<SearchKey[]>([]);
   const hasSearch = ref(false);
-  /** 新建成功后绿底高亮，刷新后消失 */
+  /** 场景下已使用的条件字段，供「包含条件」多选 */
+  const containsFields = ref<ContainsFieldOption[]>([]);
+  /** 新建成功后绿底高亮，刷新后消失；高亮期间前端临时置顶，避免排序后看不到绿底 */
   const highlightNewId = ref<string | null>(null);
+  const pinnedNewRow = ref<RiskWhitelist | null>(null);
   const NEW_ROW_STORAGE_KEY = 'risk_whitelist_new_id';
 
   const readCachedSceneList = (): CachedSceneItem[] => {
@@ -206,18 +209,18 @@
     return false;
   };
 
-  const searchData = [
+  const searchData = computed(() => [
     { id: 'rule_code', name: t('规则标识') },
     { id: 'match_scope', name: t('匹配范围') },
     {
-      id: 'condition_keyword',
+      id: 'contains_fields',
       name: t('包含条件'),
       multiple: true,
       placeholder: t('请选择包含条件'),
-      // id 用字段 key，便于 keyword 命中 match_scope 里的 field（如 strategy_id）
-      children: FALLBACK_CONDITION_FIELDS.map(item => ({
+      // id 用字段 key，作为 contains_fields 数组项传给列表接口（如 strategy_id）
+      children: containsFields.value.map(item => ({
         id: item.field,
-        name: t(item.name),
+        name: item.field_name || item.field,
       })),
     },
     {
@@ -237,12 +240,52 @@
       placeholder: t('请选择状态'),
       children: Object.entries(WHITELIST_STATUS_TEXT).map(([id, name]) => ({ id, name: t(name) })),
     },
-  ];
+  ]);
 
-  const getRowClassName = (row: Record<string, any>) => {
-    if (!highlightNewId.value) return '';
-    const rowData = row?.row || row;
-    return String(rowData?.id) === String(highlightNewId.value) ? 'new-row' : '';
+  /** 切场景或规则变更后刷新包含条件选项；并剔除已不存在的已选字段 */
+  const loadContainsFields = () => {
+    if (!ensureManageAccessBeforeFetch()) {
+      containsFields.value = [];
+      return Promise.resolve();
+    }
+    return RiskWhitelistService.fetchContainsFields()
+      .then((list) => {
+        containsFields.value = list;
+        const allowed = new Set(list.map(item => item.field));
+        searchValue.value = searchValue.value.map((item) => {
+          if (item.id !== 'contains_fields' || !item.values?.length) return item;
+          const values = item.values.filter(child => allowed.has(child.id));
+          return { ...item, values };
+        }).filter(item => item.id !== 'contains_fields' || (item.values?.length ?? 0) > 0);
+      })
+      .catch(() => {
+        containsFields.value = [];
+      });
+  };
+
+  // TDesign rowClassName 入参为 { row, rowIndex }；用 computed 保证高亮 id 变化后强制重算
+  const getRowClassName = computed(() => {
+    const highlightId = highlightNewId.value;
+    return (params: Record<string, any>) => {
+      if (!highlightId) return '';
+      const rowData = params?.row || params;
+      return String(rowData?.id) === String(highlightId) ? 'new-row' : '';
+    };
+  });
+
+  /** 高亮期间把新建行临时置顶，排序后仍能看到绿底 */
+  const pinHighlightRow = (results: RiskWhitelist[]) => {
+    const highlightId = highlightNewId.value;
+    if (!highlightId) return results;
+    const list = [...results];
+    const idx = list.findIndex(item => String(item.id) === highlightId);
+    let pinned = idx >= 0 ? list.splice(idx, 1)[0] : null;
+    if (!pinned && pinnedNewRow.value && String(pinnedNewRow.value.id) === highlightId) {
+      pinned = pinnedNewRow.value;
+    }
+    if (!pinned) return results;
+    list.unshift(pinned);
+    return list;
   };
 
   const filterList = (map: Record<string, string>) => Object.entries(map).map(([value, label]) => ({
@@ -534,7 +577,10 @@
     return RiskWhitelistService.fetchList({
       ...params,
       ...search,
-    });
+    }).then(data => ({
+      ...data,
+      results: pinHighlightRow(data.results || []),
+    }));
   };
 
   const handleSearch = () => {
@@ -552,18 +598,24 @@
 
   const refresh = () => {
     if (!ensureManageAccessBeforeFetch()) return;
-    listRef.value?.fetchData(buildSearchParams());
+    // 先更新包含条件选项（可能裁掉无效已选），再按最新 search 拉列表
+    loadContainsFields().then(() => {
+      listRef.value?.fetchData(buildSearchParams());
+    });
   };
 
   const handleCreateEditSuccess = (created?: RiskWhitelist | null) => {
     if (created?.id != null && created.id !== '') {
       const id = String(created.id);
       highlightNewId.value = id;
+      pinnedNewRow.value = created;
       try {
         sessionStorage.setItem(NEW_ROW_STORAGE_KEY, id);
       } catch {
         // ignore
       }
+    } else {
+      pinnedNewRow.value = null;
     }
     refresh();
   };
@@ -590,6 +642,7 @@
     } catch {
       // ignore
     }
+    loadContainsFields();
     onEvent('scene:change', handleSceneChange);
     onEvent('scene-list-ready', handleSceneListReady);
     document.addEventListener('click', handleDocumentClick, true);

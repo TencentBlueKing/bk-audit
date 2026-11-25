@@ -7,7 +7,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
+    software distributed under the License is distributed on
   an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
@@ -17,7 +17,8 @@
 <template>
   <audit-sideslider
     v-model:isShow="isShow"
-    :quick-close="false"
+    :before-close="handleBeforeClose"
+    quick-close
     show-footer-slot
     :title="isEdit ? '编辑风险白名单' : '新建风险白名单'"
     :width="960">
@@ -35,7 +36,8 @@
       </bk-button>
       <bk-button
         class="footer-action"
-        @click="isShow = false" style="margin-left: var(--bk-theme-space-8)">
+        style="margin-left: var(--bk-theme-space-8)"
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -55,6 +57,8 @@
   import RiskWhitelistForm from '@components/risk-whitelist-form/index.vue';
   import WhitelistConfirmDialog from '@components/whitelist-confirm-dialog/index.vue';
 
+  import { changeConfirm } from '@utils/assist';
+
   const emit = defineEmits<{(e: 'success', created?: RiskWhitelist | null): void}>();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -69,6 +73,22 @@
     record.value = row || null;
     isEdit.value = Boolean(row?.id);
     isShow.value = true;
+  };
+
+  /** 编辑类抽屉：有改动时点遮罩 / 取消需二次确认 */
+  const handleBeforeClose = (): boolean | Promise<boolean> => {
+    if (!formRef.value?.isDirty()) {
+      window.changeConfirm = false;
+      return true;
+    }
+    window.changeConfirm = true;
+    return changeConfirm().catch(() => false);
+  };
+
+  const handleCancel = () => {
+    Promise.resolve(handleBeforeClose()).then((ok) => {
+      if (ok) isShow.value = false;
+    });
   };
 
   const handleSubmit = async () => {
@@ -98,6 +118,7 @@
       : RiskWhitelistService.create(payload);
     request.then((data) => {
       messageSuccess(t(isEdit.value ? '白名单已更新' : '白名单已生效'));
+      window.changeConfirm = false;
       isShow.value = false;
       // 仅新建回传记录，供列表绿底高亮
       emit('success', isEdit.value ? null : data);

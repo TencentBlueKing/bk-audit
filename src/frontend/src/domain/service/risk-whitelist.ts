@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type {
+  ContainsFieldOption,
   EventFieldRow,
   HitRecord,
   RenewPayload,
@@ -46,6 +47,7 @@ const LIST_QUERY_KEYS = [
   'match_scope',
   'updated_by',
   'keyword',
+  'contains_fields',
   'sort',
   'page',
   'page_size',
@@ -54,32 +56,40 @@ const LIST_QUERY_KEYS = [
 /** 规则标识列按后端整数主键 id 排序 */
 const toSortField = (field: string) => field.replace(/^(-?)rule_code$/, '$1id');
 
-/** 多选值统一拆开后再按逗号拼回，保证传参为 strategy_id,raw_event_id */
-const joinConditionKeywords = (value?: string) => String(value || '')
-  .split(/[,\s]+/)
-  .map(item => item.trim())
-  .filter(Boolean)
-  .join(',');
+/**
+ * 包含条件多选：整理为逗号分隔字符串。
+ * 不用数组，避免 paramsSerializer 把 key 写成 contains_fields[]。
+ */
+const toContainsFieldsParam = (value?: string | string[]) => {
+  const list = Array.isArray(value)
+    ? value.map(item => String(item).trim()).filter(Boolean)
+    : String(value || '')
+      .split(/[,\s]+/)
+      .map(item => item.trim())
+      .filter(Boolean);
+  return list.join(',');
+};
 
 /**
- * 搜索框里的规则标识、匹配范围、包含条件在后端分别是 id / keyword。
- * 包含条件：字段 key 写入 keyword；多选逗号分隔（如 strategy_id,raw_event_id）。
+ * 搜索框字段映射：规则标识 → id；匹配范围 → keyword；包含条件 → contains_fields。
  */
 const normalizeListParams = (params: Record<string, any>): Record<string, any> => {
   const {
     rule_code: ruleCode,
     match_scope: matchScope,
     condition_keyword: conditionKeyword,
+    contains_fields: containsFieldsRaw,
     sort,
     keyword: rawKeyword,
     ...rest
   } = params;
-  const conditionPart = joinConditionKeywords(conditionKeyword);
-  const keyword = [rawKeyword, matchScope, conditionPart].filter(Boolean).join(' ');
+  const containsFields = toContainsFieldsParam(containsFieldsRaw ?? conditionKeyword);
+  const keyword = [rawKeyword, matchScope].filter(Boolean).join(' ');
   const normalized: Record<string, any> = {
     ...rest,
     ...(ruleCode ? { id: ruleCode } : {}),
     ...(keyword ? { keyword } : {}),
+    ...(containsFields ? { contains_fields: containsFields } : {}),
     ...(sort ? { sort: Array.isArray(sort) ? sort.map(toSortField) : toSortField(String(sort)) } : {}),
   };
   return LIST_QUERY_KEYS.reduce((result, key) => {
@@ -189,5 +199,15 @@ export default {
   fetchHitEvents(params: { id: number | string; hit_id: number | string }) {
     return RiskWhitelistSource.getHitEvents(params)
       .then(({ data }): EventFieldRow[] => data?.fields || []);
+  },
+
+  /** 列表「包含条件」下拉：按 scene 拉全量已用字段 */
+  fetchContainsFields(sceneId?: string | number) {
+    const { scene_id: id } = sceneParams(sceneId);
+    if (id === undefined) {
+      return Promise.resolve([] as ContainsFieldOption[]);
+    }
+    return RiskWhitelistSource.getContainsFields({ scene_id: id }, { permission: 'page' })
+      .then(({ data }): ContainsFieldOption[] => data?.results || []);
   },
 };

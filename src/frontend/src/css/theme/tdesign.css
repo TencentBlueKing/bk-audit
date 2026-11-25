@@ -107,22 +107,25 @@
   color: var(--bk-theme-table-header-text);
 }
 
-/* 已排序态需盖过 th *，保留品牌色以区分未排序 */
+/* 已排序 / 已筛选：盖过 th * 的表头色，用品牌色区分未激活态 */
 .t-table thead .t-table__sort-icon--active,
 .t-table thead .t-table__sort-icon--active *,
 .t-table thead .t-table__sort-icon.t-is-focus,
-.t-table thead .t-table__sort-icon:hover {
-  color: var(--bk-theme-color-brand-2) !important;
+.t-table thead .t-table__sort-icon:hover,
+.t-table thead .t-table__filter-icon.t-is-focus,
+.t-table thead .t-table__filter-icon.t-is-focus *,
+.t-table thead .t-table__filter-icon:hover {
+  color: var(--bk-theme-color-brand-2);
 }
 
 /* 内容行高仍是 42；上下 8 写在行高里面，对应文本格 pad 上8 下8。表头保持上下 0。 */
 .t-table tbody td,
 .t-table.t-size-m td {
-  box-sizing: border-box;
   height: var(--bk-theme-table-row-height);
   padding: var(--bk-theme-space-8) var(--bk-theme-space-16);
   background-color: var(--bk-theme-table-row-bg);
   border-bottom-color: var(--bk-theme-table-border);
+  box-sizing: border-box;
 }
 
 .t-table--striped tbody > tr:nth-child(even):not(.t-table__empty-row) > td {
@@ -149,10 +152,10 @@
 .t-table__empty {
   position: sticky;
   left: 0;
-  box-sizing: border-box;
   width: 100cqi !important;
-  min-width: 100cqi;
   max-width: 100cqi;
+  min-width: 100cqi;
+  box-sizing: border-box;
 }
 
 .t-table--hoverable tbody tr:hover:not(.t-table__empty-row),
