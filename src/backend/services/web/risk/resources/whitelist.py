@@ -55,6 +55,7 @@ from services.web.risk.whitelist.service import (
     _load_ticket_detail,
     _save_rule,
     apply_whitelist_result,
+    assert_can_manage_scene,
     build_hit_event_fields,
     ensure_same_strategy_scene,
     get_rule_for_admin,
@@ -223,6 +224,7 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
             scene_id = risks[0].scene_id
         elif not scene_id:
             raise ValidationError(gettext("需要 scene_id"))
+        assert_can_manage_scene(username, scene_id)
         return serialize_rule(
             _submit_created(
                 validated_request_data,
@@ -252,6 +254,7 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
         if len(risks) != len(risk_ids):
             raise ValidationError(gettext("部分风险单不存在"))
         ensure_same_strategy_scene(risks)
+        assert_can_manage_scene(username, risks[0].scene_id)
         created = _submit_created(
             validated_request_data,
             scene_id=risks[0].scene_id,
@@ -368,9 +371,7 @@ class RenewRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = RenewRiskWhitelistReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = RiskWhitelist.objects.filter(pk=validated_request_data["id"]).first()
-        if rule is None:
-            raise ValidationError(gettext("白名单不存在"))
+        rule = get_rule_for_admin(validated_request_data["id"], get_request_username(), maintain=True)
         renewed = renew_whitelist(
             rule,
             match_scope=rule.match_scope,

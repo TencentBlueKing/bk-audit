@@ -59,7 +59,58 @@ def _frontend_leaf(item: dict) -> dict | None:
         condition["filters"] = value
     elif value not in (None, ""):
         condition["filter"] = value
-    return {"condition": condition}
+    leaf = {"condition": condition}
+    # 保留前端叶子 connector（与下一叶子的连接符），供 _group_subtrees 切段；
+    # connector 一致的段折叠后叶子不再携带 connector，避免冗余。
+    if item.get("connector"):
+        leaf["connector"] = item["connector"]
+    return leaf
+
+
+def _group_subtrees(leaves: list, group_connector: str) -> list:
+    """组内叶子按 connector 切段：连续相同 connector 的叶子合并为一个段（子树），
+    段 connector 取叶子真实连接符；全段 connector 与组一致时折叠回扁平结构。
+
+    求值（dispatch.evaluate）只读取父节点 connector 作为其子节点间连接符，叶子自身 connector 不参与求值。
+    旧实现把组内所有叶子统一按组 connector 连接，导致叶子 connector 与组不一致时语义错误：
+    组 connector=and、叶子写 `a or b` 时，旧实现按 `a and b` 求值，把 or 错当成 and。
+    这里以段为最小求值单元：段节点带真实 connector 挂到组下，由组 connector 聚合各段。
+    单段折叠为“组直挂叶子”且 connector 不变（与旧结构一致，避免改变既有同 connector 语义）。
+    """
+
+    segments: list = []
+    for leaf in leaves:
+        connector = leaf.get("connector") or group_connector
+        if segments and segments[-1][0] == connector:
+            segments[-1][1].append(leaf)
+        else:
+            segments.append((connector, [leaf]))
+    if len(segments) == 1:
+        connector, seg_leaves = segments[0]
+        for leaf in seg_leaves:
+            leaf.pop("connector", None)
+        return [{"connector": connector, "conditions": seg_leaves}]
+    subtrees = []
+    for connector, seg_leaves in segments:
+        if len(seg_leaves) == 1:
+            subtrees.append(seg_leaves[0])
+        else:
+            subtrees.append({"connector": connector, "conditions": seg_leaves})
+    return subtrees
+
+
+def _group_leaves(group: dict) -> list:
+    """把前端组内条件转成叶子节点列表（保留各叶子的 connector，供切段使用）。"""
+
+    return [leaf for item in group.get("conditions") or [] if (leaf := _frontend_leaf(item))]
+
+
+def _group_subtree(group: dict) -> dict:
+    """组转成条件树子树：组 connector 聚合各段，段 connector 表达组内线性连接符。"""
+
+    group_connector = group.get("connector") or "and"
+    subtrees = _group_subtrees(_group_leaves(group), group_connector)
+    return {"connector": group_connector, "conditions": subtrees}
 
 
 def as_where_scope(scope: dict) -> dict:
@@ -67,11 +118,7 @@ def as_where_scope(scope: dict) -> dict:
 
     if not _is_group_scope(scope):
         return scope or {}
-    groups = []
-    for group in scope.get("groups") or []:
-        leaves = [leaf for item in group.get("conditions") or [] if (leaf := _frontend_leaf(item))]
-        if leaves:
-            groups.append({"connector": group.get("connector") or "and", "conditions": leaves})
+    groups = [_group_subtree(group) for group in scope.get("groups") or [] if _group_leaves(group)]
     return {"connector": scope.get("connector") or "and", "conditions": groups}
 
 
@@ -233,7 +280,7 @@ def _describe_tree(node, connector: str = "") -> str:
         value = _display_value(condition)
         operator = _display_operator(condition.operator)
         return f"{field} {operator} {value}".strip()
-    joiner = str(getattr(node.connector, "value", None) or node.connector or "and")
+    joiner = str(getattr(node.connector, "value", None) or node.connector or "and").upper()
     parts = [part for part in (_describe_tree(child, joiner) for child in node.conditions or []) if part]
     if not parts:
         return ""
@@ -257,11 +304,11 @@ def _group_leaf_text(item: dict, fallbacks: dict) -> str:
 def _describe_group_scope(scope: dict) -> str:
     """groups 结构按原始结构拼接，保留前端的条件中文名。"""
 
-    connector = str(scope.get("connector") or "and")
+    connector = str(scope.get("connector") or "and").upper()
     fallbacks = _fallback_field_names()
     parts = []
     for group in scope.get("groups") or []:
-        joiner = str(group.get("connector") or "and")
+        joiner = str(group.get("connector") or "and").upper()
         texts = [_group_leaf_text(item, fallbacks) for item in group.get("conditions") or [] if item.get("field")]
         texts = [t for t in texts if t]
         if not texts:
@@ -318,10 +365,17 @@ def append_risk_match_fields(scope: dict, *, strategy_id, raw_event_id=None) -> 
         groups = [dict(group) for group in scope.get("groups") or []]
         if not groups:
             groups = [{"connector": "and", "conditions": []}]
-        conditions = list(groups[0].get("conditions") or [])
-        conditions.extend(_frontend_condition(raw_name, value) for raw_name, value in additions)
-        groups[0]["conditions"] = conditions
-        groups[0]["connector"] = groups[0].get("connector") or "and"
+        # 策略 / 原始事件必须出现在每个可命中子树：组间 connector 可能为 OR，
+        # 仅注入 groups[0] 会让其余 OR 分支脱离策略约束，扩大加白命中范围。
+        # 仅对叶子条件做去重，子树内缺少 strategy_id / raw_event_id 时补上。
+        for group in groups:
+            conditions = list(group.get("conditions") or [])
+            field_names = {item.get("field") for item in conditions if isinstance(item, dict) and item.get("field")}
+            for raw_name, value in additions:
+                if raw_name not in field_names:
+                    conditions.append(_frontend_condition(raw_name, value))
+            group["conditions"] = conditions
+            group["connector"] = group.get("connector") or "and"
         scope["groups"] = groups
         return scope
     where_additions = [_condition(raw_name, value) for raw_name, value in additions]

@@ -23,11 +23,13 @@ from services.web.risk.whitelist.service import (
     _node_payload,
     _submit_itsm_ticket,
     _ticket_on_rule,
+    assert_can_manage_scene,
     build_hit_event_fields,
     create_itsm_ticket,
     expire_at_from,
     flow_of,
     format_snapshot_value,
+    get_rule_for_admin,
     intercept_whitelist,
     renew_whitelist,
     resolve_duration,
@@ -269,11 +271,12 @@ class WhitelistCreateTests(SimpleTestCase):
 
 
 class WhitelistTicketCreateTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service._scene_display", return_value="梯阵(1)")
     @patch("services.web.risk.whitelist.service._abort_whitelist")
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", side_effect=RuntimeError("boom"))
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter")
-    def test_ticket_create_failure_raises(self, query, ticket_create, abort):
+    def test_ticket_create_failure_raises(self, query, ticket_create, abort, _display):
         rule = SimpleNamespace(
             id=1,
             itsm_ticket_id="",
@@ -297,6 +300,8 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         from services.web.scene.models import Scene
 
         scene_filter.return_value.first.return_value = Scene(scene_id=3, managers=["scene-admin"])
+        # _scene_display 走 values_list("name").first()，这里补上场景名供展示断言
+        scene_filter.return_value.values_list.return_value.first.return_value = "梯阵"
         rule = SimpleNamespace(
             id=1,
             scene_id=3,
@@ -305,12 +310,70 @@ class WhitelistTicketCreateTests(SimpleTestCase):
             match_scope=_scope(),
             risk_id="risk-1",
             created_by="alice",
+            is_permanent=True,
+            expire_at=None,
         )
         _submit_itsm_ticket(rule, operator="alice", callback_token="token")
         form_data = ticket_create.call_args.kwargs["form_data"]
         self.assertEqual(form_data["approver"], ["scene-admin"])
         # 工单里的匹配范围给人看：压成一行可读文案，而不是 JSON 条件树
         self.assertEqual(form_data["match_scope"], "责任人 = alice")
+        # 工单只改展示：场景带名称与 ID、加白类型用中文、有效期有值；入库的 scene_id / 枚举值不受影响
+        self.assertEqual(form_data["scene_id"], "梯阵(3)")
+        self.assertEqual(form_data["whitelist_type"], "误报加白")
+        self.assertEqual(form_data["validity"], "永久")
+
+    @patch("services.web.risk.whitelist.service._whitelist_approvers", return_value=[])
+    @patch("services.web.risk.whitelist.service._scene_display", return_value="梯阵(4)")
+    @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
+    def test_ticket_create_displays_chinese_type_and_validity(self, ticket_create, _display, _approvers):
+        # 冒险加白 + 本次传入 duration_days 算出的到期时间：工单展示中文类型和算好的有效期，
+        # 且不把内存覆盖的到期时间写回 rule（提单不落库，创建流程随后自行保存）
+        import datetime
+
+        from django.utils import timezone
+
+        resolved = (timezone.now() + datetime.timedelta(days=15)).replace(microsecond=0)
+        rule = SimpleNamespace(
+            id=2,
+            scene_id=4,
+            whitelist_type=WhitelistType.RISK_ACCEPTANCE,
+            reason="接受风险",
+            match_scope=_scope(),
+            risk_id="risk-2",
+            created_by="bob",
+            is_permanent=False,
+            expire_at=None,
+        )
+        _submit_itsm_ticket(rule, operator="bob", callback_token="token", expire_override=(False, resolved))
+        form_data = ticket_create.call_args.kwargs["form_data"]
+        self.assertEqual(form_data["whitelist_type"], "冒险加白")
+        self.assertEqual(form_data["validity"], _fmt(resolved))
+        # 内存覆盖只服务展示：rule 原始 expire_at 保持 None，避免误落库
+        self.assertIsNone(rule.expire_at)
+
+    @patch("services.web.risk.whitelist.service._whitelist_approvers", return_value=[])
+    @patch("services.web.risk.whitelist.service._scene_display", return_value="梯阵(4)")
+    @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
+    def test_ticket_create_match_scope_uppercase_connector(self, ticket_create, _display, _approvers):
+        # 匹配范围连接符大写展示，和 SaaS 里的 AND 对齐（存储仍是小写 and）
+        scope = _tree_scope(_tree_leaf("a", "1"), _tree_leaf("b", "2"))
+        rule = SimpleNamespace(
+            id=3,
+            scene_id=4,
+            whitelist_type=WhitelistType.FALSE_POSITIVE,
+            reason="误报",
+            match_scope=scope,
+            risk_id="risk-3",
+            created_by="bob",
+            is_permanent=True,
+            expire_at=None,
+        )
+        _submit_itsm_ticket(rule, operator="bob", callback_token="token")
+        form_data = ticket_create.call_args.kwargs["form_data"]
+        self.assertEqual(form_data["match_scope"], "a = 1 AND b = 2")
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
@@ -1206,15 +1269,15 @@ class WhitelistScopeReadableTests(SimpleTestCase):
             _group_leaf("strategy_id", "9", field_name="命中策略(ID)"),
             _group_leaf("operator", ["alice", "bob"], operator="include"),
         )
-        # 前端 field_name 优先；没带中文名的走标准字段兜底
-        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 and 责任人 in alice、bob")
+        # 前端 field_name 优先；没带中文名的走标准字段兜底；连接符大写展示（与 SaaS 一致）
+        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 AND 责任人 in alice、bob")
 
     def test_tree_scope_falls_back_to_standard_names(self):
         from services.web.risk.whitelist.match import format_scope_readable
 
         # append_risk_match_fields 补的条件 display_name 就是 raw_name，走兜底中文名
         scope = _tree_scope(_tree_leaf("strategy_id", "9"), _tree_leaf("raw_event_id", "e-1"))
-        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 and 原始事件ID = e-1")
+        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 AND 原始事件ID = e-1")
         # 未知字段（如 event_data 自定义列）兜底不到，回退 raw_name
         self.assertEqual(
             format_scope_readable(_tree_scope(_tree_leaf("cost_center", "x", operator="neq"))),
@@ -1229,7 +1292,7 @@ class WhitelistScopeReadableTests(SimpleTestCase):
             _tree_leaf("raw_event_id", "keep", operator="neq"),
         )
         scope = {"connector": "or", "conditions": scope["conditions"]}
-        self.assertEqual(format_scope_readable(scope), "(命中策略(ID) = 9) or 原始事件ID != keep")
+        self.assertEqual(format_scope_readable(scope), "(命中策略(ID) = 9) OR 原始事件ID != keep")
 
     def test_invalid_scope_falls_back_to_json(self):
         import json
@@ -1600,7 +1663,7 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
             renewed_at=None,
         )
 
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service._pass_if_admin")
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
     @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
@@ -1628,7 +1691,7 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
             )
         update_label.assert_not_called()
 
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service._pass_if_admin")
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
     @patch("services.web.risk.whitelist.service.write_whitelist_nodes")
@@ -1656,3 +1719,72 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
                 }
             )
         update_label.assert_not_called()
+
+
+class WhitelistPermissionTests(SimpleTestCase):
+    """建议 6：白名单写权限口径。
+
+    创建 / 批量创建：场景管理员，或有该场景管理权限的平台管理员任一即可。
+    编辑 / 删除 / 启停 / 续期（maintain）：同上。
+    通过 / 驳回（非 maintain）：仅场景管理员。
+    """
+
+    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[])
+    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
+    def test_create_allows_scene_admin(self, _scene, _platform, _managed):
+        # 场景管理员直接放行，不因非平台管理员被拒
+        assert_can_manage_scene("alice", 1)
+
+    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[1, 2])
+    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_create_allows_platform_admin_on_managed_scene(self, _scene, _platform, _managed):
+        # 平台管理员且该场景在其可管理范围内放行（scene_id 做字符串归一比较）
+        assert_can_manage_scene("bob", "1")
+
+    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[3])
+    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_create_denies_platform_admin_outside_scene(self, _scene, _platform, _managed):
+        with self.assertRaises(ValidationError):
+            assert_can_manage_scene("bob", 1)
+
+    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[])
+    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_create_denies_normal_user(self, _scene, _platform, _managed):
+        with self.assertRaises(ValidationError):
+            assert_can_manage_scene("carol", 1)
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_maintain_allows_platform_admin_on_managed_scene(self, _scene):
+        # 编辑 / 启停 / 删除 / 续期：平台管理员可管理该场景即放行
+        rule = SimpleNamespace(scene_id=1)
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
+            "services.web.risk.whitelist.service.is_platform_admin", return_value=True
+        ), patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[1]):
+            query.return_value.first.return_value = rule
+            self.assertIs(get_rule_for_admin(1, "bob", maintain=True), rule)
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_renew_without_permission_denied(self, _scene):
+        # 续期走 maintain=True，非场景管理员且非平台管理员应被拒（原实现直接取库无鉴权）
+        rule = SimpleNamespace(scene_id=1)
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
+            "services.web.risk.whitelist.service.is_platform_admin", return_value=False
+        ), patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[]):
+            query.return_value.first.return_value = rule
+            with self.assertRaises(ValidationError):
+                get_rule_for_admin(1, "carol", maintain=True)
+
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_approve_reject_only_scene_admin(self, _scene):
+        # 通过 / 驳回（非 maintain）：平台管理员也不放行，仍只认场景管理员
+        rule = SimpleNamespace(scene_id=1)
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
+            "services.web.risk.whitelist.service.is_platform_admin", return_value=True
+        ), patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[1]):
+            query.return_value.first.return_value = rule
+            with self.assertRaises(ValidationError):
+                get_rule_for_admin(1, "bob")

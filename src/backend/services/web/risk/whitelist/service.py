@@ -77,6 +77,20 @@ def managed_scene_ids(username: str):
     return ScopePermission(username).get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.MANAGE_SCENE)
 
 
+def assert_can_manage_scene(username: str, scene_id) -> None:
+    """创建 / 批量创建白名单的前置鉴权：场景管理员或有该场景管理权限的平台管理员任一即可。
+
+    创建态尚无白名单实例，无法走 :func:`get_rule_for_admin` 的实例鉴权，
+    故按场景维度校验：命中场景管理员，或平台管理员且该场景在其可管理范围内。
+    """
+
+    if is_scene_admin(username, scene_id):
+        return
+    if is_platform_admin(username) and str(scene_id) in {str(sid) for sid in managed_scene_ids(username)}:
+        return
+    raise ValidationError(gettext("没有该场景的白名单管理权限"))
+
+
 _PERIOD_PATTERN = re.compile(r"^(\d+)([dDmM])$")
 
 
@@ -258,6 +272,19 @@ def validity_text(rule: RiskWhitelist) -> str:
     if not rule.expire_at:
         return "永久"
     return _format_expire(rule.expire_at)
+
+
+def _scene_display(scene_id) -> str:
+    """ITSM 展示用：场景名(ID)，例如 梯阵(4)。查不到场景名时降级为 (ID)。"""
+
+    name = Scene.objects.filter(pk=scene_id).values_list("name", flat=True).first() or ""
+    return f"{name}({scene_id})"
+
+
+def _whitelist_type_display(whitelist_type) -> str:
+    """ITSM 展示用：把加白类型枚举值转成中文，例如 false_positive 转 误报加白。"""
+
+    return dict(WhitelistType.choices).get(whitelist_type, whitelist_type)
 
 
 def _kept(ticket: dict, previous: dict, key: str):
@@ -677,7 +704,18 @@ def _whitelist_approvers(scene_id) -> list:
     return _scene_admin_usernames(scene_id)
 
 
-def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: str, reason=None, match_scope=None):
+_EXPIRE_UNSET = object()
+
+
+def _submit_itsm_ticket(
+    rule: RiskWhitelist,
+    *,
+    operator: str,
+    callback_token: str,
+    reason=None,
+    match_scope=None,
+    expire_override=_EXPIRE_UNSET,
+):
     """提交 ITSM 工单。"""
 
     workflow_key = RISK_WHITELIST_WORKFLOW_KEY
@@ -685,13 +723,22 @@ def _submit_itsm_ticket(rule: RiskWhitelist, *, operator: str, callback_token: s
         logger.error("[RiskWhitelist] 未配置itsm, id=%s", rule.id)
         raise ValidationError(gettext("ITSM 审批流程未配置"))
     scope = rule.match_scope if match_scope is None else match_scope
+    # 有效期展示：创建提单时 rule 尚未落 expire_at，续期换有效期时 rule 还是旧到期时间，
+    # 用本次传入算好的 (是否永久, 到期时间) 局部展示，绝不改动 rule，避免误持久化。
+    if expire_override is _EXPIRE_UNSET:
+        is_permanent, expire_at = getattr(rule, "is_permanent", False), getattr(rule, "expire_at", None)
+    else:
+        is_permanent, expire_at = expire_override
+    validity = "永久" if is_permanent or not expire_at else _format_expire(expire_at)
     form_data = {
         "ticket__title": "【审计中心】风险白名单",
-        "scene_id": str(rule.scene_id),
-        "whitelist_type": rule.whitelist_type,
+        # 工单展示给人看：场景带名称、加白类型用中文，仅展示层转换，不改动入库的 scene_id / 枚举值
+        "scene_id": _scene_display(rule.scene_id),
+        "whitelist_type": _whitelist_type_display(rule.whitelist_type),
         "reason": rule.reason if reason is None else reason,
         # 审批单里给人看的匹配范围，条件树太长放不下，压成一行可读文本
         "match_scope": format_scope_readable(scope),
+        "validity": validity,
         "risk_id": rule.risk_id,
         "applicant": operator or rule.created_by or "",
         "approver": _whitelist_approvers(rule.scene_id),
@@ -837,6 +884,7 @@ def renew_whitelist(
             callback_token=callback_token,
             reason=reason,
             match_scope=match_scope,
+            expire_override=(is_permanent, resolved_expire),
         )
     except ValidationError:
         _restore_renew_snapshot(rule, previous)
