@@ -195,3 +195,47 @@ class StatusUpdateClosedGuardTest(TicketTest):
             handler.update_status(process_result={"status": {"state": SOPSTaskStatus.FINISHED}})
             risk.refresh_from_db()
             self.assertEqual(risk.status, RiskStatus.CLOSED)
+
+
+class RunClosedGuardTest(TicketTest):
+    """run() 级并发约束（BKSEC 1578946 评审意见）：行锁内刷新最新状态后由 pre_check 终止整个流转。
+
+    覆盖评审指出的两个缺口：① 外部调用与状态写入之前拦截（不再产生处理人/节点/授权/通知）；
+    ② CloseRisk 对已关单保持幂等（ConfirmAsMisReport 依赖）。
+    """
+
+    def _assert_no_side_effect(self, risk: Risk, handler_cls, operator: str):
+        node_count = TicketNode.objects.filter(risk_id=risk.risk_id).count()
+        operator_before = Risk.objects.get(risk_id=risk.risk_id).current_operator
+        handler = handler_cls(risk_id=risk.risk_id, operator=operator)
+        # 模拟并发时序：handler 构造已读到旧状态，人工关单随后提交
+        Risk.objects.filter(risk_id=risk.risk_id).update(status=RiskStatus.CLOSED)
+        with self.assertRaises(RiskStatusInvalid):
+            handler.run()
+        risk.refresh_from_db()
+        self.assertEqual(risk.status, RiskStatus.CLOSED, "FAIL: 状态被流转改写")
+        self.assertEqual(TicketNode.objects.filter(risk_id=risk.risk_id).count(), node_count, "FAIL: 产生了流转节点")
+        self.assertEqual(risk.current_operator, operator_before, "FAIL: 处理人被写入")
+
+    def test_for_approve_run_terminated_when_closed(self):
+        """审批流转遇已关单：整个 run 终止（无外部调用副作用、无节点、无处理人写入）"""
+        with RiskContext(
+            risk_info={"status": RiskStatus.FOR_APPROVE, "display_status": RiskDisplayStatus.FOR_APPROVE}
+        ) as risk:
+            self._assert_no_side_effect(risk, ForApprove, "run-guard-tester")
+
+    def test_auto_process_run_terminated_when_closed(self):
+        """套餐流转遇已关单：整个 run 终止"""
+        with RiskContext(
+            risk_info={"status": RiskStatus.AUTO_PROCESS, "display_status": RiskDisplayStatus.AUTO_PROCESS}
+        ) as risk:
+            self._assert_no_side_effect(risk, AutoProcess, "run-guard-tester")
+
+    def test_close_risk_remains_idempotent_when_closed(self):
+        """CloseRisk 对已关单保持幂等放行（ConfirmAsMisReport 二次关单依赖此语义）"""
+        with RiskContext(risk_info={"status": RiskStatus.CLOSED, "display_status": RiskDisplayStatus.CLOSED}) as risk:
+            CloseRisk(risk_id=risk.risk_id, operator="idempotent-tester").run(description="已关单重复关单")
+            risk.refresh_from_db()
+            self.assertEqual(risk.status, RiskStatus.CLOSED)
+            # 幂等关单仅追加历史节点，状态不变
+            self.assertEqual(TicketNode.objects.filter(risk_id=risk.risk_id, action="CloseRisk").count(), 1)
