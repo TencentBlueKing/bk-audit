@@ -297,6 +297,12 @@ class RiskFlowBaseHandler:
         处理风险单
         """
 
+        # 行锁内取最新状态（锁持有至本事务提交）：与人工关单入口全程互斥（BKSEC 1578946 并发约束）。
+        # 刷新后 pre_check 基于最新状态校验，已关单在流程动作/外部调用/写历史之前即被终止；
+        # 人工关单若在流转事务提交后执行，撤销逻辑必能查到已提交的 RUNNING 节点。
+        locked = Risk.objects.select_for_update().filter(risk_id=self.risk.risk_id).only("status").first()
+        if locked is not None:
+            self.risk.status = locked.status
         self.pre_check(*args, **kwargs)
         process_result = self.process(*args, **kwargs)
         self.update_operator(process_result=process_result, *args, **kwargs)
