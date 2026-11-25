@@ -120,21 +120,13 @@
   let pendingCalc = false;
   let calcRetryCount = 0;
   const MAX_CALC_RETRY = 5;
-  const initData = computed(() =>  {
-    // 1. 如果是真正的数组，直接连接
-    if (Array.isArray(props.data)) {
-      return props.data;
-    }
-    return   props.data === undefined ? [] : props.data.split(',');
+  const initData = computed(() => {
+    const source = Array.isArray(props.data)
+      ? props.data
+      : (props.data === undefined || props.data === null ? [] : String(props.data).split(','));
+    return source.map(item => String(item ?? '').trim()).filter(Boolean);
   });
-  const renderData = computed(() =>  {
-    // 1. 如果是真正的数组，直接连接
-    if (Array.isArray(props.data)) {
-      return props.data.slice(0, renderTagNum.value);
-    }
-
-    return  (props.data.split(',')).slice(0, renderTagNum.value);
-  });
+  const renderData = computed(() => initData.value.slice(0, renderTagNum.value));
 
   const moreDataText = computed(() => {
     if (initData.value.length < 1

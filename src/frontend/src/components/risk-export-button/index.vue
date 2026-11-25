@@ -71,12 +71,18 @@
 .risk-export-btn-wrapper {
   display: inline-flex;
 
-  &.is-export-disabled :deep(.risk-export-btn) {color: var(--bk-theme-text-disabled);
+  &.is-export-disabled :deep(.risk-export-btn) {
+    color: var(--bk-theme-text-disabled);
     pointer-events: none;
-    cursor: not-allowed;background-color: var(--bk-theme-surface-default);border-color: var(--bk-theme-border-default);
+    cursor: not-allowed;
+    background-color: var(--bk-theme-surface-subtle);
+    border-color: var(--bk-theme-border-default);
 
     &:hover,
-    &:active {color: var(--bk-theme-text-disabled);background-color: var(--bk-theme-surface-default);border-color: var(--bk-theme-border-default);
+    &:active {
+      color: var(--bk-theme-text-disabled);
+      background-color: var(--bk-theme-surface-subtle);
+      border-color: var(--bk-theme-border-default);
     }
   }
 }

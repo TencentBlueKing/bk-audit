@@ -378,10 +378,8 @@
 
   import pentagramIcon from '@images/pentagram.svg';
   import pentagramFillIcon from '@images/pentagram-fill.svg';
-  import toolTypeApi from '@images/tools-square/tool-type-api.svg';
-  import toolTypeBkvision from '@images/tools-square/tool-type-bkvision.svg';
-  import toolTypeSmart from '@images/tools-square/tool-type-smart.svg';
-  import toolTypeSql from '@images/tools-square/tool-type-sql.svg';
+
+  import { getToolTypeMark } from '@/views/tools/tools-square/utils/tool-type-mark';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
@@ -552,7 +550,7 @@
     getScroll:() => { scrollTop: number };
     scrollTo: (scrollLeft: number, scrollTop: number) => void;
   }>();
-  const loading = ref(false);
+  const loading = ref(true);
   const skeletonCount = 4;
   let listRequestSeq = 0;
 
@@ -657,13 +655,7 @@
     clearSearchAnchor();
   });
 
-  const toolTypeMark = (item: ToolInfo) => {
-    if (item.tool_type === 'api') return toolTypeApi;
-    if (item.tool_type === 'data_search') return toolTypeSql;
-    if (item.tool_type === 'bk_vision') return toolTypeBkvision;
-    if (item.tool_type === 'smart_page') return toolTypeSmart;
-    return '';
-  };
+  const toolTypeMark = (item: ToolInfo) => getToolTypeMark(item.tool_type);
 
   const toggleGroupCollapse = (groupKey: string) => {
     if (collapsedGroups.value.has(groupKey)) {

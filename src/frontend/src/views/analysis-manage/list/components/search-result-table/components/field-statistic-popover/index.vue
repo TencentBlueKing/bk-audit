@@ -16,12 +16,13 @@
 -->
 <template>
   <bk-popover
+    boundary="document.body"
     ext-cls="field-statistic-popover"
-    placement="bottom"
+    placement="bottom-start"
     theme="light"
     trigger="click"
     @after-hidden="statisticActive = false"
-    @after-show="statisticActive = true">
+    @after-show="handleStatisticShow">
     <template #default>
       <audit-icon
         v-bk-tooltips="{
@@ -182,6 +183,7 @@
     onSuccess: () => {
       nextTick(() => {
         setChart();
+        fitPopoverHeight();
       });
     },
   });
@@ -258,6 +260,21 @@
     });
   };
 
+  // 浮层挂在 body 上，高度按视口剩余空间收住，多出来的内容在浮层内滚动。
+  const fitPopoverHeight = () => {
+    const pop = document.querySelector('.bk-popover.field-statistic-popover.visible') as HTMLElement | null;
+    if (!pop) return;
+    const available = window.innerHeight - pop.getBoundingClientRect().top - 16;
+    pop.style.maxHeight = `${Math.max(available, 240)}px`;
+  };
+
+  const handleStatisticShow = () => {
+    statisticActive.value = true;
+    nextTick(() => {
+      fitPopoverHeight();
+    });
+  };
+
   // 处理点击事件
   const handleClick = () => {
     const params = {
@@ -275,6 +292,7 @@
 <style lang="postcss">
 .bk-popover.bk-pop2-content.field-statistic-popover[data-theme^='light'] {
   padding: 0;
+  overflow-y: auto;
   background: var(--bk-theme-surface-default);
   border-radius: var(--bk-theme-overlay-radius);
   box-shadow: var(--bk-theme-card-shadow);

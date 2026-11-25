@@ -410,7 +410,7 @@
           </div>
         </template>
         <bk-exception
-          v-else
+          v-else-if="!loading"
           class="exception-part"
           scene="part"
           type="empty">
@@ -570,7 +570,7 @@
   let timeout: number| undefined = undefined;
 
   const activeStatus = ref('');
-  const loading = ref(false);
+  const loading = ref(true);
   // 仅列表尚未加载出内容时展示 loading，后台静默刷新不再转圈
   const showListLoading = computed(() => loading.value && !hasLoadedData.value);
   const newIndex = ref<number[]>([]);
@@ -927,7 +927,6 @@
         id: props.data.risk_id,
       }).then(() => {
         // 触底加载，拼接 - 使用动态去重字段
-        loading.value = false;
         isLoadingMore.value = false;
 
         // 如果是第一页，重置新事件索引；保留当前列表避免弹层闪闭
@@ -997,10 +996,14 @@
           }
           // 默认获取第一个
           [eventItem.value] = linkEventList.value;
-          // 标记已加载过数据
+          // 列表写入后再结束加载，避免加载动画和空态同时出现
           hasLoadedData.value = true;
+          loading.value = false;
         });
-      });
+      })
+        .catch(() => {
+          loading.value = false;
+        });
     },
   });
 

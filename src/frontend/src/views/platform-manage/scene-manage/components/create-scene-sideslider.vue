@@ -107,6 +107,7 @@
               </bk-popover>
             </template>
             <bk-select
+              ref="systemSelectRef"
               v-model="formData.system_id"
               :clearable="false"
               collapse-tags
@@ -115,8 +116,13 @@
               multiple
               multiple-mode="tag"
               :placeholder="t('请选择')"
+              :popover-options="{
+                autoPlacement: true,
+                maxHeight: 240,
+              }"
               show-all
-              @change="handleSystemChange">
+              @change="handleSystemChange"
+              @toggle="handleSystemSelectToggle">
               <bk-option
                 v-for="item in systemList"
                 :key="item.system_id"
@@ -176,6 +182,8 @@
   import {
     computed,
     nextTick,
+    onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -229,6 +237,8 @@
   const isEditMode = computed(() => !!props.sceneId);
 
   const formRef = ref();
+  const systemSelectRef = ref<{ hidePopover?: () => void } | null>(null);
+  const systemSelectOpen = ref(false);
   const submitLoading = ref(false);
   const systemLoading = ref(false);
   const tableLoading = ref(false);
@@ -294,6 +304,27 @@
       formRef.value?.validateField('managers');
     }
   };
+
+  const handleSystemSelectToggle = (open: boolean) => {
+    systemSelectOpen.value = open;
+  };
+
+  const handleSystemSelectEsc = (event: KeyboardEvent) => {
+    if (!systemSelectOpen.value || event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    systemSelectRef.value?.hidePopover?.();
+  };
+
+  onMounted(() => {
+    window.addEventListener('keydown', handleSystemSelectEsc, true);
+  });
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleSystemSelectEsc, true);
+  });
 
   // 关联系统变更
   const handleSystemChange = (value: any) => {

@@ -62,6 +62,40 @@
   background-color: var(--bk-theme-table-header-bg);
 }
 
+/* 勾选列不要吃上面的左右 16。表头带下拉、表体只有方框，居中会让两个方框错开。
+   统一贴左 16。方框固定 16，避免行高把表头方框顶上去。 */
+.t-table th.t-table__cell-check,
+.t-table td.t-table__cell-check,
+.t-table th.tdesign-list-select-col,
+.t-table td.tdesign-list-select-col {
+  padding: 0 0 0 var(--bk-theme-space-16) !important;
+  text-align: left !important;
+  vertical-align: middle !important;
+}
+
+.t-table th.t-table__cell-check .t-table__th-cell-inner,
+.t-table th.tdesign-list-select-col .t-table__th-cell-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: var(--bk-theme-table-row-height);
+  padding: 0;
+}
+
+.t-table .tdesign-list-select-slot,
+.t-table .t-table__cell-check .t-checkbox,
+.t-table .t-table__cell-check .t-radio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  line-height: 16px;
+  vertical-align: middle;
+}
+
 /* 带筛选/排序列的内部标题节点由库内深色改为统一表头文字色 */
 .t-table thead .t-table__cell--title,
 .t-table thead .t-table__cell--title *,

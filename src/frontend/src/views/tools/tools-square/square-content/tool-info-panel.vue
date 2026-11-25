@@ -44,15 +44,10 @@
           @click="handleTabClick(item.uid)"
           @contextmenu.prevent="handleTabContextMenu($event, item, index)">
           <img
-            v-if="item.tool_type === 'smart_page'"
-            alt="smart_page"
+            v-if="getToolTypeMark(item.tool_type)"
+            alt=""
             class="tab-tool-icon"
-            :src="userProfileIcon">
-          <img
-            v-else-if="item.tool_type === 'bk_vision'"
-            alt="bk_vision"
-            class="tab-tool-icon"
-            :src="toolTypeBkvision">
+            :src="getToolTypeMark(item.tool_type)">
           <audit-icon
             v-else
             class="tab-tool-icon"
@@ -192,8 +187,7 @@
 
   import useRequest from '@/hooks/use-request';
   import useToolTabs from '@/hooks/use-tool-tabs';
-  import toolTypeBkvision from '@/images/tools-square/tool-type-bkvision.svg';
-  import userProfileIcon from '@/images/user.svg';
+  import { getToolTypeMark } from '@/views/tools/tools-square/utils/tool-type-mark';
   import {
     getToolDetailScopeQuery,
     isToolDetailScopeReady,

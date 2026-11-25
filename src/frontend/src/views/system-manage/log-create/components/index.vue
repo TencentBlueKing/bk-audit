@@ -22,7 +22,7 @@
       </div>
       <div class="log-create-header-line" />
       <div class="log-create-header-desc">
-        基于权限模型或数据接入数据，可上传或数据至审计中心，以供后续分析与风险追踪；因不同方式流程有差异，请先选择上报方式
+        基于权限模型或数据接入数据，可上传数据至审计中心，以供后续分析与风险追踪；因不同方式流程有差异，请先选择上报方式
       </div>
     </div>
 
@@ -53,7 +53,8 @@
               <bk-radio-button
                 v-bk-tooltips="{
                   content: t('仅可创建一个'),
-                  disabled: !data.enabled
+                  disabled: !data.enabled,
+                  placement: 'bottom',
                 }"
                 :disabled="data.enabled"
                 label="apiPush">

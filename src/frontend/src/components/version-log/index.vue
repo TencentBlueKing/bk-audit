@@ -126,7 +126,7 @@
 .log-version {
   display: flex;
   height: 70vh;
-  margin: -33px -var(--bk-theme-space-24) -26px;
+  margin: -33px calc(var(--bk-theme-space-24) * -1) -26px;
 
   .log-version-left {
     position: absolute;
@@ -305,7 +305,7 @@
         float: left;
         width: 6px;
         height: 6px;margin-top: calc(.9em - var(--bk-theme-space-4));
-        margin-left: -var(--bk-theme-space-16);
+        margin-left: calc(var(--bk-theme-space-16) * -1);
         background: #000;
         border-radius: 50%;
         content: '';

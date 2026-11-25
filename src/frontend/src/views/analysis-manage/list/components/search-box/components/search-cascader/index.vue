@@ -192,6 +192,15 @@
   const selectedItems = ref<Array<CascaderItem>>([]);
   const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 
+  const sortSelectableFirst = (nodes: CascaderItem[]): CascaderItem[] => {
+    const next = nodes.map(node => ({
+      ...node,
+      children: node.children?.length ? sortSelectableFirst(node.children) : node.children,
+    }));
+    next.sort((left, right) => Number(Boolean(left.disabled)) - Number(Boolean(right.disabled)));
+    return next;
+  };
+
   const handleSearch = (keyword: string) => {
     isSearching.value = !!keyword;
 
@@ -354,10 +363,10 @@
   watch(
     () => props.data,
     async (newVal) => {
-      const processedData = newVal.map(item => ({
+      const processedData = sortSelectableFirst(newVal.map(item => ({
         ...item,
         disabled: Object.keys(props.filedConfig).includes(item.id),
-      }));
+      })));
 
       localData.value = processedData;
       // 保存原始数据副本

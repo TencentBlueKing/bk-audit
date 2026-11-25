@@ -76,15 +76,10 @@
                       :class="{ 'is-added': isToolOpened(tool.uid) }"
                       @click="handleAddTool(tool, group.groupKey)">
                       <img
-                        v-if="tool.tool_type === 'smart_page'"
-                        alt="smart_page"
+                        v-if="getToolTypeMark(tool.tool_type)"
+                        alt=""
                         class="tool-group-item-icon"
-                        :src="userProfileIcon">
-                      <img
-                        v-else-if="tool.tool_type === 'bk_vision'"
-                        alt="bk_vision"
-                        class="tool-group-item-icon"
-                        :src="toolTypeBkvision">
+                        :src="getToolTypeMark(tool.tool_type)">
                       <audit-icon
                         v-else
                         class="tool-group-item-icon"
@@ -122,15 +117,10 @@
                 :class="{ 'is-added': isToolOpened(tool.uid) }"
                 @click="handleAddTool(tool)">
                 <img
-                  v-if="tool.tool_type === 'smart_page'"
-                  alt="smart_page"
+                  v-if="getToolTypeMark(tool.tool_type)"
+                  alt=""
                   class="tool-group-item-icon"
-                  :src="userProfileIcon">
-                <img
-                  v-else-if="tool.tool_type === 'bk_vision'"
-                  alt="bk_vision"
-                  class="tool-group-item-icon"
-                  :src="toolTypeBkvision">
+                  :src="getToolTypeMark(tool.tool_type)">
                 <audit-icon
                   v-else
                   class="tool-group-item-icon"
@@ -202,15 +192,10 @@
                           :class="{ 'is-added': isToolOpened(tool.uid) }"
                           @click="handleAddTool(tool, group.groupKey)">
                           <img
-                            v-if="tool.tool_type === 'smart_page'"
-                            alt="smart_page"
+                            v-if="getToolTypeMark(tool.tool_type)"
+                            alt=""
                             class="tool-group-item-icon"
-                            :src="userProfileIcon">
-                          <img
-                            v-else-if="tool.tool_type === 'bk_vision'"
-                            alt="bk_vision"
-                            class="tool-group-item-icon"
-                            :src="toolTypeBkvision">
+                            :src="getToolTypeMark(tool.tool_type)">
                           <audit-icon
                             v-else
                             class="tool-group-item-icon"
@@ -243,15 +228,10 @@
                     :class="{ 'is-added': isToolOpened(tool.uid) }"
                     @click="handleAddTool(tool)">
                     <img
-                      v-if="tool.tool_type === 'smart_page'"
-                      alt="smart_page"
+                      v-if="getToolTypeMark(tool.tool_type)"
+                      alt=""
                       class="tool-group-item-icon"
-                      :src="userProfileIcon">
-                    <img
-                      v-else-if="tool.tool_type === 'bk_vision'"
-                      alt="bk_vision"
-                      class="tool-group-item-icon"
-                      :src="toolTypeBkvision">
+                      :src="getToolTypeMark(tool.tool_type)">
                     <audit-icon
                       v-else
                       class="tool-group-item-icon"
@@ -306,15 +286,10 @@
                           :class="{ 'is-added': isToolOpened(tool.uid) }"
                           @click="handleAddTool(tool, group.groupKey)">
                           <img
-                            v-if="tool.tool_type === 'smart_page'"
-                            alt="smart_page"
+                            v-if="getToolTypeMark(tool.tool_type)"
+                            alt=""
                             class="tool-group-item-icon"
-                            :src="userProfileIcon">
-                          <img
-                            v-else-if="tool.tool_type === 'bk_vision'"
-                            alt="bk_vision"
-                            class="tool-group-item-icon"
-                            :src="toolTypeBkvision">
+                            :src="getToolTypeMark(tool.tool_type)">
                           <audit-icon
                             v-else
                             class="tool-group-item-icon"
@@ -347,15 +322,10 @@
                     :class="{ 'is-added': isToolOpened(tool.uid) }"
                     @click="handleAddTool(tool)">
                     <img
-                      v-if="tool.tool_type === 'smart_page'"
-                      alt="smart_page"
+                      v-if="getToolTypeMark(tool.tool_type)"
+                      alt=""
                       class="tool-group-item-icon"
-                      :src="userProfileIcon">
-                    <img
-                      v-else-if="tool.tool_type === 'bk_vision'"
-                      alt="bk_vision"
-                      class="tool-group-item-icon"
-                      :src="toolTypeBkvision">
+                      :src="getToolTypeMark(tool.tool_type)">
                     <audit-icon
                       v-else
                       class="tool-group-item-icon"
@@ -399,8 +369,7 @@
 
 
   import useRequest from '@/hooks/use-request';
-  import toolTypeBkvision from '@/images/tools-square/tool-type-bkvision.svg';
-  import userProfileIcon from '@/images/user.svg';
+  import { getToolTypeMark } from '@/views/tools/tools-square/utils/tool-type-mark';
   import { groupToolsByScene } from '@/views/tools/tools-square/utils/tool-scene-groups';
 
   interface TagItem {

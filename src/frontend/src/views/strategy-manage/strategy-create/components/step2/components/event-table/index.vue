@@ -18,7 +18,7 @@
   <div
     class="event-table"
     :class="{ 'is-model': strategyType !== 'rule' }"
-    :style="{ '--group-col': locale === 'en-US' ? '140px' : '80px' }">
+    :style="{ '--group-col': locale === 'en-US' ? '140px' : '96px' }">
     <!-- 表头 -->
     <div class="head">
       <div
@@ -452,7 +452,7 @@
 
 <style lang="postcss" scoped>
 .event-table {
-  --group-col: 80px;
+  --group-col: 96px;
   --table-min: 1260px;
   --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(168px, 1.5fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
 
@@ -491,9 +491,11 @@
       @include cell-base;
 
       overflow: hidden;
-      background-color: var(--bk-theme-surface-subtle);
+      font-size: var(--bk-theme-font-size-sm);
       font-weight: 500;
+      line-height: var(--bk-theme-line-height-sm);
       color: var(--bk-theme-text-strong);
+      background-color: var(--bk-theme-surface-subtle);
 
       span {
         overflow: hidden;
@@ -530,6 +532,7 @@
 
       background-color: var(--bk-theme-table-header-bg);
       justify-content: center;
+      white-space: nowrap;
     }
 
     .rows-container {

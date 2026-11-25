@@ -12,9 +12,13 @@
 }
 
 .bk-button.risk-toolbar-secondary.is-disabled,
-.bk-button.risk-toolbar-secondary[disabled] {
+.bk-button.risk-toolbar-secondary[disabled],
+.bk-button.risk-toolbar-secondary.is-disabled:hover,
+.bk-button.risk-toolbar-secondary[disabled]:hover,
+.bk-button.risk-toolbar-secondary.is-disabled:active,
+.bk-button.risk-toolbar-secondary[disabled]:active {
   color: var(--bk-theme-text-disabled);
-  background-color: var(--bk-theme-surface-default);
+  background-color: var(--bk-theme-surface-subtle);
   border-color: var(--bk-theme-border-default);
 }
 
