@@ -45,7 +45,12 @@ def validate_request_url(url: str, allow_empty: bool = True) -> None:
         if allow_empty:
             return
         raise URLSecurityError(_("URL不能为空"))
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        # urlparse 对部分畸形输入（如缺右方括号的 IPv6 形式 http://[::1）抛 ValueError，
+        # 在同一校验边界统一转换，保证调用方（serializer 400 / 扫描汇总 / 发送侧拦截）行为一致
+        raise URLSecurityError(_("URL格式非法"))
     if parsed.scheme not in ALLOWED_SCHEMES:
         raise URLSecurityError(_("URL必须使用http或https协议"))
     if not parsed.netloc:
