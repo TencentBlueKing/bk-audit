@@ -390,6 +390,8 @@ class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
     id = serializers.CharField(label=gettext_lazy("字段ID"))
     # 增加type字段，用于区分事件基本字段和非基本字段
     type = serializers.CharField(label=gettext_lazy("事件基本字段"), required=False, allow_null=True)
+    # 字段数据类型，取自 FieldType 词表；扩展字段无类型时为 null
+    field_type = serializers.CharField(label=gettext_lazy("字段类型"), required=False, allow_null=True, allow_blank=True)
 
 
 class RiskEventSubscriptionQuerySerializer(serializers.Serializer):

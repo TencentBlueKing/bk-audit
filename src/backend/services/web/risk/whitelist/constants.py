@@ -38,3 +38,9 @@ DELETABLE_STATUS = {
     WhitelistStatus.REJECTED,
 }
 FLOW_STATUS = {WhitelistStatus.PENDING, WhitelistStatus.REJECTED}
+
+# 白名单展示层对个别标准字段的展示名覆盖：标准字段默认取 EventMappingFields.description，
+# 个别字段需对齐风险列表筛选页口径（如 strategy_id 在风险筛选 Tab 显示“风险命中策略(ID)”）。
+WHITELIST_FIELD_NAME_OVERRIDES = {
+    "strategy_id": str(gettext_lazy("风险命中策略(ID)")),
+}

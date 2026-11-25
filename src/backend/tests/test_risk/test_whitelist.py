@@ -1262,22 +1262,44 @@ class WhitelistScopeFieldNamesTests(SimpleTestCase):
 
 
 class WhitelistScopeReadableTests(SimpleTestCase):
-    def test_group_scope_prefers_frontend_field_name(self):
+    def test_group_scope_uses_standard_field_name(self):
         from services.web.risk.whitelist.match import format_scope_readable
 
         scope = _group_scope(
             _group_leaf("strategy_id", "9", field_name="命中策略(ID)"),
             _group_leaf("operator", ["alice", "bob"], operator="include"),
         )
-        # 前端 field_name 优先；没带中文名的走标准字段兜底；连接符大写展示（与 SaaS 一致）
-        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 AND 责任人 in alice、bob")
+        # 标准字段统一走权威中文名（strategy_id 走白名单覆盖对齐风险筛选口径）；连接符大写展示（与 SaaS 一致）
+        self.assertEqual(format_scope_readable(scope), "风险命中策略(ID) = 9 AND 责任人 in alice、bob")
+
+    def test_group_scope_standard_field_overrides_stale_field_name(self):
+        """标准字段即便建单快照里 field_name 写错/写成 raw，也统一纠正为权威中文名（消除行间不一致）"""
+        from services.web.risk.whitelist.match import format_scope_readable
+
+        self.assertEqual(
+            format_scope_readable(_group_scope(_group_leaf("raw_event_id", "e-1", field_name="事件ID"))),
+            "原始事件ID = e-1",
+        )
+        self.assertEqual(
+            format_scope_readable(_group_scope(_group_leaf("raw_event_id", "e-1"))),
+            "原始事件ID = e-1",
+        )
+        self.assertEqual(
+            format_scope_readable(_group_scope(_group_leaf("event_id", "E-1"))),
+            "事件ID = E-1",
+        )
+        # 非标准字段（自定义列）无权威名，沿用前端 field_name
+        self.assertEqual(
+            format_scope_readable(_group_scope(_group_leaf("cost_center", "x", field_name="成本中心"))),
+            "成本中心 = x",
+        )
 
     def test_tree_scope_falls_back_to_standard_names(self):
         from services.web.risk.whitelist.match import format_scope_readable
 
         # append_risk_match_fields 补的条件 display_name 就是 raw_name，走兜底中文名
         scope = _tree_scope(_tree_leaf("strategy_id", "9"), _tree_leaf("raw_event_id", "e-1"))
-        self.assertEqual(format_scope_readable(scope), "命中策略(ID) = 9 AND 原始事件ID = e-1")
+        self.assertEqual(format_scope_readable(scope), "风险命中策略(ID) = 9 AND 原始事件ID = e-1")
         # 未知字段（如 event_data 自定义列）兜底不到，回退 raw_name
         self.assertEqual(
             format_scope_readable(_tree_scope(_tree_leaf("cost_center", "x", operator="neq"))),
@@ -1292,7 +1314,7 @@ class WhitelistScopeReadableTests(SimpleTestCase):
             _tree_leaf("raw_event_id", "keep", operator="neq"),
         )
         scope = {"connector": "or", "conditions": scope["conditions"]}
-        self.assertEqual(format_scope_readable(scope), "(命中策略(ID) = 9) OR 原始事件ID != keep")
+        self.assertEqual(format_scope_readable(scope), "(风险命中策略(ID) = 9) OR 原始事件ID != keep")
 
     def test_invalid_scope_falls_back_to_json(self):
         import json
@@ -1344,7 +1366,7 @@ class WhitelistScopeFieldOptionsTests(SimpleTestCase):
         # 带值才算包含；field_name 缺失走标准字段中文名兜底，兜底不到回退 field
         self.assertEqual(
             scope_field_options(scope),
-            [("strategy_id", "命中策略(ID)"), ("raw_event_id", "原始事件ID")],
+            [("strategy_id", "风险命中策略(ID)"), ("raw_event_id", "原始事件ID")],
         )
 
     def test_tree_scope_falls_back_to_standard_field_name(self):
@@ -1354,18 +1376,28 @@ class WhitelistScopeFieldOptionsTests(SimpleTestCase):
         scope = _tree_scope(_tree_leaf("strategy_id", "9"), _tree_leaf("cost_center", "x", operator="neq"))
         self.assertEqual(
             scope_field_options(scope),
-            [("strategy_id", "命中策略(ID)"), ("cost_center", "cost_center")],
+            [("strategy_id", "风险命中策略(ID)"), ("cost_center", "cost_center")],
         )
 
     def test_dedupe_keeps_first_non_empty_field_name(self):
         from services.web.risk.whitelist.match import scope_field_options
 
         scope = _group_scope(
-            _group_leaf("operator", "a", field_name="操作人"),
-            _group_leaf("operator", "b", field_name="处理人"),
+            _group_leaf("cost_center", "a", field_name="成本中心"),
+            _group_leaf("cost_center", "b", field_name="归属团队"),
         )
-        # 同一 field 去重，field_name 取首次出现的非空展示名
-        self.assertEqual(scope_field_options(scope), [("operator", "操作人")])
+        # 非标准字段（无权威中文名）去重，field_name 取首次出现的非空展示名
+        self.assertEqual(scope_field_options(scope), [("cost_center", "成本中心")])
+
+    def test_standard_field_name_overrides_stale_field_name(self):
+        """标准字段统一用权威中文名，覆盖存量快照里的错误/不同 field_name（消除行间不一致）"""
+        from services.web.risk.whitelist.match import scope_field_options
+
+        scope = _group_scope(
+            _group_leaf("raw_event_id", "r-1", field_name="事件ID"),
+            _group_leaf("operator", "a", field_name="处理人"),
+        )
+        self.assertEqual(scope_field_options(scope), [("raw_event_id", "原始事件ID"), ("operator", "责任人")])
 
     def test_empty_scope_returns_empty(self):
         from services.web.risk.whitelist.match import scope_field_options
@@ -1392,7 +1424,7 @@ class WhitelistContainsFieldsEnumTests(SimpleTestCase):
             {
                 "results": [
                     {"field": "operator", "field_name": "责任人"},
-                    {"field": "strategy_id", "field_name": "命中策略(ID)"},
+                    {"field": "strategy_id", "field_name": "风险命中策略(ID)"},
                 ]
             },
         )

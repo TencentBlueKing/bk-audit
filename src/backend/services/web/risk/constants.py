@@ -870,6 +870,18 @@ EVENT_BASIC_COLUMN_MAP = {field.value: field.column for field in EventBasicField
 # 数值型基本字段, 其余字段默认字符串比较
 EventBasicField.NUMERIC_FIELDS = frozenset({EventBasicField.STRATEGY_ID.value})
 
+# 事件基本信息字段的 field_type：复用 EventMappingFields 的权威定义（meta string/text/long），
+# 统一到 FieldType 词表（含 timestamp）。event_time 语义为时间戳，meta 仅有 long，按约定取 FieldType.TIMESTAMP。
+EVENT_BASIC_FIELD_TYPE_MAP = {
+    EventBasicField.RAW_EVENT_ID.value: FieldType.STRING.value,
+    EventBasicField.OPERATOR.value: FieldType.TEXT.value,
+    EventBasicField.EVENT_TIME.value: FieldType.TIMESTAMP.value,
+    EventBasicField.EVENT_SOURCE.value: FieldType.STRING.value,
+    EventBasicField.STRATEGY_ID.value: FieldType.LONG.value,
+    EventBasicField.EVENT_CONTENT.value: FieldType.TEXT.value,
+    EventBasicField.EVENT_TYPE.value: FieldType.TEXT.value,
+}
+
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "risk_level"
 

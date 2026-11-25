@@ -83,6 +83,7 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
+    EVENT_BASIC_FIELD_TYPE_MAP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
@@ -1705,25 +1706,27 @@ class ListEventFieldsByStrategy(RiskMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        from services.web.strategy_v2.serializers import merge_select_field_type
+
         strategy_ids = validated_request_data.get("strategy_ids")
         if strategy_ids:
             strategies = Strategy.objects.filter(strategy_id__in=strategy_ids)
         else:
             strategies = Strategy.objects.all()
 
-        extended = set()
+        extended_field_types: dict = {}
         for s in strategies:
-            for cfg in s.event_data_field_configs or []:
+            for cfg in merge_select_field_type(s, list(s.event_data_field_configs or [])):
                 field_name = cfg.get("field_name")
                 display_name = cfg.get("display_name") or field_name
-                if field_name:
-                    extended.add((field_name, display_name))
+                if not field_name:
+                    continue
+                key = (field_name, display_name)
+                if not extended_field_types.get(key):
+                    extended_field_types[key] = cfg.get("field_type")
 
         basic = [(field_name, str(label)) for field_name, label in EventBasicField.choices]
         basic_field_names = {field_name for field_name, _ in basic}
-        extended = [
-            (field_name, display_name) for field_name, display_name in extended if field_name not in basic_field_names
-        ]
 
         basic_results = [
             {
@@ -1731,12 +1734,19 @@ class ListEventFieldsByStrategy(RiskMeta):
                 "display_name": display_name,
                 "id": f"{display_name}:{field_name}",
                 "type": "basic_event_field",
+                "field_type": EVENT_BASIC_FIELD_TYPE_MAP.get(field_name),
             }
             for field_name, display_name in basic
         ]
         extended_results = [
-            {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
-            for field_name, display_name in extended
+            {
+                "field_name": field_name,
+                "display_name": display_name,
+                "id": f"{display_name}:{field_name}",
+                "field_type": field_type,
+            }
+            for (field_name, display_name), field_type in extended_field_types.items()
+            if field_name not in basic_field_names
         ]
         return basic_results + extended_results
 
