@@ -20,7 +20,8 @@
     :class="{ 'is-with-sidebar': route.params?.isShowSideBar === 'true' }">
     <img
       class="app-logo"
-      :src="data.logo_url">
+      :src="displayLogo"
+      @error="handleLogoError">
     <div class="system-base-box">
       <div class="system-name">
         {{ data.name }}
@@ -42,13 +43,15 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { computed } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
 
   import SystemModel from '@model/meta/system';
+
+  import systemIconUrl from '@images/system.svg';
 
   import useRequest from '@hooks/use-request';
 
@@ -69,6 +72,19 @@
 
   // 复用父组件下发的系统详情，避免重复请求
   const data = computed(() => props.data || new SystemModel());
+  const logoFailed = ref(false);
+  const displayLogo = computed(() => (
+    logoFailed.value || !data.value.logo_url ? systemIconUrl : data.value.logo_url
+  ));
+  const handleLogoError = () => {
+    if (logoFailed.value) {
+      return;
+    }
+    logoFailed.value = true;
+  };
+  watch(() => data.value.logo_url, () => {
+    logoFailed.value = false;
+  });
 
   const {
     data: GlobalChoices,

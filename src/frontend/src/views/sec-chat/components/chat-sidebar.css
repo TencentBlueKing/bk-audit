@@ -612,7 +612,7 @@
     .conv-item {
       position: relative;
       display: flex;
-      padding: 7px var(--bk-theme-space-8);
+      padding: 7px 46px 7px var(--bk-theme-space-8);
       margin: 0 var(--bk-theme-space-8) var(--bk-theme-space-2);
       cursor: grab;
       border-radius: var(--bk-theme-radius-8);

@@ -403,6 +403,12 @@
   box-shadow: 0 0 3px 0 var(--input-shadow-color) !important;
 }
 
+.bk-form-item.is-error .bk-user-selector .tags-container,
+.bk-form-item.is-error .bk-user-selector .tags-container:hover,
+.bk-form-item.is-error .bk-user-selector .tags-container.focused {
+  border-color: var(--bk-theme-color-danger-2) !important;
+}
+
 .bk-date-picker-rel .bk-date-picker-editor {
   border-color: var(--bk-theme-control-border-color);
 }
@@ -581,6 +587,11 @@
   height: 16px;
 }
 
+/* 库把单选文案写死 14px。表单标签已是 12，单选文字跟标签走。 */
+.bk-radio-label {
+  font-size: var(--bk-theme-font-size-sm);
+}
+
 .bk-pagination {
   color: var(--bk-theme-text-default);
 }
@@ -737,10 +748,18 @@
   border-bottom-color: var(--bk-theme-table-header-divider);
 }
 
+/* 表格设置里的字段名、全选和行高说明跟表头一样用 12。标题保持库内字号。 */
+.bk-table-settings[data-bk-table-settings-theme='true'] .setting-content .setting-body .setting-body-title,
+.bk-table-settings[data-bk-table-settings-theme='true'] .setting-content .setting-body .setting-body-title .field-setting-label,
+.bk-table-settings[data-bk-table-settings-theme='true'] .setting-content .setting-body .setting-body-line-height,
+.bk-table-settings .bk-checkbox {
+  font-size: var(--bk-theme-font-size-sm);
+}
+
 /* 库内 .cell 用 line-height: calc(行高 - 4px) 撑满内容区。
    上下 8 必须从这 4px 里再扣掉，否则 38 + 16 = 54，行高会被撑开。
    td 上下各 1px 边框，所以格子本体是 42 - 2。 */
-.bk-table .bk-table-body table tbody tr td:not(.empty-cell) .cell {
+.bk-table .bk-table-body table tbody tr td:not(.empty-cell) .cell:not(.selection) {
   box-sizing: border-box;
   height: calc(var(--bk-theme-table-row-height) - 2px);
   padding: var(--bk-theme-space-8) var(--bk-theme-space-16);

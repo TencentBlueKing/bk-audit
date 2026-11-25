@@ -1872,9 +1872,13 @@
   margin-bottom: var(--bk-theme-space-12);
 
   .column-popover-section-title {
-    font-size: 14px;
+    font-size: var(--bk-theme-font-size-sm);
     color: var(--bk-theme-text-strong);
   }
+}
+
+.column-popover .bk-checkbox {
+  font-size: var(--bk-theme-font-size-sm);
 }
 
 .column-popover-grid {

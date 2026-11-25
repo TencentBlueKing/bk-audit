@@ -34,7 +34,7 @@
             {{ panelSceneTag.name }}({{ panelSceneTag.id }})
           </bk-tag>
           <span
-            v-if="panelDescription"
+            v-if="showPanelDescription"
             class="title-tip">
             <span> | </span>
             <span class="title-tip-text">{{ panelDescription }}</span>
@@ -199,6 +199,11 @@
   const pageTitle = computed(() => route.meta.title || layoutRef.value?.titleRef || '' as string);
   // 报表详情页的描述信息（来自 layoutRef 的 descriptionRef）
   const panelDescription = computed(() => (layoutRef.value as any)?.descriptionRef || '');
+  // 没有副说明时后端会给占位符 --。这时标题后的分隔线和占位符都不展示。
+  const showPanelDescription = computed(() => {
+    const text = String(panelDescription.value ?? '').trim();
+    return text !== '' && text !== '--';
+  });
   // 聚合模式下当前面板所属场景标签（来自 layoutRef 的 currentPanelScene）
   const panelSceneTag = computed(() => (layoutRef.value as any)?.currentPanelScene || null);
   const titleTip = computed(() => {

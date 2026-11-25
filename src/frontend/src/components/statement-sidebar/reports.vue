@@ -129,11 +129,12 @@
               src="@images/folder.svg">
             <span class="side-group-name">
               <tool-tip-text
+                class="side-group-title"
                 :data="group.name"
                 :line="1"
                 placement="right"
-                style="display: inline-block;max-width: 200px; vertical-align: middle;"
-                theme="dark" /></span>
+                theme="dark" />
+            </span>
             <audit-icon
               class="side-group-arrow"
               :class="{ expanded: expandedGroups.includes(group.id) }"
@@ -177,12 +178,17 @@
             </audit-menu-item>
           </div>
         </div>
-        <!-- 暂无数据 -->
-        <div
-          v-if="showEmpty"
-          class="side-empty">
-          {{ t('暂无数据') }}
-        </div>
+      </div>
+      <div
+        v-if="showEmpty"
+        class="side-empty">
+        <bk-exception
+          scene="part"
+          :type="searchKeyword.trim() ? 'search-empty' : 'empty'">
+          <div class="side-empty-text">
+            {{ searchKeyword.trim() ? t('未找到匹配报表') : t('暂无数据') }}
+          </div>
+        </bk-exception>
       </div>
     </div>
   </div>
@@ -498,10 +504,10 @@
     return allSideRoutes.value
       .map(side => ({
         ...side,
-        children: side.children
+        children: (side.children || [])
           .map(group => ({
             ...group,
-            children: group.children.filter(child => child.name.toLowerCase().includes(keyword)),
+            children: (group.children || []).filter(child => String(child?.name || '').toLowerCase().includes(keyword)),
           }))
           .filter(group => group.children.length > 0),
       }))
@@ -509,7 +515,12 @@
   });
 
   // 是否显示暂无数据
-  const showEmpty = computed(() => sideRoutes.value.length === 0 && favoriteItems.value.length === 0);
+  const showEmpty = computed(() => {
+    if (searchKeyword.value.trim()) {
+      return filteredSideRoutes.value.length === 0;
+    }
+    return sideRoutes.value.length === 0 && favoriteItems.value.length === 0;
+  });
 
   // 展开的分组ID列表
   const expandedGroups = ref<number[]>([]);
@@ -1035,6 +1046,7 @@
     width: 14px;
     height: 14px;
     margin-right: var(--bk-theme-space-12);
+    flex-shrink: 0;
   }
 
   .side-pentagram-close {
@@ -1078,12 +1090,18 @@
 
   .side-group-name {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+
+  .side-group-title {
+    display: block;
+    max-width: 100%;
   }
 
   .side-group-arrow {
+    flex-shrink: 0;
+    margin-left: var(--bk-theme-space-8);
     font-size: 12px;
     color: var(--bk-theme-nav-side-text);
     transition: transform .2s ease;
@@ -1177,8 +1195,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 80px;
-    font-size: 12px;
+    height: 100%;
+    min-height: 240px;
+  }
+
+  .side-empty-text {
     color: var(--bk-theme-text-default);
   }
 

@@ -21,6 +21,8 @@
       :export-disabled="!isExportEnabled"
       :export-request="runExport"
       :export-tooltip="exportTooltip"
+      :reassignment-disabled="!isExportEnabled"
+      :reassignment-tooltip="isExportEnabled ? '' : t('请至少选择 1 条风险单')"
       :field-config="FieldConfig"
       is-export
       is-reassignment

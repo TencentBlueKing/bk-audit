@@ -60,6 +60,8 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
+  import systemIconUrl from '@images/system.svg';
+
   import SystemAccessDropdown from './components/system-access-dropdown.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -95,8 +97,16 @@
       width: '80px',
       render: ({ data }: {data: SyetemModel}) => (
         <img
-        src={data.logo_url}
-        style="width: 24px; height: 24px; vertical-align: middle;" />
+          src={data.logo_url || systemIconUrl}
+          style="width: 24px; height: 24px; vertical-align: middle;"
+          onError={(event: Event) => {
+            const img = event.currentTarget as HTMLImageElement;
+            if (img.dataset.fallback === '1') {
+              return;
+            }
+            img.dataset.fallback = '1';
+            img.src = systemIconUrl;
+          }} />
       ),
     },
     {

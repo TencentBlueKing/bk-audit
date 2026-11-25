@@ -32,6 +32,7 @@
             class="reassignment-btn-wrapper"
             :class="{ 'is-reassignment-disabled': reassignmentDisabled }">
             <bk-button
+              class="risk-toolbar-secondary"
               :disabled="reassignmentDisabled"
               @click="handleBatch">
               {{ t('批量转单') }}

@@ -53,10 +53,10 @@
         </div>
         <div class="top-right">
           <img
-            v-if="toolDetails?.tool_type === 'smart_page'"
-            alt="smart_page"
+            v-if="getToolTypeMark(toolDetails?.tool_type)"
+            alt=""
             class="top-left-icon"
-            :src="userProfileIcon">
+            :src="getToolTypeMark(toolDetails?.tool_type)">
           <audit-icon
             v-else
             class="top-left-icon"
@@ -242,8 +242,8 @@
   import DialogHeader from './dialog-header.vue';
 
   import useRequest from '@/hooks/use-request';
-  import userProfileIcon from '@/images/user.svg';
   import { getSceneSystemParams, getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
+  import { getToolTypeMark } from '@/views/tools/tools-square/utils/tool-type-mark';
   import {
     getSearchItemDefaultValue,
     resolveSearchValueWithDefault,

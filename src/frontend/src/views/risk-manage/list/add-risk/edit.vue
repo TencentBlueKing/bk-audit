@@ -75,7 +75,7 @@
                 class="base-item"
                 :label="t('风险发现规则')"
                 property="strategy_rule_id"
-                required>
+                :required="Boolean(formData.strategy_id)">
                 <bk-select
                   v-model="formData.strategy_rule_id"
                   class="bk-select"
@@ -299,9 +299,14 @@
       trigger: 'change',
     }],
     strategy_rule_id: [{
-      required: true,
       message: t('请选择风险发现规则'),
       trigger: 'change',
+      validator: (value: string | number) => {
+        if (!formData.value.strategy_id) {
+          return true;
+        }
+        return value !== '' && value !== undefined && value !== null;
+      },
     }],
     event_time: [{
       required: true,

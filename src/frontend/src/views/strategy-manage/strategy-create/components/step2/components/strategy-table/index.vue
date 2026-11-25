@@ -334,9 +334,11 @@
     .header-cell {
       @include cell-base;
 
-      background-color: var(--bk-theme-editable-table-header-bg);
+      font-size: var(--bk-theme-font-size-sm);
       font-weight: 500;
+      line-height: var(--bk-theme-line-height-sm);
       color: var(--bk-theme-text-strong);
+      background-color: var(--bk-theme-editable-table-header-bg);
 
       &.field-name {
         width: 250px;

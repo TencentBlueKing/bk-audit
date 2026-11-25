@@ -42,7 +42,8 @@
             text
             theme="primary"
             @click="handleCardClick(card.linkEvent)">
-            {{ t('查看详情') }} →
+            <span class="stat-link-text">{{ t('查看详情') }}</span>
+            <span class="stat-link-arrow">→</span>
           </bk-button>
           <img
             alt=""
@@ -150,6 +151,7 @@
   }
 
   .stat-right {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -176,9 +178,24 @@
   }
 
   .stat-link {
-    position: relative;
+    position: absolute;
+    top: 0;
+    right: 0;
     z-index: 1;
-    margin-bottom: -var(--bk-theme-space-16);
     font-size: 12px;
+  }
+
+  .stat-link :deep(.bk-button-text) {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .stat-link-arrow {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2px;
+    line-height: 1;
+    /* → 的墨迹中心比汉字低约 1px，盒子对齐后字形仍偏下。 */
+    transform: translateY(-2px);
   }
 </style>

@@ -120,10 +120,20 @@
         <template #content>
           <div class="favourite-query-name">
             <span style="padding: 0 20px;">{{ t('收藏名称') }}</span>
-            <bk-input
-              v-model="favouriteSearch.name"
-              :placeholder="t('请输入收藏名称')"
-              style="width: 250px;" />
+            <div
+              class="favourite-name-control"
+              :class="{ 'is-error': favouriteNameError }">
+              <bk-input
+                v-model="favouriteSearch.name"
+                :placeholder="t('请输入收藏名称')"
+                style="width: 250px;"
+                @input="favouriteNameError = ''" />
+              <p
+                v-if="favouriteNameError"
+                class="favourite-name-error">
+                {{ favouriteNameError }}
+              </p>
+            </div>
           </div>
           <div class="favourite-query-pop-bth">
             <bk-button
@@ -270,6 +280,7 @@
 
   const localSearchModel = ref<Record<string, any>>({});
   const favouriteSearch = ref<Record<string, any>>({});
+  const favouriteNameError = ref('');
   const fieldConfigRef = ref();
   const isShowMore = ref(false);
 
@@ -599,17 +610,28 @@
 
   const handleAfterHidden = (value: { isShow: boolean}) => {
     isShow.value = value.isShow;
+    if (!value.isShow) {
+      favouriteNameError.value = '';
+    }
   };
 
   // 收藏搜索条件
   const handleFavouriteQuery = () => {
+    favouriteNameError.value = '';
     favouriteSearch.value = _.cloneDeep(localSearchModel.value);
   };
 
   // 确认收藏搜索条件
   const handleSubmitFavourite = () => {
+    const favouriteName = String(favouriteSearch.value.name || '').trim();
+    if (!favouriteName) {
+      favouriteNameError.value = t('请输入收藏名称');
+      return;
+    }
+    favouriteNameError.value = '';
+    favouriteSearch.value.name = favouriteName;
     // 查找是否存在同名的收藏条件
-    const existingItem = favouriteQueryList.value.find(item => item.config_name === favouriteSearch.value.name);
+    const existingItem = favouriteQueryList.value.find(item => item.config_name === favouriteName);
 
     if (existingItem) {
       // 如果存在，使用该项的实际 id 进行更新
@@ -832,8 +854,26 @@
 
   .favourite-query-name {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: var(--bk-theme-space-8);
+  }
+
+  .favourite-name-control {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .favourite-name-control.is-error .bk-input,
+  .favourite-name-control.is-error .bk-input.is-focused,
+  .favourite-name-control.is-error .bk-input:hover:not(.is-disabled):not(.is-simplicity):not(.is-focused) {
+    border-color: var(--bk-theme-color-danger-2);
+  }
+
+  .favourite-name-error {
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--bk-theme-color-danger-2);
   }
 
   .favourite-query-pop-bth {
