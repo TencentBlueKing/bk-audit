@@ -619,7 +619,8 @@ class RiskWhitelistsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_whitelist_contains_fields, endpoint="contains_fields"),
         # endpoint 不能叫 "detail"：与 DRF 保留 initkwarg detail(bool) 同名，会被路由 as_view
         # 的 initkwargs={'detail': True} 覆盖成布尔，dispatch 取 self.get 时变成 True(request) 调用，必现 500
-        ResourceRoute("GET", resource.risk.retrieve_risk_whitelist, pk_field="id", endpoint="detail_info"),
+        # 批量详情：POST，ids 走 body，服务端只返回待审批 / 已驳回的单，权限仍按 body 的 scene_id 校验
+        ResourceRoute("POST", resource.risk.retrieve_risk_whitelist, endpoint="detail_info"),
         ResourceRoute("POST", resource.risk.create_risk_whitelist),
         ResourceRoute("POST", resource.risk.batch_create_risk_whitelist, endpoint="batch"),
         ResourceRoute("PUT", resource.risk.update_risk_whitelist, pk_field="id"),

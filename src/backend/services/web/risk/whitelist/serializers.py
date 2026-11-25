@@ -120,10 +120,14 @@ class RiskWhitelistIdReqSerializer(serializers.Serializer):
     id = serializers.IntegerField(label=gettext_lazy("白名单ID"))
 
 
-class RiskWhitelistDetailReqSerializer(RiskWhitelistIdReqSerializer):
-    """详情入参。scene_id 供 viewset 做场景管理权限校验，与命中记录用同一份主键。"""
+class BatchRiskWhitelistDetailReqSerializer(serializers.Serializer):
+    """批量详情入参。scene_id 供 viewset 做场景管理权限校验；id 为待查白名单 ID 数组。
+
+    复用 FlexibleListField，前端单值 / 数组 / 逗号串都能传，服务端统一成 ID 列表。
+    """
 
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
+    id = FlexibleListField(child=serializers.IntegerField(), label=gettext_lazy("白名单ID"))
 
 
 class RejectRiskWhitelistReqSerializer(RiskWhitelistIdReqSerializer):

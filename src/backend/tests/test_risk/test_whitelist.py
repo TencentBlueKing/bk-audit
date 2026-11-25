@@ -1554,44 +1554,99 @@ class WhitelistContainsFieldsEnumTests(SimpleTestCase):
 
 
 class WhitelistDetailTests(SimpleTestCase):
+    @staticmethod
+    def _detail_rule(**kwargs):
+        base = dict(
+            id=7,
+            scene_id=3,
+            status=WhitelistStatus.PENDING,
+            itsm_ticket_id="ticket-1",
+            itsm_sn="",
+            created_by="alice",
+            created_at=None,
+            updated_at=None,
+        )
+        base.update(kwargs)
+        return SimpleNamespace(**base)
+
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
-    def test_detail_returns_raw_ticket_detail(self, objects, load_detail):
+    def test_detail_maps_specified_ticket_fields(self, objects, load_detail):
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
-        rule = SimpleNamespace(id=7, scene_id=3, status=WhitelistStatus.PENDING, itsm_ticket_id="ticket-1")
-        objects.filter.return_value.first.return_value = rule
-        ticket_detail = {"id": "ticket-1", "sn": "SN-1", "current_steps": [{"name": "审批"}]}
-        load_detail.return_value = ticket_detail
+        rule = self._detail_rule()
+        objects.filter.return_value = [rule]
+        load_detail.return_value = {
+            "id": "ticket-1",
+            "sn": "SN-1",
+            "title": "【审计中心】风险白名单",
+            "creator": "alice",
+            "created_at": "2026-11-11 10:00:00",
+            "status": "RUNNING",
+            "status_display": "审批中",
+            "current_processors": [{"processor": "admin"}],
+            "current_steps": [{"name": "审批"}],
+        }
 
-        result = RetrieveRiskWhitelist().perform_request({"id": 7, "scene_id": 3})
+        result = RetrieveRiskWhitelist().perform_request({"id": [7], "scene_id": 3})
 
-        # 详情只作工单详情代理：原样返回 ticket_detail，不掺白名单列表字段
-        self.assertEqual(result, ticket_detail)
         load_detail.assert_called_once_with(rule)
+        self.assertEqual(
+            result,
+            [
+                {
+                    "id": "7",
+                    "current_steps": [{"name": "审批"}],
+                    "current_processors": [{"processor": "admin"}],
+                    "status": "RUNNING",
+                    "status_display": "审批中",
+                    "creator": "alice",
+                    "created_at": "2026-11-11 10:00:00",
+                    "title": "【审计中心】风险白名单",
+                    "sn": "SN-1",
+                }
+            ],
+        )
+
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    def test_detail_filters_pending_rejected_scene(self, objects):
+        # 服务端硬编码只取待审批 / 已驳回，并按 scene_id 兜一层越权，与入参 ids 求交
+        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
+
+        objects.filter.return_value = []
+        RetrieveRiskWhitelist().perform_request({"id": [1, 2, 3], "scene_id": 3})
+        called = objects.filter.call_args.kwargs
+        self.assertEqual(called["scene_id"], 3)
+        self.assertEqual(called["pk__in"], [1, 2, 3])
+        self.assertEqual(set(called["status__in"]), {WhitelistStatus.PENDING, WhitelistStatus.REJECTED})
 
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
-    def test_detail_returns_empty_without_ticket_id(self, objects, load_detail):
+    def test_detail_falls_back_to_local_when_no_ticket(self, objects, load_detail):
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
-        rule = SimpleNamespace(id=8, scene_id=3, status=WhitelistStatus.ACTIVE, itsm_ticket_id="")
-        objects.filter.return_value.first.return_value = rule
+        # 已驳回但工单外呼失败（返回空）：状态、申请人、单据号回落本地值，保证入参里状态符合的都返回
+        rule = self._detail_rule(
+            id=9,
+            status=WhitelistStatus.REJECTED,
+            itsm_ticket_id="ticket-9",
+            itsm_sn="SN-9",
+            created_by="bob",
+        )
+        objects.filter.return_value = [rule]
+        load_detail.return_value = {}
 
-        result = RetrieveRiskWhitelist().perform_request({"id": 8, "scene_id": 3})
+        result = RetrieveRiskWhitelist().perform_request({"id": [9], "scene_id": 3})
 
-        # 无工单号时无从外呼，直接返回空 dict，不调用工单详情
-        self.assertEqual(result, {})
-        load_detail.assert_not_called()
-
-    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
-    def test_detail_missing_raises(self, objects):
-        from core.exceptions import ValidationError as CoreValidationError
-        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
-
-        objects.filter.return_value.first.return_value = None
-        with self.assertRaises(CoreValidationError):
-            RetrieveRiskWhitelist().perform_request({"id": 404, "scene_id": 3})
+        self.assertEqual(len(result), 1)
+        item = result[0]
+        self.assertEqual(item["status"], WhitelistStatus.REJECTED)
+        self.assertEqual(item["status_display"], str(WhitelistStatus.REJECTED.label))
+        self.assertEqual(item["creator"], "bob")
+        self.assertEqual(item["sn"], "SN-9")
+        self.assertEqual(item["current_steps"], [])
+        self.assertEqual(item["current_processors"], [])
+        self.assertEqual(item["title"], "")
 
     @patch("services.web.risk.whitelist.service.list_actions", return_value=[])
     def test_serialize_rule_include_flow_controls_flow_key(self, _actions):

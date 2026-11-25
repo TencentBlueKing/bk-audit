@@ -34,6 +34,7 @@ from services.web.risk.whitelist.match import (
 from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.whitelist.serializers import (
     BatchCreateRiskWhitelistReqSerializer,
+    BatchRiskWhitelistDetailReqSerializer,
     CreateRiskWhitelistReqSerializer,
     FetchWhitelistHitEventReqSerializer,
     ListRiskWhitelistReqSerializer,
@@ -42,7 +43,6 @@ from services.web.risk.whitelist.serializers import (
     RejectRiskWhitelistReqSerializer,
     RenewRiskWhitelistReqSerializer,
     RiskWhitelistCallbackReqSerializer,
-    RiskWhitelistDetailReqSerializer,
     RiskWhitelistIdReqSerializer,
     UpdateRiskWhitelistReqSerializer,
 )
@@ -63,6 +63,7 @@ from services.web.risk.whitelist.service import (
     review_whitelist,
     serialize_rule,
     submit_whitelist,
+    submitted_at_of,
 )
 
 
@@ -180,22 +181,49 @@ class ListWhitelistContainsFields(RiskWhitelistMeta):
 
 
 class RetrieveRiskWhitelist(RiskWhitelistMeta):
-    """白名单详情：按白名单 ID 找到其 ITSM 工单，直接返回工单详情接口（ticket_detail）的响应。
+    """批量查询白名单工单详情：入参一批白名单 ID，服务端只挑出「待审批 / 已驳回」的单返回。
 
-    只作工单详情代理，不再回显白名单列表字段或本地 flow；与列表序列化相互独立。
-    能进来即该场景管理员（viewset 已校验）。无工单号或外呼失败时返回空 dict。
+    这两态是 flow 态（FLOW_STATUS），需要展示工单实时进度（当前处理人 / 步骤）。
+    逐条代理 ITSM 工单详情接口取 current_steps / current_processors / status / status_display /
+    creator / created_at / title / sn；无工单号或外呼失败时对应字段回落到白名单本地值，
+    保证入参里状态符合的白名单都出现在结果中。状态由服务端硬编码过滤，不受入参左右。
+    能进来即该场景管理员（viewset 已按 scene_id 校验 MANAGE_SCENE），scene_id 再兜一层越权。
     """
 
     name = gettext_lazy("风险白名单详情")
-    RequestSerializer = RiskWhitelistDetailReqSerializer
+    RequestSerializer = BatchRiskWhitelistDetailReqSerializer
 
     def perform_request(self, validated_request_data):
-        rule = RiskWhitelist.objects.filter(pk=validated_request_data["id"]).first()
-        if rule is None:
-            raise ValidationError(gettext("白名单不存在"))
-        if not rule.itsm_ticket_id:
-            return {}
-        return _load_ticket_detail(rule)
+        scene_id = validated_request_data["scene_id"]
+        rule_ids = validated_request_data["id"]
+        # 状态硬编码只取待审批 / 已驳回；scene_id 再过滤一次，杜绝跨场景 ID 越权查询
+        rules = RiskWhitelist.objects.filter(
+            pk__in=rule_ids,
+            scene_id=scene_id,
+            status__in=[WhitelistStatus.PENDING, WhitelistStatus.REJECTED],
+        )
+        return [self._detail(rule) for rule in rules]
+
+    @staticmethod
+    def _detail(rule: RiskWhitelist) -> dict:
+        """组装单条详情：工单字段优先，外呼失败 / 无工单号时回落本地值。"""
+
+        detail = _load_ticket_detail(rule) or {}
+        # 状态：工单返回优先；外呼失败回落白名单本地状态（列表态，和 flow 终态一致）
+        status = detail.get("status") or rule.status
+        status_display = detail.get("status_display") or str(WhitelistStatus(rule.status).label)
+        return {
+            "id": str(rule.id),
+            "current_steps": detail.get("current_steps") or [],
+            "current_processors": detail.get("current_processors") or [],
+            "status": status,
+            "status_display": status_display,
+            # creator 是工单申请人，与建单提交的 applicant 同源，外呼失败回落白名单创建人
+            "creator": detail.get("creator") or rule.created_by or "",
+            "created_at": detail.get("created_at") or submitted_at_of(rule),
+            "title": detail.get("title") or "",
+            "sn": detail.get("sn") or rule.itsm_sn or "",
+        }
 
 
 class CreateRiskWhitelist(RiskWhitelistMeta):
