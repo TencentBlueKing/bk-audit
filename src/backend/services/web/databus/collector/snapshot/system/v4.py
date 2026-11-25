@@ -10,6 +10,7 @@ from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 from django.db import transaction
 
+from api.bk_base_v4.default import INIT_DEADLINE
 from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE, ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from services.web.bkbase import metadata as bkbase_metadata
@@ -133,9 +134,20 @@ def _normalize_binding(resource_type, context, value):
     }
 
 
+def _lookup(getter, **params):
+    if INIT_DEADLINE.get() is None:
+        return get_resource_or_none(getter, **params)
+    try:
+        return getter(**params)
+    except APIRequestError as error:
+        if getattr(error, "http_status", None) == 200 and getattr(error, "resource_not_found", False):
+            return None
+        raise
+
+
 def _running_resource(context, getter, ref):
     kind = ref["kind"]
-    resource = get_resource_or_none(getter, tenant=ref["tenant"], namespace=ref["namespace"], name=ref["name"])
+    resource = _lookup(getter, tenant=ref["tenant"], namespace=ref["namespace"], name=ref["name"])
     if resource is None:
         return None
     if bkbase_source._binding_resource_ref(context, resource, kind) != ref:
@@ -216,9 +228,9 @@ def _verified_redis_binding(resource, table, redis):
 
 def _result_table_info(sdk, context, logical_id):
     try:
-        return get_resource_or_none(sdk.result_table_info, tenant=context["tenant"], result_table_id=logical_id)
+        return _lookup(sdk.result_table_info, tenant=context["tenant"], result_table_id=logical_id)
     except APIRequestError as error:
-        if str(error.data.get("code")) == "1558025":
+        if isinstance(error.data, dict) and str(error.data.get("code")) == "1558025":
             # This code also covers an unrelated binding target; it does not establish that this Join is gone.
             error.message = "IAM V4 ResultTableInfo 1558025: result table or a binding target is missing"
         raise

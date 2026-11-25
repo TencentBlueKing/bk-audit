@@ -16,6 +16,11 @@ from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
 
+from api.bk_base_v4.default import (
+    InitDeadlineBeforeSend,
+    init_deadline_remaining,
+    is_init_deadline_before_send,
+)
 from services.web.bkbase import clean, metadata, source, storage
 from services.web.bkbase.common import (
     build_resource_name,
@@ -162,6 +167,8 @@ def _ready(resource, ref, expected_state=None):
     if expected_state is None:
         return True
     state = operation_result(resource, ref, "observe")["task_state"]
+    if state == TaskState.FAILED:
+        raise BKBaseResourceMappingError(message=f"IAM V4 created {ref['kind']} is failed")
     if state != expected_state:
         if state in (TaskState.RUNNING, TaskState.STOPPED):
             raise BKBaseResourceMappingError(message=f"IAM V4 created {ref['kind']} is in an unexpected state")
@@ -195,6 +202,8 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
     # 摘要只约束确定未下发后要重发的本地请求。
     if step is not None and step.get("target_digest") != digest:
         raise BKBaseResourceMappingError(message=f"IAM V4 {ref['kind']} creation inputs changed")
+    init_deadline_remaining()
+    previous = record
     operation = deepcopy(operation)
     operation["steps"][key] = {
         **(step or {}),
@@ -208,8 +217,11 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
         creator(
             tenant=context["tenant"], namespace=context["namespace"], metadata=metadata_value, spec=desired, status=None
         )
-    except APIRequestError as error:
-        if _proven_not_dispatched(error):
+    except (APIRequestError, InitDeadlineBeforeSend) as error:
+        if is_init_deadline_before_send(error):
+            # 只还原本次没有发送的认领，保留原资源名及已有确认步骤。
+            _save(kind, context, record, previous)
+        elif _proven_not_dispatched(error):
             operation = deepcopy(operation)
             operation["steps"][key]["not_dispatched"] = True
             _save(kind, context, record, {**record, "creation": operation})
@@ -264,6 +276,8 @@ def _source_state(resource, ref):
     if not _ready(resource, ref):
         return None
     state = operation_result(resource, ref, "observe")["task_state"]
+    if state == TaskState.FAILED:
+        raise BKBaseResourceMappingError(message="IAM V4 DataSource is failed")
     desired = resource["spec"].get("desired_status")
     if state == TaskState.RUNNING and desired is None:
         return state
@@ -300,6 +314,8 @@ def _request_source_activation(kind, context, record):
     _verify_activation_binding(context, record, latest)
     if _source_state(latest, ref) != TaskState.STOPPED:
         return "DataSource"
+    init_deadline_remaining()
+    previous = record
     desired = deepcopy(latest)
     desired["spec"]["desired_status"] = "Running"
     operation = {
@@ -320,8 +336,10 @@ def _request_source_activation(kind, context, record):
             spec=desired["spec"],
             status=None,
         )
-    except APIRequestError as error:
-        if _proven_not_dispatched(error):
+    except (APIRequestError, InitDeadlineBeforeSend) as error:
+        if is_init_deadline_before_send(error):
+            _save(kind, context, record, previous)
+        elif _proven_not_dispatched(error):
             operation = {
                 **operation,
                 "source_start": {**operation["source_start"], "not_dispatched": True},

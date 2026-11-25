@@ -52,7 +52,31 @@ from core.bk_api_base import AuditBkApiResource
 from core.tenant import TENANT_ID_HEADER
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
+INIT_DEADLINE: ContextVar[float | None] = ContextVar("bkbase_v4_init_deadline", default=None)
 READ_MAX_TIMEOUT = 30.0
+
+
+class InitDeadlineBeforeSend(TimeoutError):
+    """初始化预算在请求发出前耗尽。"""
+
+
+def init_deadline_remaining() -> float | None:
+    deadline = INIT_DEADLINE.get()
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise InitDeadlineBeforeSend("BKBase V4 init deadline reached before sending request")
+    return remaining
+
+
+def is_init_deadline_before_send(error: BaseException) -> bool:
+    """仅识别本地发送前的证据，不把网络超时当成未下发。"""
+    while error is not None:
+        if isinstance(error, InitDeadlineBeforeSend):
+            return True
+        error = error.__cause__
+    return False
 
 
 class BkBaseV4Resource(AuditBkApiResource, abc.ABC):
@@ -150,10 +174,15 @@ class BkBaseV4Resource(AuditBkApiResource, abc.ABC):
         return payload
 
     def before_request(self, kwargs):
-        """隔离路径参数；仅在受控列表读取中为GET沿用剩余预算。"""
+        """隔离路径参数，受控初始化和列表请求沿用其剩余预算。"""
+        remaining_init = init_deadline_remaining()
+        if remaining_init is not None:
+            kwargs["timeout"] = Timeout(total=min(self.TIMEOUT, remaining_init))
         deadline = READ_DEADLINE.get()
         if self.method == "GET" and deadline is not None:
             remaining = deadline - monotonic()
+            if remaining_init is not None:
+                remaining = min(remaining, remaining_init)
             if remaining <= 0:
                 raise RequestTimeout("BKBase list read deadline exceeded")
             kwargs["timeout"] = Timeout(total=min(READ_MAX_TIMEOUT, remaining))

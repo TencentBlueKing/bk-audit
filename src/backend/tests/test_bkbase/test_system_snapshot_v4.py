@@ -10,7 +10,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, override_settings
 
-from api.bk_base_v4.default import BkBaseV4Resource, ResultTableInfo
+from api.bk_base_v4.default import INIT_DEADLINE, BkBaseV4Resource, ResultTableInfo
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.etl.etl_config_handler.base import BkBaseConfig
 from services.web.databus.collector.snapshot.system import v4
@@ -24,6 +24,21 @@ COMMAND_PATH = "services.web.databus.management.commands.iam_data_pull"
 
 def ref(kind, name, namespace="audit"):
     return {"kind": kind, "tenant": "default", "namespace": namespace, "name": name}
+
+
+class SystemSnapshotInitLookupTests(SimpleTestCase):
+    def test_result_table_gateway_404_is_not_pending(self):
+        error = APIRequestError(module_name="bkbase_v4", url="/result_tables", result="synthetic gateway 404")
+        error.http_status = 404
+        remote = mock.Mock()
+        remote.result_table_info.side_effect = error
+        token = INIT_DEADLINE.set(1)
+        try:
+            with self.assertRaises(APIRequestError) as caught:
+                v4._result_table_info(remote, {"tenant": "default"}, "47_actions")
+        finally:
+            INIT_DEADLINE.reset(token)
+        self.assertIs(caught.exception, error)
 
 
 def observed(ref_data, spec, phase="Ok"):

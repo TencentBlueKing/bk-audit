@@ -14,6 +14,11 @@ from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.db import IntegrityError, connection, transaction
 
+from api.bk_base_v4.default import (
+    InitDeadlineBeforeSend,
+    init_deadline_remaining,
+    is_init_deadline_before_send,
+)
 from api.bk_base_v4.serializers import RedisAssetCreateRequestSerializer
 from api.bk_base_v4.tenant import get_bkbase_v4_platform_username
 from apps.meta.constants import ConfigLevelChoices
@@ -39,7 +44,10 @@ from services.web.bkbase.constants import (
     RedisRegistrationState,
     TaskState,
 )
-from services.web.bkbase.exceptions import BKBaseResourceMappingError
+from services.web.bkbase.exceptions import (
+    BKBaseResourceMappingError,
+    RedisRegistrationPending,
+)
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin, RedisConfig
 
@@ -562,12 +570,17 @@ def _bind_redis_or_claim_retry(config, context, payload, saved):
     try:
         ref = _redis_asset_ref(context, payload["asset_name"], recovery_payload=payload)
     except APIRequestError as error:
+        if is_init_deadline_before_send(error):
+            raise
         if not getattr(error, "asset_not_found", False):
             raise BKBaseResourceMappingError(
                 message=f"Redis registration {config.pk} is unknown; asset lookup failed, creation retry disabled"
             ) from None
         # 查无资产不代表没写入，例如上次超时后 BKBase 可能还在处理。
-        if (saved.get("error_http_status"), saved.get("error_code")) != _GATEWAY_ROUTE_NOT_FOUND:
+        if (
+            saved.get("init_not_dispatched") is not True
+            and (saved.get("error_http_status"), saved.get("error_code")) != _GATEWAY_ROUTE_NOT_FOUND
+        ):
             raise BKBaseResourceMappingError(
                 message=(
                     f"Redis registration {config.pk} is unknown and asset absent; previous write may have been "
@@ -580,6 +593,7 @@ def _bind_redis_or_claim_retry(config, context, payload, saved):
                 "registration_state": RedisRegistrationState.REGISTERING,
                 "error_code": "",
                 "error_http_status": None,
+                "init_not_dispatched": False,
                 # 另一个进程重试后即使收到相同 404，旧的查询结果也不能再用来认领。
                 "retry_attempt": saved.get("retry_attempt", 0) + 1,
             },
@@ -599,7 +613,14 @@ def _submit_redis_registration(config, params):
         receipt = create_resource_set(**params)
         if not isinstance(receipt, dict) or receipt.get("asset_name") != config.redis_name_en:
             raise BKBaseResourceMappingError(message="Redis registration receipt does not match requested asset")
-    except (APIRequestError, BKBaseResourceMappingError) as error:
+    except (APIRequestError, BKBaseResourceMappingError, InitDeadlineBeforeSend) as error:
+        if is_init_deadline_before_send(error):
+            _save_redis_registration(
+                config,
+                {"registration_state": RedisRegistrationState.UNKNOWN, "init_not_dispatched": True},
+                expected=config.extra[BKBASE_V4_REDIS_BINDING],
+            )
+            raise
         detail = getattr(error, "data", {})
         code = getattr(error, "gateway_error_code", "")
         if not code and isinstance(detail, dict):
@@ -625,6 +646,7 @@ def register_redis_config(data, params):
     if connection.in_atomic_block:
         raise BKBaseResourceMappingError(message="Redis registration must run outside an outer database transaction")
 
+    init_deadline_remaining()
     config, saved = _get_or_create_redis_registration(data["namespace"], actor, payload, params)
     state = saved.get("registration_state") if saved is not None else None
     if saved is None:
@@ -644,13 +666,16 @@ def register_redis_config(data, params):
     # 已受理或本轮写入成功，只查正式引用，不再发起创建。
     try:
         ref = _redis_asset_ref(context, payload["asset_name"])
-    except (APIRequestError, BKBaseResourceMappingError):
-        raise BKBaseResourceMappingError(
-            message=(
-                f"Redis registration {config.pk} accepted but Ref unverified; "
-                "repeat the same create request to read detail only"
-            )
-        ) from None
+    except (APIRequestError, BKBaseResourceMappingError) as error:
+        if is_init_deadline_before_send(error):
+            raise
+        message = (
+            f"Redis registration {config.pk} accepted but Ref unverified; "
+            "repeat the same create request to read detail only"
+        )
+        if getattr(error, "asset_not_found", False):
+            raise RedisRegistrationPending(payload["asset_name"], message=message) from None
+        raise BKBaseResourceMappingError(message=message) from None
     _save_redis_registration(config, {"registration_state": RedisRegistrationState.BOUND, "resource_ref": ref})
     return config
 

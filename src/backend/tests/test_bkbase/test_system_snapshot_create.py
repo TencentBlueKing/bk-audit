@@ -8,7 +8,12 @@ import requests
 from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase, override_settings
 
-from api.bk_base_v4.default import DataConnCreate, DataConnGet, DataSourceUpdate
+from api.bk_base_v4.default import (
+    DataConnCreate,
+    DataConnGet,
+    DataSourceUpdate,
+    InitDeadlineBeforeSend,
+)
 from services.web.bkbase import source
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.collector.snapshot.system import provision, pull
@@ -750,6 +755,26 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         )
         self.assertIsNone(current)
         create.assert_called_once()
+
+    def test_pre_send_deadline_does_not_strand_claim(self):
+        failure = APIRequestError(result="synthetic budget exhaustion")
+        failure.__cause__ = InitDeadlineBeforeSend("no transport")
+        with mock.patch.object(self.sdk, "data_conn_create", side_effect=failure), self.assertRaises(APIRequestError):
+            provision.ensure_system_snapshot("action")
+        key = bindings.SYSTEM_SNAPSHOT_KEYS["action"][0]
+        saved = self.rows[key].config_value["bkbase_v4"]["default"]["audit"]["creation"]
+        self.assertNotIn("connection", saved["steps"])
+        self.assertEqual(self.posts, [])
+        self.assertEqual(provision.ensure_system_snapshot("action"), "DataConn")
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(self.posts[0][1]["metadata"]["name"], saved["refs"]["connection"]["name"])
+
+    def test_ok_phase_with_failed_task_is_not_pending(self):
+        failed = {"status": {"phase": "Ok"}, "spec": {"current_status": "Failed"}}
+        with self.assertRaisesRegex(BKBaseResourceMappingError, "failed"):
+            provision._ready(failed, {"kind": "Clean"}, "running")
+        with self.assertRaisesRegex(BKBaseResourceMappingError, "failed"):
+            provision._source_state(failed, {"kind": "DataSource"})
 
     def test_existing_unclaimed_source_is_never_adopted(self):
         provision.ensure_system_snapshot("action")

@@ -7,10 +7,12 @@ from copy import deepcopy
 from unittest import mock
 
 import requests
+from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
+from api.bk_base_v4.default import InitDeadlineBeforeSend, StorageAssetCreate
 from apps.meta.models import ResourceType, System
 from services.web.bkbase import storage
 from services.web.bkbase.common import get_bkbase_context
@@ -24,6 +26,8 @@ from services.web.databus.models import RedisConfig, Snapshot, SnapshotStorage
 from services.web.databus.storage.handler.redis import RedisHandler
 from services.web.databus.storage.resources import CreateOrUpdateRedisResource
 from services.web.databus.storage.serializers import RedisConnectionInfoSerializer
+from services.web.entry.init.base import SystemInitHandler
+from services.web.entry.init.v4_wait import V4InitWait
 
 
 @override_settings(
@@ -250,6 +254,50 @@ class RedisRegistrationTests(TransactionTestCase):
 
     def posts(self):
         return [c for c in self.calls if c[0] == "POST" and "/res_manage/assets/storage/" in c[1]]
+
+    def test_v4_init_redis_accepted_lookup_waits_without_second_post(self):
+        self.detail_response = self.response("https://synthetic.test", None, False, "1553002")
+        handler = SystemInitHandler()
+        with mock.patch("services.web.entry.init.base.get_secret_json", return_value=[self.data]), mock.patch.object(
+            handler, "_init_redis", side_effect=lambda _: self.create()
+        ), mock.patch.object(handler, "post_init"), mock.patch(
+            "services.web.entry.init.v4_wait.sleep", side_effect=lambda _: setattr(self, "detail_response", None)
+        ):
+            handler.init_redis(v4_wait=V4InitWait(300))
+        row = RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
+        self.assertEqual(row.extra["bkbase_v4"]["resource_ref"], self.ref)
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_v4_init_redis_lookup_permission_error_fails_immediately(self):
+        self.detail_response = self.response("https://synthetic.test", None, False, "1553002")
+        self.detail_response.status_code = 403
+        self.detail_response.request = requests.Request("GET", self.detail_response.url).prepare()
+        handler = SystemInitHandler()
+        with mock.patch("services.web.entry.init.base.get_secret_json", return_value=[self.data]), mock.patch.object(
+            handler, "_init_redis", side_effect=lambda _: self.create()
+        ), mock.patch.object(handler, "post_init") as post_init, mock.patch(
+            "services.web.entry.init.v4_wait.sleep"
+        ) as wait, self.assertRaises(
+            BKBaseResourceMappingError
+        ):
+            handler.init_redis(v4_wait=V4InitWait(300))
+        post_init.assert_not_called()
+        wait.assert_not_called()
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_v4_init_redis_can_recover_write_that_never_reached_transport(self):
+        with mock.patch.object(
+            StorageAssetCreate, "before_request", side_effect=InitDeadlineBeforeSend("synthetic before send")
+        ), self.assertRaises(APIRequestError):
+            self.create()
+        row = RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
+        self.assertIs(row.extra["bkbase_v4"]["init_not_dispatched"], True)
+        self.assertEqual(self.posts(), [])
+
+        bound = self.create()
+        self.assertEqual(bound.pk, row.pk)
+        self.assertEqual(bound.extra["bkbase_v4"]["resource_ref"], self.ref)
+        self.assertEqual(len(self.posts()), 1)
 
     def test_handler_registers_private_asset_with_platform_identity_and_persists_authoritative_ref(self):
         result = CreateOrUpdateRedisResource().request(deepcopy(self.data))

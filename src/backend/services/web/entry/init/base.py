@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import json
 import os
+from copy import deepcopy
 from typing import Dict, Type
 
 from bk_resource import resource
@@ -48,6 +49,7 @@ from services.web.bkbase.constants import (
 from services.web.bkbase.exceptions import (
     BKBaseFlowOperationPending,
     BKBaseResourceMappingError,
+    RedisRegistrationPending,
 )
 from services.web.databus.collector.snapshot.system.base import (
     create_iam_data_link,
@@ -88,6 +90,7 @@ from services.web.entry.constants import (
     get_manual_event_strategy_config,
 )
 from services.web.entry.init.strategy_storage import init_strategy_storage
+from services.web.entry.init.v4_wait import V4InitWait
 from services.web.entry.serializers import AgentAuthConfigSerializer
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -176,8 +179,14 @@ class SystemInitHandler:
         self.init_es()
         self.init_doris()
         init_strategy_storage()
-        self.init_redis()
-        if self.init_snapshot() is False:
+        if get_bkbase_version() == BKBaseVersion.V4:
+            wait = V4InitWait.from_settings()
+            self.init_redis(v4_wait=wait)
+            snapshot_ready = self.init_snapshot(v4_wait=wait)
+        else:
+            self.init_redis()
+            snapshot_ready = self.init_snapshot()
+        if snapshot_ready is False:
             return False
         self.init_event()
         self.create_or_update_plugin_etl()
@@ -277,19 +286,52 @@ class SystemInitHandler:
         resource.databus.storage.create_or_update_redis(redis_config)
         print("[InitRedis] Finished")
 
-    def init_redis(self):
+    def init_redis(self, *, v4_wait: V4InitWait | None = None) -> None:
         if self.pre_check(INIT_REDIS_FISHED_KEY):
             return
         redis_configs = get_secret_json("BKAPP_INIT_REDIS_CONFIG")
-        for redis_config in redis_configs:
-            self._init_redis(redis_config)
+        if v4_wait is None:
+            for redis_config in redis_configs:
+                self._init_redis(redis_config)
+        else:
+            unfinished = list(redis_configs)
+
+            def advance():
+                pending = {}
+                for config in unfinished[:]:
+                    # 初始化转换可能写入连接配置；原声明留给后续同配置续跑。
+                    try:
+                        self._init_redis(deepcopy(config))
+                    except RedisRegistrationPending as error:
+                        pending[error.asset_name] = "waiting for Redis asset reference"
+                    else:
+                        unfinished.remove(config)
+                return pending
+
+            v4_wait.until_ready("Redis registration", advance)
         self.post_init(INIT_REDIS_FISHED_KEY)
 
-    def init_snapshot(self):
+    def init_snapshot(self, *, v4_wait: V4InitWait | None = None):
         if get_bkbase_version() == BKBaseVersion.V4:
             kinds = ["action", "resource_type"]
             if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
                 kinds.append("user")
+            if v4_wait is not None:
+
+                def advance():
+                    pending = {}
+                    for kind in kinds[:]:
+                        waiting_for = create_iam_data_link(kind, init_redis_fallback=self._resolve_snapshot_redis)
+                        if waiting_for == "migration binding":
+                            raise BKBaseResourceMappingError(message=f"IAM V4 {kind} requires a migration binding")
+                        if waiting_for is None:
+                            kinds.remove(kind)
+                        else:
+                            pending[kind] = waiting_for
+                    return pending
+
+                v4_wait.until_ready("IAM system snapshot", advance)
+                return True
             ready = True
             for kind in kinds:
                 waiting_for = create_iam_data_link(kind, init_redis_fallback=self._resolve_snapshot_redis)

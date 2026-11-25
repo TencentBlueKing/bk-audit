@@ -22,6 +22,8 @@ from typing import Dict
 from unittest import mock
 
 from django.conf import settings
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
@@ -49,6 +51,7 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
 )
 from services.web.entry.init.base import SystemInitHandler
+from services.web.entry.init.v4_wait import BKBaseV4InitTimeout, V4InitWait
 from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import (
@@ -61,6 +64,41 @@ from tests.base import TestCase
 
 
 class SystemSnapshotInitGateTests(SimpleTestCase):
+    @override_settings(BKBASE_API_VERSION="v4", SNAPSHOT_USERINFO_RESOURCE_URL="")
+    def test_v4_snapshots_progress_to_ready_in_one_init(self):
+        handler = SystemInitHandler()
+        with mock.patch(
+            "services.web.entry.init.base.create_iam_data_link", side_effect=["DataConn", None, "Clean", None]
+        ) as advance, mock.patch("services.web.entry.init.v4_wait.sleep") as wait:
+            self.assertTrue(handler.init_snapshot(v4_wait=V4InitWait(300)))
+        self.assertEqual(
+            [entry.args[0] for entry in advance.call_args_list], ["action", "resource_type", "action", "action"]
+        )
+        self.assertEqual(wait.call_args_list, [mock.call(5), mock.call(5)])
+
+    @override_settings(BKBASE_API_VERSION="v4", SNAPSHOT_USERINFO_RESOURCE_URL="")
+    def test_v4_snapshot_timeout_keeps_pending_phase(self):
+        clock = [0]
+        with mock.patch("services.web.entry.init.v4_wait.monotonic", side_effect=lambda: clock[0]), mock.patch(
+            "services.web.entry.init.v4_wait.sleep", side_effect=lambda seconds: clock.__setitem__(0, seconds)
+        ), mock.patch(
+            "services.web.entry.init.base.create_iam_data_link", side_effect=["DataConn", None]
+        ) as advance, self.assertRaisesRegex(
+            BKBaseV4InitTimeout, "action=DataConn"
+        ):
+            SystemInitHandler().init_snapshot(v4_wait=V4InitWait(2))
+        self.assertEqual(advance.call_count, 2)
+
+    @override_settings(BKBASE_API_VERSION="v4", SNAPSHOT_USERINFO_RESOURCE_URL="")
+    def test_v4_snapshot_missing_migration_binding_does_not_wait(self):
+        with mock.patch(
+            "services.web.entry.init.base.create_iam_data_link", return_value="migration binding"
+        ), mock.patch("services.web.entry.init.v4_wait.sleep") as wait, self.assertRaisesRegex(
+            BKBaseResourceMappingError, "migration binding"
+        ):
+            SystemInitHandler().init_snapshot(v4_wait=V4InitWait(300))
+        wait.assert_not_called()
+
     def test_init_snapshot_only_v4_passes_redis_fallback(self):
         handler = SystemInitHandler()
         for version in ("v3", "v4"):
@@ -79,7 +117,8 @@ class SystemSnapshotInitGateTests(SimpleTestCase):
                     create.call_args_list, [mock.call("action", **expected), mock.call("resource_type", **expected)]
                 )
 
-    def test_init_imports_strategy_storage_before_default_strategy(self):
+    @override_settings(BKBASE_API_VERSION="v3", BKBASE_V4_INIT_TIMEOUT_SECONDS="0")
+    def test_v3_init_preserves_strategy_storage_order_without_v4_budget(self):
         calls = []
         methods = (
             "pre_init",
@@ -108,10 +147,11 @@ class SystemSnapshotInitGateTests(SimpleTestCase):
         self.assertEqual(calls[3:6], ["init_doris", "strategy_storage", "init_redis"])
         self.assertLess(calls.index("strategy_storage"), calls.index("init_system_rule_audit"))
 
-    def test_init_stops_before_event_when_snapshot_is_pending(self):
+    def test_init_command_times_out_before_event_when_v4_snapshot_is_pending(self):
         for multi_tenant in (False, True):
             with self.subTest(multi_tenant=multi_tenant), override_settings(
                 BKBASE_API_VERSION="v4",
+                BKBASE_V4_INIT_TIMEOUT_SECONDS="300",
                 BKPAAS_MULTI_TENANT_MODE=multi_tenant,
                 SNAPSHOT_USERINFO_RESOURCE_URL="",
             ), mock.patch.multiple(
@@ -122,11 +162,15 @@ class SystemSnapshotInitGateTests(SimpleTestCase):
                 init_doris=mock.DEFAULT,
                 init_redis=mock.DEFAULT,
             ), mock.patch(
-                "services.web.entry.init.base.create_iam_data_link", side_effect=["DataSource", None]
+                "services.web.entry.init.base.create_iam_data_link", return_value="DataSource"
+            ), mock.patch(
+                "services.web.entry.init.v4_wait.monotonic", side_effect=[0, 0, 300, 300]
             ), mock.patch.object(
                 SystemInitHandler, "init_event"
-            ) as init_event:
-                self.assertIs(SystemInitHandler().init(), False)
+            ) as init_event, self.assertRaisesRegex(
+                CommandError, "IAM system snapshot.*action=DataSource"
+            ):
+                call_command("init_system")
             init_event.assert_not_called()
 
     @override_settings(BKBASE_API_VERSION="v4", SNAPSHOT_USERINFO_RESOURCE_URL="")
