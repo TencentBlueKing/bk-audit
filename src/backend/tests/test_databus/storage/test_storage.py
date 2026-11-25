@@ -125,7 +125,7 @@ class StorageTest(TestCase):
         self.assertFalse(CreateOrUpdateRedisResource.support_data_collect)
 
     def test_redis_redacted_log_keeps_context_without_password(self):
-        """BKSEC 1578945：自记录脱敏日志保留排障字段、剔除密码（含异常分支）"""
+        """BKSEC 1578945：自记录脱敏日志保留排障字段、剔除密码（成功路径）"""
         from services.web.databus.storage.resources import CreateOrUpdateRedisResource
 
         req = {
@@ -133,12 +133,51 @@ class StorageTest(TestCase):
             "connection_info": {"host": "synth.example.com", "port": 6379, "password": "SYNTH-PWD-123"},
         }
         with self.assertLogs("app", level="INFO") as captured:
-            CreateOrUpdateRedisResource._log_redacted(req, {"redis_id": 1})
-            CreateOrUpdateRedisResource._log_redacted(req, {"error": "synth bkbase failure"})
+            CreateOrUpdateRedisResource()._log_redacted(req, {"redis_id": 1})
         text = "\n".join(captured.output)
         self.assertNotIn("SYNTH-PWD-123", text)
         self.assertIn("synth.example.com", text)
-        self.assertIn("synth bkbase failure", text)
+        self.assertIn("***", text)
+
+    def test_redis_failure_log_records_controlled_fields_only(self):
+        """BKSEC 1578945（评审P1）：失败日志只记受控字段，异常消息含合成凭据也不外泄"""
+        from services.web.databus.storage.resources import CreateOrUpdateRedisResource
+
+        req = {
+            "namespace": "default",
+            "connection_info": {"host": "synth.example.com", "port": 6379, "password": "SYNTH-PWD-123"},
+        }
+        # 上游异常消息携带未登记的合成凭据（模拟 BKBase 错误响应回显口令原文）
+        err = RuntimeError("synthetic upstream failure SYNTH-LEAK-PWD-456 SYNTH-LEAK-TOKEN")
+        with self.assertLogs("app", level="INFO") as captured:
+            CreateOrUpdateRedisResource()._log_failure(req, err)
+        text = "\n".join(captured.output)
+        self.assertNotIn("SYNTH-LEAK-PWD-456", text)      # 异常消息中的凭据不落日志
+        self.assertNotIn("SYNTH-LEAK-TOKEN", text)
+        self.assertNotIn("synthetic upstream failure", text)  # str(err) 自由文本不落日志
+        self.assertIn("RuntimeError", text)               # 异常类型（受控字段）
+        self.assertIn("RequestID =>", text)               # 请求 ID（受控字段）
+        self.assertIn("synth.example.com", text)          # 脱敏请求体保留排障上下文
+        self.assertNotIn("SYNTH-PWD-123", text)           # 请求体密码脱敏
+
+    def test_redis_failure_log_via_request_path(self):
+        """BKSEC 1578945（评审P1）：请求路径异常分支走受控失败日志（不落 str(err)）"""
+        from services.web.databus.storage.resources import CreateOrUpdateRedisResource
+
+        with mock.patch.object(
+            CreateOrUpdateRedisResource,
+            "perform_request",
+            side_effect=RuntimeError("synthetic bkbase error SYNTH-LEAK-PWD-789"),
+        ):
+            instance = CreateOrUpdateRedisResource()
+            with self.assertLogs("app", level="INFO") as captured:
+                with self.assertRaises(RuntimeError):
+                    instance.request(request_data=CREATE_OR_UPDATE_REDIS_PARAMS)
+        text = "\n".join(captured.output)
+        self.assertNotIn("SYNTH-LEAK-PWD-789", text)
+        self.assertNotIn("synthetic bkbase error", text)
+        self.assertIn("[Failed]", text)
+        self.assertIn("RuntimeError", text)
 
     @mock.patch("bk_resource.api.bk_base.create_resource_set", mock.Mock(return_value={}))
     @mock.patch("services.web.databus.storage.handler.redis.get_request_username", mock.Mock(return_value=USERNAME))
