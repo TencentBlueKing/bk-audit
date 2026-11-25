@@ -245,10 +245,10 @@ class AutoFlowChainTest(TicketTest):
                 process_one_risk(risk_id=risk.risk_id, chain_depth=2)
                 ticket_create.assert_called_once()
 
-    def test_process_one_risk_uses_late_ack(self):
-        """短 TTL + owner token 就绪后开启延迟确认：消息不丢；崩溃恢复由锁过期后的周期扫描兜底。"""
-        self.assertTrue(process_one_risk.acks_late)
-        self.assertTrue(process_one_risk.reject_on_worker_lost)
+    def test_process_one_risk_uses_early_ack(self):
+        """采用默认早 ACK：避免连接断连后消息重投导致重复执行；任务丢失由周期扫描兜底。"""
+        self.assertFalse(process_one_risk.acks_late)
+        self.assertFalse(process_one_risk.reject_on_worker_lost)
 
     def test_handler_match_restricts_auto_flow_statuses(self):
         """自动流转 match 只匹配各自的状态，避免手动操作状态被自动调度。"""

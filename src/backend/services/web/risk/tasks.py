@@ -620,8 +620,6 @@ _AUTO_FLOW_STATUSES = (RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_P
 @celery_app.task(
     queue="risk",
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
-    acks_late=True,
-    reject_on_worker_lost=True,
 )
 def process_one_risk(*, risk_id: str, chain_depth: int = 0):
     """
