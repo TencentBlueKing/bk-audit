@@ -1131,7 +1131,7 @@ def record_plugin_failure(plugin, error, *, poll_count=None):
     )
 
 
-def configure_plugin(handler):
+def configure_plugin(handler, *, raise_errors=False):
     """插件初始化逐次推进，有界重试并隔离单插件错误。"""
     if get_bkbase_version() == BKBaseVersion.V3:
         return _configure_plugin(handler)
@@ -1150,6 +1150,9 @@ def configure_plugin(handler):
     except PLUGIN_OPERATION_EXCEPTIONS as error:
         logger.exception("BKBase V4 plugin operation failed: %s", plugin.pk)
         record_plugin_failure(plugin, error, poll_count=count)
+        if raise_errors:
+            # 部署严格入口不能把权限/路由等明确失败吞成 Pending。
+            raise
         return None
     ready = (plugin.bkbase_v4_resources or {}).get("ready", False)
     binding = plugin.bkbase_v4_resources or {}

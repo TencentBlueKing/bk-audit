@@ -93,6 +93,7 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
+from services.web.entry.init.deploy import StrictSystemInit
 from services.web.entry.init.strategy_storage import init_strategy_storage
 from services.web.entry.init.v4_wait import V4InitWait
 from services.web.entry.serializers import AgentAuthConfigSerializer
@@ -170,6 +171,14 @@ def adapt_auth_password(config: dict) -> None:
 
 
 class SystemInitHandler:
+    def init_strict(self, phase, deployment):
+        """显式两段入口不改变无标志的历史初始化流程。"""
+        runner = StrictSystemInit(self, deployment)
+        if phase == "bootstrap":
+            runner.bootstrap()
+        else:
+            runner.finalize()
+
     def init(self):
         """
         执行系统初始化。
@@ -523,7 +532,7 @@ class SystemInitHandler:
                 message=f"内置资产本地 ResourceType 缺失：{system_id} [{', '.join(sorted(missing))}]，请等待元数据同步后重试"
             )
 
-    def init_asset(self):
+    def init_asset(self, *, strict=False):
         """
         初始化资产
         """
@@ -550,7 +559,16 @@ class SystemInitHandler:
         for asset, config in assets.items():
             resource_type_id = asset.id
             map_key = f"{system_id}-{resource_type_id}"
-            if status_map.get(map_key):
+            if strict:
+                # 上轮可能在后续资产失败，尚未来得及保存整份完成标记；以已落库的原资产为准。
+                if Snapshot.objects.filter(
+                    system_id=system_id,
+                    resource_type_id=resource_type_id,
+                    join_data_type=JoinDataType.ASSET,
+                    status__in=[SnapshotRunningStatus.PREPARING, SnapshotRunningStatus.RUNNING],
+                ).exists():
+                    continue
+            elif status_map.get(map_key):
                 continue
             try:
                 toggle_params = {
@@ -568,6 +586,8 @@ class SystemInitHandler:
                 resource.databus.collector.toggle_join_data(toggle_params)
                 status_map[map_key] = True
             except Exception as err:  # pylint: disable=broad-except
+                if strict:
+                    raise
                 print(f"[InitAsset] Failed => {system_id}-{resource_type_id}: {err}")
                 status_map[map_key] = False
         GlobalMetaConfig.set(INIT_ASSET_FINISHED_KEY, status_map)
