@@ -56,6 +56,7 @@ from apps.meta.permissions import SystemPermissionHandler
 from apps.meta.utils.saas import get_saas_url
 from apps.permission.handlers.actions import ActionEnum
 from core.cache import CacheType
+from core.tenant import TENANT_ID_HEADER
 from core.utils.data import replenish_params
 from core.utils.time import format_date_string
 from services.web.bkbase import clean as bkbase_clean
@@ -556,13 +557,17 @@ class ToggleJoinDataResource(CollectorMeta):
         pull_handler = HttpPullHandler(system, resource_type, Snapshot(), join_data_type)
         # 触发url校验
         _ = pull_handler.url
+        headers = pull_handler.callback_headers
+        # 自身共享回调不跟随跳转，防止实例租户头被带到第三方；其他路径保持原行为。
+        request_options = {"allow_redirects": False} if TENANT_ID_HEADER in headers else {}
         web = requests.session()
         try:
             resp = web.post(
                 pull_handler.url,
                 json=body,
-                headers={"Authorization": pull_handler.authorization},
+                headers=headers,
                 timeout=PULL_HANDLER_PRE_CHECK_TIMEOUT,
+                **request_options,
             )
             content = resp.json()
             status = resp.status_code

@@ -399,6 +399,8 @@ HTTP_PULL_REDIS_TIMEOUT = os.getenv("BKAPP_HTTP_PULL_REDIS_TIMEOUT", "360d")
 
 # IAM
 BK_IAM_SYSTEM_ID = os.getenv("BKAPP_IAM_SYSTEM_ID", "bk-audit")
+# 本地内置资产身份与 IAM 后端解耦；仅纯 V4 新装显式使用 iam_v4_bk-audit。
+BUILTIN_ASSET_SYSTEM_ID = os.getenv("BKAPP_BUILTIN_ASSET_SYSTEM_ID", "")
 BK_IAM_SYSTEM_NAME = os.getenv("BKAPP_IAM_SYSTEM_NAME", "审计中心")
 BK_IAM_USE_APIGATEWAY = True
 BK_IAM_APIGATEWAY_URL = (os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL") or "").strip()

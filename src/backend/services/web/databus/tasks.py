@@ -39,6 +39,7 @@ from api.bk_base.constants import StorageType
 from apps.exceptions import CoreException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from apps.meta.utils.builtin_assets import get_builtin_asset_system_id
 from apps.notice.handlers import ErrorMsgHandler
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.lock import lock
@@ -676,7 +677,7 @@ def sync_asset_bkbase_rt_ids():
 
         snapshot: Optional[Snapshot] = (
             Snapshot.objects.filter(
-                system_id=resource_cls.system_id,
+                system_id=get_builtin_asset_system_id(),
                 resource_type_id=resource_cls.id,
                 status=SnapshotRunningStatus.RUNNING.value,
                 bkbase_data_id__isnull=False,

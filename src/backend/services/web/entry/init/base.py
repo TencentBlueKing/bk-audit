@@ -28,8 +28,12 @@ from django.utils.translation import gettext_lazy
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
 from apps.itsm.utils import is_itsm_v4_enabled
-from apps.meta.models import Field, GlobalMetaConfig
+from apps.meta.models import Field, GlobalMetaConfig, ResourceType, System
 from apps.meta.tasks import sync_iam_systems
+from apps.meta.utils.builtin_assets import (
+    BUILTIN_ASSET_RESOURCE_TYPES,
+    get_builtin_asset_system_id,
+)
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.kms import (
@@ -488,12 +492,45 @@ class SystemInitHandler:
         create_or_update_plugin_etl()
         print("[CreateOrUpdatePluginEtl] Stop")
 
+    def _precheck_builtin_assets(self, system_id: str) -> None:
+        """切换本地资产身份前阻止自动迁移，并确认六类本地元数据已同步。"""
+        if system_id == settings.BK_IAM_SYSTEM_ID:
+            return
+        resource_type_ids = {asset.id for asset in BUILTIN_ASSET_RESOURCE_TYPES}
+        legacy_assets = list(
+            Snapshot.objects.filter(
+                system_id=settings.BK_IAM_SYSTEM_ID,
+                resource_type_id__in=resource_type_ids,
+                join_data_type=JoinDataType.ASSET.value,
+            ).values_list("resource_type_id", flat=True)
+        )
+        if legacy_assets:
+            raise ParamsNotValid(
+                message=(
+                    f"内置资产系统 ID 切换冲突：{settings.BK_IAM_SYSTEM_ID} 已登记资产 "
+                    f"{', '.join(sorted(legacy_assets))}，保留原快照和 RT；不自动迁移到 {system_id}"
+                )
+            )
+        if not System.objects.filter(system_id=system_id).exists():
+            raise ParamsNotValid(message=f"内置资产本地 System 缺失：{system_id}，请等待元数据同步后重试")
+        available = set(
+            ResourceType.objects.filter(system_id=system_id, resource_type_id__in=resource_type_ids).values_list(
+                "resource_type_id", flat=True
+            )
+        )
+        if missing := resource_type_ids - available:
+            raise ParamsNotValid(
+                message=f"内置资产本地 ResourceType 缺失：{system_id} [{', '.join(sorted(missing))}]，请等待元数据同步后重试"
+            )
+
     def init_asset(self):
         """
         初始化资产
         """
 
         print("[InitAsset] Start")
+        system_id = get_builtin_asset_system_id()
+        self._precheck_builtin_assets(system_id)
         status_map = GlobalMetaConfig.get(INIT_ASSET_FINISHED_KEY, default={})
         assets: Dict[Type[ResourceTypeMeta], Dict] = {
             ResourceEnum.RISK: {},
@@ -511,7 +548,7 @@ class SystemInitHandler:
             },
         }
         for asset, config in assets.items():
-            system_id, resource_type_id = asset.system_id, asset.id
+            resource_type_id = asset.id
             map_key = f"{system_id}-{resource_type_id}"
             if status_map.get(map_key):
                 continue
@@ -623,7 +660,7 @@ class SystemInitHandler:
         print("[InitSystemRuleAudit] Start")
         snapshot = (
             Snapshot.objects.filter(
-                system_id=ResourceEnum.MANUAL_EVENT.system_id,
+                system_id=get_builtin_asset_system_id(),
                 resource_type_id=ResourceEnum.MANUAL_EVENT.id,
                 bkbase_table_id__isnull=False,
                 join_data_type=JoinDataType.ASSET.value,

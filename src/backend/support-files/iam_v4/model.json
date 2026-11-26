@@ -7,7 +7,11 @@
     {"id":"link_table","name":"联表","ancestors":["scene"]},
     {"id":"risk","name":"风险","ancestors":["scene"]},
     {"id":"notice_group","name":"通知组","ancestors":["scene"]},
-    {"id":"tag","name":"标签","ancestors":[]}
+    {"id":"tag","name":"标签","ancestors":[]},
+    {"id":"strategy_tag","name":"策略标签","ancestors":[]},
+    {"id":"ticket_permission","name":"风险工单权限","ancestors":[]},
+    {"id":"ticket_node","name":"风险处理记录","ancestors":[]},
+    {"id":"manual_event","name":"手工事件","ancestors":[]}
   ],
   "actions": [
     {"id":"view_system","name":"系统查看","resource_type_id":"system"},

@@ -1,9 +1,11 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from apps.permission.iam_v4_model.model import load_model
+from apps.permission.iam_v4_model.reconcile import build_plan
 
 MODEL = Path(__file__).resolve().parents[2] / "support-files/iam_v4/model.json"
 CONFIG = {
@@ -17,12 +19,31 @@ CONFIG = {
 
 def test_reference_model_preserves_ancestor_role_actions():
     snapshot = load_model(MODEL, **CONFIG)
-    assert [len(snapshot.resource_types), len(snapshot.actions), len(snapshot.roles)] == [7, 38, 6]
+    assert [len(snapshot.resource_types), len(snapshot.actions), len(snapshot.roles)] == [11, 38, 6]
     assert snapshot.actions["edit_strategy"]["resource_type_id"] == "strategy"
     assert {"id": "edit_strategy", "resource_type_id": "scene"} in snapshot.roles["scene_admin"]["actions"]
     assert snapshot.system["clients"] == ["audit_extra", "audit_site"]
     assert snapshot.system["managers"] == ["model_owner"]
     assert snapshot.system["callback_url"] == CONFIG["callback_url"]
+
+
+def test_builtin_assets_extend_only_four_root_resources():
+    """从原七类模型升级时，计划只注册四类，无 Action/角色/授权变化。"""
+    target = load_model(MODEL, **CONFIG)
+    original_ids = {"system", "scene", "strategy", "link_table", "risk", "notice_group", "tag"}
+    current = replace(
+        target, resource_types={key: val for key, val in target.resource_types.items() if key in original_ids}
+    )
+    plan = build_plan(target, current, gateway_url="https://iam.example.test", tenant_id="system")
+    assert not plan.blocked
+    assert [(step.operation, step.kind, step.ids) for step in plan.steps] == [
+        ("create", "resource_type", ("manual_event",)),
+        ("create", "resource_type", ("strategy_tag",)),
+        ("create", "resource_type", ("ticket_node",)),
+        ("create", "resource_type", ("ticket_permission",)),
+    ]
+    for step in plan.steps:
+        assert step.body[0]["ancestors"] == []
 
 
 @pytest.mark.parametrize("scope", ["tag", "strategy"])

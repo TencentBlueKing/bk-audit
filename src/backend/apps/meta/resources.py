@@ -162,6 +162,7 @@ from apps.meta.serializers import (
     UploadDataMapFileRequestSerializer,
     UploadDataMapFileResponseSerializer,
 )
+from apps.meta.utils.builtin_assets import builtin_asset_callback_headers
 from apps.meta.utils.globals import Globals
 from apps.meta.utils.system import (
     PermissionSorter,
@@ -910,7 +911,10 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
             )
             return []
         request_body = {"type": resource_type.resource_type_id, "method": FETCH_INSTANCE_SCHEMA_METHOD}
-        request_header = {"Authorization": system.base64_token}
+        request_header = {
+            "Authorization": system.base64_token,
+            **builtin_asset_callback_headers(system.system_id, resource_type.resource_type_id),
+        }
         # 请求数据
         web = requests.session()
         try:

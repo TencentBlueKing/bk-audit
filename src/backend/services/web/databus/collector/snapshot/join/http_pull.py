@@ -22,6 +22,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from apps.meta.models import ResourceType, System
+from apps.meta.utils.builtin_assets import builtin_asset_callback_headers
 from services.web.bkbase import source as bkbase_source
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
@@ -122,6 +123,14 @@ class HttpPullHandler:
         return self.system.base64_token
 
     @property
+    def callback_headers(self) -> dict:
+        """预检和实际 PULL 共用认证头，仅内置资产额外携带实例租户。"""
+        headers = {"Authorization": self.authorization}
+        if self.join_data_type == JoinDataType.ASSET:
+            headers.update(builtin_asset_callback_headers(self.system_id, self.resource_type_id))
+        return headers
+
+    @property
     def config_name(self):
         if self.join_data_type == JoinDataType.ASSET:
             return ASSET_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id).replace(
@@ -212,7 +221,7 @@ class HttpPullHandler:
                             "url": self.url,
                             "headers": {
                                 "Content-type": "application/json",
-                                "Authorization": self.authorization,
+                                **self.callback_headers,
                             },
                             "body": {
                                 "time": {
