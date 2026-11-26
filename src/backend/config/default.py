@@ -644,8 +644,10 @@ if BKPAAS_MULTI_TENANT_MODE and not AUDIT_INSTANCE_TENANT_ID:
 
 # 外部调用 X-Bk-Tenant-Id Header 取值
 # 多租户模式 = AUDIT_INSTANCE_TENANT_ID（不可为空，已 fail-fast 校验）
-# 非多租户模式 = BKPAAS_APP_TENANT_ID
-BK_TENANT_ID = AUDIT_INSTANCE_TENANT_ID or os.getenv("BKPAAS_APP_TENANT_ID")
+# 非多租户模式保留原有 PaaS 租户及 tencent 缺省值，忽略实例绑定配置。
+BK_TENANT_ID = (
+    AUDIT_INSTANCE_TENANT_ID if BKPAAS_MULTI_TENANT_MODE else (os.getenv("BKPAAS_APP_TENANT_ID") or "tencent")
+)
 BKBASE_V4_TENANT = os.getenv("BKAPP_BKBASE_V4_TENANT", BK_TENANT_ID if BKPAAS_MULTI_TENANT_MODE else "default")
 
 # 租户前缀（共享资源命名空间化：队列/索引名等）
