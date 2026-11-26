@@ -82,6 +82,7 @@ export default {
     '当前期限已到期。如需延长使用，请续期。': 'This rule has expired. Renew it to keep using it.',
     有效期: 'Validity',
     蓝鲸流程服务: 'BlueKing Process Service',
+    加载中: 'Loading',
     ITSM单号: 'ITSM ticket',
     申请状态: 'Request status',
     审批中: 'Approving',

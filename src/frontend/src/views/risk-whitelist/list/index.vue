@@ -35,16 +35,19 @@
         unique-select
         @update:model-value="handleSearch" />
     </div>
-    <tdesign-list
+      <tdesign-list
       ref="listRef"
       :columns="columns"
       :data-source="dataSource"
       is-need-scene-id
+      :persist-table-filters="false"
       :row-class-name="getRowClassName"
       row-key="id"
       scene-id-key="scene_id"
+      :search-params="linkedSearchParams"
       use-skeleton
-      @clear-search="handleClearSearch">
+      @clear-search="handleClearSearch"
+      @filter-change="handleTableFilterChange">
       <template #empty>
         <div
           class="list-empty"
@@ -72,14 +75,14 @@
   </div>
 </template>
 <script setup lang="tsx">
-  import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
   import RiskWhitelistService from '@service/risk-whitelist';
 
   import type RiskWhitelist from '@model/risk-whitelist/whitelist';
-  import type { ContainsFieldOption } from '@model/risk-whitelist/whitelist';
+  import type { ContainsFieldOption, WhitelistFlow } from '@model/risk-whitelist/whitelist';
 
   import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
@@ -102,6 +105,7 @@
   import HitRecordSideslider from '../components/hit-record-sideslider.vue';
   import RejectDialog from '../components/reject-dialog.vue';
   import RenewDialog from '../components/renew-dialog.vue';
+  import { WHITELIST_FLOW_STATE_KEY } from '../components/flow-state';
   import StatusFlowPopover from '../components/status-flow-popover.vue';
   import ToggleDialog from '../components/toggle-dialog.vue';
 
@@ -242,6 +246,57 @@
     },
   ]);
 
+  /** 与表头筛选双向联动的字段（对齐执行记录 / 风险管理） */
+  const linkedFilterIds = ['whitelist_type', 'status'] as const;
+  const fieldValue = (id: string) => (
+    searchValue.value
+      .find(item => item.id === id)
+      ?.values
+      ?.map(child => child.id)
+      .filter(Boolean)
+      .join(',') || undefined
+  );
+  const linkedSearchParams = computed(() => ({
+    whitelist_type: fieldValue('whitelist_type'),
+    status: fieldValue('status'),
+  }));
+  let syncingTableFilter = false;
+
+  const optionName = (fieldId: string, valueId: string) => {
+    const field = searchData.value.find(item => item.id === fieldId);
+    return field?.children?.find(item => item.id === valueId)?.name || valueId;
+  };
+
+  const upsertChip = (id: string, values: Array<{ id: string; name: string }>) => {
+    const index = searchValue.value.findIndex(item => item.id === id);
+    if (!values.length) {
+      if (index >= 0) searchValue.value.splice(index, 1);
+      return;
+    }
+    const name = searchData.value.find(item => item.id === id)?.name || id;
+    const chip = { id, name, values };
+    if (index >= 0) {
+      searchValue.value[index] = chip;
+      return;
+    }
+    searchValue.value.push(chip);
+  };
+
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    syncingTableFilter = true;
+    linkedFilterIds.forEach((id) => {
+      if (!Object.prototype.hasOwnProperty.call(filters, id)) return;
+      const raw = filters[id];
+      const ids = (Array.isArray(raw) ? raw : (raw ? [raw] : []))
+        .map(value => String(value))
+        .filter(Boolean);
+      upsertChip(id, ids.map(valueId => ({ id: valueId, name: optionName(id, valueId) })));
+    });
+    nextTick(() => {
+      syncingTableFilter = false;
+    });
+  };
+
   /** 切场景或规则变更后刷新包含条件选项；并剔除已不存在的已选字段 */
   const loadContainsFields = () => {
     if (!ensureManageAccessBeforeFetch()) {
@@ -299,6 +354,39 @@
   };
 
   const approvingIds = ref(new Set<number | string>());
+  /** 当前页待审批/已驳回的 ITSM flow（detail_info 批量预取） */
+  const flowMap = ref<Record<string, WhitelistFlow>>({});
+  const flowLoadingIds = ref<Set<string>>(new Set());
+  let flowRequestSeq = 0;
+  const FLOW_STATUS_SET = new Set(['pending', 'rejected']);
+  // 注入给状态气泡：flow 回填时不重算 columns，避免 hover 中的 popover remount 残留
+  provide(WHITELIST_FLOW_STATE_KEY, { flowMap, flowLoadingIds });
+
+  const prefetchFlows = (rows: RiskWhitelist[]) => {
+    const ids = rows
+      .filter(item => FLOW_STATUS_SET.has(item.status) && item.id !== '' && item.id != null)
+      .map(item => item.id);
+    const seq = ++flowRequestSeq;
+    flowMap.value = {};
+    if (!ids.length) {
+      flowLoadingIds.value = new Set();
+      return;
+    }
+    flowLoadingIds.value = new Set(ids.map(id => String(id)));
+    RiskWhitelistService.fetchDetailInfo({ id: ids })
+      .then((map) => {
+        if (seq !== flowRequestSeq) return;
+        flowMap.value = map;
+      })
+      .catch(() => {
+        if (seq !== flowRequestSeq) return;
+        flowMap.value = {};
+      })
+      .finally(() => {
+        if (seq !== flowRequestSeq) return;
+        flowLoadingIds.value = new Set();
+      });
+  };
 
   const approve = (row: RiskWhitelist) => {
     if (approvingIds.value.has(row.id)) return;
@@ -465,7 +553,7 @@
   };
 
   const columns = computed(() => {
-    // 依赖 moreOpenId，保证菜单开关时操作列重渲染
+    // 仅依赖 moreOpenId：菜单开关需重渲染操作列；flow 通过 provide 更新，避免状态气泡 remount
     void moreOpenId.value;
     return [
       {
@@ -519,7 +607,13 @@
           list: filterList(WHITELIST_STATUS_TEXT),
         },
         cell: (_: unknown, { row }: { row: RiskWhitelist }) => (
-          <StatusFlowPopover applicant={row.applicant} flow={row.flow} status={row.status} />
+          <StatusFlowPopover
+            applicant={row.applicant}
+            itsmSn={row.itsm_sn}
+            itsmUrl={row.itsm_url}
+            rowId={row.id}
+            status={row.status}
+          />
         ),
       },
       {
@@ -568,6 +662,9 @@
 
   const dataSource = (params: Record<string, any>) => {
     if (!ensureManageAccessBeforeFetch()) {
+      flowRequestSeq += 1;
+      flowMap.value = {};
+      flowLoadingIds.value = new Set();
       return Promise.resolve(EMPTY_LIST);
     }
     const search = buildSearchParams();
@@ -577,13 +674,18 @@
     return RiskWhitelistService.fetchList({
       ...params,
       ...search,
-    }).then(data => ({
-      ...data,
-      results: pinHighlightRow(data.results || []),
-    }));
+    }).then((data) => {
+      const results = pinHighlightRow(data.results || []);
+      prefetchFlows(results);
+      return {
+        ...data,
+        results,
+      };
+    });
   };
 
   const handleSearch = () => {
+    if (syncingTableFilter) return;
     if (!ensureManageAccessBeforeFetch()) return;
     // resetSearch：删除某一搜索条件后必须清掉 paramsMemo 里旧字段，否则列表不恢复
     listRef.value?.fetchData(buildSearchParams(), { resetSearch: true });

@@ -71,7 +71,6 @@
 
   import useWhitelistRoleText, {
     getWhitelistAdventureAdminImpact,
-    getWhitelistApplyHint,
     getWhitelistEffectImpact,
     getWhitelistRiskCloseImpact,
   } from '@hooks/use-whitelist-role-text';
@@ -90,12 +89,15 @@
     customDays?: number;
     source?: 'menu' | 'risk';
     expireAt?: string;
+    /** 风险所属 / 规则所属场景；用于场景域管理员判权 */
+    sceneId?: string | number | null;
     /** 菜单编辑：标题改为「确认修改白名单」，确认按钮为「确定」 */
     mode?: 'create' | 'edit';
   }
 
   const { t } = useI18n();
-  const roleText = useWhitelistRoleText();
+  const activeSceneId = ref<string | number | null>(null);
+  const roleText = useWhitelistRoleText(activeSceneId);
   const { isAdmin } = roleText;
   const isShow = ref(false);
   const scope = ref<MatchScope>({ groups: [] });
@@ -125,10 +127,6 @@
     const lines: string[] = [];
     const type = whitelistType.value;
     const admin = isAdmin.value;
-    if (!admin && source.value === 'risk') {
-      const hint = getWhitelistApplyHint(type, false);
-      if (hint) lines.push(hint);
-    }
     // 管理员从风险单冒险加白：确认后立即关单并生效（合并一条，对齐验收文案）
     if (source.value === 'risk' && admin && type === 'risk_acceptance') {
       lines.push(getWhitelistAdventureAdminImpact());
@@ -157,6 +155,7 @@
     customDays.value = options.customDays || 1;
     source.value = options.source || 'menu';
     expireAt.value = options.expireAt === undefined ? null : options.expireAt;
+    activeSceneId.value = options.sceneId ?? null;
     mode.value = options.mode || 'create';
     isShow.value = true;
     return new Promise<boolean>((resolve) => {

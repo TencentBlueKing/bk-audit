@@ -36,6 +36,14 @@ class RiskWhitelistSource extends ModuleBase {
     });
   }
 
+  /** 批量拉取待审批/已驳回的工单 flow 回显（后端写死状态过滤） */
+  getDetailInfo(params: { scene_id: number; id: Array<number | string> }, payload = {} as IRequestPayload) {
+    return Request.post<Record<string, any> | Array<Record<string, any>>>(`${this.module}/detail_info/`, {
+      params,
+      payload,
+    });
+  }
+
   create(params: Record<string, any>) {
     return Request.post<Record<string, any>>(`${this.module}/`, { params });
   }

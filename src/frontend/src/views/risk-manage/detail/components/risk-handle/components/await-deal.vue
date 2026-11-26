@@ -117,6 +117,7 @@
           embedded
           locked-type="false_positive"
           :initial-scope="initialScope"
+          :scene-id="detailData.scene_id"
           show-apply-hint />
       </template>
 
@@ -126,6 +127,7 @@
           ref="whitelistFormRef"
           embedded
           :initial-scope="initialScope"
+          :scene-id="detailData.scene_id"
           show-apply-hint />
       </template>
 
@@ -313,7 +315,7 @@
   };
   const { t } = useI18n();
   const { messageSuccess, messageError } = useMessage();
-  const roleText = useWhitelistRoleText();
+  const roleText = useWhitelistRoleText(computed(() => props.detailData.scene_id));
   const whitelistFormRef = ref<InstanceType<typeof RiskWhitelistForm>>();
   const confirmRef = ref<InstanceType<typeof WhitelistConfirmDialog>>();
   const withWhitelist = ref(false);
@@ -626,6 +628,7 @@
       validityMode: payload.validity_mode || 'permanent',
       customDays: payload.custom_days,
       source: 'risk',
+      sceneId: props.detailData.scene_id,
     });
     if (!confirmed) return;
     applyWhitelist({

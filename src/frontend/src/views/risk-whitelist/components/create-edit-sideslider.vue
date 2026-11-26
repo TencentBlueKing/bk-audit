@@ -104,6 +104,7 @@
         ? preview.expireAt
         : (preview.editable ? undefined : preview.expireAt),
       source: 'menu',
+      sceneId: record.value?.scene_id ?? null,
       mode: isEdit.value ? 'edit' : 'create',
     });
     if (!confirmed) return;

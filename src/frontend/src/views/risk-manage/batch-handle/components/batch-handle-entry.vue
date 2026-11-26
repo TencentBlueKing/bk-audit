@@ -30,6 +30,7 @@
     :event-fields="visibleEventFields"
     :risk-fields="riskFields"
     :risk-ids="riskIds"
+    :scene-id="availability.sceneId"
     :strategy-id="availability.strategyId"
     :strategy-unique="availability.strategyUnique"
     @success="handleSuccess" />

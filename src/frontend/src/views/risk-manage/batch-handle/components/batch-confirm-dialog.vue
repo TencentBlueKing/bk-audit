@@ -85,6 +85,7 @@
             embedded
             locked-type="false_positive"
             :initial-scope="initialScope"
+            :scene-id="sceneId"
             show-apply-hint />
         </template>
       </bk-form>
@@ -148,6 +149,7 @@
     eventFields?: FieldItem[];
     strategyId?: string;
     strategyUnique?: boolean;
+    sceneId?: string | number | null;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -155,12 +157,13 @@
     eventFields: () => [],
     strategyId: '',
     strategyUnique: false,
+    sceneId: null,
   });
 
   const emit = defineEmits<{(e: 'success'): void }>();
   const { t } = useI18n();
   const { messageSuccess, messageError } = useMessage();
-  const roleText = useWhitelistRoleText();
+  const roleText = useWhitelistRoleText(computed(() => props.sceneId));
   const isShow = ref(false);
   const isSubmitting = ref(false);
   const editorKey = ref(0);
@@ -256,6 +259,7 @@
         validityMode: payload.validity_mode || 'permanent',
         customDays: payload.custom_days,
         source: 'risk',
+        sceneId: props.sceneId,
       });
       if (!confirmed) {
         return;

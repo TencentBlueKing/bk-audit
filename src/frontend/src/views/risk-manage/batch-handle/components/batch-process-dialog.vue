@@ -197,6 +197,7 @@
             embedded
             locked-type="false_positive"
             :initial-scope="initialScope"
+            :scene-id="availability.sceneId"
             show-apply-hint />
         </template>
 
@@ -206,6 +207,7 @@
             data-testid="batch-whitelist-form"
             embedded
             :initial-scope="initialScope"
+            :scene-id="availability.sceneId"
             show-apply-hint />
         </template>
 
@@ -345,7 +347,7 @@
 
   const { t } = useI18n();
   const { messageSuccess, messageError } = useMessage();
-  const roleText = useWhitelistRoleText();
+  const roleText = useWhitelistRoleText(computed(() => props.availability.sceneId));
   const isShow = ref(false);
   const isSubmitting = ref(false);
   const editorKey = ref(0);
@@ -621,6 +623,7 @@
         validityMode: payload.validity_mode || 'permanent',
         customDays: payload.custom_days,
         source: 'risk',
+        sceneId: props.availability.sceneId,
       });
       if (!confirmed) {
         return;
