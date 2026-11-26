@@ -125,16 +125,28 @@ class FlowRestartTests(FlowFixture, TransactionTestCase):
         self.assert_write_targets("true")
 
     def assert_restart_continues(self, position):
-        self.remote["spec"]["operation_config"] = {"start_position": position, "retained": {"keep": True}}
+        self.remote["spec"]["nodes"].append({"name": "sql", "kind": "StreamNode", "inputs": ["source"]})
+        self.remote["spec"]["operation_config"] = {
+            "start_position": position,
+            "retained": {"keep": True},
+            "stream_sql_deploy_config": {
+                "cluster": "published_stream",
+                "deploy_mode": "k8s",
+                "deploy_config": {"parallelism": 5},
+            },
+        }
         original = deepcopy(self.remote["spec"])
+        original["operation_config"]["batch_sql_deploy_config"] = None
         self.restart()
         self.assertEqual(self.writes()[0][2]["json"]["spec"], original)
+        self.remote["spec"]["operation_config"].pop("batch_sql_deploy_config")
         self.complete_step()
         self.observe()
         self.assert_write_targets("true", "false")
         expected = deepcopy(original)
         expected["operation_config"]["start_position"] = "continue"
         self.assertEqual(self.writes()[1][2]["json"]["spec"], expected)
+        self.remote["spec"]["operation_config"].pop("batch_sql_deploy_config")
         self.complete_step()
         self.observe()
         self.strategy.refresh_from_db()

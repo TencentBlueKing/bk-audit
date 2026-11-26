@@ -81,7 +81,7 @@ class ReleaseFlowMigrationTests(SimpleTestCase):
             check_source_type=lambda rt: flow.FlowDataSourceNodeType.REALTIME,
             _build_sql_node_config=lambda biz: {"node_type": "realtime"},
         )
-        with mock.patch.object(flow, "_controller_flow_nodes", return_value=self.nodes), mock.patch.object(
+        with mock.patch.object(flow, "_controller_flow_spec", return_value={"nodes": self.nodes}), mock.patch.object(
             flow, "_input_result_table_refs", return_value={"47_logs": {}, "2_asset": {}}
         ), mock.patch.object(
             flow.metadata_service, "get_result_tables", return_value=[{"bk_biz_id": 47}, {"bk_biz_id": 2}]

@@ -254,6 +254,7 @@ class CrossProjectCandidateTests(SimpleTestCase):
             self.select()
         self.assertFalse(any(c["kind"] == "formal" for c in self.calls))
 
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
     def test_selected_cross_project_table_builds_graph_with_authoritative_ref(self):
         self.formal[self.sample] = self.result(self.sample, "project_v3_1024", "ChannelBinding")
         selected = self.select()

@@ -25,7 +25,9 @@ def offsets(start=0, end=1, unit="hour"):
     }
 
 
-@override_settings(BKBASE_API_VERSION="v4", TIME_ZONE="Asia/Shanghai")
+@override_settings(
+    BKBASE_API_VERSION="v4", TIME_ZONE="Asia/Shanghai", BKBASE_V4_STREAM_CLUSTER="", BKBASE_V4_BATCH_CLUSTER=""
+)
 class InitialBatchScheduleTests(SimpleTestCase):
     def setUp(self):
         self.context = {"version": "v4", "tenant": "default", "namespace": "audit", "rt_namespaces": {}}
@@ -70,7 +72,7 @@ class InitialBatchScheduleTests(SimpleTestCase):
 
     def graph(self):
         with mock.patch.object(
-            flow, "_controller_flow_nodes", side_effect=lambda *a: deepcopy(self.existing)
+            flow, "_controller_flow_spec", side_effect=lambda *a: {"nodes": deepcopy(self.existing)}
         ), mock.patch.object(
             flow,
             "_input_result_table_refs",
@@ -176,6 +178,11 @@ class InitialBatchScheduleTests(SimpleTestCase):
         node = self.sql_node(self.graph())
         self.assertEqual(node["dedicated_config"]["schedule_config"]["start_time"], 1)
         self.assertEqual(node["windows_info"][0]["window_end_offset"], 4)
+
+    def test_missing_flow_deployment_config_reports_the_batch_environment_variable(self):
+        self.profile = {}
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "BKAPP_BKBASE_V4_BATCH_CLUSTER"):
+            self.graph()
 
     def existing_graph(self, period="hour", anchor=1):
         self.configure_schedule(period)
@@ -352,7 +359,7 @@ class InitialBatchScheduleTests(SimpleTestCase):
                     stop.assert_not_called()
                     self.assertEqual(result, {"task_state": "running"})
 
-    def test_empty_node_options_equivalence_does_not_hide_real_spec_changes(self):
+    def test_ordinary_edit_only_stops_running_flow_for_a_business_spec_change(self):
         for change in ("sql", "cluster", "add_override", "remove_override", "change_override", "other_field"):
             current = self.graph()
             desired = deepcopy(current)
@@ -375,8 +382,12 @@ class InitialBatchScheduleTests(SimpleTestCase):
                 desired["description"] = "changed"
             with self.subTest(change=change):
                 result, stop = self.apply_running_graph(current, desired)
-                stop.assert_called_once_with(self.context, self.strategy, action="stop")
-                self.assertEqual(result, {"requested": "stop"})
+                if change in ("sql", "other_field"):
+                    stop.assert_called_once_with(self.context, self.strategy, action="stop")
+                    self.assertEqual(result, {"requested": "stop"})
+                else:
+                    stop.assert_not_called()
+                    self.assertEqual(result, {"task_state": "running"})
 
     def test_complete_batch_operation_and_model_storage_are_built_without_hardcoded_cluster(self):
         graph = self.graph()
@@ -453,12 +464,24 @@ class InitialBatchScheduleTests(SimpleTestCase):
                 with self.assertRaisesMessage(BKBaseResourceMappingError, "batch storage output"):
                     flow._validate_batch_deployment(self.context, graph)
 
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
     def test_realtime_path_does_not_require_batch_cluster_or_storage(self):
         self.strategy.configs["data_source"]["source_type"] = NodeType.REALTIME
         self.controller.storage_nodes = []
         self.profile["operation_config"] = {}
         graph = self.graph()
-        self.assertEqual(graph["operation_config"], {"start_position": "continue"})
+        self.assertEqual(
+            graph["operation_config"],
+            {
+                "start_position": "continue",
+                "stream_sql_deploy_config": {
+                    "cluster": "synthetic_stream",
+                    "deploy_mode": "k8s-operator",
+                    "deploy_config": None,
+                },
+                "batch_sql_deploy_config": None,
+            },
+        )
         self.assertEqual(graph["nodes"][-1]["kind"], "StreamNode")
 
     @override_settings(BKBASE_API_VERSION="v3")

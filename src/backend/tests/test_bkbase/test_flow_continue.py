@@ -121,6 +121,7 @@ class ContinueSpecTests(SimpleTestCase):
         controller = SimpleNamespace(strategy=SimpleNamespace(backend_data={"flow_id": 1}))
         self.assertEqual(BkbaseFlowController.build_update_flow_params(controller)["consuming_mode"], "continue")
 
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
     def test_profile_from_head_is_overridden_without_mutating_other_operation_fields(self):
         strategy = SimpleNamespace(
             strategy_id=7,
@@ -153,5 +154,6 @@ class ContinueSpecTests(SimpleTestCase):
             flow, "bk_resource_settings", SimpleNamespace(PLATFORM_AUTH_ACCESS_USERNAME="synthetic_user")
         ):
             spec = flow.build_controller_spec(controller, context=context)
-        self.assertEqual(spec["operation_config"], {"start_position": "continue", "retained": {"checkpoint": True}})
+        self.assertEqual(spec["operation_config"]["start_position"], "continue")
+        self.assertEqual(spec["operation_config"]["retained"], {"checkpoint": True})
         self.assertEqual(profile, original)
