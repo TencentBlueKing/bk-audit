@@ -21,7 +21,7 @@
     :esc-close="false"
     :quick-close="false"
     :title="t('事件详情')"
-    width="800">
+    width="640">
     <bk-loading :loading="loading">
       <table class="event-table">
         <thead>
@@ -151,19 +151,20 @@
     background: var(--bk-theme-surface-subtle);
   }
 
+  /* 相对原 112px 适当加宽；弹窗仍 640，溢出由 ellipsis + tooltip 承接 */
   .event-table th:nth-child(1),
   .event-table td:nth-child(1) {
-    width: 160px;
+    width: 136px;
   }
 
   .event-table th:nth-child(2),
   .event-table td:nth-child(2) {
-    width: 160px;
+    width: 136px;
   }
 
   .event-table th:nth-child(3),
   .event-table td:nth-child(3) {
-    width: 72px;
+    width: 64px;
   }
 
   .event-table td {
