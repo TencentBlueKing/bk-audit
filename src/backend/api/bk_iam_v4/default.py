@@ -120,6 +120,8 @@ class ListSystemResource(IAMV4BaseResource):
     name = gettext_lazy("获取IAM系统列表")
     action = "/api/v1/open/rbac/share/model/systems/"
     method = "GET"
+    # 后台系统同步调用，无登录用户；多租户下使用租户管理员应用态身份
+    use_admin_username = True
     RequestSerializer = ListSystemRequestSerializer
 
     def fetch_all(self, *args, **kwargs):
@@ -137,6 +139,8 @@ class RetrieveSystemResource(IAMV4BaseResource):
     name = gettext_lazy("获取IAM系统详情")
     action = "/api/v1/open/rabc/share/model/systems/{system_id}/"
     method = "GET"
+    # 后台系统同步调用，无登录用户；多租户下使用租户管理员应用态身份
+    use_admin_username = True
     url_keys = ["system_id"]
     RequestSerializer = RetrieveSystemRequestSerializer
 
