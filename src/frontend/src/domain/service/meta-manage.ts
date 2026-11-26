@@ -416,6 +416,20 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 保存策略/联表/工具的标签绑定，tags 传标签名称，不存在的标签由后端创建
+   * @param { String } resource_type strategy / tool / link_table
+   * @param { String } resource_id 策略 ID 或工具、联表的 uid
+   * @param { Array } tags
+   */
+  saveTagBindings(params: {
+    resource_type: 'strategy' | 'tool' | 'link_table',
+    resource_id: string,
+    tags: Array<string>,
+  }) {
+    return MetaManageSource.saveTagBindings(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 收藏的查询条件列表
    * @param { Object } params
    */

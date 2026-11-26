@@ -170,6 +170,7 @@
     name: '',
     tags: [],
     description: '',
+    status: 'published',
     tool_type: 'data_search',
     is_bkvision: false,
     data_search_config_type: 'sql',
@@ -376,6 +377,7 @@
       if (data.tags) {
         data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
       }
+      data.status = data.status === 'unpublished' ? 'unpublished' : 'published';
       service(data)
         .then((res: any) => {
           isFailed.value = false;

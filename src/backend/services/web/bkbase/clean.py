@@ -59,6 +59,7 @@ from services.web.databus.exceptions import DatabusException
 from services.web.databus.models import CollectorConfig, CollectorPlugin
 
 PLUGIN_OPERATION_EXCEPTIONS = (APIRequestError, BKBaseException, LockError, DatabusException)
+PLUGIN_RETRY_STEPS = "plugin_retry_steps"
 
 
 def _convert_named_regex_groups(pattern):
@@ -613,6 +614,7 @@ def ensure_clean(
     _locked_clean_ref=None,
     _require_existing=False,
     _legacy_json_decoders=(),
+    _retry_existing=None,
 ):
     """稳定引用下声明/更新Clean，首次失败后的重试先核实远端。"""
     binding = deepcopy(owner.bkbase_v4_resources or {})
@@ -640,10 +642,13 @@ def ensure_clean(
         if binding.get("result_table") not in (None, rt_ref):
             raise BKBaseResourceMappingError(message="Clean ResultTable binding cannot be changed")
         pending["result_table"] = rt_ref
+    retried = False
     with resource_lock(context, ref) if _locked_clean_ref is None else nullcontext():
         old = get_resource_or_none(api.bk_base_v4.clean_get, **params)
         if old is None and _require_existing:
             raise BKBaseResourceMappingError(message="The established V4 Clean is missing; cannot recreate it")
+        if old is None and _retry_existing is not None and not _retry_existing(None):
+            raise BKBaseResourceMappingError(message="Previous Clean creation is still unconfirmed")
         if old is not None:
             actual = _existing_clean_table_id(
                 context, ref, old, raw_id=raw_id, data_ref=data_ref, source_role=source_role
@@ -691,7 +696,11 @@ def ensure_clean(
                 old["spec"].get("deploy_revision") != old["spec"].get("config_revision")
                 or old["spec"].get("desired_status") != CleanState.RUNNING
             )
-            if changed or must_publish:
+            if _retry_existing is not None:
+                retried = _retry_existing(old)
+                if not retried and (old.get("status") or {}).get("phase") == "Ok" and (changed or must_publish):
+                    raise BKBaseResourceMappingError(message="Existing Clean configuration differs during plugin retry")
+            if retried or (_retry_existing is None and (changed or must_publish)):
                 desired["config_revision"] = max(
                     int(old["spec"].get("config_revision", 0)) + 1, int(time.time() * 1000)
                 )
@@ -706,6 +715,9 @@ def ensure_clean(
             else:
                 result = old
     observed = operation_result(result, ref, "configure")
+    if retried:
+        # 重试 PUT 回执可能仍是旧状态，下一轮正式 GET 才确认发布结果。
+        observed["task_state"] = None
     patch = {"clean_ready": observed["task_state"] == TaskState.RUNNING}
     if role == CleanRole.EXISTING:
         patch.update(
@@ -748,7 +760,7 @@ def build_clean_spec(params, *, data_ref, logical_id, rt_owner, _legacy_json_dec
     return spec
 
 
-def configure_clean(owner, params, *, rt_owner=False, publish=True, _locked_clean_ref=None):
+def configure_clean(owner, params, *, rt_owner=False, publish=True, _locked_clean_ref=None, _retry_existing=None):
     """统一现有插件/采集项清洗入口，V4不覆盖旧版资源ID。"""
     if get_bkbase_version() == BKBaseVersion.V3:
         field = "processing_id" if hasattr(owner, "processing_id") else "bkbase_processing_id"
@@ -786,7 +798,7 @@ def configure_clean(owner, params, *, rt_owner=False, publish=True, _locked_clea
             rt_id = _logical_table_id(binding.get("result_table_id"))
             rt_ref = (
                 _verified_result_table_ref(context, binding, rt_id)
-                if binding.get("result_table") or not binding.get("clean_pending_create")
+                if binding.get("result_table") or (_retry_existing is None and not binding.get("clean_pending_create"))
                 else None
             )
         else:
@@ -808,6 +820,8 @@ def configure_clean(owner, params, *, rt_owner=False, publish=True, _locked_clea
     intent = {"_require_existing": True} if require_existing else {}
     if require_existing and legacy_json_decoders:
         intent["_legacy_json_decoders"] = legacy_json_decoders
+    if _retry_existing is not None:
+        intent["_retry_existing"] = _retry_existing
     return ensure_clean(
         context, owner, rules=spec, rt_ref=rt_ref, publish=publish, _locked_clean_ref=_locked_clean_ref, **intent
     )
@@ -987,6 +1001,21 @@ def pending_plugins(queryset):
     )
 
 
+def _retry_plugin_resource(plugin, step):
+    """把单次显式资格交给资源锁内的读回；先记录已检查再允许发请求。"""
+    if PLUGIN_RETRY_STEPS not in (plugin.bkbase_v4_resources or {}):
+        return {}
+
+    def claim(resource):
+        remaining = plugin.bkbase_v4_resources[PLUGIN_RETRY_STEPS]
+        if step not in remaining:
+            return False
+        update_owner_binding(plugin, {PLUGIN_RETRY_STEPS: [name for name in remaining if name != step]})
+        return resource is None or (resource.get("status") or {}).get("phase") == "Failed"
+
+    return {"_retry_existing": claim}
+
+
 def _configure_plugin(handler):
     """插件级共享RT及主副入库按顺序推进，后续周期任务负责等待。"""
     if get_bkbase_version() == BKBaseVersion.V3:
@@ -1006,7 +1035,9 @@ def _configure_plugin(handler):
         update_owner_binding(plugin, {"ready": False, "clean_ready": False})
         return observe_imported_resource(get_bkbase_context(), plugin)
     update_owner_binding(plugin, {"ready": False})
-    result = configure_clean(plugin, handler.build_clean_config(), rt_owner=True)
+    result = configure_clean(
+        plugin, handler.build_clean_config(), rt_owner=True, **_retry_plugin_resource(plugin, "clean")
+    )
     if result["task_state"] != TaskState.RUNNING:
         return result
     binding = plugin.bkbase_v4_resources
@@ -1020,7 +1051,11 @@ def _configure_plugin(handler):
         main, replica = handler.build_storage_config()
     preserve_retention = plugin.plugin_scene == PluginSceneChoices.COLLECTOR
     main_result = storage_service.configure_storage(
-        plugin, main, purpose="main", preserve_existing_retention=preserve_retention and "expires" not in main
+        plugin,
+        main,
+        purpose="main",
+        preserve_existing_retention=preserve_retention and "expires" not in main,
+        **_retry_plugin_resource(plugin, "main"),
     )
     if main_result["task_state"] == TaskState.FAILED:
         return main_result
@@ -1028,7 +1063,11 @@ def _configure_plugin(handler):
     if replica:
         results.append(
             storage_service.configure_storage(
-                plugin, replica, purpose="replica", preserve_existing_retention=preserve_retention
+                plugin,
+                replica,
+                purpose="replica",
+                preserve_existing_retention=preserve_retention,
+                **_retry_plugin_resource(plugin, "replica"),
             )
         )
     failed = next((result for result in results if result["task_state"] == TaskState.FAILED), None)
@@ -1057,19 +1096,26 @@ def _configure_plugin(handler):
     return next(r for r in results if r["task_state"] != TaskState.RUNNING)
 
 
-def reset_plugin_operation(plugin):
-    """显式重试允许修正配置后重新推进，后台轮询不自动清除终止状态。"""
+def reset_plugin_operation(plugin, *, retry_failed=None):
+    """按 ID 区分原配置恢复和提交新配置。"""
     if get_bkbase_version() == BKBaseVersion.V4:
         from services.web.bkbase.resource_migration import (
             MIGRATION_BINDING_KEY,
             MIGRATION_MAINTENANCE_KEY,
         )
 
-        patch = {"poll_count": 0, "blocked": False, "message": ""}
-        if MIGRATION_BINDING_KEY in (plugin.bkbase_v4_resources or {}):
+        binding = plugin.bkbase_v4_resources or {}
+        patch = {"poll_count": 0, "blocked": False}
+        remove = []
+        if retry_failed is False:
+            patch["ready"] = False
+            remove.append(PLUGIN_RETRY_STEPS)
+        elif binding.get("blocked") is True or (retry_failed is True and PLUGIN_RETRY_STEPS not in binding):
+            patch.update({"ready": False, PLUGIN_RETRY_STEPS: ["clean", "main", "replica"]})
+        if MIGRATION_BINDING_KEY in binding:
             # 仅现有显式task id入口调用reset；后续Beat可继续这次已授权的异步维护。
             patch[MIGRATION_MAINTENANCE_KEY] = True
-        update_owner_binding(plugin, patch)
+        update_owner_binding(plugin, patch, remove=remove)
 
 
 def record_plugin_failure(plugin, error, *, poll_count=None):
@@ -1121,7 +1167,7 @@ def configure_plugin(handler):
     update_owner_binding(
         plugin,
         {"poll_count": count, "blocked": blocked, "message": message},
-        remove=[MIGRATION_MAINTENANCE_KEY] if ready else [],
+        remove=[MIGRATION_MAINTENANCE_KEY, PLUGIN_RETRY_STEPS] if ready else [],
     )
     return result
 

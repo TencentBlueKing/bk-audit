@@ -260,7 +260,7 @@
           allow-create
           class="consition-value pa-user-selector"
           :model-value="userSelectorValue"
-          :placeholder="userGroup.length ? t('请输入用户名，或通过输入$使用变量') : t('请输入人员进行搜索')"
+          :placeholder="userGroup.length ? t('请输入用户名，或通过输入$使用变量') : ''"
           :user-group="userGroup"
           :user-group-name="userGroupName"
           @update:model-value="handlerUserChange" />

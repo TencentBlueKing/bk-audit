@@ -11,6 +11,7 @@ from uuid import uuid4
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
+from django.conf import settings
 from django.db import transaction
 
 from api.bk_base_v4.tenant import get_bkbase_v4_platform_username
@@ -19,6 +20,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import WEIXIN_UNAVAILABLE_MESSAGE, MsgType
 from core.exceptions import LockError
 from services.web.analyze.constants import (
+    AUDIT_EVENT_TABLE_PREFIX,
     BKBASE_FLOW_CONSUMING_MODE,
     ControlTypeChoices,
     FlowDataSourceNodeType,
@@ -279,6 +281,15 @@ def _merged_spec(old, desired, *, preserve_storage_targets=False):
         if same_target and preserve_storage_targets:
             _assert_storage_target(previous, node)
         merged = {**deepcopy(previous), **deepcopy(node)} if same_target else deepcopy(node)
+        if same_target and node.get("kind") == "BatchSqlNode":
+            dedicated = merged["dedicated_config"]
+            saved = previous.get("dedicated_config", {})
+            dedicated["schedule_config"]["start_time"] = _batch_start_time(
+                dedicated["schedule_config"], saved.get("schedule_config", {})
+            )
+            merged["windows_info"] = _preserve_batch_windows(previous, merged["windows_info"])
+            if isinstance(saved.get("output_config"), dict):
+                dedicated["output_config"] = deepcopy(saved["output_config"])
         if (
             same_target
             and preserve_storage_targets
@@ -290,12 +301,29 @@ def _merged_spec(old, desired, *, preserve_storage_targets=False):
             old_config, config = previous.get("storage_config"), node.get("storage_config")
             if isinstance(old_config, dict) and isinstance(config, dict):
                 merged["storage_config"] = deepcopy({**old_config, **config})
+            if isinstance(merged.get("storage_config"), dict):
+                # 开关只用于新节点；锁内最新正式值（包括缺省/null）不能被新建默认覆盖。
+                if isinstance(old_config, dict) and "use_lowercase_field" in old_config:
+                    merged["storage_config"]["use_lowercase_field"] = deepcopy(old_config["use_lowercase_field"])
+                else:
+                    merged["storage_config"].pop("use_lowercase_field", None)
         nodes.append(merged)
     spec.update({key: deepcopy(value) for key, value in desired.items() if key not in ("nodes", "operation_config")})
     spec["nodes"] = nodes
     spec.setdefault("operation_config", {}).update(deepcopy(desired.get("operation_config", {})))
     validate_graph(nodes)
     return spec
+
+
+def _same_flow_spec(before, after):
+    """仅将空离线节点覆盖的缺省/null/{}视为等价，不改正式回读及其他字段。"""
+    compared = [deepcopy(before), deepcopy(after)]
+    for spec in compared:
+        operation = spec.get("operation_config")
+        config = operation.get("batch_sql_deploy_config") if isinstance(operation, dict) else None
+        if isinstance(config, dict) and config.get("node_deploy_configs") is None:
+            config["node_deploy_configs"] = {}
+    return compared[0] == compared[1]
 
 
 def apply_rule_flow(context, strategy, spec):
@@ -335,6 +363,7 @@ def apply_rule_flow(context, strategy, spec):
                     message="Bound Flow is missing; recreation requires an explicit new flow"
                 )
             validate_graph(spec["nodes"])
+            _validate_batch_deployment(context, spec)
             _validate_flow_inputs(context, spec)
             _save_operation_binding(context, strategy, {"requested_action": "start"})
             result = _write_flow_request(
@@ -363,12 +392,16 @@ def apply_rule_flow(context, strategy, spec):
     desired = _aligned_graph(current["spec"], spec)
     _validate_flow_inputs(context, desired)
     merged = _merged_spec(current["spec"], desired, preserve_storage_targets=True)
+    _validate_batch_deployment(context, merged)
     _validate_flow_inputs(context, merged)
     if phase != "Ok":
         # 未收敛的正式配置只观察，保留待发布整图供后续Ok后推进。
         _save_operation_binding(context, strategy, {"pending_spec": desired, "operation": "wait_stopped"})
         return observed
-    if merged == current["spec"] and current["metadata"].get("annotations", {}).get("task_stopped") != "true":
+    if (
+        _same_flow_spec(merged, current["spec"])
+        and current["metadata"].get("annotations", {}).get("task_stopped") != "true"
+    ):
         _save_operation_binding(
             context,
             strategy,
@@ -397,6 +430,7 @@ def apply_rule_flow(context, strategy, spec):
         desired = _aligned_graph(current["spec"], desired)
         _validate_flow_inputs(context, desired)
         merged = _merged_spec(current["spec"], desired, preserve_storage_targets=True)
+        _validate_batch_deployment(context, merged)
         _validate_flow_inputs(context, merged)
         metadata = deepcopy(current["metadata"])
         metadata.setdefault("annotations", {})["task_stopped"] = "false"
@@ -676,6 +710,8 @@ def _storage_node(context, strategy, config, profile, *, existing_nodes=(), outp
             result["storage_config"]["db"] = database
         if config.get("physical_table_name") or not current:
             result["storage_config"]["table"] = table
+        if not current:
+            result["storage_config"]["use_lowercase_field"] = settings.BKBASE_V4_DORIS_USE_LOWERCASE_FIELD
     elif storage_type == "hdfs":
         configured = profile.get("hdfs_storage_config")
         result["expires"] = _expires(config["expires"])
@@ -695,15 +731,104 @@ def _storage_node(context, strategy, config, profile, *, existing_nodes=(), outp
     return result
 
 
-def _batch_node(controller, old, profile):
-    """保留确定字段；调度锚点和新窗口边界要求明确登记，不能猜测。"""
+def _batch_period(unit):
+    """原生GET使用H/D，业务构图使用hour/day，比较时统一单位。"""
+    return {"H": "hour", "D": "day"}.get(unit, unit)
+
+
+def _batch_start_time(schedule, previous=None):
+    """起点由引擎在启动时解释；同周期编辑保留合法原值，换周期重新选择。"""
+    period = _batch_period(schedule.get("schedule_period"))
+    if period not in ("hour", "day"):
+        raise BKBaseResourceMappingError(message="Unsupported V4 batch schedule period")
+    if previous is not None and (
+        not isinstance(previous, dict) or _batch_period(previous.get("schedule_period")) not in ("hour", "day")
+    ):
+        raise BKBaseResourceMappingError(message="V4 existing batch schedule period is invalid")
+    if previous is not None and _batch_period(previous.get("schedule_period")) == period:
+        start = previous.get("start_time")
+        minimum = 1 if period == "hour" else 0
+        if type(start) is not int or not minimum <= start <= 23:
+            raise BKBaseResourceMappingError(message="V4 existing batch schedule start_time is invalid")
+        return start
+    return 1 if period == "hour" else 0
+
+
+def _batch_window_key(window):
+    """只复用同一输入、窗口类型及业务时间范围的正式窗口。"""
+    return tuple(
+        _batch_period(window.get(key)) if key.endswith("_unit") else window.get(key)
+        for key in (
+            "result_table_id",
+            "window_type",
+            "window_size",
+            "window_size_unit",
+            "window_offset",
+            "window_offset_unit",
+        )
+    )
+
+
+def _batch_offsets_valid(window):
+    """偏移必须完整且单位明确，缺项不能被候选值自动补齐。"""
+    return all(
+        type(window.get(key)) is int and window.get(f"{key}_unit") in ("hour", "day", "H", "D")
+        for key in ("window_start_offset", "window_end_offset")
+    )
+
+
+def _preserve_batch_windows(previous, windows):
+    """按语义复用存量窗口，禁止用新建候选或profile回填已存在的窗口。"""
+    saved = {}
+    for window in previous.get("windows_info", []):
+        key = _batch_window_key(window)
+        if key in saved:
+            raise BKBaseResourceMappingError(message="Ambiguous existing batch window")
+        saved[key] = window
+    result = []
+    for window in windows:
+        existing = saved.get(_batch_window_key(window))
+        if existing is not None and not _batch_offsets_valid(existing):
+            raise BKBaseResourceMappingError(message="V4 existing batch window boundaries are invalid")
+        result.append(deepcopy(existing if existing is not None else window))
+    return result
+
+
+def _validate_batch_deployment(context, spec):
+    """校验离线集群和存储输出，将原生null节点覆盖归一为空对象。"""
+    batch_nodes = [node for node in spec["nodes"] if node.get("kind") == "BatchSqlNode"]
+    if not batch_nodes:
+        return
+    config = spec.get("operation_config", {}).get("batch_sql_deploy_config")
+    if (
+        not isinstance(config, dict)
+        or not isinstance(config.get("cluster"), str)
+        or not config["cluster"].strip()
+        or (config.get("node_deploy_configs") is not None and not isinstance(config["node_deploy_configs"], dict))
+    ):
+        raise BKBaseResourceMappingError(message="V4 batch deployment requires cluster and node_deploy_configs")
+    if config.get("node_deploy_configs") is None:
+        config["node_deploy_configs"] = {}
+    kinds = {
+        "EsStorageNode": "ElasticSearch",
+        "DorisStorageNode": "Doris",
+        "HdfsStorageNode": "Hdfs",
+        "QueueStorageNode": "Kafka",
+    }
+    for batch in batch_nodes:
+        sinks = [node for node in spec["nodes"] if node.get("kind") in kinds and node.get("input") == batch["name"]]
+        if not sinks:
+            raise BKBaseResourceMappingError(message="V4 batch storage output must be configured")
+        for sink in sinks:
+            source_service._replay_ref(context, sink.get("storage"), kinds[sink["kind"]])
+
+
+def _batch_node(controller, old, profile, *, existing=None):
+    """沿用业务SQL和选窗；相对起点交给引擎，旧窗口与新建候选分开处理。"""
+    existing = existing or {}
     schedule = deepcopy(old["dedicated_config"]["schedule_config"])
-    period = schedule["schedule_period"]
-    key = f"{period}:{schedule['count_freq']}"
-    policy = profile.get("batch_schedules", {}).get(key)
-    if not isinstance(policy, dict) or not isinstance(policy.get("start_time"), int):
-        raise BKBaseResourceMappingError(message=f"V4 batch schedule policy requires validation: {key}")
-    schedule["start_time"] = policy["start_time"]
+    previous_schedule = existing.get("dedicated_config", {}).get("schedule_config", {}) if existing else None
+    schedule["start_time"] = _batch_start_time(schedule, previous_schedule)
     dedicated = deepcopy(old["dedicated_config"])
     dedicated["schedule_config"] = schedule
     dedicated["self_dependence"]["self_dependency_config"]["dependency_rule"] = "self_no_failed"
@@ -716,6 +841,9 @@ def _batch_node(controller, old, profile):
     windows = []
     for window in old["window_info"]:
         item = {k: deepcopy(v) for k, v in window.items() if k != "color"}
+        if any(_batch_window_key(saved) == _batch_window_key(item) for saved in existing.get("windows_info", [])):
+            windows.extend(_preserve_batch_windows(existing, [item]))
+            continue
         item["accumulate_start_time"] = "" if item["window_type"] != "accumulate" else item["accumulate_start_time"]
         item["dependency_rule"] = controller.strategy.configs.get("schedule_config", {}).get(
             "dependency_rule", "no_failed"
@@ -724,11 +852,34 @@ def _batch_node(controller, old, profile):
             str(item[k])
             for k in ("window_type", "window_size", "window_size_unit", "window_offset", "window_offset_unit")
         )
-        offsets = profile.get("batch_window_offsets", {}).get(wkey)
-        required = {"window_start_offset", "window_start_offset_unit", "window_end_offset", "window_end_offset_unit"}
-        if not isinstance(offsets, dict) or not required.issubset(offsets):
+        configured = profile.get("batch_window_offsets", {})
+        if not isinstance(configured, dict):
+            raise BKBaseResourceMappingError(message="Invalid V4 batch window boundaries configuration")
+        if wkey in configured:
+            offsets = configured[wkey]
+        elif wkey in ("scroll:1:hour:0:hour", "whole:1:hour:0:hour"):
+            # 仅覆盖已确认的一小时零偏移组合；日/多小时不从该样本外推。
+            offsets = {
+                "window_start_offset": 0,
+                "window_start_offset_unit": "hour",
+                "window_end_offset": 1,
+                "window_end_offset_unit": "hour",
+            }
+        else:
+            offsets = None
+        if not isinstance(offsets, dict) or not _batch_offsets_valid(offsets):
             raise BKBaseResourceMappingError(message=f"V4 batch window boundaries require validation: {wkey}")
-        item.update({k: offsets[k] for k in required})
+        item.update(
+            {
+                key: offsets[key]
+                for key in (
+                    "window_start_offset",
+                    "window_start_offset_unit",
+                    "window_end_offset",
+                    "window_end_offset_unit",
+                )
+            }
+        )
         windows.append(item)
     return {
         "kind": "BatchSqlNode",
@@ -844,7 +995,9 @@ def build_controller_spec(controller, *, context=None):
         }
     controller.rt_node_map = {rt_id: node_name("src", rt_id) for rt_id in rt_ids}
     binding = (strategy.backend_data or {}).get("bkbase_v4", {})
-    output_name = binding.get("output_name") or stable_name("audit", strategy.namespace, strategy.strategy_id)
+    output_name = binding.get("output_name") or stable_name(
+        AUDIT_EVENT_TABLE_PREFIX, strategy.namespace, strategy.strategy_id
+    )
     output = binding.get("output_rt_id")
     if output:
         business, separator, raw_name = output.partition("_")
@@ -878,7 +1031,12 @@ def build_controller_spec(controller, *, context=None):
             },
         }
     else:
-        sql_node = _batch_node(controller, old_sql, profile)
+        existing_batch = [
+            node for node in existing_nodes if node.get("kind") == "BatchSqlNode" and node.get("output") == output
+        ]
+        if len(existing_batch) > 1:
+            raise BKBaseResourceMappingError(message="Ambiguous existing batch output")
+        sql_node = _batch_node(controller, old_sql, profile, existing=existing_batch[0] if existing_batch else None)
     storages = []
     for cls in controller.storage_nodes:
         config = cls(namespace=strategy.namespace).build_node_config(
@@ -892,8 +1050,9 @@ def build_controller_spec(controller, *, context=None):
         raise BKBaseResourceMappingError(message="V4 Flow deployment resources must be explicitly configured")
     operation = deepcopy(profile["operation_config"])
     operation["start_position"] = BKBASE_FLOW_CONSUMING_MODE
-    _save_operation_binding(context, strategy, {"output_name": output_name, "output_rt_id": output})
-    return build_rule_flow(
+    if sql_node["kind"] == "BatchSqlNode":
+        operation.setdefault("stream_sql_deploy_config", None)
+    spec = build_rule_flow(
         strategy,
         rt_metadata=metadata,
         binding_map={
@@ -905,6 +1064,10 @@ def build_controller_spec(controller, *, context=None):
             "operation_config": operation,
         },
     )
+    if sql_node["kind"] == "BatchSqlNode":
+        _validate_batch_deployment(context, spec)
+    _save_operation_binding(context, strategy, {"output_name": output_name, "output_rt_id": output})
+    return spec
 
 
 def configure_rule_controller(controller):

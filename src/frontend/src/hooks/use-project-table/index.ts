@@ -45,7 +45,7 @@ const readConfig = () => {
 export const isProjectTableLazyEnabled = () => readConfig()?.feature_toggle?.bkbase_project_rt_lazy_load === true;
 
 export const isProjectTableType = (tableType: string) => (
-  isProjectTableLazyEnabled() && ['BizRt', 'BuildIn'].includes(tableType)
+  isProjectTableLazyEnabled() && ['BizRt', 'BuildIn', 'MineBizRt'].includes(tableType)
 );
 
 /** 项目和 RT 使用不同 UI key，namespace 仅作导航，不会进入提交 RT。 */

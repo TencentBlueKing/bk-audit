@@ -156,11 +156,13 @@ def ensure_storage(
     _before_write=None,
     _bind_owner=True,
     _retry_failed=False,
+    _retry_existing=None,
 ):
     """复用共享入库；初始编排可先认领写意图，再独立确认绑定。"""
     ref = storage_ref(context, owner, rt_ref=rt_ref, cluster_ref=cluster_ref, purpose=purpose)
     params = resource_params(context, ref, kind="DataStorage")
     wrote = False
+    retried_plugin = False
     with resource_lock(context, ref):
         old = get_resource_or_none(api.bk_base_v4.data_storage_get, **params)
         bound = (owner.bkbase_v4_resources or {}).get("storages", {}).get(purpose)
@@ -193,10 +195,24 @@ def ensure_storage(
             if preserve_existing_retention:
                 desired["tableInfo"].pop("expire", None)
             merged = _merge_spec(old["spec"], desired)
-            if merged == old["spec"] and not (_retry_failed and (old.get("status") or {}).get("phase") == "Failed"):
+            phase = (old.get("status") or {}).get("phase")
+            changed = merged != old["spec"]
+            if _retry_existing is not None:
+                if old.get("kind") != "DataStorage" or any(
+                    old.get("metadata", {}).get(k) != v for k, v in params.items()
+                ):
+                    raise BKBaseResourceMappingError(message="Existing DataStorage resource identity mismatch")
+                _retry_failed = _retry_existing(old)
+                if not _retry_failed and phase == "Ok" and changed:
+                    raise BKBaseResourceMappingError(
+                        message="Existing DataStorage configuration differs during plugin retry"
+                    )
+            retrying_failed = _retry_failed and phase == "Failed"
+            if not (retrying_failed or (_retry_existing is None and changed)):
                 result = old
             else:
                 wrote = True
+                retried_plugin = _retry_existing is not None and retrying_failed
                 result = api.bk_base_v4.data_storage_update(
                     **params, metadata=deepcopy(old["metadata"]), spec=merged, status=None
                 )
@@ -215,6 +231,8 @@ def ensure_storage(
                     raise BKBaseResourceMappingError(
                         message="V4 plugin storage creation requires an explicit valid retention"
                     )
+            if _retry_existing is not None and not _retry_existing(None):
+                raise BKBaseResourceMappingError(message="Previous DataStorage creation is still unconfirmed")
             wrote = True
             result = api.bk_base_v4.data_storage_create(
                 tenant=params["tenant"],
@@ -231,7 +249,8 @@ def ensure_storage(
     observed = operation_result(result, ref, "configure")
     if physical is not None:
         observed["physical_table_name"] = physical
-    if wrote and observed["task_state"] != TaskState.FAILED:
+    # 插件显式重试以之后的正式 GET 为准，PUT 回执可能仍携带旧失败。
+    if retried_plugin or (wrote and observed["task_state"] != TaskState.FAILED):
         observed["task_state"] = None
     return observed
 
@@ -331,6 +350,7 @@ def configure_storage(
     _before_write=None,
     _bind_owner=True,
     _retry_failed=False,
+    _retry_existing=None,
 ):
     """按业务所有者配置入库，V4只保存独立引用。
 
@@ -365,6 +385,8 @@ def configure_storage(
     intent = {}
     if _before_write is not None:
         intent.update(_before_write=_before_write, _bind_owner=_bind_owner, _retry_failed=_retry_failed)
+    if _retry_existing is not None:
+        intent["_retry_existing"] = _retry_existing
     return ensure_storage(
         context,
         owner,

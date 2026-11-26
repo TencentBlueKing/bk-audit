@@ -14,8 +14,7 @@ from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from core.view_sets import APIGWViewSet, UserAPIGWViewSet
-from services.web.scene.constants import PanelStatus
-from services.web.tool.exceptions import ToolDoesNotExist, ToolNotPublished
+from services.web.tool.exceptions import ToolDoesNotExist
 from services.web.tool.models import Tool
 from services.web.tool.permissions import CallerContextPermission, UseToolPermission
 
@@ -70,6 +69,7 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.user_query_table_auth_check, endpoint="user_query_table_auth_check"),
         ResourceRoute("POST", resource.tool.tool_execute_debug, endpoint="tool_execute_debug"),
         ResourceRoute("PUT", resource.tool.favorite_tool, pk_field="uid", endpoint="favorite"),
+        ResourceRoute("POST", resource.tool.record_tool_recent_usage, pk_field="uid", endpoint="recent_usage"),
         ResourceRoute(
             "POST",
             resource.tool.get_tool_input_variable_candidates,
@@ -105,8 +105,6 @@ class MCPUserToolViewSet(UserAPIGWViewSet):
         )
         if tool is None:
             raise ToolDoesNotExist()
-        if tool.status != PanelStatus.PUBLISHED:
-            raise ToolNotPublished()
         return tool.uid
 
     def get_permissions(self):

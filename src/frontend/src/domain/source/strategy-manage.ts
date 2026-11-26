@@ -90,6 +90,7 @@ class Strategy extends ModuleBase {
   // 获取所有策略下拉列表
   getAllStrategyList(params: {
     scene_id?: string
+    binding_type?: 'platform_binding' | 'scene_binding'
   }) {
     return Request.get<Array<{
       label: string,

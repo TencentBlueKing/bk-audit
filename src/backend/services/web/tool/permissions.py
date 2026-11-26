@@ -25,9 +25,7 @@ from core.models import get_request_username
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
 from services.web.common.scope_permission import ScopeInstancePermission
-from services.web.scene.constants import PanelStatus
 from services.web.tool.exceptions import BkVisionSearchPermissionProhibited
-from services.web.tool.models import Tool
 
 
 class CallerContextPermission(BasePermission):
@@ -39,21 +37,18 @@ class CallerContextPermission(BasePermission):
 
 
 class UseToolPermission(ScopeInstancePermission):
-    """检查用户是否拥有使用工具的权限（含启停态与管理员例外）。"""
+    """检查用户是否拥有使用工具的权限（场景可见性与资源范围；广场展示状态不参与使用鉴权）。
+
+    说明：工具 status 语义为「是否在工具广场展示」，仅影响广场列表/计数，
+    不应在使用鉴权中校验 published（避免广场隐藏的工具无法使用/下钻）。
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(
             resource_type=BindingResourceType.TOOL,
-            status_getter=self._get_tool_status,
-            published_status=PanelStatus.PUBLISHED,
             *args,
             **kwargs,
         )
-
-    @staticmethod
-    def _get_tool_status(tool_uid: str):
-        tool = Tool.last_version_tool(uid=tool_uid)
-        return tool.status if tool else None
 
 
 def check_bkvision_share_permission(user_id, share_uid) -> bool:

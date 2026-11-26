@@ -304,6 +304,19 @@ class MetaManage extends ModuleBase {
       tag_name: string
     }>>(`${this.path}/tag/`);
   }
+  // 保存策略/联表/工具的标签绑定
+  saveTagBindings(params: {
+    resource_type: 'strategy' | 'tool' | 'link_table',
+    resource_id: string,
+    tags: Array<string>,
+  }) {
+    return Request.put<Array<{
+      tag_id: string,
+      tag_name: string
+    }>>(`${this.path}/tags/bindings/`, {
+      params,
+    });
+  }
   // 获取收藏的查询条件列表
   getFavouriteQueryList(params: Record<string, any>) {
     return Request.get<Array<{

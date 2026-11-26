@@ -120,6 +120,14 @@ export default  {
     }));
   },
   /**
+   * @desc 广场点击或打开工作台时记录最近使用。失败不影响打开工具。
+   */
+  recordRecentUsage(uid: string) {
+    return ToolManageSources.recordRecentUsage(uid)
+      .then(({ data }) => data)
+      .catch(() => ({ recorded: false }));
+  },
+  /**
      * @desc 工具调试
      * @param { Object } params
      */
@@ -147,6 +155,7 @@ export default  {
   publishPlatformTool(params: {
       uid: string,
       scene_id: number,
+      status?: 'published' | 'unpublished',
     }) {
     return ToolManageSources.publishPlatformTool(params).then(({ data }) => data);
   },

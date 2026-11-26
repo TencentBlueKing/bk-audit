@@ -53,7 +53,6 @@
       }"
       allow-create
       :disabled="dataConfig.disabled"
-      :placeholder="t('请输入人员进行搜索')"
       @change="handleUserChange" />
 
     <date-picker

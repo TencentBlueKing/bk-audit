@@ -97,5 +97,8 @@ export default {
     暂无数据: 'No data',
     场景管理员至少保留一个: 'At least one scene manager is required',
     全局策略: 'Global Strategy',
+    // Tool referenced by strategies
+    '该工具正在被{strategies}使用，无法停用': 'This tool is in use by {strategies} and cannot be disabled',
+    '该工具正在被{strategies}使用，无法删除': 'This tool is in use by {strategies} and cannot be deleted',
   },
 };

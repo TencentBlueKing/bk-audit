@@ -96,3 +96,24 @@ class TestToolViewPermissions(TestCase):
 
         self.assertIsInstance(permission, InstanceActionPermission)
         self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
+
+    def test_use_tool_permission_ignores_square_display_status(self):
+        """广场展示关闭（unpublished）的工具，使用权限不校验 published 状态（防回归）"""
+        from unittest import mock
+
+        permission = UseToolPermission()
+        request = SimpleNamespace(query_params={}, data={}, parser_context={"kwargs": {"uid": "tool-unpublished"}})
+        view = ToolViewSet()
+        view.kwargs = {"uid": "tool-unpublished"}
+        view.request = request
+
+        with (
+            mock.patch.object(permission, "_is_scene_binding_enabled", return_value=True),
+            mock.patch.object(permission, "_is_resource_manager_exception", return_value=False),
+            mock.patch(
+                "services.web.common.scope_permission.ScopePermission.check_resource_permission", return_value=True
+            ),
+            mock.patch("services.web.common.scope_permission.get_request_username", return_value="alice"),
+        ):
+            # 修复前：_is_resource_published 会因工具非 published 拦截；修复后由可见性/资源范围决定
+            self.assertTrue(permission.has_permission(request, view))

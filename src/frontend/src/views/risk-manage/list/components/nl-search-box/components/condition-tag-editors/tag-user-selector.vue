@@ -51,7 +51,6 @@
           auto-focus
           class="nl-tag-user-selector"
           :class="{ 'has-users': hasUsers }"
-          :placeholder="t('请输入人员')"
           @blur="handleSelectorBlur"
           @update:model-value="handleValueChange" />
       </div>

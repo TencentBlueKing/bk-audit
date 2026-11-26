@@ -353,7 +353,7 @@
       return t('搜索 联表数据名称');
     }
     // 资产数据后端枚举值为 BuildIn
-    if (activeTypeItem.value?.lazyDirectory && activeTab.value !== props.mineBizRtType) return t('搜索项目 namespace');
+    if (activeTypeItem.value?.lazyDirectory) return t('搜索项目 namespace');
     if (activeTab.value === 'BuildIn') {
       return t('搜索 系统名称、系统ID');
     }
@@ -373,7 +373,7 @@
   const rightEmptyHint = computed(() => (
     activeTab.value === 'EventLog'
       ? t('请先选择左侧插件')
-      : (activeTypeItem.value?.lazyDirectory && activeTab.value !== props.mineBizRtType
+      : (activeTypeItem.value?.lazyDirectory
         ? t('请先选择项目') : t('请先选择左侧业务'))
   ));
 
@@ -564,9 +564,9 @@
           item.value === path[1]
           || decodeId(tab.value, item.value) === leftId
         ))?.item;
-    const leftLabel = left
+    const leftLabel = left && left.node_type !== 'project'
       ? formatNodeNameId(left.label, left.namespace || decodeId(path[0], left.value) || leftId)
-      : leftId;
+      : left?.label || leftId;
     const right = left?.children?.find(item => item.value === path[2])
       || left?.children?.find(item => decodeId(path[0], item.value) === decodeId(path[0], path[2]))
       || lazyChildrenMap.value[`${path[0]}_${path[1]}`]?.find(item => item.value === path[2]);

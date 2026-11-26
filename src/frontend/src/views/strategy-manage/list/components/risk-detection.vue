@@ -29,7 +29,15 @@
           </render-info-block>
           <render-info-block>
             <render-info-item :label="t('标签')">
-              <edit-tag :data="data.tags?.map(item=> strategyMap[item] || item) || ''" />
+              <inline-tag
+                :editable="tagEditable"
+                :is-editing="isTagEditing"
+                :saving="isTagSaving"
+                :tag-list="tagList"
+                :tags="data.tags?.map(item => strategyMap[item] || item) || []"
+                @cancel="isTagEditing = false"
+                @edit="isTagEditing = true"
+                @save="handleTagSave" />
             </render-info-item>
           </render-info-block>
           <render-info-block>
@@ -149,7 +157,7 @@
   import useRequest from '@hooks/use-request';
   import { isProjectTableLazyEnabled } from '@hooks/use-project-table';
 
-  import EditTag from '@components/edit-box/tag.vue';
+  import InlineTag from '@components/edit-box/inline-tag.vue';
 
   import editWayIcon from '@images/strategy-manage/edit.svg';
   import modelWayIcon from '@images/strategy-manage/model.svg';
@@ -166,13 +174,38 @@
 
   interface Props {
     data: StrategyModel,
-    strategyMap: Record<string, string>
+    strategyMap: Record<string, string>,
+    tagEditable?: boolean,
+    tagList?: Array<{ tag_id: string | number, tag_name: string }>,
+    tagSave?: (tags: string[]) => Promise<unknown>,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    tagEditable: false,
+    tagList: () => [],
+    tagSave: undefined,
+  });
   const { t } = useI18n();
   const route = useRoute();
   const isPlatformMode = computed(() => isPlatformStrategyRoute(route.name));
+
+  const isTagEditing = ref(false);
+  const isTagSaving = ref(false);
+
+  const handleTagSave = (tags: string[]) => {
+    if (!props.tagSave) {
+      return;
+    }
+    isTagSaving.value = true;
+    props.tagSave(tags)
+      .then(() => {
+        isTagEditing.value = false;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        isTagSaving.value = false;
+      });
+  };
 
   const fetchStrategyTableList = (params: {
     table_type: string;

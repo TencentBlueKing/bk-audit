@@ -143,6 +143,15 @@ class ToolManage extends ModuleBase {
     const query = `?${processedParams(mergedParams).toString()}`;
     return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/${query}`);
   }
+  // 广场点击工具卡片或打开工作台时记录最近使用。无请求体，失败不提示。
+  recordRecentUsage(uid: string) {
+    return Request.post<{ recorded: boolean }>(`${this.path}/tool/${uid}/recent_usage/`, {
+      payload: {
+        silent: true,
+        catchError: true,
+      },
+    });
+  }
   // 工具执行
   getToolsExecute(params: ToolExecutePayload) {
     return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
@@ -162,11 +171,13 @@ class ToolManage extends ModuleBase {
   publishPlatformTool(params: {
     uid: string,
     scene_id: number,
+    status?: 'published' | 'unpublished',
   }) {
     return Request.post(`${this.path}/tool/scene/${params.uid}/publish/`, {
       params: {
         uid: params.uid,
         scene_id: params.scene_id,
+        ...(params.status ? { status: params.status } : {}),
       },
     });
   }

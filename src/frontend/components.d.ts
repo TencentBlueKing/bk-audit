@@ -34,6 +34,7 @@ declare module 'vue' {
     EditorImagePreview: typeof import('./src/components/editor-image-preview/index.vue')['default']
     EventList: typeof import('./src/components/skeleton-loading/components/event-list.vue')['default']
     ExtendAction: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/extend-action.vue')['default']
+    InlineTag: typeof import('./src/components/edit-box/inline-tag.vue')['default']
     Input: typeof import('./src/components/search-box/components/render-field-config/components/input.vue')['default']
     IpSelector: typeof import('./src/components/ip-selector/index.vue')['default']
     Item: typeof import('./src/components/audit-menu/item.vue')['default']

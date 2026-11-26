@@ -268,6 +268,68 @@ class TestCallerPermission(TestCase):
         self.assertTrue(is_tool_related_to_risk(risk.risk_id, "T_RISK_SCENE"))
         self.assertFalse(is_tool_related_to_risk(risk.risk_id, "T_OTHER_SCENE"))
 
+    def test_is_tool_related_to_risk_ignores_square_display_status(self):
+        """广场展示关闭（unpublished）的工具不影响下钻权限判定"""
+        from django.utils import timezone
+
+        from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
+        from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+        from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
+
+        scene = Scene.objects.create(name="scene-hidden-tool", status=SceneStatus.ENABLED)
+        strategy = Strategy.objects.create(namespace="ns", strategy_name="s_hidden_tool")
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+
+        # 广场展示关闭的工具：仍与策略关联且场景可见，下钻权限应通过
+        Tool.objects.create(
+            namespace="ns",
+            uid="T_HIDDEN",
+            version=1,
+            name="tool-hidden",
+            tool_type="data_search",
+            config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+            permission_owner="admin",
+            status=PanelStatus.UNPUBLISHED,
+        )
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id="T_HIDDEN",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
+        StrategyTool.objects.create(
+            strategy=strategy,
+            tool_uid="T_HIDDEN",
+            tool_version=1,
+            field_name="f1",
+            field_source=StrategyFieldSourceEnum.BASIC.value,
+        )
+        risk = Risk.objects.create(
+            raw_event_id="e_hidden_tool",
+            strategy=strategy,
+            event_time=timezone.now(),
+            scene_id=scene.scene_id,
+        )
+
+        self.assertTrue(is_tool_related_to_risk(risk.risk_id, "T_HIDDEN"))
+
     def test_extract_extra_variables(self):
         # 读取 current_type / current_object_id
         data = {"current_type": "tool", "current_object_id": "T2"}
