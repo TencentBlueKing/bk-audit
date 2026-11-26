@@ -3,7 +3,7 @@ export default {
     风险白名单: 'Risk whitelist',
     新建白名单: 'New whitelist',
     '规则标识、匹配范围、包含条件、加白类型、加白原因、更新人': 'Rule ID, match scope, condition, type, reason, updated by',
-    '规则标识、匹配范围、包含条件、加白类型、加白原因、更新人、状态': 'Rule ID, match scope, condition, type, reason, updated by, status',
+    '规则标识、匹配范围、包含条件、加白类型、状态、加白原因、更新人': 'Rule ID, match scope, condition, type, status, reason, updated by',
     规则标识: 'Rule ID',
     匹配范围: 'Match scope',
     包含条件: 'Condition',
@@ -136,5 +136,6 @@ export default {
     字段中文名: 'Field name',
     类型: 'Type',
     字段值: 'Value',
+    '点击可查看或复制完整内容': 'Click to view or copy full content',
   },
 };

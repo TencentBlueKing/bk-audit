@@ -293,7 +293,7 @@
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-  import JsonFieldPreview from './json-field-preview.vue';
+  import JsonFieldPreview from '@components/json-field-preview/index.vue';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
   const props = withDefaults(defineProps<{

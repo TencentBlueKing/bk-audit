@@ -7,10 +7,10 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-    software distributed under the License is distributed on
-    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-    either express or implied. See the License for the
-    specific language governing permissions and limitations under the License.
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
@@ -22,7 +22,7 @@
       <bk-popover
         arrow
         boundary="body"
-        ext-cls="sec-chat-json-preview-popover"
+        ext-cls="json-field-preview-popover"
         hide-ignore-reference
         :is-show="popoverVisible"
         placement="bottom-start"
@@ -41,6 +41,8 @@
               content: clickTip,
               disabled: !clickTip || popoverVisible,
               placement: 'top',
+              // 事件详情等 dialog 内也要压在遮罩之上
+              zIndex: 100060,
             }"
             class="json-field-preview-value">
             {{ previewText }}
@@ -49,18 +51,33 @@
         <template #content>
           <div
             class="json-field-preview-panel"
+            :class="{ 'is-tree': previewMode === 'tree' }"
             @click.stop>
             <button
+              v-if="previewMode !== 'tree'"
               class="json-copy-btn"
-              v-bk-tooltips="'复制'"
+              v-bk-tooltips="{
+                content: '复制',
+                // 默认 tip≈8000，低于 JSON 气泡(100050)，会穿到气泡后面
+                zIndex: 100060,
+                placement: 'top',
+              }"
               type="button"
               @click="handleCopy">
               <audit-icon type="copy" />
             </button>
             <div class="json-field-preview-scroll">
+              <!-- tree：与 API 工具调试一致的 json-viewer；highlight：AI 助手高亮文本 -->
+              <json-viewer
+                v-if="previewMode === 'tree'"
+                copyable
+                expand-depth="99"
+                theme="jv-light"
+                :value="jsonObject" />
               <!-- eslint-disable vue/no-v-html -->
               <!-- highlightHtml 由 getJsonHighlightHtml 生成，内容已 escapeHtml 转义 -->
               <pre
+                v-else
                 class="json-field-preview-code"
                 v-html="highlightHtml" />
               <!-- eslint-enable vue/no-v-html -->
@@ -90,15 +107,21 @@
     getJsonHighlightHtml,
     getJsonPrettyText,
     tryParseJsonObject,
-  } from '../utils/json-field-preview';
+  } from './utils';
 
   const props = withDefaults(defineProps<{
     /** 原始值（对象优先） */
     value?: unknown;
-    /** 非 JSON 时的展示文案 */
+    /** 非对象时的展示文案 */
     text?: string;
-    /** JSON 可点击预览时的 hover 提示 */
+    /** 可点击预览时的 hover 提示 */
     clickTip?: string;
+    /**
+     * 弹层内容形态：
+     * - highlight：高亮文本（AI 助手默认）
+     * - tree：vue-json-viewer 树（与 API 工具调试一致）
+     */
+    previewMode?: 'highlight' | 'tree';
     tooltipMaxWidth?: string | number;
     tooltipMaxHeight?: string;
     tooltipContentClass?: string;
@@ -106,6 +129,7 @@
     value: undefined,
     text: '',
     clickTip: '',
+    previewMode: 'highlight',
     tooltipMaxWidth: 480,
     tooltipMaxHeight: '400px',
     tooltipContentClass: 'show-tooltips-text-popup',
@@ -284,8 +308,9 @@
     box-sizing: border-box;
   }
 
-  .sec-chat-json-preview-popover {
-    z-index: 9999 !important;
+  /* z-index 需高于 bk-dialog，事件详情等弹窗内也能正常浮出 */
+  .json-field-preview-popover {
+    z-index: 100050 !important;
 
     .bk-pop2-content,
     .bk-popover-content {
@@ -310,7 +335,8 @@
   }
 
   .json-field-preview-scroll {
-    max-height: min(400px, 70vh);padding: var(--bk-theme-space-16) var(--bk-theme-space-32) var(--bk-theme-space-16) var(--bk-theme-space-16);
+    max-height: min(400px, 70vh);
+    padding: var(--bk-theme-space-16) var(--bk-theme-space-32) var(--bk-theme-space-16) var(--bk-theme-space-16);
     overflow-x: hidden;
     overflow-y: auto;
     box-sizing: border-box;
@@ -326,6 +352,20 @@
       background: var(--bk-theme-border-default);
       border-radius: var(--bk-theme-tag-radius);
     }
+  }
+
+  .json-field-preview-panel.is-tree .json-field-preview-scroll {
+    /* json-viewer 自带 copy，右侧不必再留复制按钮位 */
+    padding-right: var(--bk-theme-space-16);
+    min-width: 280px;
+  }
+
+  .json-field-preview-panel.is-tree .jv-container {
+    background: transparent;
+  }
+
+  .json-field-preview-panel.is-tree .jv-code {
+    padding: 0;
   }
 
   .json-copy-btn {

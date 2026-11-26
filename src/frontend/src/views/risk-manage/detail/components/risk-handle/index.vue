@@ -266,6 +266,8 @@
   let isInit = false;
   let renderedTimelineKey = '';
   let timelineBuildSeq = 0;
+  /** 同一笔加白只锚点一次，避免详情轮询反复抢滚动 */
+  let anchoredWhitelistKey = '';
   const list = ref<Record<string, any>[]>([]);
   const riskFieldMap = ref<Record<string, string>>({});
 
@@ -458,6 +460,24 @@
     }
   });
 
+  /** 在工单 dock 内把最新「加入白名单」节点滚到可视区域顶部（不改变时间线顺序） */
+  const scrollWhitelistNodeIntoDockTop = () => {
+    const root = rootRef.value as HTMLElement | undefined;
+    const dockBody = root?.closest?.('.risk-handle-dock__body') as HTMLElement | null;
+    // 翻转后 DOM 中第一个 WhitelistApply tag 即最新加白节点
+    const tag = root?.querySelector('.risk-handle-timeline-tag[class*="WhitelistApply-"]') as HTMLElement | null;
+    if (!dockBody || !tag) {
+      return;
+    }
+    const item = tag.closest('.bk-timeline-dot') as HTMLElement | null;
+    if (!item) {
+      return;
+    }
+    const bodyRect = dockBody.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    dockBody.scrollTop += itemRect.top - bodyRect.top;
+  };
+
   // 详情轮询会整体替换 data，签名不变时不重建，避免清空人工处理表单中的输入
   const getTimelineKey = (data: RiskManageModel) => `${data.status}|${JSON.stringify(data.ticket_history)}`;
 
@@ -512,13 +532,13 @@
       }
       const showHandleForm = ['await_deal', 'processing'].includes(data.status)
         || (data.status === 'closed' && data.risk_label === 'normal');
-      // 最新节点为未驳回的加白时，翻转后应把「加入白名单」顶到时间线顶部，而不是人工处理表单
+      // 时间线顺序不变（人工处理仍在上）；最新为未驳回加白时，进入后锚点滚到「加入白名单」节点
       const latestHistoryAction = data.ticket_history[data.ticket_history.length - 1]?.action;
-      const pinWhitelistOnTop = latestHistoryAction === 'WhitelistApply' && !whitelistRejected;
+      const shouldAnchorWhitelist = latestHistoryAction === 'WhitelistApply' && !whitelistRejected;
       if (showHandleForm) {
         const item = Object.assign({}, data.ticket_history[data.ticket_history.length - 1]);
         item.action = 'await_deal'; // 使用await_deal组件来处理两种状态
-        const handleFormListItem = {
+        list.value.push({
           tag: renderTimelineTag(
             item.action,
             data.ticket_history.length,
@@ -527,15 +547,8 @@
           ),
           content: '<template/>',
           icon: () => renderTimelineIcon(item.action, true),
-        };
-        if (pinWhitelistOnTop && list.value.length > 0) {
-          // 插到加白节点之前，reverse 后加白在顶、人工处理表单在其后
-          list.value.splice(list.value.length - 1, 0, handleFormListItem);
-          ticketHistory.value.splice(ticketHistory.value.length - 1, 0, item);
-        } else {
-          list.value.push(handleFormListItem);
-          ticketHistory.value.push(item);
-        }
+        });
+        ticketHistory.value.push(item);
       }
       // 翻转列表
       list.value.reverse();
@@ -558,12 +571,21 @@
             needScrollToContent.value = false;
             removeSearchParam('scrollToContent');
           }
-          // 加白后确保工单面板滚到顶部，露出「加入白名单」节点
-          if (pinWhitelistOnTop) {
-            const dockBody = rootRef.value?.closest?.('.risk-handle-dock__body') as HTMLElement | null;
-            if (dockBody) {
-              dockBody.scrollTop = 0;
+          if (shouldAnchorWhitelist) {
+            const whitelistAnchorId = [
+              data.risk_id,
+              latestWhitelist?.time || '',
+              latestWhitelist?.whitelist?.id
+                || latestWhitelist?.whitelist?.whitelist_id
+                || latestWhitelist?.whitelist?.itsm_sn
+                || '',
+            ].join('|');
+            if (anchoredWhitelistKey !== whitelistAnchorId) {
+              anchoredWhitelistKey = whitelistAnchorId;
+              scrollWhitelistNodeIntoDockTop();
             }
+          } else {
+            anchoredWhitelistKey = '';
           }
         });
       });

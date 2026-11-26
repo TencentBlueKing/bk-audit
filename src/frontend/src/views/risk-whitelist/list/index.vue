@@ -31,7 +31,7 @@
         class="page-search"
         clearable
         :data="searchData"
-        :placeholder="t('规则标识、匹配范围、包含条件、加白类型、加白原因、更新人、状态')"
+        :placeholder="t('规则标识、匹配范围、包含条件、加白类型、状态、加白原因、更新人')"
         unique-select
         @update:model-value="handleSearch" />
     </div>
@@ -235,8 +235,6 @@
         { id: 'risk_acceptance', name: t('冒险加白') },
       ],
     },
-    { id: 'reason', name: t('加白原因') },
-    { id: 'updated_by', name: t('更新人') },
     {
       id: 'status',
       name: t('状态'),
@@ -244,6 +242,8 @@
       placeholder: t('请选择状态'),
       children: Object.entries(WHITELIST_STATUS_TEXT).map(([id, name]) => ({ id, name: t(name) })),
     },
+    { id: 'reason', name: t('加白原因') },
+    { id: 'updated_by', name: t('更新人') },
   ]);
 
   /** 与表头筛选双向联动的字段（对齐执行记录 / 风险管理） */

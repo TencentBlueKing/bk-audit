@@ -563,7 +563,7 @@
   import { resolveStatisticsSubmit } from '../utils/build-statistics-retry-input';
   import { isFieldStatisticsType, isStatisticsAttachmentType } from '../utils/map-statistics-output';
   import { formatStatisticsInputError } from '../utils/statistics-input-error';
-  import JsonFieldPreview from './json-field-preview.vue';
+  import JsonFieldPreview from '@components/json-field-preview/index.vue';
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
   import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
   import LogStatisticsDialog, { type StatisticsSelectPayload } from './log-statistics-dialog.vue';

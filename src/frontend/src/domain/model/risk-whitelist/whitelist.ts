@@ -131,7 +131,8 @@ export interface EventFieldRow {
   field: string;
   field_name: string;
   field_type: string;
-  field_value: string;
+  /** 后端可能返回字符串，dict 也可能是对象或 JSON 字符串 */
+  field_value: unknown;
 }
 
 /** 列表「包含条件」筛选项：场景下 match_scope 字段去重 */
