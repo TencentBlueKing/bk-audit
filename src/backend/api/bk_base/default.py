@@ -47,6 +47,7 @@ from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
 from api.utils import get_endpoint
 from core.bk_api_base import AuditBkApiResource
+from core.redacted_log import RedactedRequestLogMixin
 from core.utils.retry import FuncRunner
 
 
@@ -146,13 +147,13 @@ class DatabusTasksDelete(BkBaseResource):
     url_keys = ["processing_id"]
 
 
-class CreateResourceSet(BkBaseResource):
+class CreateResourceSet(RedactedRequestLogMixin, BkBaseResource):
     name = gettext_lazy("创建资源")
     action = "/v3/resourcecenter/resource_sets/"
     method = "POST"
 
 
-class UpdateResourceSet(BkBaseResource):
+class UpdateResourceSet(RedactedRequestLogMixin, BkBaseResource):
     name = gettext_lazy("更新资源")
     action = "/v3/resourcecenter/resource_sets/{resource_set_id}/"
     method = "PATCH"

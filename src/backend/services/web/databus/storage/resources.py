@@ -31,6 +31,7 @@ from apps.exceptions import MetaConfigNotExistException, StorageChanging
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
+from core.redacted_log import RedactedRequestLogMixin
 from services.web.bkbase import plugin_storage_switch
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
@@ -258,11 +259,14 @@ class CreateStorageResource(StorageMeta):
         return data
 
 
-class CreateOrUpdateRedisResource(StorageMeta):
+class CreateOrUpdateRedisResource(RedactedRequestLogMixin, StorageMeta):
     name = gettext_lazy("创建或更新Redis")
     RequestSerializer = CreateRedisRequestSerializer
     ResponseSerializer = CreateRedisResponseSerializer
 
     def perform_request(self, validated_request_data):
+        # 评审 P2（BKSEC 1578945）：不加 decrypt 对齐位——init_redis 以明文直传共用本资源，
+        # 开启 BKCRYPTO 时明文会被当密文解密导致初始化失败；ES 链路的 decrypt 前有
+        # adapt_auth_password 前置适配，Redis 无对应机制，保持明文传输与修复前行为一致
         redis_id = validated_request_data.get("redis_id")
         return RedisHandler(redis_id).update_or_create(validated_request_data)

@@ -74,7 +74,7 @@ npm run server        # 运行打包后的静态服务
 | 提交规范 | Commitlint（conventional）+ Husky；提交前 lint-staged 自动对 `src/**` 执行 eslint 与 stylelint 修复 |
 | 导入排序 | `eslint-plugin-simple-import-sort` 强制 |
 | 组件自动导入 | `unplugin-vue-components`（仅 `src/components` 目录，`dts: true`） |
-| Node 版本 | `>= 16.16.0`（`.nvmrc`） |
+| Node 版本 | 支持范围见 `package.json` 的 `engines.node`，本地默认用 `.nvmrc` 选择 Node 22 |
 | 构建分包 | `vue` / `@vue` / `vue-router` / `vue-i18n` 打入 `vue-vendor` chunk |
 
 ---

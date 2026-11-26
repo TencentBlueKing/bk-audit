@@ -111,6 +111,9 @@ class AuditBkApiResource(BkApiResource):
         try:
             return super().perform_request(validated_request_data)
         except Exception as err:
+            # 已关闭原始请求日志的资源由脱敏 mixin 记录，不再输出异常原文和 traceback。
+            if not self.support_data_collect:
+                raise
             logger.error(
                 "[AuditBkApiResource] 出站请求失败: module=%s action=%s url=%s error_type=%s error=%s\n%s",
                 getattr(self, "module_name", ""),

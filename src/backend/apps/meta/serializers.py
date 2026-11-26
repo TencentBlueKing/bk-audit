@@ -69,6 +69,11 @@ from apps.meta.models import (
 from apps.meta.utils.format import format_resource_permission
 from apps.meta.utils.system import wrapper_system_status
 from core.models import get_request_username
+from core.utils.url_security import (
+    URLSecurityError,
+    validate_request_url,
+    validate_resource_path,
+)
 from services.web.common.serializers import OptionalScopeQuerySerializer
 
 
@@ -389,6 +394,15 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         help_text=gettext_lazy("操作的 system_id 和 resource_type_ids 会被自动填充"),
     )
 
+    # 资源路径形态校验规则与 core.utils.url_security.validate_resource_path 同源（含禁用前缀）
+    def validate_path(self, value: str) -> str:
+        """资源路径形态校验（仅管增量，存量脏数据由 schema 拉取出口校验兜底）"""
+        try:
+            validate_resource_path(value)
+        except URLSecurityError as err:
+            raise serializers.ValidationError(_("资源路径不合法")) from err
+        return value
+
     class Meta:
         model = ResourceType
         fields = [
@@ -452,6 +466,17 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             attrs["unique_id"] = expected
         elif attrs["unique_id"] != expected:
             raise serializers.ValidationError("unique_id 必须为 system_id 和 resource_type_id 的组合")
+
+        # 拼接后整体校验：仅当本次写入 path 时，校验其与所属系统 callback_url 的组合是否为合法 URL
+        # （update_system 变更 callback_url 时不回溯存量 path，存量脏数据由 get_schema 出口校验兜底）
+        path = attrs.get("path")
+        if path:
+            system = System.objects.filter(system_id=system_id).first()
+            if system and system.callback_url:
+                try:
+                    validate_request_url(f"{system.callback_url.rstrip('/')}/{path.lstrip('/')}")
+                except URLSecurityError as err:
+                    raise serializers.ValidationError({"path": _("资源路径与回调地址组合后不合法")}) from err
 
         return attrs
 
@@ -923,6 +948,15 @@ class CreateSystemReqSerializer(serializers.ModelSerializer):
             },
         }
 
+    def validate_callback_url(self, value: str) -> str:
+        if not value:
+            return value
+        try:
+            validate_request_url(value)
+        except URLSecurityError as err:
+            raise serializers.ValidationError(_("回调地址不合法")) from err
+        return value
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         attrs["auth_token"] = System.gen_auth_token()
@@ -983,6 +1017,15 @@ class UpdateSystemReqSerializer(serializers.Serializer):
     permission_type = serializers.ChoiceField(
         label=_("权限类型"), choices=SystemPermissionTypeEnum.choices, required=False, allow_null=True, allow_blank=True
     )
+
+    def validate_callback_url(self, value: str) -> str:
+        if not value:
+            return value
+        try:
+            validate_request_url(value)
+        except URLSecurityError as err:
+            raise serializers.ValidationError(_("回调地址不合法")) from err
+        return value
 
 
 class SystemFavoriteReqSerializer(serializers.Serializer):

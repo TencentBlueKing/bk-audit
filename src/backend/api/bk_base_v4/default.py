@@ -49,6 +49,7 @@ from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL
 from api.utils import get_endpoint
 from core.bk_api_base import AuditBkApiResource
+from core.redacted_log import RedactedRequestLogMixin
 from core.tenant import TENANT_ID_HEADER
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
@@ -319,7 +320,7 @@ class DatasetList(DatasetResource):
     requires_platform_auth = True
 
 
-class StorageAssetCreate(DatasetResource):
+class StorageAssetCreate(RedactedRequestLogMixin, DatasetResource):
     """登记Redis存储资产；受理返回asset_name，不冒充正式Ref或连通成功。"""
 
     action = "/v4/res_manage/assets/storage/"

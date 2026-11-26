@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:567b5ffc627d32aa1bfe84aadb48ad7eecb43685efe888cda67d10df4c09e339"
+content_hash = "sha256:c20fa1b05e5ec74acf6a2d349ad7c11f349e6abec28c2f0eaa62de58b039e7f2"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -1591,12 +1591,12 @@ files = [
 
 [[package]]
 name = "kafka-python"
-version = "2.0.2"
+version = "2.3.2"
 summary = "Pure Python client for Apache Kafka"
 groups = ["default"]
 files = [
-    {file = "kafka-python-2.0.2.tar.gz", hash = "sha256:04dfe7fea2b63726cd6f3e79a2d86e709d608d74406638c5da33a01d45a9d7e3"},
-    {file = "kafka_python-2.0.2-py2.py3-none-any.whl", hash = "sha256:2d92418c7cb1c298fa6c7f0fb3519b520d0d7526ac6cb7ae2a4fc65a51a94b6e"},
+    {file = "kafka_python-2.3.2-py2.py3-none-any.whl", hash = "sha256:e8a5e6f2c4ce13a8041669337038d5125e0e09e6d6f0911902ae5939e5b9595e"},
+    {file = "kafka_python-2.3.2.tar.gz", hash = "sha256:2d2469bcabc2551be7eaf7fb512e1241484d358800f2665b90e7e24fea84259d"},
 ]
 
 [[package]]
@@ -1723,16 +1723,16 @@ files = [
 
 [[package]]
 name = "mistune"
-version = "3.2.0"
-requires_python = ">=3.8"
+version = "3.4.0"
+requires_python = ">=3.10"
 summary = "A sane and fast Markdown parser with useful plugins and renderers"
 groups = ["default"]
 dependencies = [
     "typing-extensions; python_version < \"3.11\"",
 ]
 files = [
-    {file = "mistune-3.2.0-py3-none-any.whl", hash = "sha256:febdc629a3c78616b94393c6580551e0e34cc289987ec6c35ed3f4be42d0eee1"},
-    {file = "mistune-3.2.0.tar.gz", hash = "sha256:708487c8a8cdd99c9d90eb3ed4c3ed961246ff78ac82f03418f5183ab70e398a"},
+    {file = "mistune-3.4.0-py3-none-any.whl", hash = "sha256:d03cec4c8620f21517a996d82d14f3b59c30d79bda2cc6c56bd32b839f18ce6b"},
+    {file = "mistune-3.4.0.tar.gz", hash = "sha256:2eaf7952af928ca8d33b779762effc1da517b62c6ad85ec8ca957e3b07b9782a"},
 ]
 
 [[package]]
