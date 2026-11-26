@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import abc
+from concurrent.futures import ThreadPoolExecutor
 
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -181,14 +182,7 @@ class ListWhitelistContainsFields(RiskWhitelistMeta):
 
 
 class RetrieveRiskWhitelist(RiskWhitelistMeta):
-    """批量查询白名单工单详情：入参一批白名单 ID，服务端只挑出「待审批 / 已驳回」的单返回。
-
-    这两态是 flow 态（FLOW_STATUS），需要展示工单实时进度（当前处理人 / 步骤）。
-    逐条代理 ITSM 工单详情接口取 current_steps / current_processors / status / status_display /
-    creator / created_at / title / sn；无工单号或外呼失败时对应字段回落到白名单本地值，
-    保证入参里状态符合的白名单都出现在结果中。状态由服务端硬编码过滤，不受入参左右。
-    能进来即该场景管理员（viewset 已按 scene_id 校验 MANAGE_SCENE），scene_id 再兜一层越权。
-    """
+    """批量查询白名单工单详情：入参一批白名单 ID，「待审批 / 已驳回」的单返回。"""
 
     name = gettext_lazy("风险白名单详情")
     RequestSerializer = BatchRiskWhitelistDetailReqSerializer
@@ -197,12 +191,15 @@ class RetrieveRiskWhitelist(RiskWhitelistMeta):
         scene_id = validated_request_data["scene_id"]
         rule_ids = validated_request_data["id"]
         # 状态硬编码只取待审批 / 已驳回；scene_id 再过滤一次，杜绝跨场景 ID 越权查询
-        rules = RiskWhitelist.objects.filter(
-            pk__in=rule_ids,
-            scene_id=scene_id,
-            status__in=[WhitelistStatus.PENDING, WhitelistStatus.REJECTED],
+        rules = list(
+            RiskWhitelist.objects.filter(
+                pk__in=rule_ids,
+                scene_id=scene_id,
+                status__in=[WhitelistStatus.PENDING, WhitelistStatus.REJECTED],
+            ).order_by("-created_at")
         )
-        return [self._detail(rule) for rule in rules]
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            return list(executor.map(self._detail, rules))
 
     @staticmethod
     def _detail(rule: RiskWhitelist) -> dict:
@@ -212,6 +209,7 @@ class RetrieveRiskWhitelist(RiskWhitelistMeta):
         # 状态：工单返回优先；外呼失败回落白名单本地状态（列表态，和 flow 终态一致）
         status = detail.get("status") or rule.status
         status_display = detail.get("status_display") or str(WhitelistStatus(rule.status).label)
+        rejected = rule.status == WhitelistStatus.REJECTED
         return {
             "id": str(rule.id),
             "current_steps": detail.get("current_steps") or [],
@@ -223,6 +221,8 @@ class RetrieveRiskWhitelist(RiskWhitelistMeta):
             "created_at": detail.get("created_at") or submitted_at_of(rule),
             "title": detail.get("title") or "",
             "sn": detail.get("sn") or rule.itsm_sn or "",
+            "rejector": rule.updated_by if rejected else "",
+            "reject_reason": rule.reject_reason if rejected else "",
         }
 
 

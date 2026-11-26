@@ -656,6 +656,9 @@ class TestRiskConfirmPermission(BaseTestCase):
             with self.assertRaises(RiskConfirmPermissionDenied) as raised:
                 perm.has_permission(request, view)
         self.assertEqual(str(raised.exception.message), "当前用户不是确认人或平台管理员")
+        # 非确认人非平台管理员：按普通业务错误 400 返回，且不带权限申请链接（data 为空）
+        self.assertEqual(RiskConfirmPermissionDenied.STATUS_CODE, 400)
+        self.assertIsNone(raised.exception.data)
 
     def test_batch_requires_confirmer_on_every_risk(self):
         owned = self._mk(3, ["confirmer"])

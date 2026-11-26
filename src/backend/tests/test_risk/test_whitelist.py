@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import threading
 from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -325,12 +326,13 @@ class WhitelistCreateTests(SimpleTestCase):
 
 
 class WhitelistTicketCreateTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service.get_request_username", return_value="")
     @patch("services.web.risk.whitelist.service._scene_display", return_value="梯阵(1)")
     @patch("services.web.risk.whitelist.service._abort_whitelist")
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", side_effect=RuntimeError("boom"))
     @patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter")
-    def test_ticket_create_failure_raises(self, query, ticket_create, abort, _display):
+    def test_ticket_create_failure_raises(self, query, ticket_create, abort, _display, _username):
         rule = SimpleNamespace(
             id=1,
             itsm_ticket_id="",
@@ -347,10 +349,11 @@ class WhitelistTicketCreateTests(SimpleTestCase):
             create_itsm_ticket(1)
         abort.assert_called_once_with(rule)
 
+    @patch("services.web.risk.whitelist.service.get_request_username", return_value="")
     @patch("services.web.risk.whitelist.service.Scene.objects.filter")
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create", return_value={"id": "ticket-1"})
-    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_filter):
+    def test_ticket_create_passes_scene_admins_only(self, ticket_create, scene_filter, _username):
         from services.web.scene.models import Scene
 
         scene_filter.return_value.first.return_value = Scene(scene_id=3, managers=["scene-admin"])
@@ -470,6 +473,22 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
         operate.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.operate_itsm")
+    @patch("services.web.risk.whitelist.service._can_manage_whitelist", return_value=True)
+    def test_platform_admin_passes_immediately(self, can_manage, operate, apply_result):
+        from services.web.risk.whitelist.service import _pass_if_admin
+
+        # 平台管理员（非场景 managers）经 _can_manage_whitelist 放行后，与场景管理员一样创建即生效
+        operate.return_value = {"success": True, "message": "操作成功"}
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
+        _pass_if_admin(rule, "root")
+        operate.assert_called_once_with(rule, "approve", "root")
+        apply_result.assert_called_once_with(
+            rule,
+            {"id": "ticket-1", "status": ITSMV4TicketStatus.FINISHED, "approve_result": True},
+        )
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [
@@ -795,6 +814,7 @@ def _noop_atomic():
 
 
 class WhitelistFlowTests(SimpleTestCase):
+    @patch("services.web.risk.whitelist.service.get_request_username", return_value="")
     @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
     @patch("services.web.risk.whitelist.service._find_converged_risk", return_value=None)
     @patch("services.web.risk.whitelist.service.RiskWhitelistHit.objects.bulk_create")
@@ -813,6 +833,7 @@ class WhitelistFlowTests(SimpleTestCase):
         bulk_create,
         find_risk,
         refresh_nodes,
+        _username,
     ):
         manager = _WhitelistManager()
         scene_filter.return_value.exists.return_value = True
@@ -1565,9 +1586,18 @@ class WhitelistDetailTests(SimpleTestCase):
             created_by="alice",
             created_at=None,
             updated_at=None,
+            updated_by="",
+            reject_reason="",
         )
         base.update(kwargs)
         return SimpleNamespace(**base)
+
+    @staticmethod
+    def _qs(rules):
+        # perform_request 先 .order_by() 再物化，mock 需让 order_by 回吐规则列表
+        qs = MagicMock()
+        qs.order_by.return_value = rules
+        return qs
 
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
@@ -1575,7 +1605,7 @@ class WhitelistDetailTests(SimpleTestCase):
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
         rule = self._detail_rule()
-        objects.filter.return_value = [rule]
+        objects.filter.return_value = self._qs([rule])
         load_detail.return_value = {
             "id": "ticket-1",
             "sn": "SN-1",
@@ -1604,6 +1634,8 @@ class WhitelistDetailTests(SimpleTestCase):
                     "created_at": "2026-11-11 10:00:00",
                     "title": "【审计中心】风险白名单",
                     "sn": "SN-1",
+                    "rejector": "",
+                    "reject_reason": "",
                 }
             ],
         )
@@ -1613,12 +1645,14 @@ class WhitelistDetailTests(SimpleTestCase):
         # 服务端硬编码只取待审批 / 已驳回，并按 scene_id 兜一层越权，与入参 ids 求交
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
-        objects.filter.return_value = []
+        objects.filter.return_value = self._qs([])
         RetrieveRiskWhitelist().perform_request({"id": [1, 2, 3], "scene_id": 3})
         called = objects.filter.call_args.kwargs
         self.assertEqual(called["scene_id"], 3)
         self.assertEqual(called["pk__in"], [1, 2, 3])
         self.assertEqual(set(called["status__in"]), {WhitelistStatus.PENDING, WhitelistStatus.REJECTED})
+        # 并发外呼前按创建时间倒序定序，executor.map 据此保序返回
+        objects.filter.return_value.order_by.assert_called_once_with("-created_at")
 
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
@@ -1632,8 +1666,10 @@ class WhitelistDetailTests(SimpleTestCase):
             itsm_ticket_id="ticket-9",
             itsm_sn="SN-9",
             created_by="bob",
+            updated_by="admin",
+            reject_reason="范围过宽",
         )
-        objects.filter.return_value = [rule]
+        objects.filter.return_value = self._qs([rule])
         load_detail.return_value = {}
 
         result = RetrieveRiskWhitelist().perform_request({"id": [9], "scene_id": 3})
@@ -1647,6 +1683,31 @@ class WhitelistDetailTests(SimpleTestCase):
         self.assertEqual(item["current_steps"], [])
         self.assertEqual(item["current_processors"], [])
         self.assertEqual(item["title"], "")
+        # 已驳回：驳回人取更新人，驳回理由取本地登记值
+        self.assertEqual(item["rejector"], "admin")
+        self.assertEqual(item["reject_reason"], "范围过宽")
+
+    @patch("services.web.risk.resources.whitelist._load_ticket_detail")
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    def test_detail_concurrent_preserves_order(self, objects, load_detail):
+        # 并发外呼：后提交的先返回也不得打乱顺序，结果必须按定序后的输入顺序返回
+        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
+
+        rules = [self._detail_rule(id=i, itsm_ticket_id=f"ticket-{i}") for i in (1, 2, 3, 4)]
+        objects.filter.return_value = self._qs(rules)
+        # 首条等待其余全部进入外呼：能进入即证并发；首条最慢完成，用于验证输出仍按输入顺序
+        all_entered = threading.Barrier(len(rules), timeout=5)
+
+        def fake_detail(rule):
+            all_entered.wait()
+            return {"id": str(rule.id), "sn": rule.itsm_sn, "current_steps": [], "current_processors": []}
+
+        load_detail.side_effect = fake_detail
+
+        result = RetrieveRiskWhitelist().perform_request({"id": [1, 2, 3, 4], "scene_id": 3})
+
+        self.assertEqual([item["id"] for item in result], ["1", "2", "3", "4"])
+        self.assertEqual(load_detail.call_count, 4)
 
     @patch("services.web.risk.whitelist.service.list_actions", return_value=[])
     def test_serialize_rule_include_flow_controls_flow_key(self, _actions):
@@ -1725,6 +1786,34 @@ class WhitelistReviewTests(SimpleTestCase):
             scope_cls.return_value.get_scene_ids.return_value = [3]
             self.assertEqual(managed_scene_ids("alice"), [3])
             self.assertEqual(scope_cls.return_value.get_scene_ids.call_args.args[1], ActionEnum.MANAGE_SCENE)
+
+    def test_whitelist_approvers_includes_current_user_with_manage_scene(self):
+        from services.web.risk.whitelist.service import _whitelist_approvers
+
+        # 当前用户不在 managers，但有该场景 MANAGE_SCENE → 补进审批人
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
+            "services.web.risk.whitelist.service.get_request_username", return_value="bob"
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=True):
+            self.assertEqual(_whitelist_approvers(3), ["alice", "bob"])
+
+    def test_whitelist_approvers_skips_duplicate_and_no_permission(self):
+        from services.web.risk.whitelist.service import _whitelist_approvers
+
+        # 当前用户已在 managers → 不重复加（即便 IAM 也判有权）
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
+            "services.web.risk.whitelist.service.get_request_username", return_value="alice"
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=True):
+            self.assertEqual(_whitelist_approvers(3), ["alice"])
+        # 当前用户不在 managers 且无 MANAGE_SCENE → 不加
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
+            "services.web.risk.whitelist.service.get_request_username", return_value="bob"
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False):
+            self.assertEqual(_whitelist_approvers(3), ["alice"])
+        # 无请求上下文（get_request_username 为空）→ 不加
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
+            "services.web.risk.whitelist.service.get_request_username", return_value=""
+        ):
+            self.assertEqual(_whitelist_approvers(3), ["alice"])
 
     def test_platform_admin_same_actions_as_scene_admin(self):
         from services.web.risk.whitelist.service import is_scene_admin, list_actions
@@ -1942,6 +2031,22 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
                     }
                 )
         create.assert_not_called()
+
+    def test_confirm_permission_denied_is_400_without_apply_url(self):
+        # 确认误报 / 确认风险 / 申请加白共用：非确认人非平台管理员按 400 返回，且不带权限申请链接
+        from services.web.risk.exceptions import RiskConfirmPermissionDenied
+        from services.web.risk.permissions import RiskConfirmPermission
+
+        self.assertEqual(RiskConfirmPermissionDenied.STATUS_CODE, 400)
+        self.assertIsNone(RiskConfirmPermissionDenied().data)
+        # 无 risk_id 时按平台管理员判断：必须以 raise_exception=False 调用，
+        # 否则失败会抛带 apply_url 的 PermissionException；失败应落到无链接的确认权限异常
+        request = SimpleNamespace(user=SimpleNamespace(username="stranger"), data={}, query_params={})
+        view = SimpleNamespace(kwargs={})
+        with patch("services.web.risk.permissions.PermissionService.is_allowed", return_value=False) as is_allowed:
+            with self.assertRaises(RiskConfirmPermissionDenied):
+                RiskConfirmPermission().has_permission(request, view)
+        self.assertFalse(is_allowed.call_args.kwargs.get("raise_exception", True))
 
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service._pass_if_admin")
