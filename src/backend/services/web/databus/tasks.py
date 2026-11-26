@@ -20,7 +20,7 @@ import datetime
 import os
 import time
 import traceback
-from typing import Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 import requests
 from bk_resource import resource
@@ -53,8 +53,14 @@ from services.web.bkbase.constants import BKBaseVersion
 from services.web.common.monitor import (
     AssetSyncAnomalyEvent,
     AssetSyncCheckAnomalyEvent,
+    LogCollectFlowMetric,
 )
 from services.web.databus.collector.check.handlers import ReportCheckHandler
+from services.web.databus.collector.check.log_flow_sampler import (
+    STORAGE_TYPES,
+    sample_source,
+    sample_storage,
+)
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.handlers import TailLogHandler
 from services.web.databus.collector.snapshot.join.base import (
@@ -78,10 +84,12 @@ from services.web.databus.constants import (
     PULL_HANDLER_PRE_CHECK_TIMEOUT,
     AssetSyncAnomalyReason,
     CheckErrorType,
+    CustomTypeEnum,
     EtlConfigEnum,
     JoinDataType,
     PluginSceneChoices,
     SnapshotRunningStatus,
+    SourcePlatformChoices,
 )
 from services.web.databus.models import (
     CollectorConfig,
@@ -935,3 +943,147 @@ def poll_bkbase_v4_clean_operations():
     """V4清洗/删源每次只做一次观测，避免请求线程等待。"""
     bkbase_clean.poll_clean_operations()
     bkbase_source.poll_source_operations()
+
+
+# =============================================================================
+# BK Log -> Doris/HDFS 水位监控
+#
+# 口径：只上报指标，不判定断流、不写阈值、不落库、不发事件。
+#   - 源端记录（每采集项 1 组）：source_query_ok / source_receive_time / source_age_seconds
+#   - 存储记录（每采集项 × 每 storage_type 1 组）：storage_query_ok / storage_has_watermark /
+#     storage_receive_time / lag_seconds / lag_source_receive_time
+#   - 轮次记录（每轮 1 条）：heartbeat / duration_seconds / collector_total / collector_failed
+# 监控平台策略：
+#   - lag 大 + age 小 → 存储没跟上
+#   - age 大 + lag 小 → 数据源停滞
+#   - query_ok 连续 0 → 观测中断（不是数据断流）
+# =============================================================================
+
+
+def _build_flow_dimension(collector: CollectorConfig, storage_type: Optional[str] = None) -> Dict[str, str]:
+    """维度统一转字符串并补空串：Metric 会静默丢弃 None 维度，避免维度集不一致。"""
+    dimension = {
+        "system_id": collector.system_id or "",
+        "collector_config_id": str(collector.collector_config_id),
+        "bk_data_id": "" if collector.bk_data_id is None else str(collector.bk_data_id),
+    }
+    if storage_type:
+        dimension["storage_type"] = storage_type
+    return dimension
+
+
+def _build_flow_records(
+    collector: CollectorConfig,
+    source: Dict[str, Any],
+    storage_type: str,
+    storage: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """组装单个采集项的单条存储记录（源端记录由调用方单独组装一次）。"""
+    dimension = _build_flow_dimension(collector, storage_type)
+    metrics: Dict[str, int] = {
+        "log_collect_storage_query_ok": storage["query_ok"],
+        "log_collect_storage_has_watermark": storage["has_watermark"],
+    }
+    if storage["receive_time"] is not None:
+        metrics["log_collect_storage_receive_time"] = storage["receive_time"]
+    # 只有两侧都有水位才算得出延迟；算不出就不报（缺值不补 0）
+    if storage["receive_time"] is not None and source["receive_time"] is not None:
+        metrics["log_collect_lag_seconds"] = source["receive_time"] - storage["receive_time"]
+        metrics["log_collect_lag_source_receive_time"] = source["receive_time"]
+    return [{"target": str(collector.collector_config_id), "metrics": metrics, "dimension": dimension}]
+
+
+def _report_flow_metrics(records: List[Dict[str, Any]]) -> None:
+    """分块上报；未配置 BKM 指标数据源时整体跳过（不阻断任务）。"""
+    metric = LogCollectFlowMetric(records=records)
+    if not metric.is_configured:
+        logger.warning("[CollectorLogFlowCheck] metric skipped, data_id/access_token unset")
+        return
+    ready_records = metric.records
+    for start in range(0, len(ready_records), settings.LOG_FLOW_METRIC_CHUNK_SIZE):
+        Metric(records=ready_records[start : start + settings.LOG_FLOW_METRIC_CHUNK_SIZE]).report()
+
+
+@periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.LOG_FLOW_TIME_LIMIT)
+@lock(lock_name="celery:collector_log_flow_check", timeout=settings.LOG_FLOW_LOCK_TIMEOUT)
+def collector_log_flow_check():
+    """链路一：BK Log -> Doris/HDFS 水位监控（纯指标上报）"""
+    started_at = time.time()
+    collectors = list(
+        CollectorConfig.objects.filter(
+            source_platform=SourcePlatformChoices.BKLOG.value,
+            custom_type=CustomTypeEnum.LOG.value,
+        )
+        .exclude(bkbase_table_id__isnull=True)
+        .exclude(bkbase_table_id="")
+    )
+
+    records: List[Dict[str, Any]] = []
+    failed = 0
+    for collector in collectors:
+        try:
+            source = sample_source(collector)
+        except Exception:  # NOCC:broad-except(单采集项失败不能中断整轮)
+            logger.exception("[CollectorLogFlowCheck] source failed, collector=%s", collector.collector_config_id)
+            failed += 1
+            continue
+
+        source_dimension = _build_flow_dimension(collector)
+        records.append(
+            {
+                "target": str(collector.collector_config_id),
+                "metrics": {"log_collect_source_query_ok": source["query_ok"]},
+                "dimension": source_dimension,
+            }
+        )
+        if source["receive_time"] is not None:
+            records.append(
+                {
+                    "target": str(collector.collector_config_id),
+                    "metrics": {"log_collect_source_receive_time": source["receive_time"]},
+                    "dimension": source_dimension,
+                }
+            )
+        if source["age_seconds"] is not None:
+            records.append(
+                {
+                    "target": str(collector.collector_config_id),
+                    "metrics": {"log_collect_source_age_seconds": source["age_seconds"]},
+                    "dimension": source_dimension,
+                }
+            )
+
+        for storage_type in STORAGE_TYPES:
+            try:
+                storage = sample_storage(collector, storage_type)
+            except Exception:  # NOCC:broad-except(单存储失败只影响自己)
+                logger.exception(
+                    "[CollectorLogFlowCheck] storage failed, collector=%s, storage=%s",
+                    collector.collector_config_id,
+                    storage_type,
+                )
+                storage = {"query_ok": 0, "has_watermark": 0, "receive_time": None}
+            records.extend(_build_flow_records(collector, source, storage_type, storage))
+
+    # 轮次心跳：区分「任务没跑」与「采集项全查不到」
+    records.append(
+        {
+            "target": "collector_log_flow_check",
+            "metrics": {
+                "log_collect_check_heartbeat": 1,
+                "log_collect_check_duration_seconds": int(time.time() - started_at),
+                "log_collect_collector_total": len(collectors),
+                "log_collect_collector_failed": failed,
+            },
+            "dimension": {"stage": "round"},
+        }
+    )
+
+    _report_flow_metrics(records)
+    logger.info(
+        "[CollectorLogFlowCheck] finished: collectors=%s failed=%s records=%s cost=%ss",
+        len(collectors),
+        failed,
+        len(records),
+        int(time.time() - started_at),
+    )
