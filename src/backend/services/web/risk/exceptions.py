@@ -80,8 +80,8 @@ class BulkSelectionOverLimit(RiskException):
 
 
 class RiskConfirmPermissionDenied(RiskException):
-    """确认风险只允许确认人或平台管理员，不引导申请平台管理权限。"""
+    """确认风险只允许确认人或平台管理员；非授权身份按普通业务错误返回，不引导申请平台管理权限。"""
 
     MESSAGE = gettext_lazy("当前用户不是确认人或平台管理员")
-    STATUS_CODE = 403
+    STATUS_CODE = 400
     ERROR_CODE = "007"

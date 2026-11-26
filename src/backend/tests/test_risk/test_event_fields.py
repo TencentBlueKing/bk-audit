@@ -9,7 +9,8 @@ ListEventFieldsByStrategy 接口单测
 
 from bk_resource import resource
 
-from services.web.risk.constants import EventBasicField
+from core.sql.constants import FieldType
+from services.web.risk.constants import EVENT_BASIC_FIELD_TYPE_MAP, EventBasicField
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -119,3 +120,35 @@ class TestListEventFieldsByStrategy(TestCase):
             self.assertEqual(item["type"], "basic_event_field")
         for item in result[7:]:
             self.assertNotIn("type", item)
+
+    def test_basic_fields_carry_field_type(self):
+        """基本信息字段返回 field_type，取自 EVENT_BASIC_FIELD_TYPE_MAP（event_time→timestamp）"""
+        result = resource.risk.list_event_fields_by_strategy(strategy_ids=[self.strategy_1.strategy_id])
+
+        basic = {item["field_name"]: item for item in result[:7]}
+        self.assertEqual(basic["event_time"]["field_type"], FieldType.TIMESTAMP.value)
+        self.assertEqual(basic["strategy_id"]["field_type"], FieldType.LONG.value)
+        self.assertEqual(basic["raw_event_id"]["field_type"], FieldType.STRING.value)
+        self.assertEqual(basic["operator"]["field_type"], FieldType.TEXT.value)
+        # 每个基本字段的 field_type 与映射表一致
+        for field_name, item in basic.items():
+            self.assertEqual(item["field_type"], EVENT_BASIC_FIELD_TYPE_MAP[field_name])
+
+    def test_extended_field_field_type_from_strategy_select_configs(self):
+        """扩展字段 field_type 由 strategy.configs.select 按 display_name 带出；缺失则为 None"""
+        strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="strategy-with-select",
+            risk_level=RiskLevel.LOW.value,
+            event_data_field_configs=[
+                {"field_name": "src_ip", "display_name": "src_ip"},
+                {"field_name": "no_type", "display_name": "no_type"},
+            ],
+            configs={"select": [{"display_name": "src_ip", "field_type": FieldType.LONG.value}]},
+        )
+
+        result = resource.risk.list_event_fields_by_strategy(strategy_ids=[strategy.strategy_id])
+        extended = {item["field_name"]: item for item in result[7:]}
+
+        self.assertEqual(extended["src_ip"]["field_type"], FieldType.LONG.value)
+        self.assertIsNone(extended["no_type"]["field_type"])
