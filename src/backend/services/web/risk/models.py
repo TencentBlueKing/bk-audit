@@ -417,10 +417,16 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
         from services.web.risk.handlers.ticket import MisReport, ReOpenMisReport
+        from services.web.risk.whitelist.constants import WHITELIST_NODE_ACTION
 
+        # 加白节点（WhitelistApply）是审批留痕，不是流转状态节点。
+        # 若不排除，详情里加白后会顶掉套餐审批/自动处理节点，
+        # MisReport、ForApprove 撤销原审批时会按它取错工单 ID 与 action。
+        # 风险详情时间线（ticket_history）走 TicketNode 直查，不读 last_history，不受影响。
+        skipped_actions = {MisReport.__name__, ReOpenMisReport.__name__, WHITELIST_NODE_ACTION}
         nodes = TicketNode.objects.filter(risk_id=self.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
-            if node.action not in [MisReport.__name__, ReOpenMisReport.__name__]:
+            if node.action not in skipped_actions:
                 return node
         return TicketNode()
 

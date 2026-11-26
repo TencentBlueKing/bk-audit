@@ -143,12 +143,12 @@ class RiskConfirmPermission(IAMPermission):
             risks = Risk.objects.filter(risk_id__in=self.get_risk_ids()).only("confirmer")
             if bool(risks) and all(risk.confirmer and username in risk.confirmer for risk in risks):
                 return True
-            if PermissionService().is_allowed(ActionEnum.MANAGE_PLATFORM):
+            if PermissionService().is_allowed(ActionEnum.MANAGE_PLATFORM, raise_exception=False):
                 return True
             raise RiskConfirmPermissionDenied()
         risk_id = view.kwargs.get("pk") or request.data.get("risk_id") or request.query_params.get("risk_id") or ""
         if not risk_id:
-            if PermissionService().is_allowed(ActionEnum.MANAGE_PLATFORM):
+            if PermissionService().is_allowed(ActionEnum.MANAGE_PLATFORM, raise_exception=False):
                 return True
             raise RiskConfirmPermissionDenied()
         risk = get_object_or_404(Risk, risk_id=risk_id)
