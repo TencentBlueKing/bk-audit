@@ -210,6 +210,33 @@ class FlowPureOperationTests(FlowFixture, TransactionTestCase):
         self.assertEqual(self.strategy.status, StrategyStatusChoices.DISABLED)
         self.assertEqual(len(self.writes()), 1)
 
+    def test_stop_receipt_accepts_null_inactive_deployment_omitted_by_get(self):
+        self.remote["spec"]["nodes"].append({"name": "sql", "kind": "StreamNode", "inputs": ["source"]})
+        operation = self.remote["spec"]["operation_config"]
+        operation["stream_sql_deploy_config"] = {
+            "cluster": "published_stream",
+            "deploy_mode": "k8s-operator",
+            "deploy_config": None,
+        }
+        self.stop()
+
+        self.assertEqual(
+            self.writes()[0][2]["json"]["spec"]["operation_config"],
+            {**operation, "batch_sql_deploy_config": None},
+        )
+        self.assertIs(self.binding()["pure_operation"]["accepted"], True)
+        self.assertEqual(self.strategy.status, StrategyStatusChoices.STOPPING)
+
+        self.remote["spec"]["operation_config"].pop("batch_sql_deploy_config")
+        self.remote["status"]["phase"] = "Ok"
+        self.observe()
+
+        pure = self.binding()["pure_operation"]
+        self.assertTrue(pure["goal_observed"])
+        self.assertFalse(pure["write_fence"])
+        self.assertEqual(self.strategy.status, StrategyStatusChoices.DISABLED)
+        self.assertEqual(len(self.writes()), 1)
+
     def test_unknown_receipt_is_not_turned_into_success_by_observation(self):
         self.write_error = requests.Timeout("synthetic timeout")
         self.stop()

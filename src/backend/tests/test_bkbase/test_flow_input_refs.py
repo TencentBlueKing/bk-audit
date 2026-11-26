@@ -24,7 +24,12 @@ from services.web.databus.models import Snapshot
 from services.web.strategy_v2.models import Strategy
 
 
-@override_settings(BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit")
+@override_settings(
+    BKBASE_API_VERSION="v4",
+    BKBASE_V4_TENANT="tenant_a",
+    BKBASE_V4_NAMESPACE="audit",
+    BKBASE_V4_STREAM_CLUSTER="synthetic_stream",
+)
 class FlowInputRefTests(TransactionTestCase):
     def setUp(self):
         self.context = {
@@ -128,6 +133,7 @@ class FlowInputRefTests(TransactionTestCase):
             "requests.sessions.Session.request", side_effect=transport
         ):
             original_spec = self.build()
+            original_spec["operation_config"].pop("batch_sql_deploy_config")
             original_spec["nodes"][-1]["storage_config"].update(flush_timeout=60, tokenizers={"event_data": ","})
             self.strategy.backend_data["bkbase_v4"].update(
                 flow=flow_ref, managed_nodes=[node["name"] for node in original_spec["nodes"]]
@@ -143,17 +149,31 @@ class FlowInputRefTests(TransactionTestCase):
             self.flow_get.return_value = current
             desired = self.build()
             locked = deepcopy(current)
+            locked["spec"]["operation_config"]["stream_sql_deploy_config"]["cluster"] = "locked_stream"
             locked["spec"]["nodes"][-1]["storage_config"]["flush_timeout"] = 120
             self.flow_get.side_effect = [locked]
             self.put.side_effect = FlowUpdate().request
             flow.apply_rule_flow(self.context, self.strategy, desired)
             self.assertEqual(len(sent), 1)
+            self.assertEqual(
+                sent[0]["spec"]["operation_config"],
+                {
+                    "start_position": "continue",
+                    "stream_sql_deploy_config": {
+                        "cluster": "locked_stream",
+                        "deploy_mode": "k8s-operator",
+                        "deploy_config": None,
+                    },
+                    "batch_sql_deploy_config": None,
+                },
+            )
             self.assertEqual(sent[0]["spec"]["nodes"][1]["config"]["sql"], "SELECT id FROM 1_input")
             self.assertIn("flush_timeout", sent[0]["spec"]["nodes"][-1]["storage_config"])
             self.assertEqual(sent[0]["spec"]["nodes"][-1]["storage_config"]["flush_timeout"], 120)
             self.assertEqual(sent[0]["spec"]["nodes"][-1]["storage_config"]["tokenizers"], {"event_data": ","})
             self.flow_get.side_effect = None
             self.flow_get.return_value = {"kind": "Flow", **deepcopy(sent[0]), "status": {"phase": "Ok"}}
+            self.flow_get.return_value["spec"]["operation_config"].pop("batch_sql_deploy_config")
             flow.apply_rule_flow(self.context, self.strategy, self.build())
             self.assertEqual(len(sent), 1)
 

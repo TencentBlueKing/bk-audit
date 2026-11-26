@@ -533,11 +533,38 @@ class FlowGet(BkBaseV4Resource):
     ResponseSerializer = ObjectResponseSerializer
 
 
+def flow_spec_for_write(spec):
+    """正式读回可能省略未用部署块，写入时补协议要求的 null。"""
+    operation = spec.get("operation_config") if isinstance(spec, dict) else None
+    if not isinstance(operation, dict):
+        return spec
+    kinds = {node.get("kind") for node in spec.get("nodes") or () if isinstance(node, dict)}
+    if {"StreamNode", "BatchSqlNode"} <= kinds:
+        return spec
+    for kind, active, inactive in (
+        ("StreamNode", "stream_sql_deploy_config", "batch_sql_deploy_config"),
+        ("BatchSqlNode", "batch_sql_deploy_config", "stream_sql_deploy_config"),
+    ):
+        if kind in kinds and active in operation and inactive not in operation:
+            return {**spec, "operation_config": {**operation, inactive: None}}
+    return spec
+
+
+def _complete_flow_payload(kwargs):
+    payload = kwargs.get("json", {})
+    if "spec" in payload:
+        payload["spec"] = flow_spec_for_write(payload["spec"])
+    return kwargs
+
+
 class FlowCreate(FlowGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/flows/"
     method = "POST"
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
+
+    def before_request(self, kwargs):
+        return super().before_request(_complete_flow_payload(kwargs))
 
 
 class FlowUpdate(FlowGet):
@@ -547,7 +574,7 @@ class FlowUpdate(FlowGet):
     def before_request(self, kwargs):
         """完整写入不跟随重定向，避免307/308在客户端重复发送PUT。"""
         kwargs["allow_redirects"] = False
-        return super().before_request(kwargs)
+        return super().before_request(_complete_flow_payload(kwargs))
 
     def parse_response(self, response):
         """仅文档化成功凭证证明保存；重定向、裸对象或矛盾包裹均未决。"""

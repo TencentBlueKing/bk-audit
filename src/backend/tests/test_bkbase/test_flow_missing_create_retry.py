@@ -37,7 +37,12 @@ from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.resources import RetryStrategy
 
 
-@override_settings(BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit")
+@override_settings(
+    BKBASE_API_VERSION="v4",
+    BKBASE_V4_TENANT="tenant_a",
+    BKBASE_V4_NAMESPACE="audit",
+    BKBASE_V4_STREAM_CLUSTER="synthetic_stream",
+)
 class MissingCreateRetryTests(TransactionTestCase):
     def setUp(self):
         self.logical = "1_" + "long_input_" * 6
