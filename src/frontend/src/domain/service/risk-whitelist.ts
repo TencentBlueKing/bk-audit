@@ -19,12 +19,14 @@ import type {
   EventFieldRow,
   HitRecord,
   RenewPayload,
+  WhitelistFlow,
   WhitelistPayload,
 } from '@model/risk-whitelist/whitelist';
 import RiskWhitelist, {
   fromMatchScopeBody,
   toMatchScopeBody,
   toWhitelistBody,
+  toWhitelistFlow,
 } from '@model/risk-whitelist/whitelist';
 
 import RiskWhitelistSource from '../source/risk-whitelist';
@@ -115,6 +117,50 @@ export default {
         ...data,
         results: (data.results || []).map(item => new RiskWhitelist(item)),
       }));
+  },
+
+  /**
+   * 批量回显 ITSM flow：入参 id 列表 + scene_id。
+   * 兼容 results/items 数组，或 id → payload 的对象映射。
+   */
+  fetchDetailInfo(params: { id: Array<number | string>; scene_id?: string | number }) {
+    const ids = (params.id || [])
+      .map(item => Number(item))
+      .filter(item => Number.isFinite(item) && item > 0);
+    const withScene = { ...sceneParams(params.scene_id) };
+    if (withScene.scene_id === undefined || !ids.length) {
+      return Promise.resolve({} as Record<string, WhitelistFlow>);
+    }
+    return RiskWhitelistSource.getDetailInfo({
+      scene_id: withScene.scene_id,
+      id: ids,
+    }, { permission: 'page' })
+      .then(({ data }) => {
+        const rows: Array<Record<string, any>> = (() => {
+          if (Array.isArray(data)) return data;
+          if (data && typeof data === 'object') {
+            if (Array.isArray((data as any).results)) return (data as any).results;
+            if (Array.isArray((data as any).items)) return (data as any).items;
+            return Object.entries(data as Record<string, any>).map(([key, value]) => {
+              if (value && typeof value === 'object') {
+                return { id: (value as any).id ?? key, ...(value as object) };
+              }
+              return { id: key };
+            });
+          }
+          return [];
+        })();
+        return rows.reduce((result, item) => {
+          const id = item?.id;
+          if (id === undefined || id === null || id === '') return result;
+          result[String(id)] = toWhitelistFlow(item, {
+            itsm_sn: item.itsm_sn || '',
+            itsm_url: item.itsm_url || '',
+            applicant: item.applicant || '',
+          });
+          return result;
+        }, {} as Record<string, WhitelistFlow>);
+      });
   },
 
   /** 菜单新建，或风险单上单独加白（带 risk_id，场景以风险单为准） */

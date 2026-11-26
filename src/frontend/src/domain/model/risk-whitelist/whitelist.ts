@@ -202,7 +202,13 @@ const joinNames = (list: unknown): string => {
     .map((item) => {
       if (item && typeof item === 'object') {
         const named = item as Record<string, any>;
-        return named.name || named.display_name || named.username || named.id || '';
+        // detail_info 的 current_processors 用人名字段 processor
+        return named.name
+          || named.display_name
+          || named.username
+          || named.processor
+          || named.id
+          || '';
       }
       return item;
     })
@@ -222,6 +228,37 @@ const emptyFlow = (): WhitelistFlow => ({
   reject_reason: '',
   rejected_at: '',
 });
+
+/**
+ * 列表/详情/批量 detail_info 的 flow 归一化。
+ * 兼容嵌套 flow，或 ITSM 字段摊平在根上（sn / current_steps / created_at 等）。
+ */
+export const toWhitelistFlow = (
+  payload: Record<string, any> = {},
+  fallback: Partial<WhitelistFlow> = {},
+): WhitelistFlow => {
+  const nested = payload.flow && typeof payload.flow === 'object' ? payload.flow : {};
+  const source = {
+    ...payload,
+    ...nested,
+  };
+  return {
+    ...emptyFlow(),
+    itsm_sn: source.itsm_sn || source.sn || fallback.itsm_sn || '',
+    itsm_url: source.itsm_url || fallback.itsm_url || '',
+    apply_status: source.status_display || source.apply_status || source.status || fallback.apply_status || '',
+    current_node: joinNames(source.current_steps) || source.current_node || fallback.current_node || '',
+    current_approvers: joinNames(source.current_processors)
+      || source.current_approvers
+      || fallback.current_approvers
+      || '',
+    applicant: source.applicant || source.creator || fallback.applicant || '',
+    submitted_at: source.submitted_at || source.created_at || fallback.submitted_at || '',
+    rejector: source.rejector || fallback.rejector || '',
+    reject_reason: source.reject_reason || fallback.reject_reason || '',
+    rejected_at: source.rejected_at || fallback.rejected_at || '',
+  };
+};
 
 export default class RiskWhitelist {
   id: number | string;
@@ -265,18 +302,10 @@ export default class RiskWhitelist {
     this.itsm_sn = payload.itsm_sn || '';
     this.itsm_url = payload.itsm_url || '';
     this.actions = Array.isArray(payload.actions) ? payload.actions : [];
-    const flow = payload.flow || {};
-    this.flow = {
-      ...emptyFlow(),
-      itsm_sn: flow.itsm_sn || this.itsm_sn,
-      itsm_url: flow.itsm_url || this.itsm_url,
-      apply_status: flow.status_display || flow.status || '',
-      current_node: joinNames(flow.current_steps),
-      current_approvers: joinNames(flow.current_processors),
+    this.flow = toWhitelistFlow(payload, {
+      itsm_sn: this.itsm_sn,
+      itsm_url: this.itsm_url,
       applicant: this.applicant,
-      rejector: flow.rejector || '',
-      reject_reason: flow.reject_reason || '',
-      rejected_at: flow.rejected_at || '',
-    };
+    });
   }
 }

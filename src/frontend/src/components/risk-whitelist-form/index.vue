@@ -386,6 +386,8 @@
     showApplyHint?: boolean;
     embedded?: boolean;
     initialScope?: MatchScope | null;
+    /** 风险所属 / 规则所属场景；用于场景域管理员判权 */
+    sceneId?: string | number | null;
     /** 锁定加白类型（如标记误报同时加白仅允许 false_positive） */
     lockedType?: WhitelistType | null;
   }
@@ -395,11 +397,12 @@
     showApplyHint: false,
     embedded: false,
     initialScope: null,
+    sceneId: null,
     lockedType: null,
   });
 
   const { t } = useI18n();
-  const roleText = useWhitelistRoleText();
+  const roleText = useWhitelistRoleText(computed(() => props.sceneId ?? props.record?.scene_id ?? null));
 
   const scope = ref<MatchScope>(createDefaultScope());
   const whitelistType = ref<WhitelistType>('false_positive');

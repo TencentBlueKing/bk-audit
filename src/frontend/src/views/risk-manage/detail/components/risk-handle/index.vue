@@ -512,10 +512,13 @@
       }
       const showHandleForm = ['await_deal', 'processing'].includes(data.status)
         || (data.status === 'closed' && data.risk_label === 'normal');
+      // 最新节点为未驳回的加白时，翻转后应把「加入白名单」顶到时间线顶部，而不是人工处理表单
+      const latestHistoryAction = data.ticket_history[data.ticket_history.length - 1]?.action;
+      const pinWhitelistOnTop = latestHistoryAction === 'WhitelistApply' && !whitelistRejected;
       if (showHandleForm) {
         const item = Object.assign({}, data.ticket_history[data.ticket_history.length - 1]);
         item.action = 'await_deal'; // 使用await_deal组件来处理两种状态
-        list.value.push({
+        const handleFormListItem = {
           tag: renderTimelineTag(
             item.action,
             data.ticket_history.length,
@@ -524,8 +527,15 @@
           ),
           content: '<template/>',
           icon: () => renderTimelineIcon(item.action, true),
-        });
-        ticketHistory.value.push(item);
+        };
+        if (pinWhitelistOnTop && list.value.length > 0) {
+          // 插到加白节点之前，reverse 后加白在顶、人工处理表单在其后
+          list.value.splice(list.value.length - 1, 0, handleFormListItem);
+          ticketHistory.value.splice(ticketHistory.value.length - 1, 0, item);
+        } else {
+          list.value.push(handleFormListItem);
+          ticketHistory.value.push(item);
+        }
       }
       // 翻转列表
       list.value.reverse();
@@ -547,6 +557,13 @@
             el.scrollIntoView();
             needScrollToContent.value = false;
             removeSearchParam('scrollToContent');
+          }
+          // 加白后确保工单面板滚到顶部，露出「加入白名单」节点
+          if (pinWhitelistOnTop) {
+            const dockBody = rootRef.value?.closest?.('.risk-handle-dock__body') as HTMLElement | null;
+            if (dockBody) {
+              dockBody.scrollTop = 0;
+            }
           }
         });
       });

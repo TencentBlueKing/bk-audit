@@ -69,6 +69,7 @@
           locked-type="false_positive"
           embedded
           :initial-scope="initialScope"
+          :scene-id="detailData.scene_id"
           show-apply-hint />
       </template>
       <bk-form-item
@@ -145,7 +146,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const { messageSuccess, messageError } = useMessage();
-  const roleText = useWhitelistRoleText();
+  const roleText = useWhitelistRoleText(computed(() => props.detailData.scene_id));
 
   const formRef = ref();
   const whitelistFormRef = ref<InstanceType<typeof RiskWhitelistForm>>();
@@ -269,6 +270,7 @@
           validityMode: payload.validity_mode,
           customDays: payload.custom_days,
           source: 'risk',
+          sceneId: props.detailData.scene_id,
         });
         if (!confirmed) return;
         await applyWhitelist({
