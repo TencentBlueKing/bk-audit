@@ -1,6 +1,6 @@
 """平台 HTTP 异常适配。
 
-bk_resource 的参数校验异常需显式映射为客户端错误，业务异常保留原生 JSON 明细。
+请求体超限和 bk_resource 参数校验异常映射为客户端错误，业务异常保留原生 JSON 明细。
 其余异常沿用 blueapps 的响应信封、权限错误及诊断日志。
 """
 
@@ -10,12 +10,21 @@ from bk_resource import Resource
 from bk_resource.exceptions import ValidateException
 from blueapps.contrib.drf.exception import custom_exception_handler
 from blueapps.core.exceptions import BlueException
+from django.core.exceptions import RequestDataTooBig
+from django.utils.translation import gettext
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.views import set_rollback
 
 
 def exception_handler(exc, context):
-    """SDK 参数错误映射为400，保留业务异常明细及既有状态码。"""
+    """请求体超限和 SDK 参数错误分别映射为 413 和 400。"""
+    if isinstance(exc, RequestDataTooBig):
+        set_rollback()
+        return Response(
+            {"code": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "message": gettext("请求体超过大小限制"), "data": None},
+            status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        )
     if isinstance(exc, ValidateException):
         # SDK 请求、响应校验共用异常类；响应协议错误仍属于服务故障。
         if any(frame.f_code is Resource.validate_response_data.__code__ for frame, _ in walk_tb(exc.__traceback__)):

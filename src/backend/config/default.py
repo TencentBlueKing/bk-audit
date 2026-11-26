@@ -59,7 +59,11 @@ INSTALLED_APPS += (
     "bk_audit.contrib.bk_audit",
 )
 
+# SEC-012 临时观测请求声明长度，默认开启。
+LOG_LARGE_REQUEST_BODY = os.getenv("BKAPP_LOG_LARGE_REQUEST_BODY", "true").strip().lower() in ("true", "1", "yes", "on")
+
 MIDDLEWARE = (
+    "core.middleware.request_size.RequestSizeLoggingMiddleware",
     "core.middleware.csrf.CSRFExemptMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "core.middleware.login_exempt.LoginExemptMiddleware",
