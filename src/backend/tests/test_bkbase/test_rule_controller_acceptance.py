@@ -32,6 +32,7 @@ from services.web.strategy_v2.models import Strategy
     BKBASE_API_VERSION="v4",
     BKBASE_V4_TENANT="tenant_a",
     BKBASE_V4_NAMESPACE="audit",
+    BKBASE_V4_STREAM_CLUSTER="synthetic_stream",
     BKBASE_V4_RESULT_TABLE_NAMESPACES={"1_input_rt": "inputs"},
 )
 class RuleControllerAcceptanceTests(TransactionTestCase):

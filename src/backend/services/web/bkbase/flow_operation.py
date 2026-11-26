@@ -14,6 +14,7 @@ from blueapps.utils.logger import logger
 from django.db import connection, transaction
 from django.db.models import Q
 
+from api.bk_base_v4.default import flow_spec_for_write
 from services.web.analyze.constants import (
     BKBASE_FLOW_CONSUMING_MODE,
     CHECK_FLOW_STATUS_SLEEP_SECONDS,
@@ -200,6 +201,11 @@ def write_guard(context, strategy):
 def _digest(value):
     """配置摘要不保存额外业务数据，也不把状态和处理人当作图变更。"""
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _matches_flow_spec_digest(spec, expected):
+    """兼容原摘要以及新发送时补全、GET 时省略未启用侧的表示。"""
+    return expected == _digest(spec) or expected == _digest(flow_spec_for_write(spec))
 
 
 def _configuration(strategy):
@@ -504,7 +510,12 @@ def request(strategy, target, *, expected_restart=None, expected_recovery=None, 
                     ):
                         # 首次正式读取才确认失败时，保留诊断但不据其字段推断远端代次。
                         pure["failure_baseline"] = deepcopy(remote["status"])
-                    pure.update(attempted=True, outcome_unknown=True, writer=writer_token, spec_digest=_digest(spec))
+                    pure.update(
+                        attempted=True,
+                        outcome_unknown=True,
+                        writer=writer_token,
+                        spec_digest=_digest(flow_spec_for_write(spec)),
+                    )
                     _save(current, strategy, saved, message="启停声明正在发送，远端结果待核实")
                 try:
                     result = api.bk_base_v4.flow_update(**params, metadata=metadata, spec=spec, status=None)
@@ -512,7 +523,7 @@ def request(strategy, target, *, expected_restart=None, expected_recovery=None, 
                     if (
                         (result["metadata"].get("annotations") or {}).get("task_stopped")
                         != ("true" if target == "stop" else "false")
-                        or result["spec"] != spec
+                        or flow_spec_for_write(result["spec"]) != flow_spec_for_write(spec)
                         or (result.get("status") or {}).get("phase") != "Pending"
                     ):
                         raise BKBaseResourceMappingError(message="启停声明响应与本次完整请求不一致")
@@ -729,7 +740,7 @@ def _restart_receipt(resource):
 def _restart_matches(resource, target, spec_digest):
     return (resource["metadata"].get("annotations") or {}).get("task_stopped") == (
         "true" if target == "stop" else "false"
-    ) and _digest(resource["spec"]) == spec_digest
+    ) and _matches_flow_spec_digest(resource["spec"], spec_digest)
 
 
 def can_retry_unsent_restart(strategy):
@@ -859,7 +870,7 @@ def _send_restart_step(context, strategy, operation_id):
             remote = api.bk_base_v4.flow_get(**params)
             _validate_resource(remote, ref)
             metadata, spec = deepcopy(remote["metadata"]), deepcopy(remote["spec"])
-            spec_digest = _digest(spec)
+            spec_digest = _digest(flow_spec_for_write(spec))
             if (remote.get("status") or {}).get("phase") != "Ok" or not isinstance(spec.get("nodes"), list):
                 raise BKBaseResourceMappingError(message="Flow 未处于已生效状态或完整节点不可用")
             if target == "stop" and (metadata.get("annotations") or {}).get("task_stopped") == "true":
@@ -871,7 +882,7 @@ def _send_restart_step(context, strategy, operation_id):
             if target == "start":
                 # 先核对原停止凭证，再按本次启用配置生成摘要，避免沿用旧消费位置。
                 spec.setdefault("operation_config", {})["start_position"] = BKBASE_FLOW_CONSUMING_MODE
-                spec_digest = _digest(spec)
+                spec_digest = _digest(flow_spec_for_write(spec))
             metadata["annotations"] = {
                 **(metadata.get("annotations") or {}),
                 "task_stopped": "true" if target == "stop" else "false",
@@ -1015,7 +1026,7 @@ def observe(strategy):
         resource = observed.get("resource", {})
         declared = resource.get("metadata", {}).get("annotations", {}).get("task_stopped")
         target_matches = declared == ("true" if pure["target"] == "stop" else "false") and (
-            not pure.get("spec_digest") or pure["spec_digest"] == _digest(resource.get("spec"))
+            not pure.get("spec_digest") or _matches_flow_spec_digest(resource.get("spec"), pure["spec_digest"])
         )
         goal = (
             not error

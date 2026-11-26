@@ -82,7 +82,11 @@ class EventDorisJsonCompatibilityTests(SimpleTestCase):
 
 
 @override_settings(
-    BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="tenant_a", BKBASE_V4_NAMESPACE="audit", DEFAULT_BK_BIZ_ID=1
+    BKBASE_API_VERSION="v4",
+    BKBASE_V4_TENANT="tenant_a",
+    BKBASE_V4_NAMESPACE="audit",
+    BKBASE_V4_STREAM_CLUSTER="synthetic_stream",
+    DEFAULT_BK_BIZ_ID=1,
 )
 class EventDorisJsonRequestTests(TransactionTestCase):
     def setUp(self):
