@@ -41,6 +41,24 @@ class AuditBkApiResource(BkApiResource):
 
     use_admin_username = False
 
+    def before_request(self, kwargs: dict) -> dict:
+        """从最终 GET query 中剥离已被 URL 路径占位符消费的 url_keys。
+
+        SDK 的 build_url 只读取 url_keys 用于路径 format，不会移除它们。本类刻意
+        不覆写 build_url：build_header / set_headers / perform_request 仍依赖同一份
+        请求数据（如 NamespacesList.build_header 读取 tenant、bk_iam
+        GetSystemRoles 读取 system_id），提前弹出会造成 KeyError 或请求体丢字段。
+
+        剥离放在 before_request：此时路径与 Header 均已构造完成，且只重建 params
+        字典而非原地修改，perform_request 的后置逻辑仍可读到原始请求数据。
+        json / data 请求体不剥离：部分接口（如 bk_iam V3 管理类 API）会显式把
+        url_keys 放进请求体，统一移除会改变既有协议。
+        """
+        params = kwargs.get("params")
+        if isinstance(params, dict) and self.url_keys:
+            kwargs["params"] = {key: value for key, value in params.items() if key not in self.url_keys}
+        return super().before_request(kwargs)
+
     @staticmethod
     def use_multi_tenant_mode() -> bool:
         """多租户模式开关检测"""

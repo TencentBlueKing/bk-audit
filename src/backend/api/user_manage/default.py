@@ -147,9 +147,9 @@ class BatchLookupVirtualUserResource(UserManageResource):
     """批量查找虚拟用户（多租户模式下查询 bk_admin 使用）
 
     设计理由：get_admin_username() 依赖此 API 查询租户内的 bk_admin 虚拟用户。
-    该调用自身会经 AuditBkApiResource.build_header 携带 X-Bk-Tenant-Id，
-    调用时硬编码 bk_username="admin" 作为该 API 的访问凭据，
-    不会形成 build_header → get_admin_username → build_header 循环。
+    该查询自身不能依赖管理员解析：后台任务没有登录用户，且沿用基类分流会再次
+    调用 get_admin_username()，形成循环。因此多租户下直接以应用凭据出站，既不需要
+    登录态，也不解析 bk_admin；单租户沿用 SDK 原生鉴权，避免其它调用方丢失鉴权信息。
     """
 
     name = gettext_lazy("批量查找虚拟用户")
@@ -159,6 +159,22 @@ class BatchLookupVirtualUserResource(UserManageResource):
         if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/virtual-users/-/lookup/"
         return "/batch_lookup_virtual_user/"
+
+    def add_esb_info_before_request(self, params: dict) -> dict:
+        """多租户下以应用凭据直接出站，绕开需要登录用户与管理员解析的基类分流。"""
+        if not self.use_multi_tenant_mode():
+            return super().add_esb_info_before_request(params)
+
+        params.pop("access_token", None)
+        params.pop("_request", None)
+        params.pop("_is_backend", None)
+        params.update(
+            {
+                "bk_app_code": settings.APP_CODE,
+                "bk_app_secret": settings.SECRET_KEY,
+            }
+        )
+        return params
 
 
 class GetSnapshotSchema(UserManageResource):

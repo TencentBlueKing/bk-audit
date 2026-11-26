@@ -94,8 +94,8 @@ class BkBaseV4Resource(AuditBkApiResource, abc.ABC):
         return super().build_request_data(validated_request_data)
 
     def add_esb_info_before_request(self, params):
-        """单租户平台列表保持原校验；多租户平台身份由审计基类补齐。"""
-        if self.platform_authorization and self.requires_platform_auth:
+        """单租户平台列表保持原校验；多租户平台身份由审计基类补齐（当前租户管理员）。"""
+        if not self.use_multi_tenant_mode() and self.platform_authorization and self.requires_platform_auth:
             username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
             token = bk_resource_settings.PLATFORM_AUTH_ACCESS_TOKEN
             valid_username = isinstance(username, str) and bool(username.strip())

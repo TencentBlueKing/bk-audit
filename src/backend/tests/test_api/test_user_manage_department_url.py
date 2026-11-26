@@ -21,35 +21,52 @@ from api.user_manage.default import ListUserDepartments, RetrieveDepartment
 from tests.base import TestCase
 
 
+class _FakeUser:
+    bk_username = "tester"
+    username = "tester"
+    is_authenticated = True
+
+
+class _FakeRequest:
+    user = _FakeUser()
+    COOKIES = {}
+
+
 class UserManageDepartmentUrlTest(TestCase):
     """验证 user_manage 部门相关资源在多租户/单租户下的 URL 拼装参数映射
     约定：
     - 多租户：调用方传 id=，资源层映射为 department_id / bk_username 后由 build_url()
-      消费进路径占位符（GET 参数经 session.get(..., params=...) 单独传出，且 URL 占位符
-      在 perform_request 中已从 validated_request_data 中 pop，不会重复进 params）。
-    - 单租户：保持原有 id 路径（id 作为 query string 经 session.get(params=...) 传出，
-      URL 保持旧路径，无租户占位符），行为不变。
+      消费进路径占位符；这些键在 before_request 阶段从最终 query 剥离，不再重复发送。
+    - 单租户：保持原有 id 路径（id 作为 query string 经 session.get(params=...) 传出），行为不变。
+    说明：部门接口在多租户下为用户态，必须依赖登录用户身份，故多租户用例注入登录上下文。
+    两个资源均为 user_related=False 的缓存资源，缓存 key 不区分租户模式/登录态，用例统一走
+    request.cacheless，避免多租户与单租户用例命中同一份 Redis 残留缓存。
     """
 
     def _mock_get(self, resource):
-        """mock session.get，使 request() 不发起真实网络请求，并捕获最终 URL 与 params。"""
+        """mock session.get，使 request.cacheless() 不发起真实网络请求，并捕获最终 URL 与 params。"""
         response = mock.Mock()
         response.json.return_value = {"result": True, "code": 0, "data": {}}
         response.raise_for_status.return_value = None
         resource.session.get = mock.Mock(return_value=response)
         return resource.session.get
 
+    def _with_login(self):
+        """注入登录用户上下文：多租户用户态需要真实登录用户身份。"""
+        return mock.patch("blueapps.utils.request_provider.get_local_request", lambda: _FakeRequest())
+
     @override_settings(BKPAAS_MULTI_TENANT_MODE=True)
     def test_multi_tenant_retrieve_department_maps_id_to_department_id(self):
         """多租户：id 应映射为 department_id 拼进 URL，且不再作为 query 参数发送"""
         resource = RetrieveDepartment()
         session_get = self._mock_get(resource)
-        resource.request({"id": "20"})
+        with self._with_login():
+            resource.request.cacheless({"id": "20"})
 
         url = session_get.call_args.args[0]
         params = session_get.call_args.kwargs["params"]
         self.assertIn("/api/v3/open/tenant/departments/20/", url)
-        # URL 占位符已从请求数据中消费，不再以 query 参数形式发送
+        # 路径占位符已弹出，不再以 query 参数形式发送
         self.assertNotIn("id", params)
         self.assertNotIn("department_id", params)
 
@@ -58,7 +75,8 @@ class UserManageDepartmentUrlTest(TestCase):
         """多租户：id 应映射为 bk_username 拼进 URL，且不再作为 query 参数发送"""
         resource = ListUserDepartments()
         session_get = self._mock_get(resource)
-        resource.request({"id": "tester"})
+        with self._with_login():
+            resource.request.cacheless({"id": "tester"})
 
         url = session_get.call_args.args[0]
         params = session_get.call_args.kwargs["params"]
@@ -71,7 +89,8 @@ class UserManageDepartmentUrlTest(TestCase):
         """多租户：调用方已传 department_id 时不应二次映射/丢值"""
         resource = RetrieveDepartment()
         session_get = self._mock_get(resource)
-        resource.request({"department_id": "99"})
+        with self._with_login():
+            resource.request.cacheless({"department_id": "99"})
 
         url = session_get.call_args.args[0]
         params = session_get.call_args.kwargs["params"]
@@ -84,7 +103,7 @@ class UserManageDepartmentUrlTest(TestCase):
         """单租户：id 仍作为 query string 经 params 传出，URL 保持旧路径（无租户占位符）"""
         resource = RetrieveDepartment()
         session_get = self._mock_get(resource)
-        resource.request({"id": "20"})
+        resource.request.cacheless({"id": "20"})
 
         url = session_get.call_args.args[0]
         params = session_get.call_args.kwargs["params"]
@@ -96,7 +115,7 @@ class UserManageDepartmentUrlTest(TestCase):
         """单租户：id 仍作为 query string 经 params 传出，URL 保持旧路径（无租户占位符）"""
         resource = ListUserDepartments()
         session_get = self._mock_get(resource)
-        resource.request({"id": "tester"})
+        resource.request.cacheless({"id": "tester"})
 
         url = session_get.call_args.args[0]
         params = session_get.call_args.kwargs["params"]
