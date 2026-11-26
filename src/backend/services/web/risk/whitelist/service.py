@@ -24,8 +24,6 @@ from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
 from core.serializers import FriendlyDateTimeField
 from core.utils.time import mstimestamp_to_date_string
-from services.web.common.constants import ScopeType
-from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.risk.constants import RiskStatus, TicketNodeStatus
 from services.web.risk.whitelist.constants import (
     FLOW_STATUS,
@@ -73,29 +71,40 @@ def is_scene_admin(username: str, scene_id: int) -> bool:
     return username in _scene_admin_usernames(scene_id)
 
 
-def managed_scene_ids(username: str):
-    """返回 IAM 里有管理场景权限的场景。"""
+def _has_manage_scene(username: str, scene_id) -> bool:
+    """当前用户对该场景实例是否有 MANAGE_SCENE，口径同入口 InstanceActionPermission。
 
-    return ScopePermission(username).get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.MANAGE_SCENE)
+    DB managers 与 IAM MANAGE_SCENE 是两套来源：只在 IAM 被授予某场景管理权的人
+    能过创建入口，却不在 Scene.managers 里，需要据此补进审批人，避免建单后无人可审。
+    """
+
+    if not username or not scene_id:
+        return False
+    resource = ResourceEnum.SCENE.create_instance(str(scene_id))
+    return PermissionService(username=username).is_allowed(
+        ActionEnum.MANAGE_SCENE, resources=[resource], raise_exception=False
+    )
 
 
-def _can_manage_whitelist(username: str, scene_id) -> bool:
-    """白名单统一鉴权口径：场景管理员，或有该场景管理权限的平台管理员，权限完全一致。"""
+def can_access_whitelist(username: str, scene_id) -> bool:
+    """白名单统一鉴权口径：场景管理员（DB managers），或对该场景有 IAM MANAGE_SCENE，或平台管理员，任一即可。
+
+    与读端点 ``AnyOfPermissions(IAMPermission(MANAGE_PLATFORM), InstanceActionPermission(MANAGE_SCENE))`` 对齐；
+    白名单绑定场景，写操作按规则上的 scene_id 反查校验。
+    """
 
     if not username:
         return False
-    if is_scene_admin(username, scene_id):
-        return True
-    return is_platform_admin(username) and str(scene_id) in {str(sid) for sid in managed_scene_ids(username)}
+    return is_scene_admin(username, scene_id) or _has_manage_scene(username, scene_id) or is_platform_admin(username)
 
 
 def assert_can_manage_scene(username: str, scene_id) -> None:
-    """创建 / 批量创建白名单的前置鉴权：场景管理员或有该场景管理权限的平台管理员任一即可。
+    """场景级创建 / 批量创建白名单的前置鉴权：场景管理员 / IAM 场景管理权 / 平台管理员任一即可。
 
     创建态尚无白名单实例，无法走 :func:`get_rule_for_admin` 的实例鉴权，故按场景维度校验。
     """
 
-    if not _can_manage_whitelist(username, scene_id):
+    if not can_access_whitelist(username, scene_id):
         raise ValidationError(gettext("没有场景管理员或平台管理权限"))
 
 
@@ -613,10 +622,8 @@ def operate_itsm(rule: RiskWhitelist, method: str, operator: str):
 
 
 def review_whitelist(rule: RiskWhitelist, method: str, operator: str, reject_reason: str = "") -> RiskWhitelist:
-    """场景管理员或有该场景管理权限的平台管理员点击通过或驳回。ITSM 返回 success 为 true 才改状态，为 false 不改。"""
+    """场景管理员或平台管理员点击通过或驳回。"""
 
-    if not _can_manage_whitelist(operator, rule.scene_id):
-        raise ValidationError(gettext("没有场景管理员或平台管理权限"))
     payload = operate_itsm(rule, method, operator)
     if not (isinstance(payload, dict) and payload.get("success") is True):
         return rule
@@ -719,21 +726,6 @@ def _scene_admin_usernames(scene_id) -> list:
     return _usernames(getattr(scene, "managers", None))
 
 
-def _has_manage_scene(username: str, scene_id) -> bool:
-    """当前用户对该场景实例是否有 MANAGE_SCENE，口径同入口 InstanceActionPermission。
-
-    DB managers 与 IAM MANAGE_SCENE 是两套来源：只在 IAM 被授予某场景管理权的人
-    能过创建入口，却不在 Scene.managers 里，需要据此补进审批人，避免建单后无人可审。
-    """
-
-    if not username or not scene_id:
-        return False
-    resource = ResourceEnum.SCENE.create_instance(str(scene_id))
-    return PermissionService(username=username).is_allowed(
-        ActionEnum.MANAGE_SCENE, resources=[resource], raise_exception=False
-    )
-
-
 def _whitelist_approvers(scene_id) -> list:
     """审批人 = 场景管理员（DB managers）+ 对该场景有 MANAGE_SCENE 的当前用户，去重。
 
@@ -823,9 +815,9 @@ def submitted_at_of(rule: RiskWhitelist) -> str:
 
 
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
-    """场景管理员或有该场景管理权限的平台管理员创建后直接写成生效中。先尝试审批工单；回调若已写入终态则保持。"""
+    """场景管理员或平台管理员创建后直接写成生效中。先尝试审批工单；回调若已写入终态则保持。"""
 
-    if not username or not _can_manage_whitelist(username, rule.scene_id):
+    if not can_access_whitelist(username, rule.scene_id):
         return
     try:
         operate_itsm(rule, "approve", username)
@@ -1225,10 +1217,10 @@ def order_whitelist_queryset(queryset, order_fields):
 
 
 def list_actions(rule: RiskWhitelist, username: str = "", is_admin=None) -> list:
-    """通过 / 驳回、编辑、启停、删除：场景管理员与有该场景管理权限的平台管理员一致。续期是申请，可见者皆可发起。"""
+    """通过 / 驳回、编辑、启停、删除：场景管理员与平台管理员一致。续期是申请，可见者皆可发起。"""
 
     if is_admin is None:
-        is_admin = _can_manage_whitelist(username, rule.scene_id)
+        is_admin = can_access_whitelist(username, rule.scene_id)
     if not is_admin:
         return _with_renew([], rule)
     if rule.status == WhitelistStatus.PENDING:
@@ -1389,11 +1381,11 @@ def serialize_rule(
 
 
 def get_rule_for_admin(rule_id: int, username: str) -> RiskWhitelist:
-    """实例鉴权：场景管理员或有该场景管理权限的平台管理员，白名单读写、通过 / 驳回权限一致。"""
+    """实例鉴权：场景管理员或平台管理员，白名单读写、通过 / 驳回权限一致。"""
 
     rule = RiskWhitelist.objects.filter(pk=rule_id).first()
     if rule is None:
         raise ValidationError(gettext("白名单不存在"))
-    if not _can_manage_whitelist(username, rule.scene_id):
+    if not can_access_whitelist(username, rule.scene_id):
         raise ValidationError(gettext("没有场景管理员或平台管理权限"))
     return rule

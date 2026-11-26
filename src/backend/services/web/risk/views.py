@@ -23,6 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    AnyOfPermissions,
     IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
@@ -605,11 +606,15 @@ class RiskWhitelistsViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list", "contains_fields", "detail_info"]:
+            # 平台管理员，或该场景管理员，任一即可
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.MANAGE_SCENE],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_instance_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.MANAGE_SCENE],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_instance_scene_id,
+                    ),
                 )
             ]
         return []

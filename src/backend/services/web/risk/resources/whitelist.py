@@ -25,7 +25,6 @@ from apps.audit.resources import AuditMixinResource
 from core.exceptions import ValidationError
 from core.models import get_request_username
 from services.web.risk.models import Risk
-from services.web.risk.permissions import ensure_user_may_confirm_risk
 from services.web.risk.whitelist.constants import DELETABLE_STATUS, WhitelistStatus
 from services.web.risk.whitelist.match import (
     scope_field_names,
@@ -55,6 +54,7 @@ from services.web.risk.whitelist.service import (
     apply_whitelist_result,
     assert_can_manage_scene,
     build_hit_event_fields,
+    can_access_whitelist,
     ensure_same_strategy_scene,
     get_rule_for_admin,
     order_whitelist_queryset,
@@ -139,7 +139,9 @@ class ListRiskWhitelists(RiskWhitelistMeta):
             )[(page - 1) * page_size : page * page_size]
         )
         # 列表只读库里的状态，不回显工单流转（flow 在详情接口按需实时拉，避免逐条外呼拖慢列表）。
-        # 列表入口能进来即该场景管理员（viewset 已校验），actions 按场景管理员处理。
+        # actions 的管理按钮口径与写操作一致：整个列表同属一个场景，按 scene_id 判一次白名单管理权限，
+        # 传入每行 list_actions（不再逐行判，也不硬编码 True 让普通申请人误见管理按钮）。
+        is_admin = can_access_whitelist(username, scene_id)
         return {
             "page": page,
             "page_size": page_size,
@@ -149,7 +151,7 @@ class ListRiskWhitelists(RiskWhitelistMeta):
                     row,
                     getattr(row, "hit_count", 0),
                     username=username,
-                    is_admin=True,
+                    is_admin=is_admin,
                     include_flow=False,
                 )
                 for row in rows
@@ -247,12 +249,12 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
             if not risks:
                 raise ValidationError(gettext("风险单不存在"))
             scene_id = risks[0].scene_id
-            # 风险处理人申请加白：口径同确认误报（确认人或平台管理员），不要求场景管理权限
-            ensure_user_may_confirm_risk(username, risks[0])
+            # 风险处理人申请加白：创建白名单只是发起审批申请，不做确认人 / 平台管理员鉴权，
+            # 能否生效由场景管理员在工单审批环节把关。
         else:
             if not scene_id:
                 raise ValidationError(gettext("需要 scene_id"))
-            # 菜单直接新建：场景级规则，保留场景管理员限制
+            # 菜单直接新建：场景级规则，保留场景管理权限限制
             assert_can_manage_scene(username, scene_id)
         return serialize_rule(
             _submit_created(
@@ -263,6 +265,7 @@ class CreateRiskWhitelist(RiskWhitelistMeta):
             ),
             progress={},
             username=username,
+            include_flow=False,
         )
 
 
@@ -294,13 +297,14 @@ class BatchCreateRiskWhitelist(RiskWhitelistMeta):
         if isinstance(created, dict):
             return {
                 "succeeded": [
-                    serialize_rule(item, progress={}, username=username) for item in created.get("succeeded", [])
+                    serialize_rule(item, progress={}, username=username, include_flow=False)
+                    for item in created.get("succeeded", [])
                 ],
                 "failed": created.get("failed", []),
             }
         if not isinstance(created, list):
             created = [created]
-        return [serialize_rule(item, progress={}, username=username) for item in created]
+        return [serialize_rule(item, progress={}, username=username, include_flow=False) for item in created]
 
 
 def _submit_created(validated_request_data, *, scene_id, risks, username):
