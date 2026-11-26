@@ -132,10 +132,13 @@ class ListSystemResource(IAMV4BaseResource):
 
 class RetrieveSystemResource(IAMV4BaseResource):
     name = gettext_lazy("获取IAM系统详情")
-    action = "/api/v1/open/rabc/share/model/systems/{system_id}/"
     method = "GET"
     url_keys = ["system_id"]
     RequestSerializer = RetrieveSystemRequestSerializer
+
+    @property
+    def action(self):
+        return settings.BK_IAM_V4_SYSTEM_DETAIL_ACTION
 
 
 class RetrieveCallbackSystemResource(RetrieveSystemResource):

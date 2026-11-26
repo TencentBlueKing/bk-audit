@@ -117,6 +117,22 @@ class TestBkAuditResourceApiDispatcher(SimpleTestCase):
             {"bk_app_code": "audit-app", "bk_app_secret": "fake-application-secret"},
         )
 
+    @override_settings(
+        IAM_PERMISSION_BACKEND="v4",
+        BK_IAM_V4_SYSTEM_DETAIL_ACTION="/api/v1/open/rbac/share/model/systems/{system_id}/",
+    )
+    def test_v4_callback_credential_lookup_uses_configured_system_detail_path(self):
+        dispatcher = self.make_dispatcher()
+        dispatcher.register("scene", FakeResourceProvider())
+
+        response = dispatcher._dispatch(self.callback_request(IAM_AUTH))
+
+        self.assertEqual(response.status_code, 200)
+        self.gateway.get.assert_called_once()
+        self.assertEqual(
+            self.gateway.get.call_args.args, (IAM_GATEWAY + "/api/v1/open/rbac/share/model/systems/bk-audit/",)
+        )
+
     @override_settings(IAM_PERMISSION_BACKEND="v4")
     def test_v4_single_tenant_uses_default_scope_and_reuses_token(self):
         dispatcher = self.make_dispatcher()

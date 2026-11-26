@@ -7,6 +7,7 @@
 | 变量 | 用途与取值 |
 | --- | --- |
 | `BKAPP_BK_IAM_V4_API_URL` | 模型同步必填，也是运行时优先使用的 IAM V4 网关地址，包含 stage，例如 `https://iam-gateway.example.com/api/bkiam/prod`。运行时不填则多租户用 `prod`，单租户沿用原有环境规则。 |
+| `BKAPP_BK_IAM_V4_SYSTEM_DETAIL_ACTION` | 运行时系统详情及回调 token 查询的相对路径，默认 `/api/v1/open/rabc/share/model/systems/{system_id}/`。如果当前 IAM 网关发布的是 `rbac`，为该环境的各审计实例设置 `/api/v1/open/rbac/share/model/systems/{system_id}/`，保留 `{system_id}` 占位符；其他环境不配。此配置不影响模型同步命令。 |
 | `BKAPP_SYSTEM_TENANT_ID` | 全租户应用注册所在的租户，默认 `system`。多租户下，模型同步任务和各实例读取 IAM 回调 token 都用这个值，不填实例自己的租户 ID。同一环境只需同步一份模型。 |
 | `BKAPP_IAM_SYSTEM_ID` / `BKAPP_IAM_SYSTEM_NAME` | 复用运行态系统 ID / 名称，默认 `bk-audit` / `审计中心`；ID 必须匹配模型。 |
 | `BKPAAS_APP_ID` / `BKPAAS_APP_SECRET` | 已有审计应用凭据，由部署环境或 KMS 提供；模型管理需单独核对 API 授权，不使用平台用户 token。 |
