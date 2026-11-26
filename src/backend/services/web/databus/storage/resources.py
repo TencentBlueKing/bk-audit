@@ -16,8 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from collections import Counter
+from copy import deepcopy
+
 from bk_resource import api, resource
 from bk_resource.utils.common_utils import ignored
+from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
@@ -27,7 +31,7 @@ from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.bk_crypto.crypto import asymmetric_cipher
-from apps.exceptions import MetaConfigNotExistException, StorageChanging
+from apps.exceptions import MetaConfigNotExistException, ParamsNotValid, StorageChanging
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
@@ -63,6 +67,12 @@ from services.web.databus.storage.serializers import (
 class StorageMeta(AuditMixinResource):
     tags = ["Storage"]
 
+    @staticmethod
+    def check_remote_edit_allowed(cluster_id: int) -> None:
+        """预定义集群只可作为存储使用，不下发平台配置变更。"""
+        if str(cluster_id) in StorageConfig.get_predefined_es():
+            raise ParamsNotValid(message=gettext_lazy("预定义 ES 由平台维护，审计不能修改或删除"))
+
     def record_config(self, cluster_id, validated_request_data):
         StorageConfig.set_allocation_min_days(
             validated_request_data["namespace"], cluster_id, validated_request_data["allocation_min_days"]
@@ -75,6 +85,7 @@ class DeleteStorageResource(StorageMeta):
     audit_action = ActionEnum.DELETE_STORAGE
 
     def perform_request(self, validated_request_data):
+        self.check_remote_edit_allowed(validated_request_data["cluster_id"])
         data = api.bk_log.delete_storage(validated_request_data)
         StorageOperateLog.create(validated_request_data["cluster_id"])
         return data
@@ -86,6 +97,8 @@ class UpdateStorageResource(StorageMeta):
     audit_action = ActionEnum.EDIT_STORAGE
 
     def perform_request(self, validated_request_data):
+        if not validated_request_data["pre_defined"]:
+            self.check_remote_edit_allowed(validated_request_data["cluster_id"])
         password = validated_request_data["auth_info"]["password"]
         if password:
             validated_request_data["auth_info"]["password"] = asymmetric_cipher.decrypt(password)
@@ -146,9 +159,11 @@ class StorageListResource(StorageMeta):
     many_response_data = True
     audit_action = ActionEnum.LIST_STORAGE
 
-    def _check_filter_clusters(self, cluster: dict, validated_request_data: dict) -> bool:
+    def _check_filter_clusters(self, cluster: dict, validated_request_data: dict, *, predefined=False) -> bool:
         namespace = validated_request_data["namespace"]
-        condition_namespace = cluster["cluster_config"].get("custom_option", {}).get("cluster_namespace") == namespace
+        condition_namespace = (
+            predefined or cluster["cluster_config"].get("custom_option", {}).get("cluster_namespace") == namespace
+        )
         if not validated_request_data.get("keyword"):
             return condition_namespace
         keyword = validated_request_data["keyword"]
@@ -156,6 +171,32 @@ class StorageListResource(StorageMeta):
         domain = cluster["cluster_config"].get("domain_name", "")
         condition_keyword = name.find(keyword) != -1 or domain.find(keyword) != -1
         return condition_namespace and condition_keyword
+
+    @staticmethod
+    def _apply_predefined(cluster: dict, namespace: str, configured_bkbase_id: str) -> dict | None:
+        """只在读取时采用预定义绑定，不把本地配置写回 BKLog。"""
+        option = cluster["cluster_config"].get("custom_option") or {}
+        label = option.get("cluster_namespace")
+        remote_bkbase_id = option.get("bkbase_cluster_id")
+        biz_id = str(settings.DEFAULT_BK_BIZ_ID)
+        if (
+            str(option.get("bk_biz_id")) != biz_id
+            or str(cluster.get("bk_biz_id")) != biz_id
+            or label not in (None, "", namespace)
+            or (remote_bkbase_id and configured_bkbase_id and str(remote_bkbase_id) != configured_bkbase_id)
+        ):
+            return None
+        cluster = deepcopy(cluster)
+        cluster["cluster_config"]["cluster_id"] = int(cluster["cluster_config"]["cluster_id"])
+        option = cluster["cluster_config"]["custom_option"]
+        if not label:
+            option.pop("cluster_namespace", None)
+        if not remote_bkbase_id:
+            option.pop("bkbase_cluster_id", None)
+            if configured_bkbase_id:
+                option["bkbase_cluster_id"] = configured_bkbase_id
+        cluster["auth_info"] = {"username": "", "password": ""}
+        return cluster
 
     def _update_default_option(self, default_cluster_id: int, cluster: dict, namespace: str) -> dict:
         option = cluster["cluster_config"]["custom_option"].get("option", {})
@@ -207,11 +248,20 @@ class StorageListResource(StorageMeta):
             )
         except MetaConfigNotExistException:
             default_cluster_id = EMPTY_CLUSTER_ID
-        clusters = [
-            self._update_default_option(default_cluster_id, cluster, namespace)
-            for cluster in bk_log_clusters
-            if self._check_filter_clusters(cluster, validated_request_data)
-        ]
+        predefined_es = StorageConfig.get_predefined_es()
+        counts = Counter(str(row["cluster_config"]["cluster_id"]) for row in bk_log_clusters) if predefined_es else {}
+        clusters = []
+        for cluster in bk_log_clusters:
+            cluster_id = str(cluster["cluster_config"]["cluster_id"])
+            declarations = predefined_es.get(cluster_id)
+            if declarations:
+                if counts[cluster_id] != 1 or len(declarations) != 1 or declarations[0][0] != namespace:
+                    continue
+                cluster = self._apply_predefined(cluster, namespace, declarations[0][1])
+                if cluster is None:
+                    continue
+            if self._check_filter_clusters(cluster, validated_request_data, predefined=bool(declarations)):
+                clusters.append(self._update_default_option(default_cluster_id, cluster, namespace))
         return clusters
 
 

@@ -27,6 +27,7 @@ from api.bk_log.serializers import (
     StorageHotWarmSerializer,
 )
 from core.exceptions import ValidationError
+from core.tenant import use_multi_tenant_mode
 from core.utils.time import format_date_string
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
@@ -109,6 +110,9 @@ class StorageCustomOptionSerializer(serializers.Serializer):
         fields = super().get_fields()
         if get_bkbase_version() == BKBaseVersion.V3:
             fields["setup_config"] = SetupSerializer()
+        elif use_multi_tenant_mode():
+            # V4 资产标识可包含连字符，保留单租户与 V3 对旧标识的校验。
+            fields["bkbase_cluster_id"] = serializers.RegexField(regex=r"^[A-Za-z0-9_-]+$", required=False)
         return fields
 
 

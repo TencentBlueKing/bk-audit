@@ -16,11 +16,15 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from collections import defaultdict
+
 from bk_resource import api
 from django.conf import settings
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from core.kms import get_secret_json
+from core.tenant import get_bk_tenant_id, use_multi_tenant_mode
 from services.web.databus.constants import (
     DEFAULT_ALLOCATION_MIN_DAYS,
     DEFAULT_RETENTION,
@@ -32,6 +36,29 @@ from services.web.databus.constants import (
 
 
 class StorageConfig:
+    @staticmethod
+    def get_predefined_es() -> dict[str, list[tuple[str, str]]]:
+        """读取当前实例部署声明，不把本地默认集群 ID 当作归属证明。"""
+        if not use_multi_tenant_mode() or not get_bk_tenant_id():
+            return {}
+        configs = get_secret_json("BKAPP_INIT_ES_CONFIG", [])
+        if not isinstance(configs, list):
+            return {}
+        clusters = defaultdict(list)
+        for config in configs:
+            if not isinstance(config, dict) or config.get("pre_defined") is not True:
+                continue
+            namespace = config.get("namespace")
+            extra = config.get("pre_defined_extra_config")
+            if not isinstance(namespace, str) or not namespace or not isinstance(extra, dict):
+                continue
+            cluster_id = str(extra.get("cluster_id"))
+            if not cluster_id.isascii() or not cluster_id.isdecimal() or cluster_id.startswith("0"):
+                continue
+            bkbase_id = extra.get("bkbase_cluster_id")
+            clusters[cluster_id].append((namespace, bkbase_id.strip() if isinstance(bkbase_id, str) else ""))
+        return clusters
+
     @classmethod
     def set_allocation_min_days(cls, namespace: str, cluster_id: int, allocation_min_days: int):
         GlobalMetaConfig.set(

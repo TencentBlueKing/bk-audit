@@ -16,10 +16,24 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import json
+import os
+from copy import deepcopy
+from types import SimpleNamespace
 from unittest import mock
 
+from django.test import override_settings
+
+from apps.exceptions import ParamsNotValid
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import GlobalMetaConfig
 from core.utils.data import ordered_dict_to_json
-from services.web.databus.models import StorageOperateLog
+from services.web.analyze.storage_node import ESStorageNode
+from services.web.bkbase import flow
+from services.web.bkbase.constants import BKBASE_V4_STORAGE_CLUSTER_MAP
+from services.web.databus.collector_plugin.handlers import PluginEtlHandler
+from services.web.databus.constants import DEFAULT_STORAGE_CONFIG_KEY
+from services.web.databus.models import CollectorPlugin, StorageOperateLog
 from services.web.databus.storage.serializers import StorageCustomOptionSerializer
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.constants import (
@@ -35,11 +49,130 @@ from tests.test_databus.storage.constants import (
     REPLICA_STORAGE_ACTIVATE_PARAMS,
     REPLICA_WRITE_CLUSTER_ID,
     STORAGE_ACTIVATE_PARAMS,
+    STORAGE_DATA,
     STORAGE_LIST_DATA,
     STORAGE_LIST_PARAMS,
     STORAGE_OPERATE_LOG_DATA,
     USERNAME,
 )
+
+
+@override_settings(BKPAAS_MULTI_TENANT_MODE=True, BK_TENANT_ID="demo", BKBASE_API_VERSION="v4", DEFAULT_BK_BIZ_ID=7)
+class PredefinedESStorageTest(TestCase):
+    def setUp(self):
+        env = mock.patch.dict(
+            os.environ,
+            {
+                "BKAPP_INIT_ES_CONFIG": json.dumps(
+                    [
+                        {
+                            "pre_defined": True,
+                            "namespace": "default",
+                            "pre_defined_extra_config": {"cluster_id": 11, "bkbase_cluster_id": "existing-es"},
+                        }
+                    ]
+                )
+            },
+        )
+        env.start()
+        self.addCleanup(env.stop)
+
+    def _cluster(self, cluster_id=11, namespace=None, biz_id=7, bkbase_id=None):
+        row = deepcopy(STORAGE_DATA)
+        row["bk_biz_id"] = biz_id
+        row["auth_info"] = {"username": "absent-from-list", "password": "absent-from-list"}
+        cluster = row["cluster_config"]
+        cluster["cluster_id"] = cluster_id
+        option = cluster["custom_option"]
+        option["bk_biz_id"] = biz_id
+        for key, value in {"cluster_namespace": namespace, "bkbase_cluster_id": bkbase_id}.items():
+            if value is None:
+                option.pop(key, None)
+            else:
+                option[key] = value
+        return row
+
+    def _list(self, *rows, namespace="default", keyword=""):
+        with mock.patch("databus.storage.resources.api.bk_log.get_storages", return_value=list(rows)):
+            return self.resource.databus.storage.storage_list(namespace=namespace, keyword=keyword)
+
+    def test_predefined_es_uses_configured_mapping_without_exposing_credentials(self):
+        raw = self._cluster()
+        result = self._list(raw)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["cluster_config"]["cluster_id"], 11)
+        self.assertEqual(result[0]["cluster_config"]["custom_option"]["bkbase_cluster_id"], "existing-es")
+        self.assertEqual(result[0]["auth_info"], {"username": "", "password": ""})
+        self.assertNotIn("bkbase_cluster_id", raw["cluster_config"]["custom_option"])
+        self.assertEqual(self._list(raw, keyword="not_a_match"), [])
+
+    def test_predefined_es_accepts_numeric_string_id_and_matching_remote_binding(self):
+        raw = self._cluster(cluster_id="11", biz_id="7", namespace="default", bkbase_id="existing-es")
+        result = self._list(raw)
+        self.assertEqual(result[0]["cluster_config"]["cluster_id"], 11)
+        self.assertEqual(result[0]["cluster_config"]["custom_option"]["bkbase_cluster_id"], "existing-es")
+
+    def test_predefined_es_does_not_accept_conflicting_or_unowned_rows(self):
+        for raw in (
+            self._cluster(12),
+            self._cluster(namespace="another"),
+            self._cluster(biz_id=8),
+            self._cluster(bkbase_id="different-es"),
+        ):
+            with self.subTest(raw=raw["cluster_config"]["custom_option"]):
+                self.assertEqual(self._list(raw), [])
+        self.assertEqual(self._list(self._cluster(), self._cluster()), [])
+        self.assertEqual(self._list(self._cluster(), namespace="another"), [])
+
+    def test_managed_es_uses_existing_label_and_mapping(self):
+        result = self._list(self._cluster(12, namespace="default", bkbase_id="managed_es"))
+        self.assertEqual(result[0]["cluster_config"]["custom_option"]["bkbase_cluster_id"], "managed_es")
+
+    @override_settings(BKPAAS_MULTI_TENANT_MODE=False)
+    def test_single_tenant_does_not_use_fallback(self):
+        self.assertEqual(self._list(self._cluster()), [])
+
+    def test_flow_and_collector_reuse_registered_es(self):
+        ref = {"kind": "ElasticSearch", "tenant": "demo", "namespace": "storage-project", "name": "es-asset"}
+        for key, value in [
+            (DEFAULT_STORAGE_CONFIG_KEY, 11),
+            (BKBASE_V4_STORAGE_CLUSTER_MAP, {"es": {"existing-es": ref}}),
+        ]:
+            GlobalMetaConfig.set(key, value, ConfigLevelChoices.NAMESPACE.value, "default")
+        with mock.patch("databus.storage.resources.api.bk_log.get_storages", return_value=[self._cluster()]):
+            self.assertEqual(ESStorageNode("default").cluster, "existing-es")
+            node = flow._storage_node(
+                {"tenant": "demo"},
+                SimpleNamespace(namespace="default", strategy_id=7),
+                {"node_type": "elastic_storage", "cluster": ESStorageNode("default").cluster, "expires": "7d"},
+                {},
+            )
+            handler = PluginEtlHandler(plugin=CollectorPlugin(namespace="default"))
+            with (
+                mock.patch.object(handler, "get_bk_data_id", return_value=7),
+                mock.patch.object(handler, "get_table_id", return_value="default_audit"),
+                mock.patch.object(handler, "get_es_fields", return_value=[]),
+                mock.patch.object(handler, "get_doris_fields", return_value=[]),
+                mock.patch.object(handler, "get_doris_storage_cluster", return_value=""),
+            ):
+                main_storage, _ = handler.build_storage_config()
+        self.assertEqual(node["storage"], ref)
+        self.assertEqual(main_storage["storage_cluster"], "existing-es")
+
+    def test_predefined_es_cannot_be_changed_as_a_managed_cluster(self):
+        with (
+            mock.patch("databus.storage.resources.api.bk_log.delete_storage") as delete,
+            mock.patch("databus.storage.resources.api.bk_log.update_storage") as update,
+        ):
+            with self.subTest(operation="delete"):
+                with self.assertRaises(ParamsNotValid):
+                    self.resource.databus.storage.delete_storage(cluster_id=11)
+            with self.subTest(operation="update"):
+                params = {**CREATE_STORAGE_PARAMS, "namespace": "default", "cluster_id": 11}
+                with self.assertRaises(ParamsNotValid):
+                    self.resource.databus.storage.update_storage(**params)
+            delete.assert_not_called()
+            update.assert_not_called()
 
 
 class StorageTest(TestCase):
