@@ -16,14 +16,16 @@
 - 先方案后改代码（琐碎单文件除外）。不确定就问，不猜接口或权限。
 - 未经同意不主动修 eslint / stylelint / 格式，不擅自跑构建或长脚本。
 - `git commit` / `push` 前展示范围与 message，等明确确认。禁止 `--no-verify`、`push --force`。
-- 收尾用 `bk-audit-memory-save` 判断是否记经验；架构/模块变化再改 `docs/`，不要把密钥写入文档或 learnings。
+- 已接入 `bk-audit-memory-save` 时，收尾按其要求整理经验。架构或模块变化时更新 `docs/`，密钥留在本地配置。
 - 图标优先查 `@lib/bk-icon`：在 `lib/bk-icon/iconcool.json` 的 `icons[].name` 里检索，用全局 `AuditIcon` 的 `type` 对上该 name。不要只查 bkui Icon 文档就断定没有。库里确实没有，再记入交付报告「icon 缺口」，不要用近似图标、emoji 或手写图形冒充已还原。
 
 ## 任务路由
 
-先按意图读已接入的对应 skill，再按需打开 `docs/`。对应技能缺失时从仓库根的 onboarding 入口定位维护源。
+公开前端开发从[文档地图](docs/README.md)和当前工程配置开始。准备本地环境看[架构与启动](docs/architecture.md)，写页面看[开发约定](docs/conventions.md)、[公共组件](docs/components.md)和现有实现。
 
-| 意图 | 读 |
+已接入内部技能时，按任务选用下表对应入口。任务需要团队流程或平台时，从仓库根的 onboarding 指引定位已确认的内部来源。
+
+| 意图 | 内部技能 |
 | --- | --- |
 | 配环境 / 装 skill / TAPD·Figma MCP | `bk-audit-frontend-onboarding`（只配环境，不写业务） |
 | TAPD 单据及对应的功能交付、回写 | `bk-audit-tapd-dev`；审计内部团队提交先核实 TAPD 关联 |

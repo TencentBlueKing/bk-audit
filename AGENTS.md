@@ -4,7 +4,14 @@
 
 - `src/frontend/` 是 Web 前端。涉及前端时读取[前端指引](src/frontend/AGENTS.md)。
 - `src/backend/` 是后端服务。涉及后端时读取[后端指引](src/backend/AGENTS.md)。跨端任务读取两份指引。
-- 首次接入、新建 worktree 或不确定该用哪个流程时，从[公共 onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md)了解能力、选择入口并补齐本次所需条件。已明确适用流程时，直接读对应技能；索引见[协作入口](agent/README.md)。
-- 涉及已接入的内部流程时，先看仓库根的本地 `.agents/README.md`（如有）、已发现的技能或当前端的 `skills-lock.json`，确定内部维护源。工作区与个人补充按所属端的 AGENTS 读取。
+- 首次接入或不确定该用哪个流程时，从[公共 onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md)选择能力。已明确适用流程时，直接读对应技能。索引见[协作入口](agent/README.md)。
+- 涉及内部流程时，先沿用已确认的团队入口。可从本地来源说明、已安装的技能或技能锁文件定位维护源。来源缺失时向用户确认。
 
 执行提交、推送、创建或合入 PR/MR 前，先定位并读取本次适用的协作与提交技能，核实其要求的前置条件。技能来源或必要信息缺失时，先说明缺口并补齐，再执行受影响操作。
+
+## 新建 worktree
+
+- 确认目标分支和基线。以新 checkout 中的项目和端内指引为准。
+- 读取端内指引提到的本地 `AGENTS.md`（如有）。从用户已确认的工作区按需接入调试记录、开发文档等本地资料。个人补充留在 Git 忽略的本地指引中。
+- 新建开发 worktree 时，为后续运行和测试准备本地配置及依赖。逐棵核对私有环境变量、运行配置和测试资源是否独立，依赖以当前分支为准。明确只读时，核对并记录缺口即可。具体步骤见所属端指引。
+- 交接时写明已准备的内容和实际缺口。可用[工作树检查工具](agent/shared/tools/worktree-bootstrap/README.md)辅助核对。

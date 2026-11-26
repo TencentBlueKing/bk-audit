@@ -79,6 +79,37 @@ class BootstrapTest(unittest.TestCase):
         self.cli("check")
         self.assertFalse(self.git("status", "--porcelain", cwd=self.target).stdout)
 
+    def test_reports_skill_files_at_root_and_both_ends(self):
+        locations = (".agents/skills", "src/backend/.agents/skills", "src/frontend/.agents/skills")
+        for location in locations:
+            skill = self.target / location / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# Example\n")
+        result = self.cli("check")
+        for location in locations:
+            self.assertIn(f"INFO skill files found: {location}\n", result.stdout)
+        self.assertIn("client discovery and versions were not checked", result.stdout)
+
+    def test_empty_skill_directory_and_broken_link_do_not_count(self):
+        skills = self.target / "src/backend/.agents/skills"
+        (skills / "empty").mkdir(parents=True)
+        (skills / "broken").symlink_to(self.base / "missing skill", target_is_directory=True)
+        result = self.cli("check")
+        self.assertIn("INFO no project skill files found", result.stdout)
+        self.assertNotIn("INFO skill files found:", result.stdout)
+
+    def test_check_reports_backend_paths_without_printing_config(self):
+        env = self.target / "src/backend/.env"
+        env.write_text("PRIVATE_TEST_MARKER=do-not-print\n")
+        config = self.target / "src/backend/config/local_settings.py"
+        config.parent.mkdir()
+        config.symlink_to(env)
+        result = self.cli("check")
+        self.assertIn("INFO backend path: src/backend/.env (present)", result.stdout)
+        self.assertIn("INFO backend path: src/backend/config/local_settings.py (symlink)", result.stdout)
+        self.assertIn("INFO backend path: src/backend/.venv (missing)", result.stdout)
+        self.assertNotIn("PRIVATE_TEST_MARKER", result.stdout)
+
     def test_preserves_existing_directory_and_wrong_or_broken_link(self):
         self.configure()
         p = self.target / SHARE
