@@ -466,8 +466,10 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         )
 
     @patch("services.web.risk.whitelist.service.operate_itsm")
+    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False)
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_scene_manager_without_iam_stays_pending(self, is_admin, operate):
+    def test_scene_manager_without_iam_stays_pending(self, is_admin, has_manage, is_platform, operate):
         from services.web.risk.whitelist.service import _pass_if_admin
 
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
@@ -476,11 +478,11 @@ class WhitelistTicketCreateTests(SimpleTestCase):
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.operate_itsm")
-    @patch("services.web.risk.whitelist.service._can_manage_whitelist", return_value=True)
+    @patch("services.web.risk.whitelist.service.can_access_whitelist", return_value=True)
     def test_platform_admin_passes_immediately(self, can_manage, operate, apply_result):
         from services.web.risk.whitelist.service import _pass_if_admin
 
-        # 平台管理员（非场景 managers）经 _can_manage_whitelist 放行后，与场景管理员一样创建即生效
+        # 平台管理员（非场景 managers）经 can_access_whitelist 放行后，与场景管理员一样创建即生效
         operate.return_value = {"success": True, "message": "操作成功"}
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "root")
@@ -819,6 +821,7 @@ class WhitelistFlowTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service._find_converged_risk", return_value=None)
     @patch("services.web.risk.whitelist.service.RiskWhitelistHit.objects.bulk_create")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    @patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False)
     @patch("services.web.risk.whitelist.service.RISK_WHITELIST_WORKFLOW_KEY", "workflow-key")
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_create")
     @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
@@ -830,6 +833,7 @@ class WhitelistFlowTests(SimpleTestCase):
         write_nodes,
         ticket_create,
         is_admin,
+        has_manage,
         bulk_create,
         find_risk,
         refresh_nodes,
@@ -1772,20 +1776,11 @@ class WhitelistApproveCloseTests(SimpleTestCase):
 
 class WhitelistReviewTests(SimpleTestCase):
     def test_scene_admin_is_scene_manager(self):
-        from apps.permission.handlers.actions import ActionEnum
-        from services.web.risk.whitelist.service import (
-            is_scene_admin,
-            managed_scene_ids,
-        )
+        from services.web.risk.whitelist.service import is_scene_admin
 
         with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]):
             self.assertTrue(is_scene_admin("alice", 3))
             self.assertFalse(is_scene_admin("root", 3))
-
-        with patch("services.web.risk.whitelist.service.ScopePermission") as scope_cls:
-            scope_cls.return_value.get_scene_ids.return_value = [3]
-            self.assertEqual(managed_scene_ids("alice"), [3])
-            self.assertEqual(scope_cls.return_value.get_scene_ids.call_args.args[1], ActionEnum.MANAGE_SCENE)
 
     def test_whitelist_approvers_includes_current_user_with_manage_scene(self):
         from services.web.risk.whitelist.service import _whitelist_approvers
@@ -1825,7 +1820,7 @@ class WhitelistReviewTests(SimpleTestCase):
             self.assertFalse(is_scene_admin("root", 3))
             self.assertTrue(is_scene_admin("alice", 3))
         # 平台管理员不再受限：与场景管理员一样可编辑、启停、删除，并通过 / 驳回待审批白名单
-        with patch("services.web.risk.whitelist.service._can_manage_whitelist", return_value=True):
+        with patch("services.web.risk.whitelist.service.can_access_whitelist", return_value=True):
             self.assertEqual(list_actions(active, "root"), ["edit", "renew", "disable", "hits"])
             self.assertEqual(list_actions(pending, "root"), ["approve", "reject"])
             self.assertEqual(list_actions(disabled, "root"), ["edit", "enable", "hits", "delete"])
@@ -1844,19 +1839,27 @@ class WhitelistReviewTests(SimpleTestCase):
 
         rule = SimpleNamespace(status=WhitelistStatus.PENDING, scene_id=3, expire_at=None)
         with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
-            "services.web.risk.whitelist.service.is_platform_admin", return_value=False
-        ):
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False):
             self.assertEqual(list_actions(rule, "bob"), [])
         with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True):
             self.assertEqual(list_actions(rule, "alice"), ["approve", "reject"])
 
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
     def test_non_admin_cannot_approve_or_reject(self, is_admin):
+        # 鉴权前移到入口 get_rule_for_admin：非场景 / 平台管理员被拒，鉴权通过的 review_whitelist 不再重复校验
+        from services.web.risk.whitelist.service import get_rule_for_admin
+
         rule = SimpleNamespace(id=1, itsm_ticket_id="ticket-1", scene_id=3, status=WhitelistStatus.PENDING)
-        with self.assertRaises(ValidationError):
-            review_whitelist(rule, "approve", "bob")
-        with self.assertRaises(ValidationError):
-            review_whitelist(rule, "refuse", "bob", reject_reason="不准")
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False):
+            query.return_value.first.return_value = rule
+            with self.assertRaises(ValidationError):
+                get_rule_for_admin(1, "bob")
+        # 鉴权通过后 review_whitelist 直接走工单，不再自带权限校验
+        with patch("services.web.risk.whitelist.service.operate_itsm", return_value={"success": False}):
+            review_whitelist(rule, "approve", "alice")
 
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
     @patch("services.web.risk.whitelist.service.apply_whitelist_result", side_effect=lambda rule, ticket: ticket)
@@ -1961,6 +1964,8 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
         rule = self._rule()
         rule.refresh_from_db = lambda: None
         with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create", return_value=rule), patch(
+            "services.web.risk.whitelist.service.is_scene_admin", return_value=False
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False), patch(
             "services.web.risk.resources.risk.UpdateRiskLabel.request"
         ) as update_label:
             CreateRiskWhitelist().request(
@@ -1980,8 +1985,8 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.Scene.objects.filter")
     @patch("services.web.risk.resources.whitelist.Risk.objects.filter")
     @patch("services.web.risk.resources.whitelist.get_request_username", return_value="handler")
-    def test_apply_whitelist_with_risk_uses_risk_permission(self, _username, risk_filter, *_mocks):
-        # 风险处理人「申请加白」（带 risk_id）按风险处理权限放行，不再要求场景管理权限
+    def test_apply_whitelist_with_risk_is_open_application(self, _username, risk_filter, *_mocks):
+        # 带 risk_id 申请加白只是发起审批申请：不再做确认人 / 场景管理鉴权，任何登录用户都可提交
         risk = SimpleNamespace(
             risk_id="apply_risk", strategy_id=9, raw_event_id="evt", scene_id=1, current_operator=["handler"]
         )
@@ -1989,8 +1994,10 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
         rule = self._rule()
         rule.refresh_from_db = lambda: None
         with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create", return_value=rule), patch(
-            "services.web.risk.resources.whitelist.ensure_user_may_confirm_risk"
-        ) as ensure_perm:
+            "services.web.risk.whitelist.service.is_scene_admin", return_value=False
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False), patch(
+            "services.web.risk.resources.whitelist.assert_can_manage_scene"
+        ) as assert_scene:
             CreateRiskWhitelist().request(
                 {
                     "risk_id": risk.risk_id,
@@ -1999,8 +2006,8 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
                     "reason": "处理人申请加白",
                 }
             )
-        # 走的是风险处理权限口径，校验对象就是这条风险
-        ensure_perm.assert_called_once_with("handler", risk)
+        # 带 risk_id 创建走开放申请：既不校验确认人，也不校验场景管理权限，正常落库建单
+        assert_scene.assert_not_called()
 
     @patch("services.web.risk.whitelist.service._pass_if_admin")
     @patch("services.web.risk.whitelist.service.create_itsm_ticket")
@@ -2009,28 +2016,27 @@ class WhitelistCreateRiskLabelTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.Scene.objects.filter")
     @patch("services.web.risk.resources.whitelist.Risk.objects.filter")
     @patch("services.web.risk.resources.whitelist.get_request_username", return_value="outsider")
-    def test_apply_whitelist_denied_without_risk_permission(self, _username, risk_filter, *_mocks):
-        # 非处理人申请加白：风险处理权限校验拒绝，不会落库
-        from services.web.risk.permissions import RiskConfirmPermissionDenied
-
+    def test_apply_whitelist_allows_non_confirmer(self, _username, risk_filter, *_mocks):
+        # 非确认人 / 非平台管理员提交带 risk_id 的加白：按申请放行，正常建单，不再抛确认权限异常
         risk = SimpleNamespace(
             risk_id="apply_risk", strategy_id=9, raw_event_id="evt", scene_id=1, current_operator=["handler"]
         )
         risk_filter.return_value = [risk]
-        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create") as create, patch(
-            "services.web.risk.resources.whitelist.ensure_user_may_confirm_risk",
-            side_effect=RiskConfirmPermissionDenied(),
-        ):
-            with self.assertRaises(RiskConfirmPermissionDenied):
+        rule = self._rule()
+        rule.refresh_from_db = lambda: None
+        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.create", return_value=rule) as create:
+            with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+                "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+            ):
                 CreateRiskWhitelist().request(
                     {
                         "risk_id": risk.risk_id,
                         "match_scope": _scope(),
                         "whitelist_type": WhitelistType.RISK_ACCEPTANCE,
-                        "reason": "非处理人申请加白",
+                        "reason": "非确认人申请加白",
                     }
                 )
-        create.assert_not_called()
+        create.assert_called_once()
 
     def test_confirm_permission_denied_is_400_without_apply_url(self):
         # 确认误报 / 确认风险 / 申请加白共用：非确认人非平台管理员按 400 返回，且不带权限申请链接
@@ -2085,61 +2091,81 @@ class WhitelistPermissionTests(SimpleTestCase):
     命中场景管理员，或平台管理员且该场景在其可管理范围内，任一即可。
     """
 
-    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[])
     @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_create_allows_scene_admin(self, _scene, _platform, _managed):
+    def test_create_allows_scene_admin(self, _scene, _platform):
         # 场景管理员直接放行，不因非平台管理员被拒
         assert_can_manage_scene("alice", 1)
 
-    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[1, 2])
-    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True)
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_create_allows_platform_admin_on_managed_scene(self, _scene, _platform, _managed):
-        # 平台管理员且该场景在其可管理范围内放行（scene_id 做字符串归一比较）
-        assert_can_manage_scene("bob", "1")
+    def test_create_allows_platform_admin_on_managed_scene(self):
+        # 平台管理员放行（不再要求场景在可管理列表内，与读端点 MANAGE_PLATFORM 对齐）
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True):
+            assert_can_manage_scene("bob", "1")
 
-    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[3])
-    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True)
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_create_denies_platform_admin_outside_scene(self, _scene, _platform, _managed):
-        with self.assertRaises(ValidationError):
+    def test_create_allows_platform_admin_outside_scene(self):
+        # 平台管理员即便不在该场景，也按平台管理权限放行
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True):
             assert_can_manage_scene("bob", 1)
 
-    @patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[])
-    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_create_denies_normal_user(self, _scene, _platform, _managed):
-        with self.assertRaises(ValidationError):
-            assert_can_manage_scene("carol", 1)
+    def test_create_denies_normal_user(self):
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False):
+            with self.assertRaises(ValidationError):
+                assert_can_manage_scene("carol", 1)
 
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_platform_admin_allows_all_whitelist_ops_on_managed_scene(self, _scene):
-        # 平台管理员可管理该场景：与场景管理员一样可读写、通过 / 驳回
+    def test_create_allows_iam_manage_scene(self):
+        # 仅 IAM MANAGE_SCENE（不在 DB managers、非平台管理员）也放行，修复「能读不能写」
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=True
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False):
+            assert_can_manage_scene("iam_only", 1)
+
+    def test_get_rule_allows_iam_manage_scene(self):
+        # 写入口 get_rule_for_admin 同口径放行 IAM MANAGE_SCENE 用户
         rule = SimpleNamespace(scene_id=1)
-        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
-            "services.web.risk.whitelist.service.is_platform_admin", return_value=True
-        ), patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[1]):
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=True
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service.RiskWhitelist.objects.filter"
+        ) as query:
+            query.return_value.first.return_value = rule
+            self.assertIs(get_rule_for_admin(1, "iam_only"), rule)
+
+    def test_platform_admin_allows_all_whitelist_ops_on_managed_scene(self):
+        # 平台管理员：与场景管理员一样可读写、通过 / 驳回
+        rule = SimpleNamespace(scene_id=1)
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True), patch(
+            "services.web.risk.whitelist.service.RiskWhitelist.objects.filter"
+        ) as query:
             query.return_value.first.return_value = rule
             self.assertIs(get_rule_for_admin(1, "bob"), rule)
 
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_no_permission_denied(self, _scene):
-        # 非场景管理员且非平台管理员应被拒
+    def test_no_permission_denied(self):
+        # 非场景管理员、无场景管理权且非平台管理员应被拒
         rule = SimpleNamespace(scene_id=1)
-        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
-            "services.web.risk.whitelist.service.is_platform_admin", return_value=False
-        ), patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[]):
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service.RiskWhitelist.objects.filter"
+        ) as query:
             query.return_value.first.return_value = rule
             with self.assertRaises(ValidationError):
                 get_rule_for_admin(1, "carol")
 
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_approve_reject_allows_platform_admin(self, _scene):
-        # 通过 / 驳回：去掉平台管理员限制，可管理该场景的平台管理员同等放行
+    def test_approve_reject_allows_platform_admin(self):
+        # 通过 / 驳回：平台管理员与场景管理员同等放行
         rule = SimpleNamespace(scene_id=1)
-        with patch("services.web.risk.whitelist.service.RiskWhitelist.objects.filter") as query, patch(
-            "services.web.risk.whitelist.service.is_platform_admin", return_value=True
-        ), patch("services.web.risk.whitelist.service.managed_scene_ids", return_value=[1]):
+        with patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False), patch(
+            "services.web.risk.whitelist.service._has_manage_scene", return_value=False
+        ), patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True), patch(
+            "services.web.risk.whitelist.service.RiskWhitelist.objects.filter"
+        ) as query:
             query.return_value.first.return_value = rule
             self.assertIs(get_rule_for_admin(1, "bob"), rule)
