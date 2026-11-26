@@ -65,6 +65,21 @@ class EntryHandlerTest(SimpleTestCase):
 
         self.assertEqual(data["platform_admin_users"], ["admin", "operator"])
 
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission")
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_storage_menu_uses_only_list_storage_permission(self, mock_get, mock_check_permission):
+        mock_get.side_effect = self._get_global_meta_config()
+        for backend in ("v3", "v4"):
+            for allowed in (True, False):
+                with self.subTest(backend=backend, allowed=allowed), override_settings(IAM_PERMISSION_BACKEND=backend):
+                    mock_check_permission.reset_mock()
+                    mock_check_permission.return_value = {"list_storage": allowed}
+
+                    data = EntryHandler.entry(self._build_request())
+
+                    mock_check_permission.assert_called_once_with(action_ids="list_storage")
+                    self.assertIs(data["super_manager"], allowed)
+
     @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission", return_value={})
     @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
     def test_home_resource_exposes_project_lazy_load_only_in_v4(self, mock_get, mock_permission):
