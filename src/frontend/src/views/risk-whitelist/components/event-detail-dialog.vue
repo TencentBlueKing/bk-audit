@@ -21,7 +21,7 @@
     :esc-close="false"
     :quick-close="false"
     :title="t('事件详情')"
-    width="640">
+    width="800">
     <bk-loading :loading="loading">
       <table class="event-table">
         <thead>
@@ -36,14 +36,31 @@
           <tr
             v-for="item in fields"
             :key="item.field">
-            <td>{{ item.field }}</td>
-            <td>{{ item.field_name }}</td>
+            <td class="name-cell">
+              <show-tooltips-text
+                :data="item.field || '--'"
+                placement="top"
+                tooltip-content-class="show-tooltips-text-popup"
+                tooltip-max-height="40vh" />
+            </td>
+            <td class="name-cell">
+              <show-tooltips-text
+                :data="item.field_name || '--'"
+                placement="top"
+                tooltip-content-class="show-tooltips-text-popup"
+                tooltip-max-height="40vh" />
+            </td>
             <td class="type-cell">{{ item.field_type }}</td>
             <td class="value-cell">
+              <json-field-preview
+                v-if="isDictField(item)"
+                :click-tip="t('点击可查看或复制完整内容')"
+                preview-mode="tree"
+                :text="formatFieldValue(item.field_value)"
+                :value="item.field_value" />
               <show-tooltips-text
+                v-else
                 :data="formatFieldValue(item.field_value)"
-                :line="4"
-                :max-width="360"
                 placement="top"
                 tooltip-content-class="show-tooltips-text-popup"
                 tooltip-max-height="40vh" />
@@ -66,6 +83,7 @@
 
   import type { EventFieldRow } from '@model/risk-whitelist/whitelist';
 
+  import JsonFieldPreview from '@components/json-field-preview/index.vue';
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   const { t } = useI18n();
@@ -81,6 +99,11 @@
     } catch {
       return String(value);
     }
+  };
+
+  const isDictField = (item: EventFieldRow) => {
+    if (String(item.field_type || '').toLowerCase() === 'dict') return true;
+    return item.field_value !== null && typeof item.field_value === 'object';
   };
 
   const open = (whitelistId: number | string, hitId: number | string) => {
@@ -117,7 +140,7 @@
     font-weight: var(--bk-theme-font-weight-regular);
     line-height: var(--bk-theme-line-height-base);
     text-align: left;
-    vertical-align: top;
+    vertical-align: middle;
     border-bottom: 1px solid var(--bk-theme-border-weak);
     box-sizing: border-box;
   }
@@ -130,30 +153,39 @@
 
   .event-table th:nth-child(1),
   .event-table td:nth-child(1) {
-    width: 112px;
+    width: 160px;
   }
 
   .event-table th:nth-child(2),
   .event-table td:nth-child(2) {
-    width: 112px;
+    width: 160px;
   }
 
   .event-table th:nth-child(3),
   .event-table td:nth-child(3) {
-    width: 64px;
+    width: 72px;
   }
 
   .event-table td {
     color: var(--bk-theme-text-default);
-    word-break: break-all;
+  }
+
+  .name-cell,
+  .value-cell {
+    overflow: hidden;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .name-cell :deep(.show-tooltips-text),
+  .value-cell :deep(.show-tooltips-text),
+  .value-cell :deep(.json-field-preview) {
+    width: 100%;
+    max-width: 100%;
   }
 
   .type-cell {
     white-space: nowrap;
-  }
-
-  .value-cell {
-    min-width: 0;
   }
 
   :deep(.bk-dialog-footer) {

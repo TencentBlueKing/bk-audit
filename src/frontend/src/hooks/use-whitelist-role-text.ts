@@ -105,8 +105,9 @@ export const getWhitelistApplySuccess = (type: WhitelistType, isAdmin: boolean) 
 };
 
 export const getWhitelistRiskCloseImpact = (type: WhitelistType, isAdmin: boolean) => {
+  // 误报加白：有场景管理权才关单（不标误报）；无权限不关单，确认框不展示本条
   if (type === 'false_positive') {
-    return '当前风险单将按误报关闭。';
+    return isAdmin ? '当前风险单将关闭。' : '';
   }
   if (isAdmin) {
     return '确认后当前风险单将立即关闭。';

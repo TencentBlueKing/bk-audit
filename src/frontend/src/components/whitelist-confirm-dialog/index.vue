@@ -132,7 +132,8 @@
       lines.push(getWhitelistAdventureAdminImpact());
     } else {
       if (source.value === 'risk') {
-        lines.push(getWhitelistRiskCloseImpact(type, admin));
+        const closeImpact = getWhitelistRiskCloseImpact(type, admin);
+        if (closeImpact) lines.push(closeImpact);
       }
       lines.push(getWhitelistEffectImpact(type, admin));
     }

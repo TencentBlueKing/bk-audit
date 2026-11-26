@@ -39,6 +39,7 @@ declare module 'vue' {
     IpSelector: typeof import('./src/components/ip-selector/index.vue')['default']
     Item: typeof import('./src/components/audit-menu/item.vue')['default']
     ItemGroup: typeof import('./src/components/audit-menu/item-group.vue')['default']
+    JsonFieldPreview: typeof import('./src/components/json-field-preview/index.vue')['default']
     KeepAliveRouteRenderer: typeof import('./src/components/keep-alive-router-view/keep-alive-route-renderer.vue')['default']
     KeepAliveRouterView: typeof import('./src/components/keep-alive-router-view/index.vue')['default']
     ListCheck: typeof import('./src/components/ip-selector/selector-box/components/list-check.vue')['default']
