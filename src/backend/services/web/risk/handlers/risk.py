@@ -282,6 +282,11 @@ class RiskHandler:
         else:
             target_scene_id = self._get_strategy_scene_id(event["strategy_id"])
 
+        from services.web.risk.whitelist.service import intercept_whitelist
+
+        if intercept_whitelist(event, create_params, target_scene_id):
+            return False, None
+
         # 检查是否有已存在的
         # 策略ID相同，原始事件ID相同，命中发现规则相同，场景相同，不为关单状态或事件时间小于最后发现时间
         # 若未关单，则不创建新风险
