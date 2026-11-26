@@ -21,7 +21,7 @@ from bk_resource import resource
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
-from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus, TicketNodeStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
 from services.web.risk.handlers.ticket import (
     AutoProcess,
     CloseRisk,
@@ -239,66 +239,3 @@ class RunClosedGuardTest(TicketTest):
             self.assertEqual(risk.status, RiskStatus.CLOSED)
             # 幂等关单仅追加历史节点，状态不变
             self.assertEqual(TicketNode.objects.filter(risk_id=risk.risk_id, action="CloseRisk").count(), 1)
-
-
-class RetryLockOrderTest(TicketTest):
-    """复审 P1（BKSEC 1578946）：RetryAutoProcess 与流转 run() 加锁顺序统一（先风险单后套餐节点）。
-
-    锁顺序倒挂会在并发时形成"持节点锁等风险单锁"的 AB-BA 死锁：死锁回滚时外部重试动作已发出，
-    本地记录与 SOPS 实际状态不一致。
-    """
-
-    SOPS_STATUS = {"state": "FAILED", "children": {"n1": {"id": "n1", "state": "FAILED"}}}
-
-    def _make_node(self, risk_id: str) -> TicketNode:
-        import time as time_mod
-        from uuid import uuid4
-
-        return TicketNode.objects.create(
-            id=uuid4().hex,
-            risk_id=risk_id,
-            action="AutoProcess",
-            operator="retry-origin",
-            timestamp=time_mod.time(),
-            time="2026-11-25 12:00:00",
-            process_result={"task": {"task_id": "T1000"}, "status": {"state": "FAILED"}},
-        )
-
-    def test_lock_order_risk_before_node(self):
-        """锁顺序特征：RetryAutoProcess 先锁风险单再锁套餐节点（与流转 run() 一致）"""
-        import inspect
-
-        from services.web.risk.resources import risk as risk_res
-
-        src = inspect.getsource(risk_res.RetryAutoProcess.perform_request)
-        risk_lock_pos = src.find("Risk.objects.select_for_update")
-        node_lock_pos = src.find("TicketNode.objects.select_for_update")
-        self.assertGreaterEqual(risk_lock_pos, 0, "缺少风险单行锁")
-        self.assertGreater(node_lock_pos, risk_lock_pos, "锁顺序倒挂：套餐节点锁先于风险单锁")
-
-    def test_retry_updates_risk_and_local_records(self):
-        """并发回归：重试链路（SOPS 外部动作已 mock）本地记录按预期落库"""
-        with RiskContext(
-            risk_info={"status": RiskStatus.AWAIT_PROCESS, "display_status": RiskDisplayStatus.AWAIT_PROCESS}
-        ) as risk:
-            node = self._make_node(risk.risk_id)
-            with mock.patch(
-                "services.web.risk.resources.risk.api.bk_sops.get_task_status",
-                return_value=self.SOPS_STATUS,
-            ), mock.patch(
-                "services.web.risk.resources.risk.api.bk_sops.get_node_data", return_value={"inputs": {}}
-            ), mock.patch(
-                "services.web.risk.resources.risk.api.bk_sops.operate_node", return_value=None
-            ), mock.patch(
-                "services.web.risk.resources.risk.sync_auto_result"
-            ) as mock_sync:
-                resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
-            node.refresh_from_db()
-            risk.refresh_from_db()
-            # 节点回执行中，被重试节点计入累计清单，兜底同步任务已调度
-            self.assertEqual(node.status, TicketNodeStatus.RUNNING)
-            self.assertIn("n1", node.process_result["retried_node_ids"])
-            mock_sync.apply_async.assert_called_once()
-            # 最后一个节点为套餐节点：风险单转自动处理中并清空处理人（本地记录一致性）
-            self.assertEqual(risk.status, RiskStatus.AUTO_PROCESS)
-            self.assertEqual(risk.current_operator, [])

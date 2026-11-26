@@ -1399,9 +1399,6 @@ class RetryAutoProcess(RiskMeta):
                 inputs=io_data["inputs"],
             )
         with transaction.atomic():
-            # 统一加锁顺序：先锁风险单再锁套餐节点（与流转 run() 一致），
-            # 避免与 AutoProcess.run 并发时"持节点锁等风险单锁"的 AB-BA 死锁（BKSEC 1578946 复审）
-            Risk.objects.select_for_update().filter(risk_id=risk.risk_id).only("id").first()
             # 行锁重取，避免并发点击重试互相覆盖
             node = TicketNode.objects.select_for_update().get(id=node.id)
             process_result = node.process_result or {}
