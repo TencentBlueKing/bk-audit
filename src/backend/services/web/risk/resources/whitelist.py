@@ -190,16 +190,17 @@ class RetrieveRiskWhitelist(RiskWhitelistMeta):
     RequestSerializer = BatchRiskWhitelistDetailReqSerializer
 
     def perform_request(self, validated_request_data):
-        scene_id = validated_request_data["scene_id"]
         rule_ids = validated_request_data["id"]
-        # 状态硬编码只取待审批 / 已驳回；scene_id 再过滤一次，杜绝跨场景 ID 越权查询
+        username = get_request_username()
+        # 状态硬编码只取待审批 / 已驳回；归属改由 can_access_whitelist 逐条校验，
+        # 不再按请求 scene_id 过滤，杜绝跨场景 ID 越权查询的同时避免误伤合法多场景访问。
         rules = list(
             RiskWhitelist.objects.filter(
                 pk__in=rule_ids,
-                scene_id=scene_id,
                 status__in=[WhitelistStatus.PENDING, WhitelistStatus.REJECTED],
             ).order_by("-created_at")
         )
+        rules = [r for r in rules if can_access_whitelist(username, r.scene_id)]
         with ThreadPoolExecutor(max_workers=10) as executor:
             return list(executor.map(self._detail, rules))
 
