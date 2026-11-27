@@ -158,6 +158,8 @@
     field_name: string;
     display_name: string;
     type?: string;
+    /** 后端 FieldType；null/缺失时前端按 string 兜底 */
+    field_type?: string | null;
   }
 
   export interface FieldSelectPayload {
@@ -165,6 +167,8 @@
     field_name: string;
     field_label: string;
     field_group: 'risk' | 'event';
+    /** 事件字段透传 API field_type（含 null） */
+    field_type?: string | null;
   }
 
   interface Props {
@@ -332,6 +336,8 @@
       field_name: item.display_name,
       field_label: `${item.display_name}(${item.field_name})`,
       field_group: 'event',
+      // 显式带上 null，表单侧才能走「未知类型兜底 string」而不是只查内置 meta
+      field_type: item.field_type ?? null,
     });
   };
 

@@ -123,6 +123,29 @@ export const getOperatorsForValueType = (valueType?: ConditionFieldOption['value
   return STRING_OPERATOR_OPTIONS;
 };
 
+/** 后端 FieldType 中按 number 操作符处理的类型（含 timestamp） */
+const NUMBER_FIELD_TYPES = new Set([
+  'int',
+  'long',
+  'float',
+  'double',
+  'timestamp',
+]);
+
+/**
+ * 将事件字段 field_type 映射为白名单 value_type。
+ * string/text/null/未知 → text；数值类 → number。
+ */
+export const mapFieldTypeToValueType = (
+  fieldType?: string | null,
+  field?: string,
+): ConditionFieldOption['value_type'] => {
+  if (field === 'strategy_id') return 'strategy';
+  const normalized = String(fieldType || '').trim().toLowerCase();
+  if (NUMBER_FIELD_TYPES.has(normalized)) return 'number';
+  return 'text';
+};
+
 const buildField = (
   field: string,
   name: string,
@@ -165,8 +188,17 @@ export const getFieldMeta = (field: string) => (
   FALLBACK_CONDITION_FIELDS.find(item => item.field === field)
 );
 
-/** 命中策略仅等于；未知动态事件字段默认按 string */
-export const getOperatorsForField = (field?: string) => {
+/**
+ * 解析字段可用操作符。
+ * - strategy_id：仅等于
+ * - 传入 fieldType（含 null）：按 API 类型映射，null/空兜底 string
+ * - 未传 fieldType：走内置字段 meta，未知字段兜底 string
+ */
+export const getOperatorsForField = (field?: string, fieldType?: string | null) => {
+  if (field === 'strategy_id') return STRATEGY_OPERATOR_OPTIONS;
+  if (fieldType !== undefined) {
+    return getOperatorsForValueType(mapFieldTypeToValueType(fieldType, field));
+  }
   const meta = field ? getFieldMeta(field) : undefined;
   if (!meta) return STRING_OPERATOR_OPTIONS;
   return meta.operators;

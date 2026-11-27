@@ -113,13 +113,24 @@
                         class="operator-select"
                         :clearable="false"
                         :disabled="isPrefillLocked(groupIndex, conditionIndex) || isStrategyRow(groupIndex, conditionIndex)"
+                        filterable
                         :model-value="condition.operator"
+                        :placeholder="t('请选择')"
+                        :popover-options="{ extCls: 'risk-whitelist-operator-select-popover' }"
+                        :search-placeholder="t('请输入关键字')"
                         @change="(value: string) => changeOperator(groupIndex, conditionIndex, value)">
                         <bk-option
-                          v-for="item in operatorsForCondition(condition)"
+                          v-for="item in operatorsForCondition(groupIndex, condition)"
                           :key="item.value"
                           :label="item.label"
-                          :value="item.value" />
+                          :value="item.value">
+                          <span
+                            v-bk-tooltips="operatorOptionTip(item.label)"
+                            class="operator-option-label"
+                            @mouseenter="(e: MouseEvent) => syncOperatorOptionOverflow(item.label, e)">
+                            {{ item.label }}
+                          </span>
+                        </bk-option>
                       </bk-select>
                     </span>
                   </bk-popover>
@@ -523,7 +534,10 @@
   };
 
   /** 命中策略强制等于；空值操作符清空 value；非法操作符回落到该字段首个可用项 */
-  const normalizeCondition = (condition: MatchCondition): MatchCondition => {
+  const normalizeCondition = (
+    condition: MatchCondition,
+    fieldType?: string | null,
+  ): MatchCondition => {
     if (condition.field === 'strategy_id') {
       return {
         ...condition,
@@ -532,7 +546,7 @@
         field_label: condition.field_label || '风险命中策略(ID)(strategy_id)',
       };
     }
-    const operators = getOperatorsForField(condition.field);
+    const operators = getOperatorsForField(condition.field, fieldType);
     const allowed = operators.some(item => item.value === condition.operator);
     const nextOperator = allowed
       ? condition.operator
@@ -794,12 +808,55 @@
     conditionIndex === 0 && scope.value.groups[groupIndex].conditions[0].field === 'strategy_id'
   );
 
-  const operatorsForCondition = (condition: MatchCondition) => getOperatorsForField(condition.field);
-
   const groupStrategyId = (groupIndex: number) => {
     const strategy = scope.value.groups[groupIndex]?.conditions
       .find(item => item.field === 'strategy_id' && item.value);
     return strategy ? String(strategy.value) : '';
+  };
+
+  /**
+   * 解析条件字段类型：
+   * - 风险字段 / 未拉到事件列表：undefined → 走内置 meta 或 string 兜底
+   * - 事件列表命中：返回 field_type（含 null，由 map 兜底为 string）
+   */
+  const resolveConditionFieldType = (
+    groupIndex: number,
+    field: string,
+  ): string | null | undefined => {
+    if (field === 'strategy_id') return undefined;
+    const meta = FALLBACK_CONDITION_FIELDS.find(item => item.field === field);
+    if (meta?.field_group === 'risk') return undefined;
+    const strategyId = groupStrategyId(groupIndex);
+    if (!strategyId) return undefined;
+    const list = eventFieldsCache.value[strategyId];
+    if (!list) return undefined;
+    const found = list.find(item => item.field_name === field);
+    if (!found) return undefined;
+    return found.field_type ?? null;
+  };
+
+  const operatorsForCondition = (groupIndex: number, condition: MatchCondition) => (
+    getOperatorsForField(condition.field, resolveConditionFieldType(groupIndex, condition.field))
+  );
+
+  /** 操作符选项溢出时才出 tip，避免短文案也弹 */
+  const operatorOptionOverflowMap = ref<Record<string, boolean>>({});
+
+  const operatorOptionTip = (label: string) => ({
+    content: label,
+    disabled: !operatorOptionOverflowMap.value[label],
+    delay: 80,
+    placement: 'right' as const,
+  });
+
+  const syncOperatorOptionOverflow = (label: string, event: MouseEvent) => {
+    const el = event.currentTarget as HTMLElement | null;
+    const overflowed = Boolean(el && el.scrollWidth > el.clientWidth + 1);
+    if (operatorOptionOverflowMap.value[label] === overflowed) return;
+    operatorOptionOverflowMap.value = {
+      ...operatorOptionOverflowMap.value,
+      [label]: overflowed,
+    };
   };
 
   const normalizeEventFieldItem = (item: Record<string, any>): EventFieldOption => {
@@ -809,6 +866,7 @@
       id: String(item.id || `${fieldName}:${displayName}`),
       field_name: fieldName,
       display_name: displayName,
+      field_type: item.field_type ?? null,
       ...(item.type === 'basic_event_field' ? { type: item.type } : {}),
     };
   };
@@ -834,6 +892,8 @@
           ...eventFieldsCache.value,
           [strategyId]: list,
         };
+        // 事件字段类型就绪后，按类型校正已选操作符（非法则回落默认）
+        realignOperatorsByEventFieldTypes(strategyId);
       })
       .catch(() => {
         eventFieldsCache.value = {
@@ -847,6 +907,28 @@
           [strategyId]: false,
         };
       });
+  };
+
+  /** 事件字段列表返回后，按 field_type 校正同策略条件下的操作符 */
+  const realignOperatorsByEventFieldTypes = (strategyId: string) => {
+    let changed = false;
+    const nextGroups = scope.value.groups.map((group, groupIndex) => {
+      if (groupStrategyId(groupIndex) !== strategyId) return group;
+      return {
+        ...group,
+        conditions: group.conditions.map((condition) => {
+          if (condition.field === 'strategy_id') return condition;
+          const fieldType = resolveConditionFieldType(groupIndex, condition.field);
+          if (fieldType === undefined) return condition;
+          const next = normalizeCondition(condition, fieldType);
+          if (next.operator !== condition.operator) changed = true;
+          return next;
+        }),
+      };
+    });
+    if (changed) {
+      scope.value = { ...scope.value, groups: nextGroups };
+    }
   };
 
   const syncEventFieldsForScope = () => {
@@ -951,7 +1033,10 @@
     if (!payload?.field) return;
     markDirty();
     clearScopeError();
-    const operators = getOperatorsForField(payload.field);
+    const fieldType = payload.field_group === 'event'
+      ? (payload.field_type ?? null)
+      : undefined;
+    const operators = getOperatorsForField(payload.field, fieldType);
     patchCondition(groupIndex, conditionIndex, normalizeCondition({
       field: payload.field,
       field_name: payload.field_name,
@@ -960,17 +1045,18 @@
       value: '',
       value_display: '',
       connector: scope.value.groups[groupIndex].conditions[conditionIndex]?.connector || 'and',
-    }));
+    }, fieldType));
   };
 
   const changeOperator = (groupIndex: number, conditionIndex: number, value: string) => {
     if (isStrategyRow(groupIndex, conditionIndex)) return;
     markDirty();
     clearScopeError();
+    const condition = scope.value.groups[groupIndex].conditions[conditionIndex];
     patchCondition(groupIndex, conditionIndex, normalizeCondition({
-      ...scope.value.groups[groupIndex].conditions[conditionIndex],
+      ...condition,
       operator: value as CompareOperator,
-    }));
+    }, resolveConditionFieldType(groupIndex, condition.field)));
   };
 
   const changeStrategy = (groupIndex: number, conditionIndex: number, value: string) => {
@@ -1335,7 +1421,8 @@
   .scope-row {
     position: relative;
     display: grid;
-    grid-template-columns: 260px 160px minmax(0, 1fr) minmax(40px, auto);
+    /* 操作符 180；字段相对原 260 略收，值列仍自适应 */
+    grid-template-columns: 240px 180px minmax(0, 1fr) minmax(40px, auto);
     gap: var(--bk-theme-space-8);
     align-items: center;
   }
@@ -1384,6 +1471,14 @@
   .operator-select :deep(.bk-select-tag.is-disabled),
   .operator-select :deep(.bk-input.is-disabled) {
     cursor: default;
+  }
+
+  .operator-option-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .value-input {
@@ -1565,5 +1660,14 @@
 <style lang="postcss">
   .risk-whitelist-date-dropdown {
     z-index: 30000;
+  }
+
+  /* 宽度跟随触发器；仅补齐选项省略样式，溢出靠 tip */
+  .risk-whitelist-operator-select-popover .operator-option-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>
