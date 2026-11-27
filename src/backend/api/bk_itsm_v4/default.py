@@ -29,10 +29,10 @@ from core.bk_api_base import AuditBkApiResource
 
 
 class BKITSMV4(AuditBkApiResource, abc.ABC):
-    """ITSM V4 接口基类"""
 
     module_name = "bk_itsm_v4"
     platform_authorization = True
+    use_admin_username = True
 
     @property
     def base_url(self):

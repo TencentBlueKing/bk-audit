@@ -22,22 +22,42 @@ from bk_resource import BkApiResource
 from blueapps.utils.logger import logger
 from django.conf import settings
 
-from core.tenant import get_admin_username, use_multi_tenant_mode
+from core.tenant import get_admin_username, get_bk_tenant_id, use_multi_tenant_mode
 
 
 class AuditBkApiResource(BkApiResource):
-    """审计中心 API 基类：多租户 Header + 应用态 bk_admin 身份
+    """审计中心 API 基类：多租户 Header + 身份分流
 
     所有 api/* 模块的资源类由继承 BkApiResource 改为继承 AuditBkApiResource。
 
-    多租户开关 BKPAAS_MULTI_TENANT_MODE = true 时：
-      - 所有出站请求携带 X-Bk-Tenant-Id: {BK_TENANT_ID}
-      - use_admin_username=True 的资源：移除 access_token，bk_username → bk_admin
+    单租户模式：完全沿用 SDK 原生逻辑，platform_authorization 在该维度生效，行为不变。
 
-    关闭时行为与改造前完全一致。
+    多租户开关 BKPAAS_MULTI_TENANT_MODE = true 时，不再参考 platform_authorization，
+    只按 use_admin_username 分流（基类默认 False）：
+      - 所有出站请求携带 X-Bk-Tenant-Id: {BK_TENANT_ID}
+      - use_admin_username=True（应用态/系统态）：bk_username → bk_admin，移除 access_token
+      - use_admin_username=False/未配（用户态）：以真实登录用户身份发起，不借用平台账号
     """
 
     use_admin_username = False
+
+    def before_request(self, kwargs: dict) -> dict:
+        """从最终 GET query 中剥离已被 URL 路径占位符消费的 url_keys。
+
+        SDK 的 build_url 只读取 url_keys 用于路径 format，不会移除它们。本类刻意
+        不覆写 build_url：build_header / set_headers / perform_request 仍依赖同一份
+        请求数据（如 NamespacesList.build_header 读取 tenant、bk_iam
+        GetSystemRoles 读取 system_id），提前弹出会造成 KeyError 或请求体丢字段。
+
+        剥离放在 before_request：此时路径与 Header 均已构造完成，且只重建 params
+        字典而非原地修改，perform_request 的后置逻辑仍可读到原始请求数据。
+        json / data 请求体不剥离：部分接口（如 bk_iam V3 管理类 API）会显式把
+        url_keys 放进请求体，统一移除会改变既有协议。
+        """
+        params = kwargs.get("params")
+        if isinstance(params, dict) and self.url_keys:
+            kwargs["params"] = {key: value for key, value in params.items() if key not in self.url_keys}
+        return super().before_request(kwargs)
 
     @staticmethod
     def use_multi_tenant_mode() -> bool:
@@ -54,32 +74,73 @@ class AuditBkApiResource(BkApiResource):
         """
         return headers
 
-    def build_header(self, validated_request_data: dict) -> dict:
-        """构造请求头：多租户 Header + 应用态 bk_admin 身份
+    def _build_user_state_params(self, params: dict) -> dict:
+        """多租户 + 用户态 headers 参数"""
+        from blueapps.utils.request_provider import get_local_request
 
-        1. super().build_header() 走原生的 x-bkapi-authorization 构造逻辑
-        2. 多租户模式下追加 X-Bk-Tenant-Id Header
-        3. use_admin_username=True 时：
-           - 移除 access_token：应用态调用不使用用户 token，与 admin 认证方式冲突
-           - 替换 bk_username：平台态调用应以租户内 bk_admin 身份发起
-        4. 调用 set_headers() 供子类补充业务侧 Header
+        request = params.pop("_request", None) or get_local_request()
+        user = getattr(request, "user", None)
+        username = getattr(user, "bk_username", None) or getattr(user, "username", None)
+        if not username or not getattr(user, "is_authenticated", False):
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied("Authenticated user required for personal BK resource")
+        params.pop("_is_backend", None)
+        params.pop("bk_username", None)
+        params.update(
+            {
+                "bk_app_code": settings.APP_CODE,
+                "bk_app_secret": settings.SECRET_KEY,
+                "bk_username": username,
+            }
+        )
+        params.update(self.build_auth_args(request))
+        return params
+
+    def add_esb_info_before_request(self, params: dict) -> dict:
+        """构造 body 鉴权信息（含后台/异步任务强制平台鉴权路径）。
+
+        分流规则：
+          - 单租户：完全走 SDK 原生逻辑（platform_authorization 在该维度生效），行为不变。
+          - 多租户：不再参考 platform_authorization，只按 use_admin_username 分流：
+              * use_admin_username=True（应用态/系统态，如 ITSM V4、bk_log 系统操作）：
+                以「应用凭据 + 租户管理员 bk_admin」组装，绕过已清空的旧平台凭据。
+                覆盖前端路径与后台/异步任务强制平台鉴权路径。
+              * use_admin_username=False 或未配（用户态，基类默认 False）：以「应用凭据 +
+                真实登录用户」组装，不借用平台账号，确保后台路径不会因旧凭据为空而抛错
+                或丢失用户身份。
+        """
+        if not self.use_multi_tenant_mode():
+            return super().add_esb_info_before_request(params)
+
+        if self.use_admin_username:
+            params.pop("access_token", None)
+            params.pop("bk_username", None)
+            params.pop("_request", None)
+            params.pop("_is_backend", None)
+            params.update(
+                {
+                    "bk_app_code": settings.APP_CODE,
+                    "bk_app_secret": settings.SECRET_KEY,
+                    "bk_username": get_admin_username(get_bk_tenant_id()),
+                }
+            )
+            return params
+
+        return self._build_user_state_params(params)
+
+    def build_header(self, validated_request_data: dict) -> dict:
+        """构造请求头：多租户追加 X-Bk-Tenant-Id。
+
+        鉴权身份（应用态 bk_admin / 用户态真实登录用户）已由 add_esb_info_before_request
+        统一构造——前端 header 路径（bkapi_header_authorization=True）与后台 body 路径
+        （bkapi_data_authorization=True）共用该方法。因此此处不再重复处理
+        x-bkapi-authorization，只负责追加租户 Header 并暴露给子类扩展点 set_headers()。
         """
         headers = super().build_header(validated_request_data)
 
         if self.use_multi_tenant_mode():
-            tenant_id = getattr(settings, "BK_TENANT_ID", "")
-            headers["X-Bk-Tenant-Id"] = tenant_id
-
-            if self.use_admin_username:
-                raw_auth = headers.get("x-bkapi-authorization", "{}")
-                auth = json.loads(raw_auth) if isinstance(raw_auth, str) else raw_auth
-                # 移除 access_token：应用态接口不使用用户 token
-                auth.pop("access_token", None)
-                # 替换为租户管理员 bk_username
-                admin_username = get_admin_username(tenant_id)
-                if admin_username:
-                    auth["bk_username"] = admin_username
-                headers["x-bkapi-authorization"] = json.dumps(auth)
+            headers["X-Bk-Tenant-Id"] = get_bk_tenant_id()
 
         # 打印最终生效的鉴权身份，便于部署时确认使用的是哪个虚拟用户
         _auth = headers.get("x-bkapi-authorization", "{}")

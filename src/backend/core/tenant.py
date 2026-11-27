@@ -20,6 +20,7 @@ from functools import lru_cache
 from typing import Optional
 
 from bk_resource import api
+from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
@@ -81,6 +82,18 @@ def get_admin_username(bk_tenant_id: str) -> str:
         raise ValueError(gettext("get_admin_username: 获取管理员用户失败"))
 
     return username
+
+
+def get_platform_operator() -> str:
+    """获取平台侧操作的 operator（提交人 / 关单人等）。
+
+    多租户应用态：使用当前租户的 bk_admin 虚拟用户，与出站请求头身份一致，
+    避免把单租户遗留的 PLATFORM_AUTH_ACCESS_USERNAME 作为平台操作人。
+    单租户：保持原有平台账号行为，不影响旧部署与场景权限申请的真实申请人。
+    """
+    if use_multi_tenant_mode():
+        return get_admin_username(get_bk_tenant_id())
+    return bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
 
 
 TENANT_ID_HEADER = "X-Bk-Tenant-Id"

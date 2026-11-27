@@ -21,6 +21,7 @@ from django.db.models.signals import post_migrate
 from django.utils.translation import gettext_lazy
 
 from apps.notice.constants import ADMIN_NOTICE_GROUP_ID
+from core.tenant import get_bk_tenant_id, use_multi_tenant_mode
 from core.utils.environ import get_env_or_raise
 
 
@@ -31,6 +32,30 @@ class NoticeConfig(AppConfig):
 
     def ready(self):
         post_migrate.connect(self._init_system_admin_notice, self)
+        self._patch_bk_notice_sdk_tenant_header()
+
+    def _patch_bk_notice_sdk_tenant_header(self):
+        """为 bk_notice_sdk 的出站请求注入多租户 Header。
+        """
+        if not use_multi_tenant_mode():
+            return
+
+        from bkapi.bk_notice.client import Client as BkNoticeClient
+
+        tenant_id = get_bk_tenant_id()
+        if not tenant_id:
+            return
+
+        original_handle_request = BkNoticeClient.handle_request
+
+        def patched_handle_request(self, operation, context):
+            headers = context.get("headers") or {}
+            if "X-Bk-Tenant-Id" not in headers:
+                headers["X-Bk-Tenant-Id"] = tenant_id
+                context["headers"] = headers
+            return original_handle_request(self, operation, context)
+
+        BkNoticeClient.handle_request = patched_handle_request
 
     def _init_system_admin_notice(self, *args, **kwargs):
         """

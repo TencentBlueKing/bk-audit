@@ -148,12 +148,16 @@ class TestMultitenantPersonalAuth(SimpleTestCase):
                 self.assertEqual(auth["bk_username"], "fixture_tenant_admin")
                 self.assertNotIn("access_token", auth)
 
-    def test_explicit_bkbase_v3_platform_exception_is_not_rewritten(self):
+    def test_explicit_bkbase_v3_non_admin_resource_uses_personal_identity(self):
+        # 多租户下不论 platform_authorization 取值，只要 use_admin_username=False
+        # 即视为用户态，以真实登录用户身份发起，不借用旧平台凭据；用户态保留
+        # build_auth_args 注入的鉴权参数（含 cookie 中的 access_token），不做 pop。
         sent = self.send(bk_base.DatabusCleansDelete, {"processing_id": "audit_clean"}, None)
         auth = json.loads(sent["headers"]["x-bkapi-authorization"])
         self.assertEqual(sent["headers"]["X-Bk-Tenant-Id"], "tencent")
-        self.assertEqual(auth["bk_username"], "fixture_legacy")
-        self.assertEqual(auth["access_token"], "fixture_legacy_token")
+        self.assertEqual(auth["bk_username"], "fixture_user")
+        self.assertEqual(auth["bk_token"], "fixture_user_token")
+        # 用户态不使用租户管理员身份
         self.admin_lookup.assert_not_called()
 
     @override_settings(BKPAAS_MULTI_TENANT_MODE=False)

@@ -2,7 +2,6 @@
 from datetime import timedelta
 
 from bk_resource import api
-from bk_resource.settings import bk_resource_settings
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.utils.logger import logger_celery
 from blueapps.utils.logger import logger_celery as logger
@@ -12,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.lock import lock
+from core.tenant import get_platform_operator
 from services.web.scene.constants import (
     SCENE_PERMISSION_GRANT_MAX_RETRY,
     SYNC_SCENE_PERMISSION_PERIODIC_TASK_MINUTE,
@@ -70,7 +70,7 @@ def sync_scene_members_from_iam():
 @lock(lock_name="celery:sync_scene_application_status")
 def sync_scene_application_status():
     """轮询 ITSM V4 审批状态，更新申请单状态（审批通过则触发授权）。"""
-    operator = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+    operator = get_platform_operator()
     one_year_ago = timezone.now() - timedelta(days=365)
 
     pending_qs = ScenePermissionApplication.objects.select_related("scene").filter(
@@ -120,7 +120,7 @@ def sync_scene_application_status():
 @lock(lock_name="celery:retry_scene_permission_grant")
 def retry_scene_permission_grant():
     """重试授权失败的申请单（审批已通过、仅授权失败），retry_count < MAX 才重试。"""
-    operator = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+    operator = get_platform_operator()
     one_year_ago = timezone.now() - timedelta(days=365)
 
     failed_qs = ScenePermissionApplication.objects.select_related("scene").filter(

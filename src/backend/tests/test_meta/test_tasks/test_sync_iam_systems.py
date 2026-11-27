@@ -15,11 +15,15 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import json
 from unittest import mock
 
 import pytest
+import requests
 from blueapps.core.celery import celery_app
+from django.test import override_settings
 
+from api.bk_iam_v4.default import ListSystemResource, RetrieveSystemResource
 from apps.meta.constants import SystemSourceTypeEnum
 from apps.meta.models import Action, ResourceType, ResourceTypeActionRelation, System
 from apps.meta.tasks import sync_iam_systems, sync_system_paas_info
@@ -150,3 +154,59 @@ class TestSyncIamSystems(TestCase):
         self.assertFalse(ResourceType.objects.filter(system_id=stale_system.system_id).exists())
         self.assertFalse(Action.objects.filter(system_id=stale_system.system_id).exists())
         self.assertFalse(ResourceTypeActionRelation.objects.filter(system_id=stale_system.system_id).exists())
+
+
+MOCK_ADMIN_USERNAME = "mock_bk_admin"
+
+
+@override_settings(
+    BKPAAS_MULTI_TENANT_MODE=True,
+    BK_TENANT_ID="tencent",
+    BKIAM_APIGW_NAME="tenant-iam",
+)
+class TestSyncIamV4SystemsUsesAdminIdentityWithoutWebRequest(TestCase):
+    """多租户下，后台系统同步（无登录用户）必须以租户管理员身份出站，不被用户态拦截。"""
+
+    def _patch_transport(self, endpoint, payload):
+        """只 mock 传输层，让鉴权分支（add_esb_info_before_request）真实执行。"""
+        method = "get" if endpoint.method == "GET" else "request"
+
+        def fake_send(*args, **kwargs):
+            response = requests.Response()
+            response.status_code = 200
+            # SDK 标准响应格式，parse_response 会取其中 data
+            response._content = json.dumps({"result": True, "code": 0, "data": payload}).encode()
+            return response
+
+        return mock.patch.object(endpoint.session, method, side_effect=fake_send)
+
+    def _patch_admin_lookup(self):
+        """固定管理员解析结果：不触虚拟用户网关，且断言使用独立期望值。"""
+        return mock.patch("core.bk_api_base.get_admin_username", return_value=MOCK_ADMIN_USERNAME)
+
+    def test_list_system_uses_admin_identity_without_web_request(self):
+        endpoint = ListSystemResource()
+        payload = [{"id": "test_system", "name": "IAM V4 测试系统"}]
+
+        with self._patch_admin_lookup():
+            with self._patch_transport(endpoint, payload) as transport:
+                endpoint.request({"page": 1, "page_size": 1})
+
+        headers = transport.call_args.kwargs["headers"]
+        auth = json.loads(headers["x-bkapi-authorization"])
+        self.assertEqual(headers["X-Bk-Tenant-Id"], "tencent")
+        # 应用态：使用租户管理员身份，而非真实登录用户
+        self.assertEqual(auth["bk_username"], MOCK_ADMIN_USERNAME)
+
+    def test_retrieve_system_uses_admin_identity_without_web_request(self):
+        endpoint = RetrieveSystemResource()
+        payload = {"id": "test_system", "name": "IAM V4 测试系统", "system_info": {}}
+
+        with self._patch_admin_lookup():
+            with self._patch_transport(endpoint, payload) as transport:
+                endpoint.request({"system_id": "test_system"})
+
+        headers = transport.call_args.kwargs["headers"]
+        auth = json.loads(headers["x-bkapi-authorization"])
+        self.assertEqual(headers["X-Bk-Tenant-Id"], "tencent")
+        self.assertEqual(auth["bk_username"], MOCK_ADMIN_USERNAME)

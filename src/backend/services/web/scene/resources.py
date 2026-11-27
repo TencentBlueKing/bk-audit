@@ -4,7 +4,6 @@ import uuid
 from collections.abc import Collection
 
 from bk_resource import api, resource
-from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
@@ -34,6 +33,7 @@ from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
+from core.tenant import get_platform_operator
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.risk.models import Risk
@@ -956,7 +956,7 @@ class ScenePermissionApplicationCallback(SceneResource):
                 if application.is_terminal:
                     return {"result": True, "message": "already processed"}
 
-                operator = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+                operator = get_platform_operator()
                 apply_ticket_result(application, parsed, operator=operator, reject_reason=reject_reason)
                 application.save()
         except Exception as err:

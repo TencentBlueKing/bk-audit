@@ -39,6 +39,7 @@ from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
 from apps.sops.constants import SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
+from core.tenant import get_platform_operator
 from services.web.risk.constants import (
     DEFAULT_RISK_OPERATE_NOTICE_CONFIG,
     RISK_OPERATE_NOTICE_CONFIG_KEY,
@@ -737,7 +738,7 @@ class ForApprove(RiskFlowBaseHandler):
         options = self._build_approve_options(ticket_info)
 
         ticket = api.bk_itsm_v4.ticket_create(
-            operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+            operator=get_platform_operator(),
             workflow_key=self.process_application.approve_service_id,
             form_data=form_data,
             options=options,

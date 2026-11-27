@@ -65,6 +65,7 @@ from core.observability import (
     start_observation_span,
 )
 from core.serializers import FlexibleListField
+from core.tenant import get_platform_operator
 from core.utils.data import (
     build_preserved_order_queryset,
     choices_to_dict,
@@ -1308,7 +1309,7 @@ class ForceRevokeApproveTicket(RiskMeta):
             # 关单（强制撤销审批单据，对应 V4 终止工单 terminate，工单级操作无需 task_id/节点）
             api.bk_itsm_v4.ticket_handle(
                 ticket_id=ticket_id,
-                operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+                operator=get_platform_operator(),
                 action={"method": "terminate", "params": {}},
             )
         else:
