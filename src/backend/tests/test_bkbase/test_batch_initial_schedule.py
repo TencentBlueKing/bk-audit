@@ -26,7 +26,10 @@ def offsets(start=0, end=1, unit="hour"):
 
 
 @override_settings(
-    BKBASE_API_VERSION="v4", TIME_ZONE="Asia/Shanghai", BKBASE_V4_STREAM_CLUSTER="", BKBASE_V4_BATCH_CLUSTER=""
+    BKBASE_API_VERSION="v4",
+    TIME_ZONE="Asia/Shanghai",
+    BKBASE_V4_STREAM_CLUSTER="",
+    BKBASE_V4_BATCH_CLUSTER="synthetic_batch",
 )
 class InitialBatchScheduleTests(SimpleTestCase):
     def setUp(self):
@@ -34,7 +37,7 @@ class InitialBatchScheduleTests(SimpleTestCase):
         self.enterContext(
             mock.patch("requests.sessions.Session.request", side_effect=AssertionError("unexpected HTTP"))
         )
-        self.profile = {"operation_config": {"batch_sql_deploy_config": {"cluster": "synthetic_batch"}}}
+        self.profile = {"operation_config": {"batch_sql_deploy_config": {"cluster": "legacy_batch"}}}
         self.strategy = SimpleNamespace(
             strategy_id=390,
             strategy_name="synthetic",
@@ -179,6 +182,7 @@ class InitialBatchScheduleTests(SimpleTestCase):
         self.assertEqual(node["dedicated_config"]["schedule_config"]["start_time"], 1)
         self.assertEqual(node["windows_info"][0]["window_end_offset"], 4)
 
+    @override_settings(BKBASE_V4_BATCH_CLUSTER="")
     def test_missing_flow_deployment_config_reports_the_batch_environment_variable(self):
         self.profile = {}
         with self.assertRaisesMessage(BKBaseResourceMappingError, "BKAPP_BKBASE_V4_BATCH_CLUSTER"):
@@ -253,11 +257,14 @@ class InitialBatchScheduleTests(SimpleTestCase):
         self.configured_window("hour", start=-2, end=-1)
         self.assertEqual(self.sql_node(self.graph())["windows_info"][0]["window_end_offset"], 0)
 
-    def test_batch_node_deploy_options_are_retained_without_mutating_profile(self):
+    def test_new_batch_ignores_old_deploy_options_without_mutating_profile(self):
         config = self.profile["operation_config"]["batch_sql_deploy_config"]
         config["node_deploy_configs"] = {"custom_output": {"engine_conf": "configured"}}
         original = deepcopy(self.profile)
-        self.assertEqual(self.graph()["operation_config"]["batch_sql_deploy_config"], config)
+        self.assertEqual(
+            self.graph()["operation_config"]["batch_sql_deploy_config"],
+            {"cluster": "synthetic_batch", "node_deploy_configs": {}},
+        )
         self.assertEqual(self.profile, original)
 
     def test_incomplete_existing_window_is_not_repaired_by_profile_or_hourly_default(self):
@@ -415,7 +422,8 @@ class InitialBatchScheduleTests(SimpleTestCase):
         self.strategy.backend_data = {"bkbase_v4": {"output_name": output_name, "output_rt_id": output}}
         self.assertEqual(self.sql_node(self.graph())["output"], output)
 
-    def test_batch_cluster_and_node_options_must_be_explicit_valid_configuration(self):
+    def test_pending_batch_requires_a_valid_cluster_and_node_options(self):
+        graph = self.graph()
         for config in (
             None,
             {},
@@ -425,9 +433,9 @@ class InitialBatchScheduleTests(SimpleTestCase):
             {"cluster": "valid", "node_deploy_configs": []},
             {"cluster": "valid", "node_deploy_configs": False},
         ):
-            self.profile["operation_config"]["batch_sql_deploy_config"] = config
+            graph["operation_config"]["batch_sql_deploy_config"] = config
             with self.subTest(config=config), self.assertRaisesMessage(BKBaseResourceMappingError, "batch deployment"):
-                self.graph()
+                flow._validate_batch_deployment(self.context, graph)
 
     def test_native_null_node_options_mean_no_overrides_in_profile_and_pending_spec(self):
         self.profile["operation_config"]["batch_sql_deploy_config"]["node_deploy_configs"] = None
@@ -464,7 +472,7 @@ class InitialBatchScheduleTests(SimpleTestCase):
                 with self.assertRaisesMessage(BKBaseResourceMappingError, "batch storage output"):
                     flow._validate_batch_deployment(self.context, graph)
 
-    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream", BKBASE_V4_BATCH_CLUSTER="")
     def test_realtime_path_does_not_require_batch_cluster_or_storage(self):
         self.strategy.configs["data_source"]["source_type"] = NodeType.REALTIME
         self.controller.storage_nodes = []

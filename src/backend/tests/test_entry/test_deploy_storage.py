@@ -123,15 +123,17 @@ class StrictDeployPreflightTests(SimpleTestCase):
     def test_first_install_requires_stream_cluster_before_db(self):
         with self.assertRaisesRegex(CommandError, "BKAPP_BKBASE_V4_STREAM_CLUSTER"):
             call_command("init_system", "--strict", "--check-only", "--first-install")
+        call_command("init_system", "--strict", "--check-only")
 
     @override_settings(BKBASE_V4_STREAM_CLUSTER="")
-    def test_first_install_allows_declared_legacy_stream_cluster(self):
+    def test_first_install_rejects_declared_legacy_stream_cluster_without_environment(self):
         config = json.loads(self.env["BKAPP_INIT_BKBASE_V4_CONFIG"])
         config["default"]["flow_config"]["operation_config"]["stream_sql_deploy_config"] = {
             "cluster": "StreamCluster/audit/legacy"
         }
         os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"] = json.dumps(config)
-        call_command("init_system", "--strict", "--check-only", "--first-install")
+        with self.assertRaisesRegex(CommandError, "BKAPP_BKBASE_V4_STREAM_CLUSTER"):
+            call_command("init_system", "--strict", "--check-only", "--first-install")
 
     def test_first_install_flag_cannot_run_initialization_phase(self):
         with self.assertRaisesRegex(CommandError, "--first-install requires --strict --check-only"):

@@ -255,7 +255,7 @@ class TableCapabilitiesTests(SimpleTestCase):
             caps["11_log"] = self.parse(self.binding("HdfsBinding", False))
             self.assertEqual(checker.link_table_support_source_types(link), [NodeType.BATCH])
 
-    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream", BKBASE_V4_BATCH_CLUSTER="synthetic_batch")
     def test_real_flow_builder_uses_confirmed_source_kind_and_keeps_user_date_sql(self):
         sql = "SELECT * FROM 11_input WHERE thedate = 20261109 AND dtEventTimeStamp >= 42"
         cases = [
@@ -310,12 +310,6 @@ class TableCapabilitiesTests(SimpleTestCase):
                 }
 
             controller._build_sql_node_config = build_sql_node_config
-            profile = {
-                "operation_config": {
-                    "start_position": "continue",
-                    "batch_sql_deploy_config": {"cluster": "synthetic_batch"},
-                },
-            }
             with self.subTest(expected=expected, mode=mode), mock.patch.object(
                 metadata, "get_source_capabilities", return_value=self.parse(binding)
             ), mock.patch.object(
@@ -323,7 +317,7 @@ class TableCapabilitiesTests(SimpleTestCase):
             ), mock.patch.object(
                 flow, "_input_result_table_refs", return_value={"11_input": self.ref}
             ), mock.patch.object(
-                flow.GlobalMetaConfig, "get", return_value=profile
+                flow.GlobalMetaConfig, "get", return_value={}
             ), mock.patch.object(
                 flow, "_save_operation_binding"
             ), mock.patch.object(

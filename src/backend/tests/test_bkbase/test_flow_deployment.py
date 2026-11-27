@@ -132,7 +132,13 @@ class FlowDeploymentTests(SimpleTestCase):
             },
         )
 
-    def test_missing_cluster_names_only_the_required_setting(self):
+    def test_new_flow_rejects_legacy_cluster_and_names_only_the_required_setting(self):
+        self.profile.return_value = {
+            "operation_config": {
+                "stream_sql_deploy_config": {"cluster": "legacy_stream"},
+                "batch_sql_deploy_config": {"cluster": "legacy_batch"},
+            }
+        }
         for source, needed, other in (
             (NodeType.REALTIME, "BKAPP_BKBASE_V4_STREAM_CLUSTER", "BKAPP_BKBASE_V4_BATCH_CLUSTER"),
             (NodeType.BATCH_REAL, "BKAPP_BKBASE_V4_BATCH_CLUSTER", "BKAPP_BKBASE_V4_STREAM_CLUSTER"),
@@ -145,6 +151,7 @@ class FlowDeploymentTests(SimpleTestCase):
         with override_settings(BKBASE_V4_STREAM_CLUSTER="temporary_stream"):
             pending = self.build()
         pending["operation_config"] = {"start_position": "continue"}
+        self.profile.return_value = {"operation_config": {"stream_sql_deploy_config": {"cluster": "legacy_stream"}}}
         self.strategy.backend_data = {"bkbase_v4": {"flow": self.ref, "operation": "create"}}
         self.flow_get.return_value = None
         with mock.patch.object(flow, "_validate_flow_inputs"), mock.patch.object(
@@ -190,26 +197,6 @@ class FlowDeploymentTests(SimpleTestCase):
         ):
             flow.apply_rule_flow(self.context, self.strategy, pending)
         self.assertNotIn("batch_sql_deploy_config", pending["operation_config"])
-
-    def test_empty_environment_keeps_manually_configured_deployment(self):
-        stream = {"cluster": "existing_stream", "deploy_mode": "k8s", "deploy_config": {"parallelism": 4}}
-        batch = {"cluster": "existing_batch", "node_deploy_configs": {"sql": {"cpu": 3}}}
-        original = {"operation_config": {"stream_sql_deploy_config": stream, "batch_sql_deploy_config": batch}}
-        self.profile.return_value = deepcopy(original)
-        for source, desired_stream, desired_batch in (
-            (NodeType.REALTIME, stream, None),
-            (NodeType.BATCH_REAL, None, batch),
-        ):
-            with self.subTest(source=source):
-                self.assertEqual(
-                    self.build(source)["operation_config"],
-                    {
-                        "stream_sql_deploy_config": desired_stream,
-                        "batch_sql_deploy_config": desired_batch,
-                        "start_position": "continue",
-                    },
-                )
-        self.assertEqual(self.profile.return_value, original)
 
     def test_same_type_edit_without_environment_preserves_fresh_stream_deployment(self):
         with override_settings(BKBASE_V4_STREAM_CLUSTER="old_stream"):
@@ -276,6 +263,14 @@ class FlowDeploymentTests(SimpleTestCase):
                     self.assertEqual(
                         self.apply(desired, previous, previous), {**expected, "start_position": "continue"}
                     )
+
+    def test_switch_without_target_environment_rejects_legacy_cluster(self):
+        with override_settings(BKBASE_V4_STREAM_CLUSTER="current_stream"):
+            self.bind(self.build())
+        self.profile.return_value = {"operation_config": {"batch_sql_deploy_config": {"cluster": "legacy_batch"}}}
+
+        with self.assertRaisesMessage(BKBaseResourceMappingError, "BKAPP_BKBASE_V4_BATCH_CLUSTER"):
+            self.build(NodeType.BATCH_REAL)
 
     def test_switch_after_a_new_locked_read_does_not_reuse_the_stale_target_deployment(self):
         with override_settings(BKBASE_V4_STREAM_CLUSTER="old_stream", BKBASE_V4_BATCH_CLUSTER="old_batch"):

@@ -236,7 +236,7 @@ class DeployStorage:
                 self._check_required_refs(space, self._declared_refs(space))
             space = settings.DEFAULT_NAMESPACE
             # 复用运行时的选择规则；内置策略不需要离线集群。
-            _new_deployment("StreamNode", self.v4_config.get(space, {}).get("flow_config", {}), space)
+            _new_deployment("StreamNode", space)
 
     @staticmethod
     def _put(key, value, space=None):
