@@ -760,7 +760,7 @@ class _Rule:
         self.updated_at = None
         self.created_at = None
 
-    def save(self, update_fields=None):
+    def save(self, update_fields=None, update_record=True):
         return None
 
     def refresh_from_db(self):
@@ -928,6 +928,33 @@ class WhitelistFlowTests(SimpleTestCase):
         close_risk.assert_called_once()
         ticket_detail.assert_not_called()
 
+    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
+    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
+    @patch("services.web.risk.whitelist.service._close_source_risk")
+    @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
+    def test_callback_keeps_creator_as_updated_by(self, close_risk, refresh_nodes, ticket_detail):
+        # 回调无登录用户：终态落库不得把 updated_by 写成空，应保留建单人（基类自动记录已关闭）
+        rule = _Rule(
+            status=WhitelistStatus.PENDING,
+            callback_token="token",
+            risk_id="",
+            updated_by="alice",
+            created_by="alice",
+        )
+        rule.itsm_ticket_id = "ticket-1"
+        manager = _WhitelistManager()
+        manager.rules.append(rule)
+        with patch.object(RiskWhitelist, "objects", manager):
+            result = RiskWhitelistCallback().perform_request(
+                {
+                    "callback_token": "token",
+                    "ticket": {"id": "ticket-1", "status": "FINISHED", "approve_result": True},
+                }
+            )
+        self.assertTrue(result["result"])
+        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
+        self.assertEqual(rule.updated_by, "alice")
+
     @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
     @patch("services.web.risk.whitelist.service._close_source_risk")
     @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
@@ -1083,7 +1110,7 @@ class WhitelistRenewTests(SimpleTestCase):
             callback_token="old-token",
         )
 
-        def save(update_fields=None):
+        def save(update_fields=None, update_record=True):
             saved["fields"] = list(update_fields or [])
 
         rule.itsm_ticket_id = "ticket-old"
@@ -1288,20 +1315,21 @@ class WhitelistListQueryTests(SimpleTestCase):
         ascending = order_whitelist_queryset(_Query(), ["expire_at"])
         self.assertEqual(ascending.fields, ("expire_is_permanent", "expire_at"))
 
-    def test_callback_save_keeps_updated_by(self):
+    def test_save_rule_disables_auto_record_and_passes_fields(self):
         from services.web.risk.whitelist.service import _save_rule
 
-        rule = SimpleNamespace(updated_by="", created_by="alice", updated_at=None)
+        rule = SimpleNamespace(updated_by="alice", created_by="alice", updated_at=None)
         saved = {}
 
-        def save(update_fields=None):
+        def save(update_fields=None, update_record=True):
             saved["update_fields"] = set(update_fields or [])
+            saved["update_record"] = update_record
 
         rule.save = save
-        # 回调没有登录用户：排除 updated_by，UPDATE 不含该列，保住 DB 原值
-        with patch("services.web.risk.whitelist.service.get_request_username", return_value=""):
-            _save_rule(rule, ["status"])
-        self.assertNotIn("updated_by", saved["update_fields"])
+        # 关闭基类自动记录：无登录用户也不会把 updated_by 写成空，fields 原样透传给 save
+        _save_rule(rule, ["status", "updated_at", "updated_by"])
+        self.assertFalse(saved["update_record"])
+        self.assertEqual(saved["update_fields"], {"status", "updated_at", "updated_by"})
 
     def test_expire_whitelists_keeps_original_updated_by(self):
         from services.web.risk.whitelist.service import expire_whitelists

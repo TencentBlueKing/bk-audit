@@ -873,13 +873,12 @@ def _restore_renew_snapshot(rule: RiskWhitelist, previous: dict) -> None:
 
 
 def _save_rule(rule: RiskWhitelist, fields) -> None:
-    """按字段保存白名单。回调、Celery 等入口没有登录用户时，把 updated_by 排除出 update_fields，
-    UPDATE 不含该列，从而保住实例加载时携带的原更新人，避免基类把它写成空。"""
+    """按字段保存白名单。基类 OperateRecordModel.save() 默认会用当前请求人覆盖 updated_by，
+    回调、Celery 等无登录用户的入口会把更新人写成空，所以这里关闭自动记录，updated_by 完全由
+    调用方传入的 fields 决定：想保留原更新人就带 DB 值，想改成操作人就传该用户名。
+    updated_at 同理不再自动刷新，需调用方在 fields 里显式带上。"""
 
-    fields = set(fields)
-    if not get_request_username():
-        fields.discard("updated_by")
-    rule.save(update_fields=list(fields))
+    rule.save(update_fields=list(fields), update_record=False)
 
 
 def renew_whitelist(
