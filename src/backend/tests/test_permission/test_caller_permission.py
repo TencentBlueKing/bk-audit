@@ -615,3 +615,446 @@ class TestCallerPermission(TestCase):
             }
             with self.assertRaises(PermissionException):
                 should_skip_permission_from(data, username="u1")
+
+
+class TestDrillSourceValidation(TestCase):
+    """下钻值校验的配置溯源：风险元字段配置参与规则收集 + 溯源失败即拒绝 + FIELD 引用风险对象兜底"""
+
+    TOOL_UID = "T_DRILL"
+
+    @staticmethod
+    def _field_config(field_name: str, tool_uid: str, config: list) -> dict:
+        return {
+            "field_name": field_name,
+            "display_name": field_name,
+            "drill_config": [{"tool": {"uid": tool_uid, "version": 1}, "config": config}],
+        }
+
+    def _create_drill_env(self, *, strategy_configs: dict, risk_kwargs: dict = None):
+        """构造完整的下钻校验环境（策略/场景/工具绑定/风险/策略工具关联），返回 (strategy, risk)"""
+        from django.utils import timezone
+
+        from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
+        from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+        from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
+
+        strategy = Strategy.objects.create(namespace="ns", strategy_name="s_drill", **strategy_configs)
+        scene = Scene.objects.create(name="scene_drill", status=SceneStatus.ENABLED)
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+        Tool.objects.create(
+            namespace="ns",
+            uid=self.TOOL_UID,
+            version=1,
+            name="tool-drill",
+            tool_type="data_search",
+            config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+            permission_owner="admin",
+            status=PanelStatus.PUBLISHED,
+        )
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.TOOL_UID,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
+        risk = Risk.objects.create(
+            raw_event_id="e_drill",
+            strategy=strategy,
+            scene_id=scene.scene_id,
+            **{"event_time": timezone.now(), "event_data": {}, **(risk_kwargs or {})},
+        )
+        StrategyTool.objects.create(
+            strategy=strategy,
+            tool_uid=self.TOOL_UID,
+            tool_version=1,
+            field_name="f_any",
+            field_source=StrategyFieldSourceEnum.BASIC.value,
+        )
+        return strategy, risk
+
+    def _build_request(self, risk, drill_field: str, tool_variables: list) -> dict:
+        return {
+            "caller_resource_type": "risk",
+            "caller_resource_id": risk.risk_id,
+            "current_type": "tool",
+            "current_object_id": self.TOOL_UID,
+            "drill_field": drill_field,
+            "event_start_time": "2026-01-01 00:00:00",
+            "event_end_time": "2026-01-02 00:00:00",
+            "tool_variables": tool_variables,
+        }
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_risk_meta_fixed_value_match(self, _):
+        """风险详情字段配置固定值、事件字段无同名字段：传配置值放行（修复误拒+漏校验）"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "operator",
+                        self.TOOL_UID,
+                        [{"source_field": "username", "target_value_type": "fixed_value", "target_value": "zhangsan"}],
+                    )
+                ]
+            }
+        )
+        data = self._build_request(risk, "operator", [{"raw_name": "username", "value": "zhangsan"}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_risk_meta_fixed_value_tampered_rejected(self, _):
+        """风险详情字段固定值被篡改：拒绝"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "operator",
+                        self.TOOL_UID,
+                        [{"source_field": "username", "target_value_type": "fixed_value", "target_value": "zhangsan"}],
+                    )
+                ]
+            }
+        )
+        data = self._build_request(risk, "operator", [{"raw_name": "username", "value": "wangwu"}])
+        with self.assertRaises(PermissionException):
+            should_skip_permission_from(data, username="u1")
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_drill_field_not_bound_rejected(self, _):
+        """溯源失败即拒绝：工具关联策略且场景可见，但 drill_field 未绑定该工具（编造字段名），携带变量值应拒绝"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "event_basic_field_configs": [
+                    self._field_config(
+                        "operator",
+                        self.TOOL_UID,
+                        [{"source_field": "username", "target_value_type": "fixed_value", "target_value": "zhangsan"}],
+                    )
+                ]
+            }
+        )
+        # drill_field 传四份配置中都不存在的字段名（修复前此请求被静默放行）
+        data = self._build_request(risk, "nonexistent_field", [{"raw_name": "username", "value": "anything"}])
+        with self.assertRaises(PermissionException):
+            should_skip_permission_from(data, username="u1")
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_same_field_dual_config_both_values_pass(self, _):
+        """同名字段双配置（risk_meta + event_basic）绑同一工具不同固定值：任一入口配置的合法值均放行"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "operator",
+                        self.TOOL_UID,
+                        [{"source_field": "username", "target_value_type": "fixed_value", "target_value": "zhangsan"}],
+                    )
+                ],
+                "event_basic_field_configs": [
+                    self._field_config(
+                        "operator",
+                        self.TOOL_UID,
+                        [{"source_field": "username", "target_value_type": "fixed_value", "target_value": "lisi"}],
+                    )
+                ],
+            }
+        )
+        # 风险详情入口配置的值
+        data = self._build_request(risk, "operator", [{"raw_name": "username", "value": "zhangsan"}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+        # 事件入口配置的值
+        data = self._build_request(risk, "operator", [{"raw_name": "username", "value": "lisi"}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+        # 两个配置之外的值：拒绝
+        data = self._build_request(risk, "operator", [{"raw_name": "username", "value": "wangwu"}])
+        with self.assertRaises(PermissionException):
+            should_skip_permission_from(data, username="u1")
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_field_ref_risk_meta_field_from_risk_object(self, _):
+        """FIELD 引用风险元字段（risk_level，不在事件记录中）：从风险对象兜底取值校验"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "risk_level",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "level",
+                                "target_value_type": "field",
+                                "target_field_type": "basic",
+                                "target_value": "risk_level",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"risk_level": "HIGH"},
+        )
+        data = self._build_request(risk, "risk_level", [{"raw_name": "level", "value": "HIGH"}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_field_ref_strategy_name_from_relation(self, _):
+        """FIELD 引用 strategy_name（非直接列）：经关联取值校验"""
+        strategy, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "strategy_name",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "sname",
+                                "target_value_type": "field",
+                                "target_field_type": "basic",
+                                "target_value": "strategy_name",
+                            }
+                        ],
+                    )
+                ]
+            }
+        )
+        data = self._build_request(risk, "strategy_name", [{"raw_name": "sname", "value": strategy.strategy_name}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_bound_without_variable_mapping_passes(self, _):
+        """绑定工具但未配置变量映射：无值约束，携带变量放行（保持现状语义）"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config("operator", self.TOOL_UID, []),
+                ]
+            }
+        )
+        data = self._build_request(risk, "operator", [{"raw_name": "username", "value": "anything"}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_event_only_config_unchanged(self, _):
+        """仅事件字段配置绑定（无同名风险元配置）：行为与修复前一致"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "event_basic_field_configs": [
+                    self._field_config(
+                        "env",
+                        self.TOOL_UID,
+                        [{"source_field": "env", "target_value_type": "fixed_value", "target_value": "prod"}],
+                    )
+                ]
+            }
+        )
+        data = self._build_request(risk, "env", [{"raw_name": "env", "value": "prod"}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+        data = self._build_request(risk, "env", [{"raw_name": "env", "value": "dev"}])
+        with self.assertRaises(PermissionException):
+            should_skip_permission_from(data, username="u1")
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_time_field_reference_epoch_millis(self, _):
+        """FIELD 引用时间字段（datetime 列）：多格式候选兼容前端传值（epoch 毫秒）"""
+        from django.utils import timezone
+
+        event_time = timezone.now()
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "event_time",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "ets",
+                                "target_value_type": "field",
+                                "target_field_type": "basic",
+                                "target_value": "event_time",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"event_time": event_time},
+        )
+        # RiskMetaFields 声明的时间格式为 epoch_millis
+        data = self._build_request(
+            risk, "event_time", [{"raw_name": "ets", "value": str(int(event_time.timestamp() * 1000))}]
+        )
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_no_variables_skips_value_check(self, _):
+        """不携带变量值的请求不进值校验：即使无字段绑定也放行（行为不变）"""
+        _, risk = self._create_drill_env(strategy_configs={})
+        data = {
+            "caller_resource_type": "risk",
+            "caller_resource_id": risk.risk_id,
+            "current_type": "tool",
+            "current_object_id": self.TOOL_UID,
+        }
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_time_field_reference_local_time_string(self, _):
+        """FIELD 引用时间字段：前端传本地时区字符串（USE_TZ=True 下与 UTC 表示差 8 小时）应放行"""
+        from django.utils import timezone
+
+        event_time = timezone.now()
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "event_time",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "ets",
+                                "target_value_type": "field",
+                                "target_field_type": "basic",
+                                "target_value": "event_time",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"event_time": event_time},
+        )
+        # 模拟前端序列化口径：本地时区（Asia/Shanghai）常规字符串
+        local_time_str = timezone.localtime(event_time).strftime("%Y-%m-%d %H:%M:%S")
+        data = self._build_request(risk, "event_time", [{"raw_name": "ets", "value": local_time_str}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_field_ref_nested_single_layer_snapshot(self, _):
+        """FIELD 嵌套引用（event_data 字段）：事件记录缺失时从风险快照兜底（真实单层存储结构）
+
+        建单时 gen_risk_create_params 将 event.get("event_data")（事件扩展字段字典）原样
+        写入 Risk.event_data，业务字段直接位于快照顶层，风险详情按 row.event_data[field] 取值。
+        """
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "client_ip",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "ip",
+                                "target_value_type": "field",
+                                # target_field_type 不传（非 basic）→ 嵌套引用
+                                "target_value": "client_ip",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"event_data": {"client_ip": "snap-mock"}},
+        )
+        # list_event 返回的事件不含该嵌套字段 → 触发风险快照兜底
+        mocked_event = {"operator": "someone", "event_time": "2026-11-26 10:00:00", "event_data": {"other": "x"}}
+        with mock.patch(
+            "services.web.common.caller_permission.resource.risk.list_event",
+            return_value={"page": 1, "num_pages": 1, "total": 1, "results": [mocked_event]},
+        ):
+            data = self._build_request(risk, "client_ip", [{"raw_name": "ip", "value": "snap-mock"}])
+            self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_field_ref_nested_legacy_double_layer_snapshot(self, _):
+        """FIELD 嵌套引用：兼容含 event_data 嵌套键的双层构造（历史数据/存量测试结构）"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "client_ip",
+                        self.TOOL_UID,
+                        [{"source_field": "ip", "target_value_type": "field", "target_value": "client_ip"}],
+                    )
+                ]
+            },
+            risk_kwargs={"event_data": {"event_data": {"client_ip": "inner-mock"}}},
+        )
+        mocked_event = {"operator": "someone", "event_time": "2026-11-26 10:00:00", "event_data": {"other": "x"}}
+        with mock.patch(
+            "services.web.common.caller_permission.resource.risk.list_event",
+            return_value={"page": 1, "num_pages": 1, "total": 1, "results": [mocked_event]},
+        ):
+            data = self._build_request(risk, "client_ip", [{"raw_name": "ip", "value": "inner-mock"}])
+            self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_field_ref_missing_value_rejected_not_500(self, _):
+        """FIELD 引用的字段在事件记录与风险快照均无值：正常拒绝（而非 expected=None 遍历 TypeError）"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "client_ip",
+                        self.TOOL_UID,
+                        [{"source_field": "ip", "target_value_type": "field", "target_value": "client_ip"}],
+                    )
+                ]
+            },
+            risk_kwargs={"event_data": {"other_field": "x"}},
+        )
+        mocked_event = {"operator": "someone", "event_time": "2026-11-26 10:00:00", "event_data": {"other": "x"}}
+        with mock.patch(
+            "services.web.common.caller_permission.resource.risk.list_event",
+            return_value={"page": 1, "num_pages": 1, "total": 1, "results": [mocked_event]},
+        ):
+            data = self._build_request(risk, "client_ip", [{"raw_name": "ip", "value": "anything"}])
+            with self.assertRaises(PermissionException):
+                should_skip_permission_from(data, username="u1")
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_time_field_reference_ceil_seconds(self, _):
+        """FIELD 引用最后发现时间（带微秒）：详情序列化向上取整到下一秒，传取整后的值应放行"""
+        import datetime as dt_module
+
+        from django.utils import timezone
+
+        # 本地时区 10:00:00.500 → 详情序列化输出 "10:00:01"（RiskInfoSerializer.get_event_end_time）
+        event_end_time = timezone.make_aware(
+            dt_module.datetime(2026, 11, 26, 10, 0, 0, 500000), timezone.get_current_timezone()
+        )
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "event_end_time",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "eets",
+                                "target_value_type": "field",
+                                "target_field_type": "basic",
+                                "target_value": "event_end_time",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"event_end_time": event_end_time},
+        )
+        ceil_value = timezone.localtime(event_end_time).replace(microsecond=0) + dt_module.timedelta(seconds=1)
+        ceil_str = ceil_value.strftime("%Y-%m-%d %H:%M:%S")
+        data = self._build_request(risk, "event_end_time", [{"raw_name": "eets", "value": ceil_str}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))

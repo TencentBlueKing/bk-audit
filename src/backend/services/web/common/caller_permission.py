@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping as _Mapping
 from contextlib import suppress
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import singledispatch
 from typing import Any, Dict, List, Optional, Tuple, Type
@@ -294,12 +295,23 @@ def validate_tool_variables_with_risk(
     if not start_time or not end_time or not drill_field:
         return False
 
-    risk = Risk.objects.filter(risk_id=risk_id).only("strategy_id", "event_data").first()
+    # 不限制 .only 字段：FIELD 引用兜底需按动态字段名取风险对象任意字段
+    risk = Risk.objects.filter(risk_id=risk_id).first()
     if not risk or not risk.strategy_id:
         return False
 
     event_record = _get_risk_event_record(risk, start_time, end_time)
-    uncheck_field, mapping = _collect_check_rules(risk, tool_uid, drill_field)
+    uncheck_field, mapping, has_binding = _collect_check_rules(risk, tool_uid, drill_field)
+    # 溯源失败即拒绝：四份字段配置中不存在 (drill_field, tool_uid) 绑定关系，
+    # 说明字段名为编造或配置已删除，携带变量值的请求不可信（正常下钻必然命中绑定）
+    if not has_binding:
+        logger.warning(
+            "[drill_perm_diag] drill field not bound to tool: risk=%s tool=%s drill_field=%s",
+            risk_id,
+            tool_uid,
+            drill_field,
+        )
+        return False
 
     for name, value in variable_values.items():
         if name in uncheck_field:
@@ -322,6 +334,21 @@ def validate_tool_variables_with_risk(
                     expected = event_record.get(rule["target"])
                 else:
                     expected = event_record.get("event_data", {}).get(rule["target"])
+                # 风险详情入口的字段引用可指向风险元字段（如 risk_level），此类字段不在事件记录中，
+                # 事件记录取不到时从风险对象/风险快照补取，对齐前端取数口径
+                if not expected:
+                    risk_value = _get_risk_field_value(
+                        risk, rule["target"], nested=tft != StrategyFieldSourceEnum.BASIC.value
+                    )
+                    if isinstance(risk_value, datetime):
+                        # 时间字段：生成常见序列化表示（epoch 毫秒/秒、常规字符串、ISO8601），
+                        # 兼容前端不同传值格式（均为同一时刻的不同表示，不构成校验放宽）
+                        expected = {collection_to_tuple(v) for v in _datetime_value_candidates(risk_value)}
+                    elif risk_value is not None and risk_value != "" and risk_value != []:
+                        expected = {collection_to_tuple(risk_value)}
+                # 事件记录与快照均无该字段值时按不匹配处理（正常拒绝），
+                # 避免 expected=None 在后续遍历中抛 TypeError（接口 500 而非 403）
+                expected = expected or set()
                 value_to_match = collection_to_tuple(value)
                 single_value = (
                     value_to_match[0] if (len(value_to_match) == 1 and isinstance(value_to_match, tuple)) else None
@@ -341,18 +368,29 @@ def validate_tool_variables_with_risk(
 
 
 def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None):
-    """生成检查规则"""
+    """生成检查规则
+
+    返回 (uncheck_field, mapping, has_binding)：
+      - has_binding：四份字段配置（风险元字段 + 三组事件字段）中是否存在
+        (field_name == drill_field 且 drill_config 绑定 tool_uid) 的绑定关系；
+        False 表示 drill_field 与该工具无绑定（字段名编造或配置已删除），调用方应拒绝。
+    """
     from services.web.strategy_v2.models import Strategy
     from services.web.tool.constants import FieldCategory
     from services.web.tool.models import Tool
 
     strategy = (
         Strategy.objects.filter(strategy_id=risk.strategy_id)
-        .only("event_basic_field_configs", "event_data_field_configs", "event_evidence_field_configs")
+        .only(
+            "risk_meta_field_config",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+        )
         .first()
     )
     if not strategy:
-        return set(), {}
+        return set(), {}, False
 
     # 某些字段类型不检查值，比如时间范围选择器常会有NOW等非具体值
     uncheck_field = set()
@@ -366,9 +404,17 @@ def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None)
             uncheck_field.add(name)
 
     # 收集所有字段的 drill_config 中与 tool_uid 匹配的映射（source_field -> (type, target, source_field_type)）
+    # 遍历范围含四份字段配置：风险详情字段（risk_meta）+ 三组事件字段；
+    # 同名字段多处绑定同一工具时规则合并（值校验任一匹配即通过）：
+    # 两个下钻入口的前置防线一致（入口非权限边界），合并后的合法值仍全部来自策略配置
     def iter_field_configs() -> list[dict]:
         cfgs = []
-        for key in ("event_basic_field_configs", "event_data_field_configs", "event_evidence_field_configs"):
+        for key in (
+            "risk_meta_field_config",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+        ):
             fields = getattr(strategy, key) or []
             if drill_field:
                 fields = [f for f in fields if (f or {}).get("field_name") == drill_field]
@@ -376,12 +422,14 @@ def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None)
         return cfgs
 
     mapping: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    has_binding = False
     for field_cfg in iter_field_configs():
         drill_list = (field_cfg or {}).get("drill_config") or []
         for drill in drill_list:
             tool = (drill or {}).get("tool") or {}
             if not tool or tool.get("uid") != tool_uid:
                 continue
+            has_binding = True
             for item in drill.get("config") or []:
                 src = item.get("source_field")
                 tv_type = item.get("target_value_type")
@@ -390,8 +438,66 @@ def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None)
                 if not src or not tv_type:
                     continue
                 mapping[src].append({"type": tv_type, "target": target_value, "target_field_type": target_field_type})
-    # 返回顺序需与调用方保持一致：(uncheck_field, mapping)
-    return uncheck_field, mapping
+    # 返回顺序需与调用方保持一致：(uncheck_field, mapping, has_binding)
+    return uncheck_field, mapping, has_binding
+
+
+def _get_risk_field_value(risk, field_name: str, nested: bool = False) -> Any:
+    """从风险对象/风险快照补取字段值（FIELD 引用事件记录取不到时的兜底取数）。
+
+    - 顶层引用（nested=False）：风险元字段（RiskMetaFields 17 项，其中 risk_tags / strategy_name
+      需经关联取值）→ Risk 模型直接列 → 风险快照顶层（risk.event_data）
+    - 嵌套引用（nested=True）：风险快照的 event_data 键（与事件记录嵌套结构同构），
+      对齐前端从风险行数据 event_data 嵌套取值的口径
+    """
+    snapshot = risk.event_data if isinstance(risk.event_data, dict) else {}
+    if nested:
+        # 真实存储为单层：Risk.event_data 直接保存事件扩展字段（建单时 gen_risk_create_params
+        # 原样写入 event.get("event_data")，风险详情亦按 row.event_data[field] 取值）；
+        # 兼容含 "event_data" 嵌套键的双层构造（历史数据/存量测试）
+        inner = snapshot.get("event_data")
+        if isinstance(inner, dict) and field_name in inner:
+            return inner[field_name]
+        return snapshot.get(field_name)
+    special_getters = {
+        "risk_tags": lambda: risk.get_tag_names(),
+        "strategy_name": lambda: risk.strategy.strategy_name if risk.strategy_id else None,
+    }
+    if field_name in special_getters:
+        with suppress(Exception):
+            return special_getters[field_name]()
+        return None
+    direct = getattr(risk, field_name, None)
+    if direct is not None:
+        return direct
+    return snapshot.get(field_name)
+
+
+def _datetime_value_candidates(value: datetime) -> set:
+    """时间字段引用兜底：生成常见序列化表示，兼容前端不同传值格式。
+
+    RiskMetaFields 中时间字段声明的 time_format 为 epoch_millis；
+    同时补充秒级时间戳、常规字符串、ISO8601 以兼容不同序列化口径
+    （均为同一时刻的不同表示，不构成校验放宽）。
+    字符串表示需转本地时区：USE_TZ=True 下模型字段为 UTC aware datetime，
+    而前端序列化输出为本地时区（Asia/Shanghai），直接格式化会差 8 小时。
+    最后发现时间（event_end_time）另需对齐详情序列化的取整规则：
+    存在微秒时向上取整到下一秒（RiskInfoSerializer.get_event_end_time）。
+    """
+    from django.utils import timezone as dj_timezone
+
+    timestamp = value.timestamp()
+    local_value = dj_timezone.localtime(value) if dj_timezone.is_aware(value) else value
+    ceil_value = local_value
+    if local_value.microsecond > 0:
+        ceil_value = local_value.replace(microsecond=0) + timedelta(seconds=1)
+    return {
+        str(int(timestamp * 1000)),
+        str(int(timestamp)),
+        local_value.strftime("%Y-%m-%d %H:%M:%S"),
+        ceil_value.strftime("%Y-%m-%d %H:%M:%S"),
+        local_value.isoformat(),
+    }
 
 
 def _get_risk_event_record(risk, start_time, end_time) -> Dict[str, Any]:
