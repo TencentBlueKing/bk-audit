@@ -120,7 +120,7 @@ EtlConfigEnum = _EtlConfigEnum
 CollectorParamConditionTypeEnum = _CollectorParamConditionTypeEnum
 CollectorParamConditionMatchType = _CollectorParamConditionMatchType
 
-PULL_HANDLER_PRE_CHECK_TIMEOUT = int(os.getenv("BKAPP_PULL_HANDLER_PRE_CHECK_TIMEOUT", 5))  # ss
+PULL_HANDLER_PRE_CHECK_TIMEOUT = int(os.getenv("BKAPP_PULL_HANDLER_PRE_CHECK_TIMEOUT", 30))
 
 # Doris 事件存储配置
 DORIS_EVENT_STORAGE_CONFIG_KEY = "doris_event_storage_config"
