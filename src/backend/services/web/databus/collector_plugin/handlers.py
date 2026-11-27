@@ -72,9 +72,9 @@ class PluginEtlHandler:
         self.plugin: CollectorPlugin = plugin
         self.bkbase_labels: List[str] = []
 
-    def create_or_update(self) -> None:
+    def create_or_update(self, *, raise_errors=False) -> None:
         """由Service推进清洗和入库，受理与运行分别处理。"""
-        return bkbase_clean.configure_plugin(self)
+        return bkbase_clean.configure_plugin(self, raise_errors=raise_errors)
 
     def create_or_update_storage(self) -> None:
         main_storage_params, replica_storage_params = self.build_storage_config()

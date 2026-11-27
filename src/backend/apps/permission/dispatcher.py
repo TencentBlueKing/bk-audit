@@ -28,7 +28,7 @@ from iam.contrib.django.dispatcher.dispatchers import fail_response, success_res
 from iam.contrib.django.dispatcher.exceptions import KeywordTooShortException
 from iam.resource.utils import get_filter_obj, get_page_obj
 
-from apps.permission.handlers.backends import is_iam_v4_backend
+from apps.permission.handlers.backends import CallbackAuthUnavailable, is_iam_v4_backend
 
 RESOURCE_CALLBACK_PROTOCOL_V3 = "v3"
 RESOURCE_CALLBACK_PROTOCOL_V4 = "v4"
@@ -121,12 +121,14 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
 
         protocol = self._get_protocol()
 
-        # auth check
         auth = request.META.get("HTTP_AUTHORIZATION", "")
-        auth_allowed = self.iam.is_basic_auth_allowed(self.system, auth)
-
+        try:
+            auth_allowed = self.iam.is_resource_callback_auth_allowed(self.system, auth)
+        except CallbackAuthUnavailable:
+            logger.error("resource request(%s) could not load IAM callback credentials", request_id)
+            return self._fail_response(503, "IAM callback authentication unavailable", request_id, protocol)
         if not auth_allowed:
-            logger.error("resource request(%s) auth failed with auth param: %s", request_id, auth)
+            logger.error("resource request(%s) basic auth failed", request_id)
             return self._fail_response(401, "basic auth failed", request_id, protocol)
 
         if data is None:

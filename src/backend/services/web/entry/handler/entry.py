@@ -25,8 +25,10 @@ from django.conf import settings
 
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.feature.constants import FeatureTypeChoices
-from apps.feature.handlers import FeatureHandler
+from apps.feature.handlers import FeatureHandler, get_entry_feature_toggle
 from apps.meta.models import GlobalMetaConfig
+from apps.permission.handlers.actions import ActionEnum
+from core.tenant import use_multi_tenant_mode
 from services.web.bkbase.common import get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
 from services.web.entry.constants import (
@@ -64,13 +66,16 @@ class EntryHandler(object):
         if app_subdomains:
             static_url = "//%s/static/" % app_subdomains.split(";")[0]
 
-        # 特性开关
-        feature_toggle = {"bkbase_project_rt_lazy_load": get_bkbase_version() == BKBaseVersion.V4}
+        # 特性开关：首屏一次性下发各开关的 enabled 状态，前端据此控制入口显隐
+        feature_toggle = {
+            **get_entry_feature_toggle(),
+            "bkbase_project_rt_lazy_load": get_bkbase_version() == BKBaseVersion.V4,
+        }
 
-        # 平台管理员
-        manage_actions = "list_storage,list_sensitive_object"
-        results = resource.permission.check_permission(action_ids=manage_actions)
-        super_manager = any(results.values())
+        # 首屏用存储列表权限控制存储管理入口。
+        storage_action = ActionEnum.LIST_STORAGE.id
+        results = resource.permission.check_permission(action_ids=storage_action)
+        super_manager = results.get(storage_action, False)
 
         data = {
             # 应用信息
@@ -133,6 +138,7 @@ class EntryHandler(object):
                 "scene_iwiki_url": settings.BKAPP_SCENE_IWIKI_URL,
             },
             "tenant_config": {
+                'BKPAAS_MULTI_TENANT_MODE': use_multi_tenant_mode(),
                 'BK_TENANT_ID': settings.BK_TENANT_ID,
                 'BK_USER_WEB_APIGW_URL': cls.get_user_web_apigw_url(),
             },

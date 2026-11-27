@@ -1,7 +1,6 @@
 """验证普通实时规则控制器到 V4 整图受理的本地业务链。"""
 import json
 from copy import deepcopy
-from types import SimpleNamespace
 from unittest import mock
 
 import requests
@@ -169,8 +168,8 @@ class RuleControllerAcceptanceTests(TransactionTestCase):
             "services.web.bkbase.metadata.api.bk_base_v4.dataset_list",
             return_value={"pages_num": 0, "total": 0, "list": []},
         ), mock.patch(
-            "services.web.bkbase.flow.bk_resource_settings",
-            SimpleNamespace(PLATFORM_AUTH_ACCESS_USERNAME="test_operator"),
+            "services.web.bkbase.flow.get_bkbase_v4_platform_username",
+            return_value="test_operator",
         ), mock.patch(
             "services.web.bkbase.flow.resource_lock"
         ), mock.patch(

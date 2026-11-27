@@ -10,11 +10,11 @@ from uuid import uuid4
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
-from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
 
+from api.bk_base_v4.tenant import get_bkbase_v4_platform_username
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import WEIXIN_UNAVAILABLE_MESSAGE, MsgType
@@ -88,26 +88,20 @@ def _has_deployment_cluster(config):
     return isinstance(cluster, str) and bool(cluster.strip())
 
 
-def _new_deployment(kind, profile, namespace):
-    """仅针对目标计算类型取本环境集群，空变量兼容原命名空间配置。"""
+def _new_deployment(kind, namespace):
+    """新建或换型时，只从目标计算类型的环境变量取集群。"""
     key, setting = _FLOW_DEPLOYMENT[kind]
     cluster = getattr(settings, setting).strip()
-    if cluster:
-        config = (
-            {"cluster": cluster, "deploy_mode": "k8s-operator", "deploy_config": None}
-            if kind == "StreamNode"
-            else {"cluster": cluster, "node_deploy_configs": {}}
+    if not cluster:
+        raise BKBaseResourceMappingError(
+            message=f"V4 Flow deployment requires BKAPP_{setting} (audit namespace {namespace})"
         )
-    else:
-        operation = profile.get("operation_config")
-        config = operation.get(key) if isinstance(operation, dict) else None
-        if not _has_deployment_cluster(config):
-            raise BKBaseResourceMappingError(
-                message=f"V4 {'stream' if kind == 'StreamNode' else 'batch'} deployment requires BKAPP_{setting} "
-                f"or {BKBASE_V4_FLOW_CONFIG}.operation_config.{key}.cluster (audit namespace {namespace})"
-            )
     blocks = dict.fromkeys(name for name, _ in _FLOW_DEPLOYMENT.values())
-    blocks[key] = deepcopy(config)
+    blocks[key] = (
+        {"cluster": cluster, "deploy_mode": "k8s-operator", "deploy_config": None}
+        if kind == "StreamNode"
+        else {"cluster": cluster, "node_deploy_configs": {}}
+    )
     return blocks
 
 
@@ -125,11 +119,7 @@ def _flow_profile(namespace):
 
 def node_name(prefix, *parts):
     """仅缩短超出Flow上限的可读部分，保留既有短名及原稳定摘要。"""
-    name = stable_name(prefix, *parts)
-    if len(name) <= BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH:
-        return name
-    readable, _, digest = name.rpartition("_")
-    return f"{readable[:BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH - len(digest) - 1]}_{digest}"
+    return stable_name(prefix, *parts, max_length=BKBASE_V4_FLOW_NODE_NAME_MAX_LENGTH)
 
 
 def validate_graph(nodes):
@@ -174,7 +164,7 @@ def build_rule_flow(strategy, *, rt_metadata, binding_map):
     return {
         "alias": ("Audit " + strategy.strategy_name)[:100],
         "description": "",
-        "maintainers": [bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME],
+        "maintainers": [get_bkbase_v4_platform_username()],
         "operation_config": deepcopy(binding_map.get("operation_config", {"start_position": "continue"})),
         "nodes": nodes,
     }
@@ -389,24 +379,19 @@ def _merge_controller_spec(context, strategy, current, desired):
     old_kind, target_kind = _compute_kind(current), _compute_kind(desired)
     same_kind = old_kind is not None and old_kind == target_kind
     if old_kind and target_kind and not same_kind:
-        _set_deployment_blocks(
-            merged["operation_config"],
-            _new_deployment(target_kind, _flow_profile(strategy.namespace), strategy.namespace),
-        )
+        _set_deployment_blocks(merged["operation_config"], _new_deployment(target_kind, strategy.namespace))
     _validate_batch_deployment(context, merged, preserve_deployment=same_kind)
     return merged
 
 
 def _ensure_create_deployment(strategy, spec):
-    """老的待创建整图可能缺计算配置，写入前按目标类型补齐。"""
+    """续跑保留已登记的部署块；只有缺集群时按目标类型从环境补齐。"""
     kind = _compute_kind(spec)
     if kind:
         operation = spec["operation_config"]
         key, _ = _FLOW_DEPLOYMENT[kind]
         if not _has_deployment_cluster(operation.get(key)):
-            _set_deployment_blocks(
-                operation, _new_deployment(kind, _flow_profile(strategy.namespace), strategy.namespace)
-            )
+            _set_deployment_blocks(operation, _new_deployment(kind, strategy.namespace))
 
 
 def _same_flow_spec(before, after):
@@ -898,8 +883,8 @@ def _validate_batch_deployment(context, spec, *, preserve_deployment=False):
             config.get("node_deploy_configs") is not None and not isinstance(config["node_deploy_configs"], dict)
         ):
             raise BKBaseResourceMappingError(
-                message="V4 batch deployment requires cluster and valid node_deploy_configs. "
-                "Configure BKAPP_BKBASE_V4_BATCH_CLUSTER or check the namespace deployment configuration."
+                message="V4 batch deployment requires a cluster and valid node_deploy_configs. "
+                "Set BKAPP_BKBASE_V4_BATCH_CLUSTER for new deployments."
             )
         if config.get("node_deploy_configs") is None:
             config["node_deploy_configs"] = {}
@@ -1134,7 +1119,7 @@ def build_controller_spec(controller, *, context=None):
     blocks = (
         _deployment_blocks(existing.get("operation_config") or {})
         if same_kind
-        else _new_deployment(sql_node["kind"], profile, strategy.namespace)
+        else _new_deployment(sql_node["kind"], strategy.namespace)
     )
     _set_deployment_blocks(operation, blocks)
     operation["start_position"] = BKBASE_FLOW_CONSUMING_MODE

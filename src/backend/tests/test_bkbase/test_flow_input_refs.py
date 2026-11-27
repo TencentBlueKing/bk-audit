@@ -55,11 +55,7 @@ class FlowInputRefTests(TransactionTestCase):
                 flow.GlobalMetaConfig, "get", return_value={"operation_config": {"start_position": "continue"}}
             )
         )
-        self.enterContext(
-            mock.patch.object(
-                flow, "bk_resource_settings", SimpleNamespace(PLATFORM_AUTH_ACCESS_USERNAME="synthetic_operator")
-            )
-        )
+        self.enterContext(mock.patch.object(flow, "get_bkbase_v4_platform_username", return_value="synthetic_operator"))
         self.flow_get = self.enterContext(mock.patch.object(flow.api.bk_base_v4, "flow_get"))
         self.flow_get.return_value = None
         self.enterContext(

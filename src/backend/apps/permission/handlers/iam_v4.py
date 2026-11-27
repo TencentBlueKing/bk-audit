@@ -1,19 +1,30 @@
 # -*- coding: utf-8 -*-
+import base64
 import time
+from hmac import compare_digest
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError, ValidateException
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
+from django.core.cache.backends.locmem import LocMemCache
 from django.utils.translation import gettext
 from iam import Resource, Subject
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
 from iam.utils import gen_perms_apply_data
+from requests.exceptions import HTTPError
 
+from api.bk_iam_v4.default import RetrieveCallbackSystemResource
+from api.domains import BK_IAM_V4_API_URL
 from apps.permission.handlers.actions import ActionMeta, get_action_by_id
+from apps.permission.handlers.backends import CallbackAuthUnavailable
 from apps.permission.handlers.resource_types import get_resource_by_id
 from core.exceptions import PermissionException
+
+_CALLBACK_TOKEN_CACHE = LocMemCache("iam-v4-resource-callback", {})
+_CALLBACK_TOKEN_TTL_SECONDS = 60
 
 
 class IAMV4Permission:
@@ -27,6 +38,44 @@ class IAMV4Permission:
         if not request:
             raise ValueError("must provide `username` or `request` param to init")
         self.username = request.user.username
+
+    @staticmethod
+    def _get_callback_token(system_id: str) -> str:
+        scope = (
+            f"tenant={settings.SYSTEM_TENANT_ID}"
+            if RetrieveCallbackSystemResource.use_multi_tenant_mode()
+            else "single"
+        )
+        key = f"{BK_IAM_V4_API_URL}:{settings.APP_CODE}:{system_id}:{scope}"
+        token = _CALLBACK_TOKEN_CACHE.get(key)
+        if token is None:
+            lookup = RetrieveCallbackSystemResource()
+            try:
+                # 跳过 Resource.__call__ 的埋点，避免记录包含 token 的响应。
+                with lookup.session:
+                    data = lookup.request({"system_id": system_id, "fields": "system_info"})
+            except (APIRequestError, HTTPError, ValidateException, ValueError):
+                raise CallbackAuthUnavailable("could not load IAM V4 callback credentials") from None
+            system_info = data.get("system_info") if isinstance(data, dict) else None
+            token = system_info.get("auth_token") if isinstance(system_info, dict) else None
+            if not isinstance(token, str) or not token.strip():
+                raise CallbackAuthUnavailable("invalid IAM V4 callback token")
+            _CALLBACK_TOKEN_CACHE.set(key, token, _CALLBACK_TOKEN_TTL_SECONDS)
+        return token
+
+    @classmethod
+    def is_resource_callback_auth_allowed(cls, system_id: str, authorization: str) -> bool:
+        """回调只接受 IAM 系统凭据，不依赖用户登录态。"""
+        try:
+            scheme, encoded = authorization.split()
+            if scheme.lower() != "basic":
+                return False
+            user, _, password = base64.b64decode(encoded, validate=True).partition(b":")
+        except ValueError:
+            return False
+        if user != b"bk_iam" or not password:
+            return False
+        return compare_digest(password, cls._get_callback_token(system_id).encode("utf-8"))
 
     @property
     def subject(self) -> Dict[str, str]:

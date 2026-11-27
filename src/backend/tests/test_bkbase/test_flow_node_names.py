@@ -92,11 +92,9 @@ class FlowNodeNameTests(SimpleTestCase):
                 self.assertNotEqual(a, b)
                 self.assertEqual(a, flow.node_name(prefix, first))
 
-    def test_other_resource_names_retain_original_fifty_eight_character_rule(self):
+    def test_flow_resource_name_also_fits_fifty_character_limit(self):
         value = "resource_name_" * 8
-        original = common.stable_name("flow", value)
-        self.assertEqual(len(original), 58)
-        self.assertEqual(flow.stable_name("flow", value), original)
+        self.assertEqual(len(flow.stable_name("flow", value)), 50)
 
     def test_existing_fifty_character_formal_node_names_are_preserved_by_alignment(self):
         source = {

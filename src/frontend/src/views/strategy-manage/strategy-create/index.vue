@@ -135,6 +135,11 @@
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import {
+    clampStrategyStep,
+    getRequestedStrategyStep,
+    isBksecCapabilityVisible,
+  } from '@utils/feature-toggle';
+  import {
     buildStrategyCreatePayload,
     createEmptyAssignWhere,
     enrichFieldDisplayNames,
@@ -201,9 +206,11 @@
   // 全局策略（平台）含第 5 步「风险分派规则」；审计策略（场景）仅 4 步
   const hasAssignStep = isPlatformStrategyRoute(route.name);
 
-  const bksecFeatureEnabled = ref(!hasAssignStep);
+  const bksecFeatureEnabled = ref(false);
   const bksecFeatureLoaded = ref(hasAssignStep);
-  const showBksecStep = computed(() => !hasAssignStep && bksecFeatureEnabled.value);
+  const showBksecStep = computed(() => (
+    !hasAssignStep && isBksecCapabilityVisible(bksecFeatureLoaded.value, bksecFeatureEnabled.value)
+  ));
   const submitBksecOnReport = computed(() => (
     !hasAssignStep && bksecFeatureLoaded.value && !bksecFeatureEnabled.value
   ));
@@ -226,16 +233,11 @@
     return list;
   });
   const maxStep = computed(() => steps.value.length);
-  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => {
-    const n = Number(step);
-    if ([1, 2, 3, 4, 5].includes(n)) {
-      const clamped = Math.min(n, maxStep.value) as 1 | 2 | 3 | 4 | 5;
-      return clamped;
-    }
-    return 1;
-  };
+  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => (
+    clampStrategyStep(getRequestedStrategyStep(step), maxStep.value) as 1 | 2 | 3 | 4 | 5
+  );
 
-  const initialStep = normalizeStep(route.query.step || 1);
+  const initialStep = getRequestedStrategyStep(route.query.step || 1);
   const targetStep = ref<1 | 2 | 3 | 4 | 5>(initialStep);
   const currentStep = ref<1 | 2 | 3 | 4 | 5>(1);
   const stepBarStuck = ref(false);
@@ -245,7 +247,12 @@
   };
   const comRef = ref();
 
-  const renderCom = computed(() => comMap.value[currentStep.value as keyof typeof comMap.value]);
+  const renderCom = computed(() => {
+    if (!hasAssignStep && currentStep.value === 5 && !showBksecStep.value) {
+      return undefined;
+    }
+    return comMap.value[currentStep.value as keyof typeof comMap.value];
+  });
 
   // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
   // 未配置预期结果时不使用字段别名，入库字段名保持 raw_name
@@ -267,9 +274,37 @@
     waitInitialDetail ? 'loading' : 'ready',
   );
   const showInitialStepPlaceholder = computed(() => (
-    currentStep.value === 1 && waitInitialDetail && detailStatus.value !== 'ready'
+    waitInitialDetail
+    && (detailStatus.value !== 'ready' || (targetStep.value === 5 && !bksecFeatureLoaded.value))
   ));
-  const showStepContent = computed(() => !waitInitialDetail || detailStatus.value === 'ready');
+  const showStepContent = computed(() => (
+    !waitInitialDetail
+    || (detailStatus.value === 'ready' && !(targetStep.value === 5 && !bksecFeatureLoaded.value))
+  ));
+  let bksecFeaturePromise: Promise<boolean> | null = null;
+  const loadBksecFeature = () => {
+    if (hasAssignStep || bksecFeatureLoaded.value) {
+      return Promise.resolve(bksecFeatureEnabled.value);
+    }
+    if (!bksecFeaturePromise) {
+      const hasPendingStepFive = waitInitialDetail && targetStep.value === 5;
+      bksecFeaturePromise = BksecManageService.fetchFeature()
+        .then(data => !!data?.enabled)
+        .catch(() => false)
+        .then((enabled) => {
+          bksecFeatureEnabled.value = enabled;
+          bksecFeatureLoaded.value = true;
+          if (!enabled && targetStep.value > steps.value.length) {
+            targetStep.value = normalizeStep(steps.value.length);
+          }
+          if (hasPendingStepFive && waitInitialDetail && detailStatus.value === 'ready') {
+            currentStep.value = normalizeStep(targetStep.value);
+          }
+          return enabled;
+        });
+    }
+    return bksecFeaturePromise;
+  };
   const isDraftStrategyEdit = computed(() => (
     isEditMode && isDraftStrategyStatus(formData.value.status)
   ));
@@ -428,7 +463,9 @@
       if (isEditMode && !initialFormData.value) {
         initialFormData.value = _.cloneDeep(nextFormData);
       }
-      currentStep.value = targetStep.value;
+      currentStep.value = !hasAssignStep && !bksecFeatureLoaded.value && targetStep.value === 5
+        ? 1
+        : normalizeStep(targetStep.value);
       detailStatus.value = 'ready';
     } catch {
       if (requestSeq === detailRequestSeq) {
@@ -961,6 +998,9 @@
     //   return;
     // }
 
+    if (!hasAssignStep && !bksecFeatureLoaded.value && step > steps.value.length) {
+      await loadBksecFeature();
+    }
     maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     if (step > steps.value.length) {
@@ -988,19 +1028,7 @@
     stepBarScroller?.addEventListener('scroll', syncStepBarStuck, { passive: true });
     syncStepBarStuck();
     if (!hasAssignStep) {
-      BksecManageService.fetchFeature()
-        .then((data) => {
-          bksecFeatureEnabled.value = !!data?.enabled;
-        })
-        .catch(() => {
-          bksecFeatureEnabled.value = false;
-        })
-        .finally(() => {
-          bksecFeatureLoaded.value = true;
-          if (!bksecFeatureEnabled.value && currentStep.value > steps.value.length) {
-            currentStep.value = normalizeStep(steps.value.length);
-          }
-        });
+      void loadBksecFeature();
     }
     if (isEditMode || isCloneMode) {
       loadStrategyDetail();

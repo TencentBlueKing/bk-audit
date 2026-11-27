@@ -27,7 +27,7 @@ from django.db import IntegrityError, models, transaction
 from django.db.models import IntegerField, OuterRef, Q, QuerySet, Subquery, Value
 from django.db.models.aggregates import Count
 from django.db.models.functions import Coalesce
-from django.utils.functional import cached_property
+from django.utils.functional import Promise, cached_property
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
 from treebeard.exceptions import InvalidPosition, NodeAlreadySaved
@@ -811,6 +811,21 @@ class Field(OperateRecordModel):
             return hash(self.field_name)
         return hash(self.pk)
 
+    @staticmethod
+    def _resolve_lazy(value):
+        """递归将 Django 懒翻译对象(__proxy__)转为普通字符串，避免 json 序列化失败
+
+        字段的 option / property 中可能携带 gettext_lazy(...) 的懒翻译对象，
+        直接序列化会触发 `Object of type __proxy__ is not JSON serializable`。
+        """
+        if isinstance(value, Promise):
+            return str(value)
+        if isinstance(value, dict):
+            return {_k: Field._resolve_lazy(_v) for _k, _v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [Field._resolve_lazy(_v) for _v in value]
+        return value
+
     def to_json(self):
         return {
             "field_name": self.field_name,
@@ -825,10 +840,10 @@ class Field(OperateRecordModel):
             "is_required": self.is_required,
             "is_display": self.is_display,
             "is_built_in": self.is_built_in,
-            "option": self.option,
+            "option": self._resolve_lazy(self.option),
             "description": str(self.description),
             "priority_index": self.priority_index,
-            "property": self.property,
+            "property": self._resolve_lazy(self.property),
         }
 
 

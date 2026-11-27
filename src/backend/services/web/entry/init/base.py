@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import json
 import os
+from copy import deepcopy
 from typing import Dict, Type
 
 from bk_resource import resource
@@ -27,8 +28,12 @@ from django.utils.translation import gettext_lazy
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
 from apps.itsm.utils import is_itsm_v4_enabled
-from apps.meta.models import Field, GlobalMetaConfig
+from apps.meta.models import Field, GlobalMetaConfig, ResourceType, System
 from apps.meta.tasks import sync_iam_systems
+from apps.meta.utils.builtin_assets import (
+    BUILTIN_ASSET_RESOURCE_TYPES,
+    get_builtin_asset_system_id,
+)
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.kms import (
@@ -40,11 +45,21 @@ from core.kms import (
 from core.sql.constants import Operator
 from core.utils.distutils import strtobool
 from services.web.bkbase.common import get_bkbase_version
-from services.web.bkbase.constants import BKBaseVersion
+from services.web.bkbase.constants import (
+    BKBASE_V4_REDIS_BINDING,
+    BKBaseVersion,
+    RedisRegistrationState,
+)
+from services.web.bkbase.exceptions import (
+    BKBaseFlowOperationPending,
+    BKBaseResourceMappingError,
+    RedisRegistrationPending,
+)
 from services.web.databus.collector.snapshot.system.base import (
     create_iam_data_link,
     init_itsm_v4,
 )
+from services.web.databus.collector.snapshot.system.v4 import _explicit_ref
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     ClusterMode,
@@ -52,7 +67,7 @@ from services.web.databus.constants import (
     SnapshotRunningStatus,
     SnapShotStorageChoices,
 )
-from services.web.databus.models import Snapshot
+from services.web.databus.models import RedisConfig, Snapshot
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     StorageCreateRequestSerializer,
@@ -74,9 +89,13 @@ from services.web.entry.constants import (
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+    INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY,
     SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
+from services.web.entry.init.deploy import StrictSystemInit
+from services.web.entry.init.strategy_storage import init_strategy_storage
+from services.web.entry.init.v4_wait import V4InitWait
 from services.web.entry.serializers import AgentAuthConfigSerializer
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -85,7 +104,13 @@ from services.web.risk.constants import (
 from services.web.risk.handlers import EventHandler
 from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
+from services.web.strategy_v2.constants import (
+    StrategySource,
+    StrategyStatusChoices,
+    StrategyType,
+)
 from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.resources import CreateStrategy, RetryStrategy
 
 
 class SystemInitHelper:
@@ -146,6 +171,14 @@ def adapt_auth_password(config: dict) -> None:
 
 
 class SystemInitHandler:
+    def init_strict(self, phase, deployment):
+        """显式两段入口不改变无标志的历史初始化流程。"""
+        runner = StrictSystemInit(self, deployment)
+        if phase == "bootstrap":
+            runner.bootstrap()
+        else:
+            runner.finalize()
+
     def init(self):
         """
         执行系统初始化。
@@ -158,8 +191,15 @@ class SystemInitHandler:
         self.init_standard_fields()
         self.init_es()
         self.init_doris()
-        self.init_redis()
-        if self.init_snapshot() is False:
+        init_strategy_storage()
+        if get_bkbase_version() == BKBaseVersion.V4:
+            wait = V4InitWait.from_settings()
+            self.init_redis(v4_wait=wait)
+            snapshot_ready = self.init_snapshot(v4_wait=wait)
+        else:
+            self.init_redis()
+            snapshot_ready = self.init_snapshot()
+        if snapshot_ready is False:
             return False
         self.init_event()
         self.create_or_update_plugin_etl()
@@ -259,22 +299,55 @@ class SystemInitHandler:
         resource.databus.storage.create_or_update_redis(redis_config)
         print("[InitRedis] Finished")
 
-    def init_redis(self):
+    def init_redis(self, *, v4_wait: V4InitWait | None = None) -> None:
         if self.pre_check(INIT_REDIS_FISHED_KEY):
             return
         redis_configs = get_secret_json("BKAPP_INIT_REDIS_CONFIG")
-        for redis_config in redis_configs:
-            self._init_redis(redis_config)
+        if v4_wait is None:
+            for redis_config in redis_configs:
+                self._init_redis(redis_config)
+        else:
+            unfinished = list(redis_configs)
+
+            def advance():
+                pending = {}
+                for config in unfinished[:]:
+                    # 初始化转换可能写入连接配置；原声明留给后续同配置续跑。
+                    try:
+                        self._init_redis(deepcopy(config))
+                    except RedisRegistrationPending as error:
+                        pending[error.asset_name] = "waiting for Redis asset reference"
+                    else:
+                        unfinished.remove(config)
+                return pending
+
+            v4_wait.until_ready("Redis registration", advance)
         self.post_init(INIT_REDIS_FISHED_KEY)
 
-    def init_snapshot(self):
+    def init_snapshot(self, *, v4_wait: V4InitWait | None = None):
         if get_bkbase_version() == BKBaseVersion.V4:
             kinds = ["action", "resource_type"]
             if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
                 kinds.append("user")
+            if v4_wait is not None:
+
+                def advance():
+                    pending = {}
+                    for kind in kinds[:]:
+                        waiting_for = create_iam_data_link(kind, init_redis_fallback=self._resolve_snapshot_redis)
+                        if waiting_for == "migration binding":
+                            raise BKBaseResourceMappingError(message=f"IAM V4 {kind} requires a migration binding")
+                        if waiting_for is None:
+                            kinds.remove(kind)
+                        else:
+                            pending[kind] = waiting_for
+                    return pending
+
+                v4_wait.until_ready("IAM system snapshot", advance)
+                return True
             ready = True
             for kind in kinds:
-                waiting_for = create_iam_data_link(kind)
+                waiting_for = create_iam_data_link(kind, init_redis_fallback=self._resolve_snapshot_redis)
                 if waiting_for is not None:
                     print(f"[InitSnapshot] V4 {kind} pending: {waiting_for}")
                     ready = False
@@ -289,6 +362,37 @@ class SystemInitHandler:
         if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
             create_iam_data_link("user")
         self.post_init(INIT_SNAPSHOT_FINISHED_KEY)
+
+    def _resolve_snapshot_redis(self, context: dict) -> dict:
+        """仅复用本审计空间部署声明中唯一、已登记且属于当前租户和项目的 Redis。"""
+        message = (
+            "BKAPP_INIT_REDIS_CONFIG requires exactly one registered Redis in the snapshot space; "
+            "set BKAPP_BKBASE_V4_SYSTEM_SNAPSHOT_CREATE for an explicit Redis reference"
+        )
+        declarations = get_secret_json("BKAPP_INIT_REDIS_CONFIG", [])
+        if not isinstance(declarations, list) or any(not isinstance(item, dict) for item in declarations):
+            raise BKBaseResourceMappingError(message=message)
+        names = set()
+        for item in declarations:
+            if item.get("namespace") != settings.DEFAULT_NAMESPACE:
+                continue
+            name = item.get("redis_name_en")
+            if not isinstance(name, str) or not name.strip():
+                raise BKBaseResourceMappingError(message=message)
+            names.add(name)
+        # 必须先判断声明数量，不能将尚未登记的另一候选过滤掉后误选唯一项。
+        if len(names) != 1:
+            raise BKBaseResourceMappingError(message=message)
+        config = RedisConfig.objects.filter(
+            namespace=settings.DEFAULT_NAMESPACE, redis_name_en=next(iter(names)), is_deleted=False
+        ).first()
+        saved = (config.extra or {}).get(BKBASE_V4_REDIS_BINDING) if config and isinstance(config.extra, dict) else None
+        if not isinstance(saved, dict) or saved.get("registration_state") != RedisRegistrationState.BOUND:
+            raise BKBaseResourceMappingError(message=message)
+        try:
+            return _explicit_ref(context, saved.get("resource_ref"), "Redis")
+        except BKBaseResourceMappingError:
+            raise BKBaseResourceMappingError(message=message) from None
 
     def init_standard_fields(self):
         if self.pre_check(INIT_FIELDS_FINISHED_KEY):
@@ -397,12 +501,45 @@ class SystemInitHandler:
         create_or_update_plugin_etl()
         print("[CreateOrUpdatePluginEtl] Stop")
 
-    def init_asset(self):
+    def _precheck_builtin_assets(self, system_id: str) -> None:
+        """切换本地资产身份前阻止自动迁移，并确认六类本地元数据已同步。"""
+        if system_id == settings.BK_IAM_SYSTEM_ID:
+            return
+        resource_type_ids = {asset.id for asset in BUILTIN_ASSET_RESOURCE_TYPES}
+        legacy_assets = list(
+            Snapshot.objects.filter(
+                system_id=settings.BK_IAM_SYSTEM_ID,
+                resource_type_id__in=resource_type_ids,
+                join_data_type=JoinDataType.ASSET.value,
+            ).values_list("resource_type_id", flat=True)
+        )
+        if legacy_assets:
+            raise ParamsNotValid(
+                message=(
+                    f"内置资产系统 ID 切换冲突：{settings.BK_IAM_SYSTEM_ID} 已登记资产 "
+                    f"{', '.join(sorted(legacy_assets))}，保留原快照和 RT；不自动迁移到 {system_id}"
+                )
+            )
+        if not System.objects.filter(system_id=system_id).exists():
+            raise ParamsNotValid(message=f"内置资产本地 System 缺失：{system_id}，请等待元数据同步后重试")
+        available = set(
+            ResourceType.objects.filter(system_id=system_id, resource_type_id__in=resource_type_ids).values_list(
+                "resource_type_id", flat=True
+            )
+        )
+        if missing := resource_type_ids - available:
+            raise ParamsNotValid(
+                message=f"内置资产本地 ResourceType 缺失：{system_id} [{', '.join(sorted(missing))}]，请等待元数据同步后重试"
+            )
+
+    def init_asset(self, *, strict=False):
         """
         初始化资产
         """
 
         print("[InitAsset] Start")
+        system_id = get_builtin_asset_system_id()
+        self._precheck_builtin_assets(system_id)
         status_map = GlobalMetaConfig.get(INIT_ASSET_FINISHED_KEY, default={})
         assets: Dict[Type[ResourceTypeMeta], Dict] = {
             ResourceEnum.RISK: {},
@@ -420,9 +557,18 @@ class SystemInitHandler:
             },
         }
         for asset, config in assets.items():
-            system_id, resource_type_id = asset.system_id, asset.id
+            resource_type_id = asset.id
             map_key = f"{system_id}-{resource_type_id}"
-            if status_map.get(map_key):
+            if strict:
+                # 上轮可能在后续资产失败，尚未来得及保存整份完成标记；以已落库的原资产为准。
+                if Snapshot.objects.filter(
+                    system_id=system_id,
+                    resource_type_id=resource_type_id,
+                    join_data_type=JoinDataType.ASSET,
+                    status__in=[SnapshotRunningStatus.PREPARING, SnapshotRunningStatus.RUNNING],
+                ).exists():
+                    continue
+            elif status_map.get(map_key):
                 continue
             try:
                 toggle_params = {
@@ -440,6 +586,8 @@ class SystemInitHandler:
                 resource.databus.collector.toggle_join_data(toggle_params)
                 status_map[map_key] = True
             except Exception as err:  # pylint: disable=broad-except
+                if strict:
+                    raise
                 print(f"[InitAsset] Failed => {system_id}-{resource_type_id}: {err}")
                 status_map[map_key] = False
         GlobalMetaConfig.set(INIT_ASSET_FINISHED_KEY, status_map)
@@ -532,7 +680,7 @@ class SystemInitHandler:
         print("[InitSystemRuleAudit] Start")
         snapshot = (
             Snapshot.objects.filter(
-                system_id=ResourceEnum.MANUAL_EVENT.system_id,
+                system_id=get_builtin_asset_system_id(),
                 resource_type_id=ResourceEnum.MANUAL_EVENT.id,
                 bkbase_table_id__isnull=False,
                 join_data_type=JoinDataType.ASSET.value,
@@ -541,7 +689,7 @@ class SystemInitHandler:
             .order_by("-updated_at")
             .first()
         )
-        if not snapshot:
+        if not snapshot or not snapshot.bkbase_table_id.strip():
             print("[InitSystemRuleAudit] Snapshot Not Ready, Skip")
             return
 
@@ -555,16 +703,44 @@ class SystemInitHandler:
         if not strategy_name:
             print("[InitSystemRuleAudit] Strategy Name Missing")
             return
-        if Strategy.objects.filter(strategy_name=strategy_name, namespace=namespace).exists():
-            print(f"[InitSystemRuleAudit] Strategy Already Exists => {strategy_name}")
+        strategy_id = GlobalMetaConfig.get(INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY, default=None)
+        created = False
+        if strategy_id is None:
+            if Strategy.objects.filter(strategy_name=strategy_name).exists():
+                print(f"[InitSystemRuleAudit] 同名策略未登记初始化归属，拒绝认领 => {strategy_name}")
+                return
+            strategy_id = CreateStrategy().request_for_init(params)["strategy_id"]
+            created = True
+        strategy = None
+        if type(strategy_id) is int and strategy_id > 0:
+            strategy = Strategy.objects.filter(
+                strategy_id=strategy_id,
+                namespace=namespace,
+                strategy_type=StrategyType.RULE,
+                source=StrategySource.SYSTEM,
+            ).first()
+        if strategy is None:
+            print("[InitSystemRuleAudit] 已登记策略缺失或归属不匹配，保留记录，禁止另建")
+            return
+        data_source = (strategy.configs or {}).get("data_source") or {}
+        if data_source.get("rt_id") != snapshot.bkbase_table_id:
+            print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} 输入 RT 已变化，保留现状，禁止自动部署")
+            return
+        if not created and strategy.status in (
+            StrategyStatusChoices.START_FAILED,
+            StrategyStatusChoices.UPDATE_FAILED,
+            StrategyStatusChoices.FAILED,
+        ):
+            try:
+                RetryStrategy().retry_existing(strategy, allow_create=False)
+            except BKBaseFlowOperationPending as error:
+                print(f"[InitSystemRuleAudit] Pending => {error}")
+                return
+            strategy.refresh_from_db()
+        if strategy.status == StrategyStatusChoices.RUNNING:
             self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
-            return
-
-        try:
-            resource.strategy_v2.create_strategy(**params)
-        except Exception as err:  # pylint: disable=broad-except
-            print(f"[InitSystemRuleAudit] Failed => {err}")
-            return
-
-        self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
-        print("[InitSystemRuleAudit] Finished")
+            print("[InitSystemRuleAudit] Finished")
+        elif strategy.status == StrategyStatusChoices.STARTING:
+            print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} 仍在启动；若长期未就绪，请按策略 ID 核对队列任务和原 Flow，不自动补投")
+        else:
+            print(f"[InitSystemRuleAudit] Strategy {strategy.strategy_id} pending: {strategy.status}")

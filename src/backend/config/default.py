@@ -72,6 +72,7 @@ MIDDLEWARE += (
     "apigw_manager.apigw.authentication.ApiGatewayJWTGenericMiddleware",  # JWT 认证
     "apigw_manager.apigw.authentication.ApiGatewayJWTAppMiddleware",  # JWT 透传的应用信息
     "apigw_manager.apigw.authentication.ApiGatewayJWTUserMiddleware",  # JWT 透传的用户信息
+    "core.middleware.tenant_router.TenantCookieMiddleware",  # 用于验证租户id的中间件
 )
 
 # 默认数据库自增字段
@@ -220,6 +221,10 @@ BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
 BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
+# 不同环境的 IAM V4 系统详情路由可能不同；默认保留已有的 rabc 路径。
+BK_IAM_V4_SYSTEM_DETAIL_ACTION = os.getenv(
+    "BKAPP_BK_IAM_V4_SYSTEM_DETAIL_ACTION", "/api/v1/open/rabc/share/model/systems/{system_id}/"
+)
 BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
 # ITSM V4 接入系统标识与系统 token（仅 system_workflow_list 服务列表接口需要）。
 # 二者均为接入系统级凭据，由后端配置读取，前端不感知。
@@ -327,6 +332,10 @@ SWAGGER_SETTINGS = {
     "DEFAULT_GENERATOR_CLASS": "bk_resource.utils.generators.BKResourceOpenAPISchemaGenerator",
 }
 
+DEFAULT_REDIS_TAGS = [
+    tag for tag in os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "Bk-Audit,inland,enable,usr").split(",") if tag
+]
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Audit',
     'DESCRIPTION': '审计中心 API',
@@ -394,10 +403,12 @@ HTTP_PULL_REDIS_TIMEOUT = os.getenv("BKAPP_HTTP_PULL_REDIS_TIMEOUT", "360d")
 
 # IAM
 BK_IAM_SYSTEM_ID = os.getenv("BKAPP_IAM_SYSTEM_ID", "bk-audit")
+# 本地内置资产身份与 IAM 后端解耦；仅纯 V4 新装显式使用 iam_v4_bk-audit。
+BUILTIN_ASSET_SYSTEM_ID = os.getenv("BKAPP_BUILTIN_ASSET_SYSTEM_ID", "")
 BK_IAM_SYSTEM_NAME = os.getenv("BKAPP_IAM_SYSTEM_NAME", "审计中心")
 BK_IAM_USE_APIGATEWAY = True
-BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL")
-BK_IAM_RESOURCE_API_HOST = os.getenv("BKAPP_BK_IAM_RESOURCE_API_HOST")
+BK_IAM_APIGATEWAY_URL = (os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL") or "").strip()
+BK_IAM_RESOURCE_API_HOST = (os.getenv("BKAPP_BK_IAM_RESOURCE_API_HOST") or "").strip()
 # 权限主链路后端：v3 使用现有 IAM V3 SDK，v4 使用审计中心 IAM V4 兼容层。
 IAM_PERMISSION_BACKEND = os.getenv("BKAPP_IAM_PERMISSION_BACKEND", "v3")
 # V3 主链路下是否额外执行 V4 影子鉴权对比；仅记录差异，不影响线上返回结果。
@@ -427,6 +438,8 @@ BK_APP_OTEL_ADDTIONAL_INSTRUMENTORS = [BKResourceAPIInstrumentor()]
 AEGIS_ID = os.getenv("BKAPP_AEGIS_ID")
 
 # FeatureToggle
+# 单租户沿用原有默认值；多租户需要区分显式配置与默认值。
+AI_CAPABILITY_FEATURE_OVERRIDE = os.getenv("BKAPP_FEATURE_AI_CAPABILITY")
 FEATURE_TOGGLE = {
     "bkbase_aiops": os.getenv("BKAPP_FEATURE_BKBASE_AIOPS", "deny"),
     "bklog_otlp": os.getenv("BKAPP_FEATURE_BKLOG_OTLP", "on"),
@@ -437,6 +450,7 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
+    "ai_capability": "available" if AI_CAPABILITY_FEATURE_OVERRIDE is None else AI_CAPABILITY_FEATURE_OVERRIDE,
     "bksec": os.getenv("BKAPP_FEATURE_BKSEC", "on"),
 }
 
@@ -450,6 +464,7 @@ INDEX_VERSION_NUMBER = os.getenv("BKAPP_INDEX_VERSION_NUMBER", "v1")
 BK_MONITOR_METRIC_PROXY_URL = os.getenv("BKAPP_BK_MONITOR_METRIC_PROXY_URL", "")
 
 # BkBase
+BKBASE_GEOG_AREA_CODE = os.getenv("BKAPP_BKBASE_GEOG_AREA_CODE", "inland")
 BKBASE_QUERY_SYNC_ACTION = os.getenv("BKAPP_BKBASE_QUERY_SYNC_ACTION", "/v3/queryengine/query_sync/")
 BKBASE_PROJECT_ID = os.getenv("BKAPP_BKBASE_PROJECT_ID")
 BKBASE_PROJECT_NAME = os.getenv("BKAPP_BKBASE_PROJECT_NAME", gettext_lazy("审计中心"))
@@ -462,8 +477,8 @@ BKBASE_DATA_TOKEN = get_secret("BKAPP_BKBASE_DATA_TOKEN", "")
 
 # BKBase协议版本独立于多租户开关，默认保留V3。
 BKBASE_API_VERSION = os.getenv("BKAPP_BKBASE_API_VERSION", "v3")
+BKBASE_V4_INIT_TIMEOUT_SECONDS = os.getenv("BKAPP_BKBASE_V4_INIT_TIMEOUT_SECONDS", "300")
 BKBASE_V4_SYSTEM_SNAPSHOT_CREATE = os.getenv("BKAPP_BKBASE_V4_SYSTEM_SNAPSHOT_CREATE", "{}")
-BKBASE_V4_TENANT = os.getenv("BKAPP_BKBASE_V4_TENANT", "default")
 BKBASE_V4_NAMESPACE = os.getenv("BKAPP_BKBASE_V4_NAMESPACE", "")
 BKBASE_V4_MCP_PROJECT_ID = os.getenv("BKAPP_BKBASE_V4_MCP_PROJECT_ID", "")
 BKBASE_V4_RESULT_TABLE_NAMESPACES = os.getenv("BKAPP_BKBASE_V4_RESULT_TABLE_NAMESPACES", "{}")
@@ -620,8 +635,48 @@ BK_AUDIT_SETTINGS = {
 # 全局配置
 BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARED_RES_URL", ""))
 
-# 租户id
-BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
+# 多租户配置
+# 多租户模式总开关（取值 1/true/yes/on 视为开启）
+BKPAAS_MULTI_TENANT_MODE = str(os.getenv("BKPAAS_MULTI_TENANT_MODE", "False")).lower() in ("1", "true", "yes", "on")
+
+# 全租户应用注册所在的租户，与审计实例绑定的租户无关。
+SYSTEM_TENANT_ID = os.getenv("BKAPP_SYSTEM_TENANT_ID", "").strip() or "system"
+
+# 实例绑定租户：由部署控制面注入，只读、非空
+# 多租户开启时必须设置；关闭时可留空（兼容模式）
+AUDIT_INSTANCE_TENANT_ID = os.getenv("BKAPP_AUDIT_INSTANCE_TENANT_ID", "").strip().lower()
+
+# 启动期 fail-fast：多租户模式下实例必须绑定目标租户
+if BKPAAS_MULTI_TENANT_MODE and not AUDIT_INSTANCE_TENANT_ID:
+    raise RuntimeError(
+        "多租户模式已开启（BKPAAS_MULTI_TENANT_MODE=true），但实例绑定租户未设置。"
+        "请在部署控制面注入 BKAPP_AUDIT_INSTANCE_TENANT_ID 后启动，"
+        "禁止回退到应用归属租户或默认值，以免破坏租户隔离。"
+    )
+
+# 外部调用 X-Bk-Tenant-Id Header 取值
+# 多租户模式 = AUDIT_INSTANCE_TENANT_ID（不可为空，已 fail-fast 校验）
+# 非多租户模式保留原有 PaaS 租户及 tencent 缺省值，忽略实例绑定配置。
+BK_TENANT_ID = (
+    AUDIT_INSTANCE_TENANT_ID if BKPAAS_MULTI_TENANT_MODE else (os.getenv("BKPAAS_APP_TENANT_ID") or "tencent")
+)
+BKBASE_V4_TENANT = os.getenv("BKAPP_BKBASE_V4_TENANT", BK_TENANT_ID if BKPAAS_MULTI_TENANT_MODE else "default")
+
+# 租户前缀（共享资源命名空间化：队列/索引名等）
+# 非多租户模式为空字符串
+AUDIT_TENANT_PREFIX = f"{AUDIT_INSTANCE_TENANT_ID}_" if AUDIT_INSTANCE_TENANT_ID else ""
+
+# 非多租户模式下的应用态默认用户名（get_admin_username 回退）
+COMMON_USERNAME = os.getenv("BKAPP_COMMON_USERNAME", "admin")
+
+# 多租户 IAM 网关地址（覆盖默认 BK_IAM_API_URL）
+BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL", "").strip()
+
+# APP_ID
+APP_ID = os.getenv("APP_ID", "")
+
+# APP_TOKEN
+APP_TOKEN = get_secret("APP_TOKEN", "")
 
 # CORS 允许的 header
 CORS_ALLOW_HEADERS = [

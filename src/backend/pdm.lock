@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:c6525a2ab8a3af8256024a3556eb62d54b081a1dc49e7392db877f4dd3c667db"
+content_hash = "sha256:a5d7eea606b0ecf9afa036e86a6d76d3c6d61c4a7a8f705b584663260bb40f7e"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -255,18 +255,19 @@ files = [
 
 [[package]]
 name = "bk-iam"
-version = "1.3.2"
-requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, <4"
+version = "2.0.3"
+requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,<4,>3"
 summary = "bk-iam python sdk"
 groups = ["default"]
 dependencies = [
-    "cachetools==3.1.1",
+    "cachetools<6.0,>=3.1.1",
     "curlify==2.2.1",
-    "requests",
+    "requests>=2.16.0",
     "six>=1.11.0",
 ]
 files = [
-    {file = "bk-iam-1.3.2.tar.gz", hash = "sha256:b0202203baa4c85a5cf8422fda4e70df9e080244d551cc45dae7df0f71ff79cd"},
+    {file = "bk_iam-2.0.3-py2.py3-none-any.whl", hash = "sha256:0a388237d226151a3abe0d4e6e7f99d2c2809bb32a7ede475b7808cee9d100a5"},
+    {file = "bk_iam-2.0.3.tar.gz", hash = "sha256:28d025237bf8d6e43a143f55657f29e1ce778e585b89c1567ea554acb9a23a97"},
 ]
 
 [[package]]
@@ -1357,6 +1358,8 @@ files = [
     {file = "greenlet-3.2.4-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2523e5246274f54fdadbce8494458a2ebdcdbc7b802318466ac5606d3cded1f8"},
     {file = "greenlet-3.2.4-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:1987de92fec508535687fb807a5cea1560f6196285a4cde35c100b8cd632cc52"},
     {file = "greenlet-3.2.4-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:55e9c5affaa6775e2c6b67659f3a71684de4c549b3dd9afca3bc773533d284fa"},
+    {file = "greenlet-3.2.4-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:c9c6de1940a7d828635fbd254d69db79e54619f165ee7ce32fda763a9cb6a58c"},
+    {file = "greenlet-3.2.4-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:03c5136e7be905045160b1b9fdca93dd6727b180feeafda6818e6496434ed8c5"},
     {file = "greenlet-3.2.4-cp311-cp311-win_amd64.whl", hash = "sha256:9c40adce87eaa9ddb593ccb0fa6a07caf34015a29bf8d344811665b573138db9"},
     {file = "greenlet-3.2.4.tar.gz", hash = "sha256:0dca0d95ff849f9a364385f36ab49f50065d76964944638be9691e1832e9f86d"},
 ]

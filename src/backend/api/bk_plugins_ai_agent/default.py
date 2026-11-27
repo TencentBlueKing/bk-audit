@@ -24,7 +24,6 @@ import time
 from contextvars import ContextVar
 from typing import Any, Callable
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
@@ -37,9 +36,10 @@ from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
+from core.bk_api_base import AuditBkApiResource
 
 
-class AIAgentBase(BkApiResource, abc.ABC):
+class AIAgentBase(AuditBkApiResource, abc.ABC):
     """AI 智能体通用 API 基类
 
     与 AIAuditReport 共享相同的认证逻辑，但 URL 通过 get_agent_base_url 动态路由。
@@ -198,8 +198,8 @@ class ChatCompletion(AIAgentBase):
             self._on_event_context.reset(callback_token)
             self._current_agent_code = None
 
-    def build_header(self, validated_request_data):
-        headers = super().build_header(validated_request_data)
+    def set_headers(self, headers, validated_request_data):
+        """补充 Agent 用户头，保留基类已注入的租户与认证信息。"""
         user = validated_request_data.pop("user", None)
         if user:
             headers["X-BKAIDEV-USER"] = user

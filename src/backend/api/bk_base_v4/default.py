@@ -7,7 +7,6 @@ import abc
 from contextvars import ContextVar
 from time import monotonic
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.request_provider import get_local_request
@@ -45,24 +44,84 @@ from api.bk_base_v4.serializers import (
     UserScopesRequestSerializer,
     UserTablesRequestSerializer,
 )
+from api.bk_base_v4.tenant import get_bkbase_v4_tenant
+from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 from core.redacted_log import RedactedRequestLogMixin
+from core.tenant import TENANT_ID_HEADER
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
+INIT_DEADLINE: ContextVar[float | None] = ContextVar("bkbase_v4_init_deadline", default=None)
 READ_MAX_TIMEOUT = 30.0
 
 
-class BkBaseV4Resource(BkApiResource, abc.ABC):
-    """平台操作默认使用当前配置的平台身份。"""
+class InitDeadlineBeforeSend(TimeoutError):
+    """初始化预算在请求发出前耗尽。"""
+
+
+def init_deadline_remaining() -> float | None:
+    deadline = INIT_DEADLINE.get()
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise InitDeadlineBeforeSend("BKBase V4 init deadline reached before sending request")
+    return remaining
+
+
+def is_init_deadline_before_send(error: BaseException) -> bool:
+    """仅识别本地发送前的证据，不把网络超时当成未下发。"""
+    while error is not None:
+        if isinstance(error, InitDeadlineBeforeSend):
+            return True
+        error = error.__cause__
+    return False
+
+
+class BkBaseV4Resource(AuditBkApiResource, abc.ABC):
+    """多租户按实例调用 V4，单租户保留原平台认证协议。"""
 
     module_name = "bkbase_v4"
-    base_url = BK_BASE_API_URL
     platform_authorization = True
     requires_platform_auth = False
     IS_STANDARD_FORMAT = False
 
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_BASE_API_URL
+
+    @property
+    def use_admin_username(self):
+        return self.platform_authorization
+
+    def build_request_data(self, validated_request_data):
+        """在构造 URL 之前校验路径租户和资源体中的显式租户引用。"""
+        if self.use_multi_tenant_mode():
+            tenant = get_bkbase_v4_tenant()
+            if validated_request_data.get("tenant") not in (None, tenant):
+                raise PermissionDenied("BKBase V4 request does not belong to this tenant")
+            metadata = validated_request_data.get("metadata")
+            if isinstance(metadata, dict) and "tenant" in metadata and metadata["tenant"] != tenant:
+                raise PermissionDenied("BKBase V4 resource metadata does not belong to this tenant")
+            refs = [validated_request_data.get("spec"), validated_request_data.get("target")]
+            while refs:
+                item = refs.pop()
+                if isinstance(item, dict):
+                    if {"tenant", "namespace", "name"} <= item.keys() and item["tenant"] != tenant:
+                        raise PermissionDenied("BKBase V4 resource reference does not belong to this tenant")
+                    refs.extend(item.values())
+                elif isinstance(item, list):
+                    refs.extend(item)
+        return super().build_request_data(validated_request_data)
+
     def add_esb_info_before_request(self, params):
-        """平台列表只从配置构造身份，缺配置时不得回退到操作者。"""
+        """多租户平台身份由审计基类补齐；单租户平台列表保持原校验。"""
+        if self.use_multi_tenant_mode() and self.platform_authorization:
+            return {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
         if self.platform_authorization and self.requires_platform_auth:
             username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
             token = bk_resource_settings.PLATFORM_AUTH_ACCESS_TOKEN
@@ -116,10 +175,15 @@ class BkBaseV4Resource(BkApiResource, abc.ABC):
         return payload
 
     def before_request(self, kwargs):
-        """隔离路径参数；仅在受控列表读取中为GET沿用剩余预算。"""
+        """隔离路径参数，受控初始化和列表请求沿用其剩余预算。"""
+        remaining_init = init_deadline_remaining()
+        if remaining_init is not None:
+            kwargs["timeout"] = Timeout(total=min(self.TIMEOUT, remaining_init))
         deadline = READ_DEADLINE.get()
         if self.method == "GET" and deadline is not None:
             remaining = deadline - monotonic()
+            if remaining_init is not None:
+                remaining = min(remaining, remaining_init)
             if remaining <= 0:
                 raise RequestTimeout("BKBase list read deadline exceeded")
             kwargs["timeout"] = Timeout(total=min(READ_MAX_TIMEOUT, remaining))
@@ -137,6 +201,12 @@ class DirectAuthByResources(BkBaseV4Resource):
     platform_authorization = False
     RequestSerializer = DirectAuthByResourcesRequestSerializer
     ResponseSerializer = DirectAuthByResourcesResponseSerializer
+
+    def build_request_data(self, validated_request_data):
+        data = super().build_request_data(validated_request_data)
+        if self.use_multi_tenant_mode():
+            data["tenant"] = get_bkbase_v4_tenant()
+        return data
 
     def add_esb_info_before_request(self, params):
         """该接口不做用户认证，前后台均只使用审计应用凭据。"""
@@ -206,7 +276,8 @@ class DatasetResource(BkBaseV4Resource, abc.ABC):
         """把校验后的tenant移入请求头，避免落入业务查询参数。"""
         tenant = validated_request_data.pop("tenant")
         headers = super().build_header(validated_request_data)
-        headers["X-Bk-Tenant-Id"] = tenant
+        if not self.use_multi_tenant_mode():
+            headers[TENANT_ID_HEADER] = tenant
         return headers
 
 
@@ -263,10 +334,20 @@ class StorageAssetCreate(RedactedRequestLogMixin, DatasetResource):
         return super().before_request(kwargs)
 
     def parse_response(self, response):
-        """重定向不能证明资产注册成功。"""
+        """保留结构化错误码，供登记续跑判断请求是否到过 BKBase。"""
         if 300 <= response.status_code < 400:
             raise APIRequestError(module_name=self.module_name, url=self.action, result="Redis registration redirected")
-        return super().parse_response(response)
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            # bk_resource 会将 HTTP 错误压成消息。只提取原始错误码，不解析异常文本或保存响应体。
+            if response.status_code != 200:
+                try:
+                    failure = response.json()
+                except ValueError:
+                    failure = None
+                error.gateway_error_code = str(failure.get("code", "")) if isinstance(failure, dict) else ""
+            raise
 
 
 class StorageAssetGet(DatasetResource):
@@ -277,6 +358,29 @@ class StorageAssetGet(DatasetResource):
     url_keys = ["project_name", "sub_type", "asset_name"]
     RequestSerializer = StorageAssetGetRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
+
+    def before_request(self, kwargs):
+        """资产存在性只信任原始租户与项目的详情端点，不跟随重定向。"""
+        kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """区分查询失败和确认资产不存在，避免把网关 404 当成查无资产。"""
+        if 300 <= response.status_code < 400:
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Redis asset lookup redirected")
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            payload = error.data
+            # 详情接口仅以 HTTP 200 / 业务码 1553002 / data=null 表示资源确实不存在。
+            error.asset_not_found = (
+                response.status_code == 200
+                and payload.get("result") is False
+                and str(payload.get("code")) == "1553002"
+                and "data" in payload
+                and payload["data"] is None
+            )
+            raise
 
 
 class StorageAssetList(DatasetResource):
@@ -301,7 +405,8 @@ class NamespacesList(BkBaseV4Resource):
     def build_header(self, validated_request_data):
         """项目列表路径及租户头采用同一校验上下文。"""
         headers = super().build_header(validated_request_data)
-        headers["X-Bk-Tenant-Id"] = validated_request_data["tenant"]
+        if not self.use_multi_tenant_mode():
+            headers[TENANT_ID_HEADER] = validated_request_data["tenant"]
         return headers
 
 
@@ -317,6 +422,9 @@ class UserBkBaseV4Resource(BkBaseV4Resource, abc.ABC):
         username = getattr(user, "bk_username", None) or getattr(user, "username", None)
         if not username or not getattr(user, "is_authenticated", False):
             raise PermissionDenied("Authenticated BKBase user required")
+        user_tenant = getattr(user, "tenant_id", "")
+        if self.use_multi_tenant_mode() and user_tenant and user_tenant != get_bkbase_v4_tenant():
+            raise PermissionDenied("BKBase V4 user does not belong to this tenant")
         params.update(bk_app_code=settings.APP_CODE, bk_app_secret=settings.SECRET_KEY, bk_username=username)
         params.update(self.build_auth_args(request))
         return params
@@ -351,6 +459,40 @@ class UserCheck(UserBkBaseV4Resource):
     ResponseSerializer = PayloadResponseSerializer
 
 
+class _SnapshotResource(BkBaseV4Resource):
+    """快照续跑使用的直达证据；同一 SDK 端点的其他调用方也不会跟随重定向。"""
+
+    snapshot_write = False
+
+    @property
+    def snapshot_request(self):
+        """名称详情由 URL 参数限定，写端必须逐个显式启用。"""
+        return self.snapshot_write or (self.method == "GET" and "name" in self.url_keys)
+
+    def before_request(self, kwargs):
+        """只信任原始端点，不跟随重定向查询或重发写入。"""
+        if self.snapshot_request:
+            kwargs["allow_redirects"] = False
+        return super().before_request(kwargs)
+
+    def parse_response(self, response):
+        """拒绝重定向链；写端路由错误码只取原始 404 JSON 顶层字段。"""
+        if self.snapshot_request and (300 <= response.status_code < 400 or response.history):
+            raise APIRequestError(module_name=self.module_name, url=self.action, result="Snapshot request redirected")
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            if self.snapshot_request:
+                error.http_status = response.status_code
+            if self.snapshot_write and response.status_code == 404:
+                try:
+                    failure = response.json()
+                except ValueError:
+                    failure = None
+                error.gateway_error_code = str(failure.get("code", "")) if isinstance(failure, dict) else ""
+            raise
+
+
 class DataSourceList(BkBaseV4Resource):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/"
     method = "GET"
@@ -359,29 +501,20 @@ class DataSourceList(BkBaseV4Resource):
     ResponseSerializer = PayloadResponseSerializer
 
 
-class DataSourceGet(DataSourceList):
+class DataSourceGet(_SnapshotResource, DataSourceList):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/"
     url_keys = ["tenant", "namespace", "name"]
     RequestSerializer = NamedResourceRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
 
 
-class DataSourceCreate(DataSourceList):
+class DataSourceCreate(_SnapshotResource, DataSourceList):
     """创建 DataSource；受理不代表 DataId 已就绪。"""
 
     method = "POST"
+    snapshot_write = True
     RequestSerializer = ResourceWriteRequestSerializer
     ResponseSerializer = ObjectResponseSerializer
-
-    def before_request(self, kwargs):
-        """禁止重定向导致重复创建。"""
-        kwargs["allow_redirects"] = False
-        return super().before_request(kwargs)
-
-    def parse_response(self, response):
-        if 300 <= response.status_code < 400:
-            raise APIRequestError(module_name=self.module_name, url=self.action, result="DataSource POST redirected")
-        return super().parse_response(response)
 
 
 class DataConnCreate(DataSourceCreate):
@@ -401,6 +534,7 @@ class UserDataSourceGet(UserBkBaseV4Resource, DataSourceGet):
 class DataSourceUpdate(DataSourceGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datasources/{name}/"
     method = "PUT"
+    snapshot_write = True
     RequestSerializer = NamedResourceWriteRequestSerializer
 
 
@@ -466,7 +600,7 @@ class CleanDebug(BkBaseV4Resource):
     ResponseSerializer = ObjectResponseSerializer
 
 
-class CleanGet(BkBaseV4Resource):
+class CleanGet(_SnapshotResource):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/cleans/{name}/"
     method = "GET"
     url_keys = ["tenant", "namespace", "name"]
@@ -484,6 +618,7 @@ class CleanList(CleanGet):
 class CleanCreate(CleanGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/cleans/"
     method = "POST"
+    snapshot_write = True
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
 
@@ -498,7 +633,7 @@ class CleanDelete(CleanGet):
     ResponseSerializer = None
 
 
-class DataStorageGet(BkBaseV4Resource):
+class DataStorageGet(_SnapshotResource):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datastorages/{name}/"
     method = "GET"
     url_keys = ["tenant", "namespace", "name"]
@@ -516,6 +651,7 @@ class DataStorageList(DataStorageGet):
 class DataStorageCreate(DataStorageGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/datastorages/"
     method = "POST"
+    snapshot_write = True
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
 

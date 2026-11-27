@@ -17,7 +17,9 @@
 <template>
   <div class="nl-search-box">
     <!-- 智能搜索标题 -->
-    <div class="nl-search-header">
+    <div
+      v-if="aiCapabilityEnabled"
+      class="nl-search-header">
       <img
         class="nl-search-header-icon"
         :src="aiXiaojingIcon">
@@ -26,6 +28,7 @@
 
     <!-- 自然语言搜索输入框 -->
     <nl-input
+      v-if="aiCapabilityEnabled"
       ref="nlInputRef"
       :history-refresh-key="historyRefreshKey"
       :loading="isNLSearching"
@@ -34,7 +37,7 @@
 
     <!-- NLP 解析结果提示（未识别搜索条件时的红色警告提示） -->
     <div
-      v-if="showParseWarning"
+      v-if="aiCapabilityEnabled && showParseWarning"
       class="nl-search-warning-tips">
       <div class="nl-search-warning-content">
         <img
@@ -101,6 +104,7 @@
   import AuditIcon from '@components/audit-icon';
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
   import { isPageReload } from '@utils/assist';
+  import { isAiCapabilityEnabled, readStoredAuditConfig } from '@utils/feature-toggle';
   import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
   import {
     applyDatetimeUrlParams,
@@ -150,6 +154,7 @@
   const emit = defineEmits<Emits>();
 
   const riskViewType = computed(() => props.riskViewType || 'all');
+  const aiCapabilityEnabled = isAiCapabilityEnabled(readStoredAuditConfig());
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -721,6 +726,7 @@
 
   // 自然语言搜索提交
   const handleNLSubmit = async (query: string) => {
+    if (!aiCapabilityEnabled) return;
     // 进入智能搜索整体流程（input 按钮开始转动）
     isNLSearching.value = true;
     parseSuccessMessage.value = '';

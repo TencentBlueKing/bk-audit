@@ -151,7 +151,7 @@ class ContinueSpecTests(SimpleTestCase):
         ), mock.patch.object(
             flow, "_save_operation_binding"
         ), mock.patch.object(
-            flow, "bk_resource_settings", SimpleNamespace(PLATFORM_AUTH_ACCESS_USERNAME="synthetic_user")
+            flow, "get_bkbase_v4_platform_username", return_value="synthetic_user"
         ):
             spec = flow.build_controller_spec(controller, context=context)
         self.assertEqual(spec["operation_config"]["start_position"], "continue")

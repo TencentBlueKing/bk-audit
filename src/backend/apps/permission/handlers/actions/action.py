@@ -132,17 +132,6 @@ class ActionEnum:
         version=1,
     )
 
-    # 敏感对象管理
-    LIST_SENSITIVE_OBJECT = ActionMeta(
-        id="list_sensitive_object",
-        name=gettext("敏感信息对象列表"),
-        name_en="List SENSITIVE OBJECT",
-        type="view",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
-
     # 全局设置
     ACCESS_GLOBAL_SETTING = ActionMeta(
         id="access_global_setting",

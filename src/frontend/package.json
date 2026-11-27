@@ -10,12 +10,14 @@
     "preview": "vite preview --port 4173",
     "build-only": "NODE_OPTIONS=--max-old-space-size=4096 vite build --mode release",
     "type-check": "vue-tsc --noEmit",
+    "test:tenant-display-name": "node --test tests/tenant-display-name.test.mjs",
     "lint-script": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix",
     "lint-style": "stylelint --fix ./src/**/*.{vue,css} --custom-syntax",
     "prepare": "cd ../.. && husky install src/frontend/.husky"
   },
   "dependencies": {
     "@blueking/bk-trace-core": "^0.0.4",
+    "@blueking/bk-user-display-name": "1.0.3-beta.7",
     "@blueking/bk-user-selector": "^0.1.9",
     "@blueking/date-picker": "^2.0.0-beta.23",
     "@blueking/login-modal": "^1.0.1",

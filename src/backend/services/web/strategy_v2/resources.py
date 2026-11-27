@@ -21,6 +21,7 @@ import datetime
 import json
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import ContextVar
 from functools import cached_property
 from typing import Any, Dict, List, Optional
 
@@ -45,9 +46,20 @@ from rest_framework.settings import api_settings
 from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
-from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
+from apps.meta.constants import (
+    GLOBAL_CONFIG_LEVEL_INSTANCE,
+    NO_TAG_ID,
+    NO_TAG_NAME,
+    ConfigLevelChoices,
+)
 from apps.meta.handlers.tag_binding import create_missing_tag_bindings_in_order
-from apps.meta.models import DataMap, EnumMappingRelatedType, System, Tag
+from apps.meta.models import (
+    DataMap,
+    EnumMappingRelatedType,
+    GlobalMetaConfig,
+    System,
+    Tag,
+)
 from apps.meta.serializers import EnumMappingSerializer
 from apps.meta.utils.fields import (
     ACTION_ID,
@@ -84,11 +96,15 @@ from services.web.bkbase import permissions as bkbase_permissions
 from services.web.bkbase import query as bkbase_query
 from services.web.bkbase.common import get_bkbase_context, get_bkbase_version
 from services.web.bkbase.constants import BKBaseVersion
-from services.web.bkbase.exceptions import BKBaseFlowOperationPending
+from services.web.bkbase.exceptions import (
+    BKBaseFlowOperationPending,
+    BKBaseResourceMappingError,
+)
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
 )
+from services.web.entry.constants import INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
@@ -691,6 +707,9 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             raise Http404
 
 
+_INIT_STRATEGY_REQUEST = ContextVar("init_strategy_request", default=None)
+
+
 class CreateStrategy(StrategyV2Base):
     """
     创建策略时附带枚举映射示例。
@@ -722,14 +741,62 @@ class CreateStrategy(StrategyV2Base):
     ResponseSerializer = CreateStrategyResponseSerializer
     audit_action = ActionEnum.CREATE_STRATEGY
 
+    def request_for_init(self, params: dict) -> dict:
+        """内部初始化仍走完整 request 校验，归属能力不来自任何公开请求参数。"""
+        token = _INIT_STRATEGY_REQUEST.set(self)
+        try:
+            return self.request(params)
+        finally:
+            _INIT_STRATEGY_REQUEST.reset(token)
+
+    @staticmethod
+    def _lock_init_claim(params):
+        """在本地创建事务内锁定唯一归属；已有 ID 只返回原策略，不重新调度。"""
+        claim, _ = GlobalMetaConfig.objects.select_for_update().get_or_create(
+            config_level=ConfigLevelChoices.GLOBAL.value,
+            instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+            config_key=INIT_SYSTEM_RULE_AUDIT_STRATEGY_ID_KEY,
+            defaults={"config_value": None},
+        )
+        if claim.config_value is None:
+            if Strategy.objects.filter(strategy_name=params["strategy_name"]).exists():
+                raise serializers.ValidationError(gettext("同名策略没有初始化归属，禁止自动认领"))
+            return claim, None
+        if type(claim.config_value) is not int or claim.config_value <= 0:
+            raise serializers.ValidationError(gettext("初始化策略 ID 记录无效，禁止重新认领"))
+        existing = Strategy.objects.filter(
+            strategy_id=claim.config_value,
+            namespace=params["namespace"],
+            strategy_type=StrategyType.RULE,
+            source=StrategySource.SYSTEM,
+        ).first()
+        if existing is None:
+            raise serializers.ValidationError(gettext("已登记的初始化策略归属不匹配，禁止替换"))
+        return claim, existing
+
     def perform_request(self, validated_request_data):
+        for_init = _INIT_STRATEGY_REQUEST.get() is self
+        if for_init:
+            # 立即消费能力，控制器或校验后续触发的普通创建不能继承初始化归属。
+            _INIT_STRATEGY_REQUEST.set(None)
         strategy_type = validated_request_data.get("strategy_type")
         scene_id = validated_request_data.pop("scene_id", None)
         # 草稿：完整配置仅落库，不部署
         is_draft = validated_request_data.pop("is_draft", False)
+        if for_init and (
+            is_draft
+            or strategy_type != StrategyType.RULE
+            or validated_request_data.get("source") != StrategySource.SYSTEM
+        ):
+            raise serializers.ValidationError(gettext("初始化只能登记正式的系统规则策略"))
         if not is_draft:
             self._check_source_type(validated_request_data)
         with transaction.atomic():
+            claim = None
+            if for_init:
+                claim, existing = self._lock_init_claim(validated_request_data)
+                if existing is not None:
+                    return existing
             # pop tag
             tag_names = validated_request_data.pop("tags", [])
             # 绑定类型：全局（platform_binding）/ 场景（scene_binding）。
@@ -806,9 +873,11 @@ class CreateStrategy(StrategyV2Base):
                 )
 
                 prepare_bksec_rule_or_keep_strategy(strategy)
+            if claim is not None:
+                claim.config_value = strategy.strategy_id
+                claim.save(update_fields=["config_value"])
         # create
-        # TODO: 当前外部 controller / IAM 调用保留在事务内；若本地事务回滚，
-        # 外部侧可能残留已创建的控制器或授权。后续可迁移到事务提交后执行或增加补偿机制。
+        # 本地事务已结束；初始化归属 ID 先于控制器调度落盘，远端失败仍复用该 ID。
         if not is_draft:
             try:
                 call_controller(
@@ -1555,10 +1624,19 @@ class RetryStrategy(StrategyV2Base):
         # 草稿未部署无远端资源，无重试语义
         if strategy.status == StrategyStatusChoices.DRAFT:
             raise serializers.ValidationError(gettext("草稿策略未部署，无需重试；请在编辑页提交部署"))
+        return self.retry_existing(strategy)
+
+    def retry_existing(self, strategy: Strategy, *, allow_create: bool = True) -> None:
+        """复用已有策略重试；初始化只恢复原 Flow，公开入口保留原创建回退语义。"""
         if bkbase_flow.retry_failed_pure(strategy):
             strategy.updated_by = get_request_username()
             strategy.save(update_fields=["updated_by"])
             return
+        if not allow_create:
+            if get_bkbase_version() == BKBaseVersion.V4:
+                raise BKBaseResourceMappingError(message="初始化策略的原 Flow 尚无可安全恢复的失败证据，禁止改图或重新创建")
+            if not (strategy.backend_data or {}).get("flow_id"):
+                raise BKBaseResourceMappingError(message="初始化策略缺少已存在的 V3 flow_id，禁止重新创建")
         # try update
         controller_cls = self.get_base_control_type(strategy.strategy_type)
         need_update = strategy.backend_data and (strategy.backend_data.get("id") or bkbase_flow.has_flow(strategy))

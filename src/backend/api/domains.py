@@ -17,14 +17,20 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 from api.constants import AIAgentCode, APIProvider
-from api.utils import get_agent_base_url, get_endpoint
+from api.utils import get_agent_base_url, get_endpoint, normalize_iam_v4_gateway_url
 
 APIGW_ENABLED = settings.USE_APIGW
+_TENANT_ENABLED = settings.BKPAAS_MULTI_TENANT_MODE
 
-# 权限中心
-BK_IAM_API_URL = get_endpoint(settings.BK_IAM_APIGW_NAME, stag="stage")
+# 权限中心地址
+BK_IAM_API_URL = (
+    get_endpoint(settings.BK_IAM_APIGW_NAME, stag="prod")
+    if _TENANT_ENABLED
+    else get_endpoint(settings.BK_IAM_APIGW_NAME, stag="stage")
+)
 
 # 日志平台
 BK_LOG_API_URL = (
@@ -82,10 +88,19 @@ if not BK_VISION_API_URL:
     BK_VISION_API_URL = get_endpoint(settings.BK_VISION_API_NAME, APIProvider.APIGW, stag="stag-new")
 
 # BK IAM V4
-# 业务代码默认使用 IAM V4 预发布网关；本地 dev e2e 可临时覆盖 BKAPP_BK_IAM_V4_API_URL。
+# 显式配置优先；未配置时，多租户走 prod，单租户沿用原有环境规则。
 BK_IAM_V4_API_URL = settings.BK_IAM_V4_API_URL or get_endpoint(
-    settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="stage"
+    settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="stage", stage="prod" if _TENANT_ENABLED else None
 )
+if settings.IAM_PERMISSION_BACKEND == "v4":
+    # 启用 V4 时只校验一次最终网关，调用方直接使用；不在错误里带出配置值。
+    try:
+        BK_IAM_V4_API_URL = normalize_iam_v4_gateway_url(BK_IAM_V4_API_URL)
+    except ValueError:
+        raise ImproperlyConfigured(
+            "Invalid BKAPP_BK_IAM_V4_API_URL: expected an HTTPS gateway URL with a stage path "
+            "and no credentials, query, or fragment."
+        ) from None
 
 # AI 智能体（审计报告 — 保留 domains 入口供 bk_plugins_ai_audit_report 使用）
 AI_AUDIT_REPORT_API_URL = get_agent_base_url(AIAgentCode.AUDIT_REPORT)

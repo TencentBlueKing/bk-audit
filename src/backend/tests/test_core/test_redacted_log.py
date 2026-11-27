@@ -76,3 +76,35 @@ class BkResourceSDKLogTest(TestCase):
             self.assertIn("***", text)  # 打码标记存在
         finally:
             bk_logger.filters = original_filters
+
+    def test_redis_resources_do_not_log_raw_upstream_error_in_audit_logger(self):
+        from api.bk_base.default import CreateResourceSet
+        from api.bk_base_v4.default import StorageAssetCreate
+
+        connection = {"host": "redis.synthetic.test", "port": 6379, "password": SYNTH_MARK}
+        cases = (
+            (CreateResourceSet, {"connection_info": connection}),
+            (
+                StorageAssetCreate,
+                {
+                    "tenant": "default",
+                    "project_name": "audit",
+                    "asset_name": "synthetic_redis",
+                    "asset_alias": "Synthetic Redis",
+                    "sub_type": "Redis",
+                    "belong_type": "project_private",
+                    "connection": {"kind": "Redis", "config": connection},
+                },
+            ),
+        )
+        for resource, payload in cases:
+            with (
+                self.subTest(resource=resource.__name__),
+                mock.patch.object(requests.Session, "request", return_value=_mock_biz_error_response()),
+                self.assertLogs("app", level="INFO") as captured,
+            ):
+                with self.assertRaises(APIRequestError):
+                    resource().request(payload)
+                output = "\n".join(captured.output)
+                self.assertIn("[Redacted][Failed]", output)
+                self.assertNotIn(SYNTH_MARK, output)

@@ -47,6 +47,18 @@ class PermissionService:
     def active_backend(self) -> Any:
         return self.v4 if is_iam_v4_backend() else self.v3
 
+    @staticmethod
+    def is_resource_callback_auth_allowed(system_id: str, authorization: str) -> bool:
+        """回调按当前 IAM 版本鉴权，不构造用户态 handler，也不跨版本兜底。"""
+        if is_iam_v4_backend():
+            from apps.permission.handlers.iam_v4 import IAMV4Permission
+
+            return IAMV4Permission.is_resource_callback_auth_allowed(system_id, authorization)
+
+        from apps.permission.handlers.permission import Permission
+
+        return Permission.is_resource_callback_auth_allowed(system_id, authorization)
+
     @property
     def scope_resolver(self) -> AuthorizationScopeResolver:
         """V4 range queries need business strategies beyond IAM's top-level reverse lookup."""
@@ -207,7 +219,7 @@ class PermissionService:
 
     @property
     def iam_client(self) -> Any:
-        """V3-only IAM SDK client for resource callbacks and excluded policy-query scenarios."""
+        """V3-only IAM SDK client for excluded policy-query scenarios."""
         return self.v3.iam_client
 
     def grant_creator_action(self, *args, **kwargs) -> Any:

@@ -1,5 +1,6 @@
 """验证新 PULL 状态机制和敏感级别兼容。"""
 from unittest import mock
+from uuid import UUID
 
 import requests
 from django.db import connection
@@ -209,30 +210,45 @@ class SnapshotProvisioningTests(TransactionTestCase):
             status=SnapshotRunningStatus.PREPARING,
         )
         handler = HttpPullHandler(system, resource_type, snapshot, JoinDataType.ASSET)
-        handler.update_or_create()
+        operation_id = "0123456789abcdef0123456789abcdef"
+        with mock.patch.object(source.uuid, "uuid4", return_value=UUID(operation_id)):
+            handler.update_or_create()
         operation = snapshot.bkbase_v4_resources["source_provision"]
+        conn_name = "audit_conn_" + operation_id
+        source_name = "audit_source_" + operation_id
+        self.assertEqual(operation["operation_id"], operation_id)
+        self.assertEqual(operation["conn_name"], conn_name)
+        self.assertEqual(operation["source_name"], source_name)
         conn = {
             "kind": "DataConn",
-            "metadata": {"tenant": "default", "namespace": "project_a", "name": operation["conn_name"]},
+            "metadata": {"tenant": "default", "namespace": "project_a", "name": conn_name},
             "status": {"phase": "Ok"},
         }
         binding = snapshot.bkbase_v4_resources.copy()
         binding["source_provision"] = {**operation, "stage": "conn_accepted"}
         Snapshot.objects.filter(pk=snapshot.pk).update(bkbase_v4_resources=binding)
-        with mock.patch.object(source.api.bk_base_v4, "data_conn_get", return_value=conn), mock.patch.object(
+        with mock.patch.object(
+            source.api.bk_base_v4, "data_conn_get", return_value=conn
+        ) as get_conn, mock.patch.object(
             source.api.bk_base_v4, "data_source_create", side_effect=requests.Timeout("unknown")
         ) as post:
             with self.assertRaises(requests.Timeout):
                 handler.advance_provision()
+            get_conn.assert_called_once_with(tenant="default", namespace="project_a", name=conn_name)
+            self.assertEqual(post.call_args.kwargs["metadata"]["name"], source_name)
             handler.advance_provision()
             snapshot.refresh_from_db()
             self.assertEqual(snapshot.status, SnapshotRunningStatus.PREPARING)
             self.assertNotIn("data_source", snapshot.bkbase_v4_resources)
+            self.assertEqual(snapshot.bkbase_v4_resources["source_provision"]["conn_name"], conn_name)
+            self.assertEqual(snapshot.bkbase_v4_resources["source_provision"]["source_name"], source_name)
             with mock.patch.object(source.time, "time", return_value=20000000000):
                 handler.advance_provision()
             snapshot.refresh_from_db()
             self.assertEqual(snapshot.status, SnapshotRunningStatus.FAILED)
             self.assertNotIn("data_source", snapshot.bkbase_v4_resources)
+            self.assertEqual(snapshot.bkbase_v4_resources["source_provision"]["conn_name"], conn_name)
+            self.assertEqual(snapshot.bkbase_v4_resources["source_provision"]["source_name"], source_name)
             post.assert_called_once()
 
     def test_accepted_source_failed_or_drifted_remains_stoppable(self):

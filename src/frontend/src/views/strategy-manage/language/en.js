@@ -515,6 +515,8 @@ export default {
     请在企微联系: 'Please contact',
     数据源空态联系后缀: 'on WeCom',
     '请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成': 'Please enter template content, or directly reference variables, or use AI agents to assist in rapid generation',
+    '请输入模版内容，或直接引用变量': 'Enter template content or reference variables directly',
+    'AI功能已关闭，包含AI智能体的报告模板无法预览': 'AI is disabled. Reports with AI agents cannot be previewed.',
     提示词最佳实践: 'Prompt Best Practices',
     内容无变化: 'No content changes',
     正在使用AI生成报告内容: 'Using AI to generate report content',

@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Dict, List, Union
+from typing import Callable, Dict, List, Union
 
 from django.conf import settings
 
@@ -91,11 +91,15 @@ def init_itsm_v4() -> bool:
     return True
 
 
-def create_iam_data_link(resource_type, migration_binding=None):
+def create_iam_data_link(
+    resource_type, migration_binding=None, *, init_redis_fallback: Callable[[dict], dict] | None = None
+):
     """Initialize the legacy chain or verify the explicitly mapped V4 chain."""
     if resource_type not in SYSTEM_SNAPSHOT_KEYS:
         raise Exception(f"ResourceType Does Not Support => {resource_type}")
     if get_bkbase_version() == BKBaseVersion.V4:
+        if init_redis_fallback is not None:
+            return ensure_system_snapshot(resource_type, migration_binding, init_redis_fallback=init_redis_fallback)
         return ensure_system_snapshot(resource_type, migration_binding)
     config_key, rt_key = SYSTEM_SNAPSHOT_KEYS[resource_type]
     print(f"[CreateIAMDataLink] ConfigKey => {config_key}; RTKey => {rt_key}")

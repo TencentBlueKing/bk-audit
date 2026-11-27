@@ -24,6 +24,7 @@ from django.utils.translation import gettext
 
 from apps.feature.constants import FeatureStatusChoices
 from apps.feature.models import FeatureToggle
+from core.tenant import use_multi_tenant_mode
 from services.web.bkbase import deprecated as bkbase_deprecated
 
 
@@ -72,6 +73,17 @@ class BklogOtlpPlugin(BaseFeaturePlugin):
         # 更新 feature
         self._feature.config = config
         # 响应状态
+        return self._feature.status
+
+
+class AiCapabilityPlugin(BaseFeaturePlugin):
+    """多租户 AI 由部署显式开启；单租户保留原有特性优先级。"""
+
+    def _update_status(self):
+        if use_multi_tenant_mode():
+            # 首屏不查库，其他路径也按同一个部署开关，避免升级时被旧数据库记录意外开启。
+            status = settings.AI_CAPABILITY_FEATURE_OVERRIDE
+            return status if status in FeatureStatusChoices.values else FeatureStatusChoices.DENY.value
         return self._feature.status
 
 

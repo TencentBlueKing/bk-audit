@@ -1,5 +1,7 @@
 **API Endpoint 环境变量说明**
 
+要申请接口授权或核对调用身份，先看[审计外部 API 与授权清单](api_authorization.md)。
+
 - 目的：支持不同环境相同 API 来源的 `api_name` 不一致，通过环境变量统一覆盖，各服务默认值与当前环境保持兼容。
 - 位置：集中定义于 `config/default.py` 的“API Endpoint Names (env overrides)”区块；在 `api/domains.py` 中统一读取
   `settings` 并构造各服务的基础 API URL。
@@ -39,6 +41,7 @@
     - `BKAPP_CMSI_URL`
     - `BKAPP_BASE_API_URL`
     - `BKAPP_BK_VISION_API_URL`
+    - `BKAPP_BK_IAM_V4_API_URL`
 
 - 开关/其他
     - `BKAPP_USE_APIGW`：是否优先走 APIGW（部分服务生效）。
@@ -69,7 +72,10 @@
 - Vision：`BK_VISION_API_URL`：
     - 若 `BKAPP_BK_VISION_API_URL` 存在，直接使用
     - 否则 APIGW `api_name`=`BKAPP_BK_VISION_API_NAME`，`stag="stag-new"`
-- IAM V4：`BK_IAM_V4_API_URL` = APIGW，`api_name`=`BKAPP_BKIAM_APIGW_NAME`，`stag="dev"`
+- IAM V4：`BK_IAM_V4_API_URL` 优先使用 `BKAPP_BK_IAM_V4_API_URL`；未填则按 `BKAPP_BKIAM_APIGW_NAME` 构造 APIGW 地址。
+    - 多租户用 `prod`；单租户生产用 `prod`，非生产用 `stage`。
+    - 启用 IAM V4 时，在加载配置时校验最终地址：必须是带 stage 路径的 HTTPS URL，不允许包含账号密码、查询参数或片段。不合法直接报错。
+    - V4 回调取 token 也使用该地址；模型同步命令必须显式设置 `BKAPP_BK_IAM_V4_API_URL`，不会使用默认地址。
 
 **示例：仅覆盖 APIGW 名称**
 

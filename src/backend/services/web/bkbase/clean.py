@@ -112,7 +112,8 @@ def _intermediate_name_mapper(extract):
         if value not in renamed:
             counter = 0
             while True:
-                candidate = stable_name("tmp", value, counter).replace("-", "_")
+                # 中间字段不是 BKBase 资源名，保留已有清洗规则的字段命名。
+                candidate = stable_name("tmp", value, counter, max_length=58).replace("-", "_")
                 if candidate not in reserved:
                     break
                 counter += 1
@@ -306,7 +307,20 @@ def delete_source_clean(context, collector):
 
 def owner_clean_ref(context, owner):
     """使用已声明的 Clean 引用，首次创建使用稳定的归属名称。"""
-    return (owner.bkbase_v4_resources or {}).get("clean") or {
+    binding = owner.bkbase_v4_resources or {}
+    ref = binding.get("clean")
+    if not ref:
+        operation = binding.get("source_provision") or {}
+        if not isinstance(operation, dict):
+            raise BKBaseResourceMappingError(message="Invalid Snapshot provision operation")
+        if operation.get("stage") == "ready" and not operation.get("completed"):
+            # POST 已经认领但尚未确认时继续按原引用回读；坏记录仅使当前快照失败。
+            step = operation.get("clean_step")
+            if step is not None:
+                if not isinstance(step, dict):
+                    raise BKBaseResourceMappingError(message="Invalid Snapshot Clean claim")
+                ref = step.get("ref")
+    return ref or {
         "kind": "Clean",
         "tenant": context["tenant"],
         "namespace": context["namespace"],
@@ -1117,7 +1131,7 @@ def record_plugin_failure(plugin, error, *, poll_count=None):
     )
 
 
-def configure_plugin(handler):
+def configure_plugin(handler, *, raise_errors=False):
     """插件初始化逐次推进，有界重试并隔离单插件错误。"""
     if get_bkbase_version() == BKBaseVersion.V3:
         return _configure_plugin(handler)
@@ -1136,6 +1150,9 @@ def configure_plugin(handler):
     except PLUGIN_OPERATION_EXCEPTIONS as error:
         logger.exception("BKBase V4 plugin operation failed: %s", plugin.pk)
         record_plugin_failure(plugin, error, poll_count=count)
+        if raise_errors:
+            # 部署严格入口不能把权限/路由等明确失败吞成 Pending。
+            raise
         return None
     ready = (plugin.bkbase_v4_resources or {}).get("ready", False)
     binding = plugin.bkbase_v4_resources or {}

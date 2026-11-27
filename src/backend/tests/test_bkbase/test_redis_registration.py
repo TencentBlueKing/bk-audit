@@ -7,10 +7,12 @@ from copy import deepcopy
 from unittest import mock
 
 import requests
+from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
+from api.bk_base_v4.default import InitDeadlineBeforeSend, StorageAssetCreate
 from apps.meta.models import ResourceType, System
 from services.web.bkbase import storage
 from services.web.bkbase.common import get_bkbase_context
@@ -24,6 +26,8 @@ from services.web.databus.models import RedisConfig, Snapshot, SnapshotStorage
 from services.web.databus.storage.handler.redis import RedisHandler
 from services.web.databus.storage.resources import CreateOrUpdateRedisResource
 from services.web.databus.storage.serializers import RedisConnectionInfoSerializer
+from services.web.entry.init.base import SystemInitHandler
+from services.web.entry.init.v4_wait import V4InitWait
 
 
 @override_settings(
@@ -47,6 +51,47 @@ class RedisRegistrationParamsTests(SimpleTestCase):
         return storage._redis_registration_params(
             {"resource_set_id": "synthetic_redis", "resource_set_name": "Synthetic Redis", "connection_info": info}
         )[2]
+
+    @override_settings(
+        BKPAAS_MULTI_TENANT_MODE=True,
+        BK_TENANT_ID="tenant_a",
+        BKBASE_API_VERSION="v4",
+        BK_RESOURCE={"PLATFORM_AUTH_ENABLED": True, "PLATFORM_AUTH_ACCESS_USERNAME": ""},
+    )
+    def test_multitenant_redis_registration_does_not_require_legacy_platform_username(self):
+        with mock.patch("api.bk_base_v4.tenant.get_admin_username", return_value="tenant_admin"):
+            _, actor, payload = storage._redis_registration_params(
+                {
+                    "resource_set_id": "synthetic_redis",
+                    "resource_set_name": "Synthetic Redis",
+                    "connection_info": self.info,
+                }
+            )
+        self.assertEqual(actor, "tenant_admin")
+        self.assertEqual(payload["tenant"], "tenant_a")
+
+    @override_settings(BKBASE_API_VERSION="v3")
+    def test_v3_redis_registration_uses_configured_region(self):
+        data = {
+            "redis_name_en": "synthetic_redis",
+            "redis_name": "Synthetic Redis",
+            "connection_info": self.info,
+            "version": "6.0",
+        }
+        handler = RedisHandler()
+        handler.redis_config = mock.Mock()
+        for region in ("inland", "SEA"):
+            with (
+                self.subTest(region=region),
+                override_settings(BKBASE_GEOG_AREA_CODE=region),
+                mock.patch.object(storage, "update_resource_set") as register,
+                mock.patch(
+                    "services.web.databus.storage.handler.redis.get_request_username",
+                    return_value="synthetic_operator",
+                ),
+            ):
+                handler.update_or_create(data)
+                self.assertEqual(register.call_args.kwargs["geog_area_code"], region)
 
     def test_disabled_sentinel_placeholders_are_omitted_from_direct_connection(self):
         serializer = RedisConnectionInfoSerializer(data=self.info)
@@ -120,6 +165,9 @@ class RedisRegistrationTests(TransactionTestCase):
         self.detail_error = False
         self.detail_ref = self.ref
         self.redirect_post = False
+        self.post_response = None
+        self.detail_response = None
+        self.after_detail = None
         self.enterContext(mock.patch("requests.sessions.Session.request", side_effect=self.transport))
         self.enterContext(
             mock.patch(
@@ -148,10 +196,13 @@ class RedisRegistrationTests(TransactionTestCase):
         if method == "POST" and url.endswith("/res_manage/assets/storage/"):
             intent = RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
             self.assertEqual(intent.extra["bkbase_v4"]["registration_state"], "registering")
+            if self.post_response is not None:
+                return self.post_response
             if self.asset is not None:
                 return self.response(url, None, False, "1553003")
             self.asset = {
                 "asset_name": self.data["redis_name_en"],
+                "sub_type": "Redis",
                 "belong_type": "project_private",
                 "project_name": "bk_project",
                 "resource_ns": deepcopy(self.detail_ref),
@@ -166,6 +217,10 @@ class RedisRegistrationTests(TransactionTestCase):
         if method == "GET" and "/res_manage/assets/bk_project/Redis/" in url:
             if self.detail_error:
                 raise requests.Timeout("synthetic detail timeout")
+            if self.after_detail is not None:
+                self.after_detail()
+            if self.detail_response is not None:
+                return self.detail_response
             if self.asset is None:
                 return self.response(url, None, False, "1553002")
             value = deepcopy(self.asset)
@@ -199,6 +254,50 @@ class RedisRegistrationTests(TransactionTestCase):
 
     def posts(self):
         return [c for c in self.calls if c[0] == "POST" and "/res_manage/assets/storage/" in c[1]]
+
+    def test_v4_init_redis_accepted_lookup_waits_without_second_post(self):
+        self.detail_response = self.response("https://synthetic.test", None, False, "1553002")
+        handler = SystemInitHandler()
+        with mock.patch("services.web.entry.init.base.get_secret_json", return_value=[self.data]), mock.patch.object(
+            handler, "_init_redis", side_effect=lambda _: self.create()
+        ), mock.patch.object(handler, "post_init"), mock.patch(
+            "services.web.entry.init.v4_wait.sleep", side_effect=lambda _: setattr(self, "detail_response", None)
+        ):
+            handler.init_redis(v4_wait=V4InitWait(300))
+        row = RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
+        self.assertEqual(row.extra["bkbase_v4"]["resource_ref"], self.ref)
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_v4_init_redis_lookup_permission_error_fails_immediately(self):
+        self.detail_response = self.response("https://synthetic.test", None, False, "1553002")
+        self.detail_response.status_code = 403
+        self.detail_response.request = requests.Request("GET", self.detail_response.url).prepare()
+        handler = SystemInitHandler()
+        with mock.patch("services.web.entry.init.base.get_secret_json", return_value=[self.data]), mock.patch.object(
+            handler, "_init_redis", side_effect=lambda _: self.create()
+        ), mock.patch.object(handler, "post_init") as post_init, mock.patch(
+            "services.web.entry.init.v4_wait.sleep"
+        ) as wait, self.assertRaises(
+            BKBaseResourceMappingError
+        ):
+            handler.init_redis(v4_wait=V4InitWait(300))
+        post_init.assert_not_called()
+        wait.assert_not_called()
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_v4_init_redis_can_recover_write_that_never_reached_transport(self):
+        with mock.patch.object(
+            StorageAssetCreate, "before_request", side_effect=InitDeadlineBeforeSend("synthetic before send")
+        ), self.assertRaises(APIRequestError):
+            self.create()
+        row = RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
+        self.assertIs(row.extra["bkbase_v4"]["init_not_dispatched"], True)
+        self.assertEqual(self.posts(), [])
+
+        bound = self.create()
+        self.assertEqual(bound.pk, row.pk)
+        self.assertEqual(bound.extra["bkbase_v4"]["resource_ref"], self.ref)
+        self.assertEqual(len(self.posts()), 1)
 
     def test_handler_registers_private_asset_with_platform_identity_and_persists_authoritative_ref(self):
         result = CreateOrUpdateRedisResource().request(deepcopy(self.data))
@@ -371,6 +470,202 @@ class RedisRegistrationTests(TransactionTestCase):
         self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
         self.assertNotIn("resource_ref", row.extra["bkbase_v4"])
 
+    def unknown_registration(self, *, route_rejected=False):
+        """经真实注册链制造不确定结果，仅替换供应商 HTTP 边界。"""
+        if route_rejected:
+            self.post_response = self.response("https://gateway.test/register", None, False, 1640401)
+            self.post_response.status_code = 404
+            self.post_response.request = requests.Request("POST", self.post_response.url).prepare()
+        else:
+            self.post_error = requests.Timeout("synthetic creation outcome unknown")
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.create()
+        self.post_response = None
+        self.post_error = None
+        return RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
+
+    def test_unknown_registration_recovers_matching_private_asset_without_reposting_or_mask_reuse(self):
+        row = self.unknown_registration()
+        self.asset["ext_properties"]["connection"] = {
+            "kind": "Redis",
+            "config": {"host": "redis.synthetic.test", "port": 6379, "password": "*******"},
+        }
+        row.extra.update(count=9, systems=["existing_system"], future={"preserve": True})
+        row.save(update_fields=["extra"])
+        recovered = self.create()
+        self.assertEqual(recovered.pk, row.pk)
+        self.assertEqual(recovered.extra["bkbase_v4"]["registration_state"], "bound")
+        self.assertEqual(recovered.extra["bkbase_v4"]["resource_ref"], self.ref)
+        self.assertEqual(recovered.connection_info["password"], "synthetic_password")
+        self.assertEqual(recovered.extra["count"], 9)
+        self.assertEqual(recovered.extra["systems"], ["existing_system"])
+        self.assertEqual(recovered.extra["future"], {"preserve": True})
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_unknown_route_rejected_registration_retries_only_after_authoritative_absence(self):
+        row = self.unknown_registration(route_rejected=True)
+        self.assertIsNone(self.asset)
+        recovered = self.create()
+        self.assertEqual(recovered.pk, row.pk)
+        self.assertEqual(recovered.extra["bkbase_v4"]["registration_state"], "bound")
+        self.assertEqual(len(self.posts()), 2)
+        self.assertEqual([method for method, _, _ in self.calls], ["POST", "GET", "POST", "GET"])
+
+    def test_unknown_timeout_and_legacy_absence_never_retry_post(self):
+        row = self.unknown_registration()
+        self.asset = None
+        for remove_evidence in (False, True):
+            if remove_evidence:
+                row.extra["bkbase_v4"].pop("error_code", None)
+                row.extra["bkbase_v4"].pop("write_not_forwarded", None)
+                row.save(update_fields=["extra"])
+            with self.subTest(legacy=remove_evidence), self.assertRaises(BKBaseResourceMappingError):
+                self.create()
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(len([call for call in self.calls if call[0] == "GET"]), 2)
+        row.refresh_from_db()
+        self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
+
+    def test_route_retry_timeout_does_not_reuse_previous_not_forwarded_evidence(self):
+        row = self.unknown_registration(route_rejected=True)
+        self.post_error = requests.Timeout("synthetic retried creation outcome unknown")
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.create()
+        self.post_error = None
+        self.asset = None
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.create()
+        row.refresh_from_db()
+        self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
+        self.assertEqual(len(self.posts()), 2)
+
+    def test_unknown_other_write_failures_never_authorize_retry_after_absence(self):
+        for index, (status, code) in enumerate(
+            ((500, 1640401), (503, "1553002"), (404, "1553002"), (200, 1640401), (404, ""))
+        ):
+            with self.subTest(status=status, code=code):
+                self.data["redis_name_en"] = f"synthetic_redis_{index}"
+                self.post_response = self.response("https://gateway.test/register", None, False, code)
+                self.post_response.status_code = status
+                self.post_response.request = requests.Request("POST", self.post_response.url).prepare()
+                before = len(self.posts())
+                with self.assertRaises(BKBaseResourceMappingError):
+                    self.create()
+                self.post_response = None
+                with self.assertRaises(BKBaseResourceMappingError):
+                    self.create()
+                self.assertEqual(len(self.posts()), before + 1)
+
+    def test_unknown_retry_loses_atomic_qualification_without_reposting(self):
+        row = self.unknown_registration(route_rejected=True)
+
+        def competitor_claims_registration():
+            row.refresh_from_db()
+            row.extra["bkbase_v4"]["registration_state"] = "registering"
+            row.save(update_fields=["extra"])
+
+        self.after_detail = competitor_claims_registration
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.create()
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(self.calls[-1][0], "GET")
+
+    def test_stale_absence_cannot_claim_after_competitor_returns_to_same_route_failure(self):
+        row = self.unknown_registration(route_rejected=True)
+
+        def competitor_retries_and_is_route_rejected_again():
+            self.after_detail = None
+            self.post_response = self.response("https://gateway.test/register", None, False, 1640401)
+            self.post_response.status_code = 404
+            self.post_response.request = requests.Request("POST", self.post_response.url).prepare()
+            with self.assertRaises(BKBaseResourceMappingError):
+                self.create()
+            self.post_response = None
+
+        self.after_detail = competitor_retries_and_is_route_rejected_again
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.create()
+        self.assertEqual(len(self.posts()), 2)
+        row.refresh_from_db()
+        self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
+        recovered = self.create()
+        self.assertEqual(recovered.extra["bkbase_v4"]["registration_state"], "bound")
+        self.assertEqual(len(self.posts()), 3)
+
+    def test_unknown_route_rejected_read_failures_and_non_authoritative_absence_never_repost(self):
+        row = self.unknown_registration(route_rejected=True)
+        for status, result, code, value in (
+            (200, False, "1553001", None),
+            (200, False, "1553005", None),
+            (403, False, "1553002", None),
+            (404, False, 1640401, None),
+            (200, False, "1553002", {}),
+            (200, True, "1553002", None),
+        ):
+            with self.subTest(status=status, result=result, code=code, value=value):
+                response = self.response("https://gateway.test/detail", value, result, code)
+                response.status_code = status
+                response.request = requests.Request("GET", response.url).prepare()
+                self.detail_response = response
+                with self.assertRaises(BKBaseResourceMappingError):
+                    self.create()
+                row.refresh_from_db()
+                self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(len([call for call in self.calls if call[0] == "GET"]), 6)
+
+    def test_unknown_registration_detail_redirect_cannot_authorize_retry(self):
+        self.unknown_registration(route_rejected=True)
+        self.detail_response = self.response("https://gateway.test/detail", None, False, "1553002")
+        self.detail_response.status_code = 302
+        self.detail_response.headers["Location"] = "https://other.synthetic.test/detail"
+        with self.assertRaises(BKBaseResourceMappingError):
+            self.create()
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual([method for method, _, _ in self.calls], ["POST", "GET"])
+        self.assertIs(self.calls[-1][2].get("allow_redirects"), False)
+
+    def test_unknown_matching_identity_with_conflicting_or_missing_connection_never_binds(self):
+        row = self.unknown_registration()
+        original = deepcopy(self.asset)
+        cases = [
+            {"asset_name": "other_redis"},
+            {"project_name": "other_project"},
+            {"belong_type": "shared"},
+            {"sub_type": "MySQL"},
+            {"ext_properties": None},
+            {"ext_properties": {"connection": {"kind": "Redis", "config": {"password": "*******"}}}},
+            {
+                "ext_properties": {
+                    "connection": {"kind": "MySQL", "config": {"host": "redis.synthetic.test", "port": 6379}}
+                }
+            },
+            {
+                "ext_properties": {
+                    "connection": {"kind": "Redis", "config": {"host": "other.synthetic.test", "port": 6379}}
+                }
+            },
+            {
+                "ext_properties": {
+                    "connection": {"kind": "Redis", "config": {"host": "redis.synthetic.test", "port": 6380}}
+                }
+            },
+            {
+                "ext_properties": {
+                    "connection": {"kind": "Redis", "config": {"host": "redis.synthetic.test", "port": 6379, "db": 1}}
+                }
+            },
+        ]
+        for patch in cases:
+            self.asset = {**deepcopy(original), **patch}
+            with self.subTest(patch=patch), self.assertRaises(BKBaseResourceMappingError):
+                self.create()
+            row.refresh_from_db()
+            self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
+            self.assertNotIn("resource_ref", row.extra["bkbase_v4"])
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(len([call for call in self.calls if call[0] == "GET"]), len(cases))
+
     def test_unverified_or_wrong_tenant_ref_never_becomes_bound(self):
         self.detail_ref = {**self.ref, "tenant": "other_tenant"}
         with self.assertRaises(BKBaseResourceMappingError):
@@ -378,6 +673,27 @@ class RedisRegistrationTests(TransactionTestCase):
         row = RedisConfig.objects.get(redis_name_en=self.data["redis_name_en"])
         self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "accepted")
         self.assertNotIn("resource_ref", row.extra["bkbase_v4"])
+
+    def test_unknown_registration_requires_explicit_matching_resource_ref(self):
+        row = self.unknown_registration()
+        self.asset["ext_properties"]["connection"] = {
+            "kind": "Redis",
+            "config": {"host": "redis.synthetic.test", "port": 6379},
+        }
+        for ref in (
+            {key: value for key, value in self.ref.items() if key != "tenant"},
+            {**self.ref, "tenant": "other_tenant"},
+            {**self.ref, "namespace": "other_project"},
+            {**self.ref, "name": "other_redis"},
+        ):
+            with self.subTest(ref=ref):
+                self.detail_ref = ref
+                with self.assertRaises(BKBaseResourceMappingError):
+                    self.create()
+                row.refresh_from_db()
+                self.assertEqual(row.extra["bkbase_v4"]["registration_state"], "unknown")
+                self.assertNotIn("resource_ref", row.extra["bkbase_v4"])
+        self.assertEqual(len(self.posts()), 1)
 
     def test_sentinel_and_masked_password_are_rejected_before_registering(self):
         for params in ({"enable_sentinel": True}, {"password": "*******"}):

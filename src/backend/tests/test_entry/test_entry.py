@@ -24,6 +24,8 @@ from bkcrypto.contrib.django.ciphers import get_asymmetric_cipher
 from django.test import SimpleTestCase, override_settings
 
 from apps.bk_crypto.crypto import FakeAsymmetricCipher, asymmetric_cipher
+from apps.feature.handlers import FeatureHandler, get_entry_feature_toggle
+from apps.feature.models import FeatureToggle
 from services.web.entry.handler.entry import EntryHandler
 from services.web.entry.resources import HomeResource
 from tests.base import TestCase
@@ -63,6 +65,21 @@ class EntryHandlerTest(SimpleTestCase):
 
         self.assertEqual(data["platform_admin_users"], ["admin", "operator"])
 
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission")
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_storage_menu_uses_only_list_storage_permission(self, mock_get, mock_check_permission):
+        mock_get.side_effect = self._get_global_meta_config()
+        for backend in ("v3", "v4"):
+            for allowed in (True, False):
+                with self.subTest(backend=backend, allowed=allowed), override_settings(IAM_PERMISSION_BACKEND=backend):
+                    mock_check_permission.reset_mock()
+                    mock_check_permission.return_value = {"list_storage": allowed}
+
+                    data = EntryHandler.entry(self._build_request())
+
+                    mock_check_permission.assert_called_once_with(action_ids="list_storage")
+                    self.assertIs(data["super_manager"], allowed)
+
     @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission", return_value={})
     @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
     def test_home_resource_exposes_project_lazy_load_only_in_v4(self, mock_get, mock_permission):
@@ -73,6 +90,29 @@ class EntryHandlerTest(SimpleTestCase):
             ):
                 data = HomeResource().request()
                 self.assertIs(data["feature_toggle"]["bkbase_project_rt_lazy_load"], expected)
+
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission", return_value={})
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_home_resource_exposes_display_name_mode_without_changing_username(self, mock_get, mock_permission):
+        mock_get.side_effect = self._get_global_meta_config()
+        for enabled, tenant_id, username in ((True, "tencent", "123456"), (False, "default", "operator")):
+            with self.subTest(enabled=enabled), override_settings(
+                BKPAAS_MULTI_TENANT_MODE=enabled,
+                BK_TENANT_ID=tenant_id,
+                BK_API_URL_TMPL="https://apigw.example.test/{api_name}",
+            ), mock.patch.dict("os.environ", {"BKPAAS_ENVIRONMENT": "prod"}), mock.patch(
+                "services.web.entry.resources.get_local_request", return_value=self._build_request(username)
+            ):
+                data = HomeResource().request()
+                self.assertEqual(data["username"], username)
+                self.assertEqual(
+                    data["tenant_config"],
+                    {
+                        "BKPAAS_MULTI_TENANT_MODE": enabled,
+                        "BK_TENANT_ID": tenant_id,
+                        "BK_USER_WEB_APIGW_URL": "https://apigw.example.test/bk-user-web/prod",
+                    },
+                )
 
 
 class EntryTest(TestCase):
@@ -103,3 +143,45 @@ class EntryTest(TestCase):
         decrypt_text: str = cipher.decrypt(encrypt_text)
         self.assertEquals(random_text, decrypt_text)
         self.assertTrue(cipher.verify(plaintext=random_text, signature=cipher.sign(random_text)))
+
+
+@override_settings(FEATURE_TOGGLE={"watermark": "deny", "ai_capability": "available"})
+class AiCapabilityFeatureTest(TestCase):
+    def setUp(self):
+        get_entry_feature_toggle.cache_clear()
+        self.addCleanup(get_entry_feature_toggle.cache_clear)
+
+    @override_settings(BKPAAS_MULTI_TENANT_MODE=True, ENVIRONMENT="stag")
+    def test_multitenant_ai_requires_explicit_valid_deployment_status(self):
+        FeatureToggle.objects.create(feature_id="ai_capability", status="available")
+        for configured_status, expected in (
+            (None, False),
+            ("", False),
+            ("false", False),
+            ("deny", False),
+            ("prod", False),
+            ("available", True),
+            ("stag", True),
+        ):
+            with self.subTest(configured_status=configured_status), override_settings(
+                AI_CAPABILITY_FEATURE_OVERRIDE=configured_status
+            ):
+                get_entry_feature_toggle.cache_clear()
+                self.assertIs(get_entry_feature_toggle()["ai_capability"], expected)
+                self.assertIs(FeatureHandler("ai_capability").check(), expected)
+
+    @override_settings(BKPAAS_MULTI_TENANT_MODE=False, AI_CAPABILITY_FEATURE_OVERRIDE=None)
+    def test_single_tenant_ai_keeps_default_and_database_precedence(self):
+        self.assertIs(get_entry_feature_toggle()["ai_capability"], True)
+        self.assertIs(FeatureHandler("ai_capability").check(), True)
+        FeatureToggle.objects.create(feature_id="ai_capability", status="deny")
+        self.assertIs(FeatureHandler("ai_capability").check(), False)
+
+    @override_settings(
+        BKPAAS_MULTI_TENANT_MODE=False,
+        AI_CAPABILITY_FEATURE_OVERRIDE="deny",
+        FEATURE_TOGGLE={"watermark": "deny", "ai_capability": "deny"},
+    )
+    def test_single_tenant_ai_respects_explicit_deny(self):
+        self.assertIs(get_entry_feature_toggle()["ai_capability"], False)
+        self.assertIs(FeatureHandler("ai_capability").check(), False)

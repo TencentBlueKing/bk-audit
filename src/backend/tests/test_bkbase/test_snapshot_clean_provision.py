@@ -172,6 +172,20 @@ class SnapshotCleanProvisionFixture:
     BKBASE_API_VERSION="v4", BKBASE_V4_TENANT="default", BKBASE_V4_NAMESPACE="project_a", HIGH_RISK_PORTS=[]
 )
 class SnapshotCleanProvisionTests(SnapshotCleanProvisionFixture, TransactionTestCase):
+    def test_malformed_clean_step_marks_snapshot_failed_without_writing(self):
+        self.start()
+        snapshot = self.snapshot()
+        snapshot.bkbase_v4_resources["source_provision"]["clean_step"] = ["invalid"]
+        snapshot.save(update_fields=["bkbase_v4_resources"])
+
+        tasks.start_snapshot.run()
+
+        snapshot.refresh_from_db()
+        self.assertEqual(snapshot.status, SnapshotRunningStatus.FAILED)
+        self.assertEqual(snapshot.bkbase_v4_resources["source_provision"]["clean_step"], ["invalid"])
+        self.assertFalse(self.clean_posts())
+        self.assert_no_storage_or_source_update()
+
     def test_latest_clean_history_can_change_when_the_declared_revision_becomes_running(self):
         self.start()
         tasks.start_snapshot.run()

@@ -17,7 +17,7 @@
 <template>
   <div
     class="rich-text-editor-container"
-    :class="{ 'is-fullscreen': isFullscreen }">
+    :class="{ 'is-fullscreen': isFullscreen, 'is-ai-capability-disabled': !aiCapabilityEnabled }">
     <div class="editor-wrapper">
       <div
         v-if="disabled"
@@ -34,11 +34,13 @@
         @text-change="handleTextChange" />
     </div>
     <a-i-agent-modal
+      v-if="aiCapabilityEnabled"
       v-model:visible="showAIModal"
       :initial-prompt="editingPrompt"
       :risk-lisks="riskLisks"
       @confirm="handleAIAgentConfirm" />
     <delete-dialog
+      v-if="aiCapabilityEnabled"
       v-model:visible="showDeleteDialog"
       :agent-name="deletingAgentName"
       @cancel="handleDeleteCancel"
@@ -64,6 +66,7 @@
   import fullScreenIconUrl from '@images/full screen.svg';
   import unFullScreenIconUrl from '@images/un-full-screen.svg';
   import { sanitizeEditorHtml } from '@views/risk-manage/detail/components/event-report/editor-utils';
+  import { isAiCapabilityEnabled, readStoredAuditConfig } from '@utils/feature-toggle';
   import InsertTableDialog from '@views/risk-manage/detail/components/event-report/insert-table-dialog.vue';
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import ReportTableBlot, {
@@ -121,6 +124,7 @@
   });
   const emit = defineEmits<emits>();
   const { t } = useI18n();
+  const aiCapabilityEnabled = isAiCapabilityEnabled(readStoredAuditConfig());
   // 定义 Quill 实例类型
   interface QuillInstance {
     root: HTMLElement;
@@ -160,7 +164,10 @@
   const insertTableDialogRef = ref<InstanceType<typeof InsertTableDialog>>();
   const pendingQuillContent = ref<string | null>(null);
   const aiList = ref<info[]>([]); // AI列表
-  const placeholder = ref(t('请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成'));
+  const getPlaceholderText = () => (aiCapabilityEnabled
+    ? t('请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成')
+    : t('请输入模版内容，或直接引用变量'));
+  const placeholder = ref(getPlaceholderText());
   const isFullscreen = ref(false);
 
   const openInsertTableDialog = () => {
@@ -210,7 +217,7 @@
   };
 
   const openAIAgentModal = () => {
-    if (!quill) return;
+    if (!aiCapabilityEnabled || !quill) return;
     // 保存当前光标位置
     const range = quill.getSelection(true);
     savedSelection.value = range || { index: quill.getLength(), length: 0 };
@@ -326,7 +333,7 @@
           [{ direction: 'rtl' }, { align: [] }],
           ['link', 'image', 'video', 'table'],
           ['clean'],
-          ['variable', 'aiagent', 'fullscreen'], // 自定义按钮
+          ['variable', ...(aiCapabilityEnabled ? ['aiagent'] : []), 'fullscreen'], // 自定义按钮
         ],
         handlers: {
           variable: insertVariable,
@@ -348,6 +355,7 @@
   });
 
   const handleEditorClick = (e: MouseEvent) => {
+    if (!aiCapabilityEnabled) return;
     const { target } = e;
     if (!(target instanceof HTMLElement)) return;
 
@@ -401,7 +409,7 @@
   };
 
   const handleAIAgentConfirm = (promptInfo: info) => {
-    if (!quill) return;
+    if (!aiCapabilityEnabled || !quill) return;
 
     // 提取数据
     const promptText = promptInfo?.prompt_template || '';
@@ -547,7 +555,7 @@
   };
   const handleBlur = () => {
     if (!quill) return;
-    placeholder.value = t('请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成');
+    placeholder.value = getPlaceholderText();
     if (quill.root) {
       quill.root.dataset.placeholder = placeholder.value;
     }
@@ -824,6 +832,10 @@
 
 .rich-text-editor-container.is-fullscreen :deep(.ql-editor) {
   min-height: calc(100vh - 120px);
+}
+
+.rich-text-editor-container.is-ai-capability-disabled :deep(.ai-agent-actions) {
+  display: none;
 }
 
 .editor-wrapper {

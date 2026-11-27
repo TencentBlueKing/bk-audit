@@ -30,8 +30,8 @@ from apps.meta.provider.tag import TagResourceProvider
 from apps.notice.provider import NoticeGroupResourceProvider
 from apps.permission import views
 from apps.permission.dispatcher import BkAuditResourceApiDispatcher
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 
 try:
     from services.web.strategy_v2.provider import (
@@ -72,7 +72,7 @@ try:
 except (RuntimeError, ImportError):
     SceneResourceProvider = None
 
-resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
+resources_dispatcher = BkAuditResourceApiDispatcher(PermissionService(), settings.BK_IAM_SYSTEM_ID)
 resources_dispatcher.register(ResourceEnum.SYSTEM.id, SystemResourceProvider())
 resources_dispatcher.register(ResourceEnum.TAG.id, TagResourceProvider())
 resources_dispatcher.register(

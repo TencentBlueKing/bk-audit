@@ -64,6 +64,7 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import { isAiCapabilityEnabled, readStoredAuditConfig } from '@utils/feature-toggle';
 
   import TdesignList from '@components/tdesign-list/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
@@ -113,6 +114,7 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const router = useRouter();
+  const aiCapabilityEnabled = isAiCapabilityEnabled(readStoredAuditConfig());
 
   const drawerWidth = ref('1200');
   const titleColumnMinWidth = ref(240);
@@ -226,7 +228,7 @@
 
   const handleRetryReport = async (row: HistoryReportItem) => {
     const reportId = getRowReportId(row);
-    if (!reportId || isRetryingReport(reportId)) {
+    if (!aiCapabilityEnabled || !reportId || isRetryingReport(reportId)) {
       return;
     }
     retryingReportIds.value = [...retryingReportIds.value, reportId];
@@ -428,21 +430,23 @@
       return (
         <span class="report-status-cell-wrap">
           {statusContent}
-          <bk-button
-            class="report-retry-btn"
-            disabled={isRetryingReport(reportId)}
-            text
-            v-bk-tooltips={{
-              content: t('重试'),
-            }}
-            onClick={(event: MouseEvent) => {
-              event.stopPropagation();
-              handleRetryReport(row);
-            }}>
-            <audit-icon
-              class={isRetryingReport(reportId) ? 'rotate-loading' : ''}
-              type="refresh" />
-          </bk-button>
+          {aiCapabilityEnabled && (
+            <bk-button
+              class="report-retry-btn"
+              disabled={isRetryingReport(reportId)}
+              text
+              v-bk-tooltips={{
+                content: t('重试'),
+              }}
+              onClick={(event: MouseEvent) => {
+                event.stopPropagation();
+                handleRetryReport(row);
+              }}>
+              <audit-icon
+                class={isRetryingReport(reportId) ? 'rotate-loading' : ''}
+                type="refresh" />
+            </bk-button>
+          )}
         </span>
       );
     }

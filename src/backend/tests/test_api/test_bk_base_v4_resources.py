@@ -19,6 +19,8 @@ from api.bk_base_v4.default import (
 class V4ResourceContractTests(SimpleTestCase):
     def response(self, data):
         response = mock.Mock()
+        response.status_code = 200
+        response.history = []
         response.json.return_value = {"result": True, "code": "00", "data": data}
         response.raise_for_status.return_value = None
         return response

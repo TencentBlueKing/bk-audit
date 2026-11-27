@@ -30,6 +30,14 @@ class BKBaseResourceMappingError(BKBaseException):
     MESSAGE = gettext_lazy("BKBase资源引用缺失或不唯一")
 
 
+class RedisRegistrationPending(BKBaseResourceMappingError):
+    """BKBase 已受理 Redis 登记，正式资产尚不可见。"""
+
+    def __init__(self, asset_name, **kwargs):
+        self.asset_name = asset_name
+        super().__init__(**kwargs)
+
+
 class BKBaseSharedResourceProtected(BKBaseException):
     ERROR_CODE = "003"
     MESSAGE = gettext_lazy("共享结果表的创建者清洗不能通过普通删源删除")
