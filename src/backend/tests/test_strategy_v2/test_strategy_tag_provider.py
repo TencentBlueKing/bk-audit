@@ -19,6 +19,8 @@ to the current version of the project delivered to anyone in the future.
 from datetime import timedelta
 from types import SimpleNamespace
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from iam.resource.utils import Page
 
@@ -74,3 +76,16 @@ class StrategyTagProviderTest(TestCase):
         self.assertEqual(tombstone_entry["id"], str(deleted_relation_id))
         self.assertEqual(tombstone_entry["data"]["tag_id"], 0)
         self.assertEqual(tombstone_entry["data"]["strategy_id"], 0)
+
+    def test_precheck_reads_one_live_or_deleted_record_without_counting(self):
+        relation = StrategyTag.objects.create(strategy=self.strategy, tag=self.tag_live)
+        relation_id = str(relation.pk)
+        for deleted in (False, True):
+            with self.subTest(deleted=deleted):
+                if deleted:
+                    relation.delete()
+                with CaptureQueriesContext(connection) as queries:
+                    result = self.provider.fetch_instance_list(self._build_filter(), Page(1, 0), count_total=False)
+                self.assertEqual(result.count, 1)
+                self.assertEqual([entry["id"] for entry in result.results], [relation_id])
+                self.assertFalse(any("COUNT(" in query["sql"].upper() for query in queries.captured_queries))

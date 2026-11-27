@@ -28,6 +28,7 @@ from iam.contrib.django.dispatcher.dispatchers import fail_response, success_res
 from iam.contrib.django.dispatcher.exceptions import KeywordTooShortException
 from iam.resource.utils import get_filter_obj, get_page_obj
 
+from apps.permission.constants import RESOURCE_PRECHECK_HEADER
 from apps.permission.handlers.backends import is_iam_v4_backend
 
 RESOURCE_CALLBACK_PROTOCOL_V3 = "v3"
@@ -181,6 +182,21 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
             f"RequestID => {request_id}"
         )
         return response
+
+    def _dispatch_fetch_instance_list(self, request, data, request_id):
+        if request.headers.get(RESOURCE_PRECHECK_HEADER) != "1":
+            return super()._dispatch_fetch_instance_list(request, data, request_id)
+
+        # 资产启用只需要验证回调取数是否成功。鉴权已由 _dispatch 完成。
+        options = self._get_options(request)
+        filter_obj = get_filter_obj(data.get("filter"), ["start_time", "end_time", "expression"])
+        page_obj = get_page_obj({"offset": 0, "limit": 1})
+        provider = self._provider[data["type"]]
+        pre_process = getattr(provider, "pre_fetch_instance_list", None)
+        if callable(pre_process):
+            pre_process(filter_obj, page_obj, **options)
+        result = provider.fetch_instance_list(filter_obj, page_obj, count_total=False, **options)
+        return success_response(result.to_dict(), request_id)
 
     def _dispatch_list_instance(self, request, data, request_id):
         if data.pop("_use_v4_keyword_search", False):

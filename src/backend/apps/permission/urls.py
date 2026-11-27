@@ -116,5 +116,5 @@ router.register_module(views)
 
 urlpatterns = [
     re_path(r"namespaces/(?P<namespace>[\w\-]+)/", include(router.urls)),
-    path("resources/", resources_dispatcher.as_view([login_exempt])),
+    path("resources/", resources_dispatcher.as_view([login_exempt]), name="iam_resource_callback"),
 ]

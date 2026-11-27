@@ -25,7 +25,10 @@ from iam.resource.provider import ListResult, SchemaResult
 from apps.notice.models import NoticeGroup
 from apps.notice.serializers import NoticeGroupInfoSerializer
 from apps.permission.handlers.resource_types import ResourceEnum
-from apps.permission.provider.base import IAMResourceProvider
+from apps.permission.provider.base import (
+    IAMResourceProvider,
+    build_fetch_instance_list_result,
+)
 from core.serializers import get_serializer_fields
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
@@ -170,7 +173,7 @@ class NoticeGroupBaseProvider(IAMResourceProvider):
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
     def fetch_resource_type_schema(self, **options):
         data = get_serializer_fields(NoticeGroupInfoSerializer)

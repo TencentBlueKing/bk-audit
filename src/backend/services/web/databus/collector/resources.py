@@ -36,6 +36,7 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
@@ -54,6 +55,7 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.permissions import SystemPermissionHandler
 from apps.meta.utils.saas import get_saas_url
+from apps.permission.constants import RESOURCE_PRECHECK_HEADER
 from apps.permission.handlers.actions import ActionEnum
 from core.cache import CacheType
 from core.utils.data import replenish_params
@@ -554,14 +556,23 @@ class ToggleJoinDataResource(CollectorMeta):
         system = System.objects.get(system_id=system_id)
         resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
         pull_handler = HttpPullHandler(system, resource_type, Snapshot(), join_data_type)
-        # 触发url校验
-        _ = pull_handler.url
+        callback_url = pull_handler.url
         web = requests.session()
         try:
+            headers = {"Authorization": pull_handler.authorization}
+            if system_id == settings.BK_IAM_SYSTEM_ID:
+                callback_path = reverse("iam_resource_callback")
+                audit_hosts = (
+                    settings.BK_IAM_RESOURCE_API_HOST,
+                    settings.BK_BACKEND_URL,
+                    get_saas_url(settings.APP_CODE, module_name="api"),
+                )
+                if any(callback_url == f"{host.rstrip('/')}{callback_path}" for host in audit_hosts if host):
+                    headers[RESOURCE_PRECHECK_HEADER] = "1"
             resp = web.post(
-                pull_handler.url,
+                callback_url,
                 json=body,
-                headers={"Authorization": pull_handler.authorization},
+                headers=headers,
                 timeout=PULL_HANDLER_PRE_CHECK_TIMEOUT,
             )
             content = resp.json()

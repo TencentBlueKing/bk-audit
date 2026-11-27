@@ -24,6 +24,7 @@ from django.utils.translation import gettext_lazy
 
 PERMISSION_CACHE_EXPIRE = 5 * 60
 FETCH_INSTANCE_TOKEN_KEY = "FETCH_INSTANCE_TOKEN"
+RESOURCE_PRECHECK_HEADER = "X-Bk-Audit-Resource-Precheck"
 
 
 class IAMSystems(Enum):
