@@ -229,11 +229,11 @@
           <span class="schedule-period-text">{{ t('调度周期') }}</span>
           <span class="schedule-period-required">*</span>
         </div>
-        <div class="schedule-period-row">
-          <bk-form-item
-            class="is-required no-label"
-            label-width="0"
-            property="configs.schedule_config.count_freq">
+        <bk-form-item
+          class="is-required no-label schedule-period-item"
+          label-width="0"
+          property="configs.schedule_config.count_freq">
+          <div class="schedule-period-row bk-compose-form-item">
             <bk-input
               v-model="formData.configs.schedule_config.count_freq"
               class="schedule-input"
@@ -241,11 +241,6 @@
               onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
               :placeholder="t('请输入')"
               type="number" />
-          </bk-form-item>
-          <bk-form-item
-            class="is-required no-label"
-            label-width="0"
-            property="configs.schedule_config.schedule_period">
             <bk-select
               v-model="formData.configs.schedule_config.schedule_period"
               class="schedule-select"
@@ -256,8 +251,8 @@
                 :label="item.label"
                 :value="item.value" />
             </bk-select>
-          </bk-form-item>
-        </div>
+          </div>
+        </bk-form-item>
       </div>
     </div>
   </div>
@@ -2132,48 +2127,54 @@
       color: var(--bk-theme-color-danger-2);
     }
 
+    :deep(.bk-form-item.no-label.schedule-period-item) {
+      display: flex;
+      flex: 0 0 auto;
+      width: max-content;
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 0;
+      line-height: 0;
+
+      &::before,
+      &::after {
+        display: none;
+      }
+
+      .bk-form-content {
+        display: flex;
+        flex: 1 1 auto;
+        width: 100%;
+        max-width: none;
+      }
+
+      .bk-form-error {
+        top: 100%;
+        line-height: 1;
+      }
+    }
+
+    /* 组合控件任一处聚焦时，数字框与单位下拉统一显示聚焦边框；错误态红框优先 */
+    :deep(.bk-form-item.schedule-period-item:not(.is-error):focus-within) .schedule-input.bk-input {
+      border-color: var(--bk-theme-color-brand-2);
+    }
+
+    :deep(.bk-form-item.schedule-period-item:not(.is-error):focus-within) .schedule-select .bk-input {
+      border-color: var(--bk-theme-color-brand-2);
+      box-shadow: 0 0 3px 0 var(--bk-theme-color-brand-4);
+    }
+
+    /* 校验错误时去掉聚焦光晕，保持纯红框 */
+    :deep(.bk-form-item.schedule-period-item.is-error) .schedule-select .bk-input {
+      box-shadow: none;
+    }
+
     .schedule-period-row {
       display: flex;
       width: max-content;
       max-width: 100%;
       align-items: stretch;
       gap: 0;
-
-      :deep(.bk-form-item.no-label) {
-        display: flex;
-        flex: 0 0 auto;
-        width: auto;
-        height: 32px;
-        max-width: none;
-        margin-bottom: 0;
-        line-height: 0;
-
-        &::before,
-        &::after {
-          display: none;
-        }
-      }
-
-      :deep(.bk-form-item.no-label:first-child) {
-        flex-basis: 360px;
-        width: 360px;
-        max-width: calc(100% - 67px);
-      }
-
-      :deep(.bk-form-item.no-label:last-child) {
-        flex-basis: 68px;
-        width: 68px;
-        margin-left: -1px;
-      }
-
-      :deep(.bk-form-content) {
-        display: flex;
-        flex: 1 1 auto;
-        width: 100%;
-        height: 32px;
-        max-width: none;
-        line-height: 0;
-      }
 
       .schedule-input {
         display: flex;
@@ -2193,6 +2194,7 @@
         width: 68px;
         height: 32px;
         flex: none;
+        margin-left: -1px;
 
         :deep(.bk-select-trigger),
         :deep(.bk-input) {

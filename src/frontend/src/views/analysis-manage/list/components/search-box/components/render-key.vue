@@ -591,6 +591,11 @@
         }
       }
     });
+    // 新增字段落在默认 7 项之后，需展开更多选项才能看到，否则用户会以为勾选未生效
+    const defaultVisibleIds = allFieldNameList.value.slice(0, 7).map(id => String(id));
+    if (selectArr.some(item => item?.id && !defaultVisibleIds.includes(item.id))) {
+      isShowMore.value = true;
+    }
   };
 
   // 删除搜索项

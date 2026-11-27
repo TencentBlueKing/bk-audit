@@ -77,7 +77,7 @@
       :style="{ '--row-height': rowHeight + 'px' }" />
     <!-- 分页器 -->
     <div
-      v-if="showPagination && (total !== undefined ? total : filteredData.length) > 0"
+      v-if="showPagination && filteredData.length > 0"
       class="scene-table-pagination">
       <bk-pagination
         v-model="currentPage"
