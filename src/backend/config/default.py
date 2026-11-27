@@ -59,7 +59,11 @@ INSTALLED_APPS += (
     "bk_audit.contrib.bk_audit",
 )
 
+# SEC-012 临时观测请求声明长度，默认开启。
+LOG_LARGE_REQUEST_BODY = os.getenv("BKAPP_LOG_LARGE_REQUEST_BODY", "true").strip().lower() in ("true", "1", "yes", "on")
+
 MIDDLEWARE = (
+    "core.middleware.request_size.RequestSizeLoggingMiddleware",
     "core.middleware.csrf.CSRFExemptMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "core.middleware.login_exempt.LoginExemptMiddleware",
@@ -479,6 +483,8 @@ BKBASE_V4_NAMESPACE = os.getenv("BKAPP_BKBASE_V4_NAMESPACE", "")
 BKBASE_V4_MCP_PROJECT_ID = os.getenv("BKAPP_BKBASE_V4_MCP_PROJECT_ID", "")
 BKBASE_V4_RESULT_TABLE_NAMESPACES = os.getenv("BKAPP_BKBASE_V4_RESULT_TABLE_NAMESPACES", "{}")
 BKBASE_V4_LIST_READ_WORKERS = int(os.getenv("BKAPP_BKBASE_V4_LIST_READ_WORKERS", "16"))
+BKBASE_V4_STREAM_CLUSTER = os.getenv("BKAPP_BKBASE_V4_STREAM_CLUSTER", "")
+BKBASE_V4_BATCH_CLUSTER = os.getenv("BKAPP_BKBASE_V4_BATCH_CLUSTER", "")
 # V3迁移的Doris物理列为小写；迁移环境显式开启，仅用于新建V4 Flow存储节点。
 BKBASE_V4_DORIS_USE_LOWERCASE_FIELD = strtobool(os.getenv("BKAPP_BKBASE_V4_DORIS_USE_LOWERCASE_FIELD", "False"))
 

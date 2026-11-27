@@ -30,7 +30,7 @@ GitHub Actions 使用 x86 runner 和官方 `mysql:5.7.44` service，不受本地
 
 ## Worktree 隔离
 
-从对应的本地开发环境取得所需配置。依赖一致时可复用 `.venv`；依赖不同时在当前 worktree 准备自己的环境。需要 `.env` 时，核对目标环境后使用独立文件。`config/local_settings.py` 从适用的本地配置准备独立副本。已有配置先核对，再按需补齐。检查这些本地文件受 Git 忽略。
+建树时为后续运行和测试准备配置与依赖。先核对已有配置，再从用户确认的本地开发环境补齐。需要 `.env` 或 `config/local_settings.py` 时，核对目标环境，准备受 Git 忽略的独立文件。先根据当前分支的 Python 版本、依赖文件和环境实际安装情况核对 `.venv`，一致时可复用，需要更新依赖时在当前 worktree 准备独立环境。来源或资源不明确时，在交接中说明具体缺口。
 
 每个 worktree 必须使用不同的 `DATABASES["default"]["TEST"]["NAME"]` 和 `CELERY_TEST_QUEUE_PREFIX`。Redis 使用本 worktree 独立的 `REDIS_DB`；`REDIS_KEY_PREFIX` 仅作额外命名隔离，不能替代 DB 隔离。项目同时存在直接 Redis 客户端，不能假定所有访问都经过 Django cache 的 key prefix。
 

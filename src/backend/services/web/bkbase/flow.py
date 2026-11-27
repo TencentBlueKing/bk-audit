@@ -62,6 +62,66 @@ from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapsh
 from services.web.strategy_v2.constants import StrategyStatusChoices, StrategyType
 from services.web.strategy_v2.models import Strategy
 
+_FLOW_DEPLOYMENT = {
+    "StreamNode": ("stream_sql_deploy_config", "BKBASE_V4_STREAM_CLUSTER"),
+    "BatchSqlNode": ("batch_sql_deploy_config", "BKBASE_V4_BATCH_CLUSTER"),
+}
+
+
+def _compute_kind(spec):
+    return next((node["kind"] for node in spec.get("nodes", []) if node.get("kind") in _FLOW_DEPLOYMENT), None)
+
+
+def _deployment_blocks(operation):
+    """提取正式部署块，保留缺省、null 和平台回填的区别。"""
+    return {key: deepcopy(operation[key]) for key, _ in _FLOW_DEPLOYMENT.values() if key in operation}
+
+
+def _set_deployment_blocks(operation, blocks):
+    for key, _ in _FLOW_DEPLOYMENT.values():
+        operation.pop(key, None)
+    operation.update(blocks)
+
+
+def _has_deployment_cluster(config):
+    cluster = config.get("cluster") if isinstance(config, dict) else None
+    return isinstance(cluster, str) and bool(cluster.strip())
+
+
+def _new_deployment(kind, profile, namespace):
+    """仅针对目标计算类型取本环境集群，空变量兼容原命名空间配置。"""
+    key, setting = _FLOW_DEPLOYMENT[kind]
+    cluster = getattr(settings, setting).strip()
+    if cluster:
+        config = (
+            {"cluster": cluster, "deploy_mode": "k8s-operator", "deploy_config": None}
+            if kind == "StreamNode"
+            else {"cluster": cluster, "node_deploy_configs": {}}
+        )
+    else:
+        operation = profile.get("operation_config")
+        config = operation.get(key) if isinstance(operation, dict) else None
+        if not _has_deployment_cluster(config):
+            raise BKBaseResourceMappingError(
+                message=f"V4 {'stream' if kind == 'StreamNode' else 'batch'} deployment requires BKAPP_{setting} "
+                f"or {BKBASE_V4_FLOW_CONFIG}.operation_config.{key}.cluster (audit namespace {namespace})"
+            )
+    blocks = dict.fromkeys(name for name, _ in _FLOW_DEPLOYMENT.values())
+    blocks[key] = deepcopy(config)
+    return blocks
+
+
+def _flow_profile(namespace):
+    profile = GlobalMetaConfig.get(
+        config_key=BKBASE_V4_FLOW_CONFIG,
+        config_level=ConfigLevelChoices.NAMESPACE.value,
+        instance_key=namespace,
+        default={},
+    )
+    if not isinstance(profile, dict):
+        raise BKBaseResourceMappingError(message="Invalid V4 Flow deployment configuration")
+    return profile
+
 
 def node_name(prefix, *parts):
     """仅缩短超出Flow上限的可读部分，保留既有短名及原稳定摘要。"""
@@ -310,9 +370,39 @@ def _merged_spec(old, desired, *, preserve_storage_targets=False):
         nodes.append(merged)
     spec.update({key: deepcopy(value) for key, value in desired.items() if key not in ("nodes", "operation_config")})
     spec["nodes"] = nodes
-    spec.setdefault("operation_config", {}).update(deepcopy(desired.get("operation_config", {})))
+    operation = spec["operation_config"] = spec.get("operation_config") or {}
+    operation.update(deepcopy(desired.get("operation_config") or {}))
+    old_kind = _compute_kind(old)
+    if old_kind is not None and old_kind == _compute_kind(desired):
+        _set_deployment_blocks(operation, _deployment_blocks(old.get("operation_config") or {}))
     validate_graph(nodes)
     return spec
+
+
+def _merge_controller_spec(context, strategy, current, desired):
+    """合并正式回读，并在实际换型时按目标计算类型取配置。"""
+    merged = _merged_spec(current, desired, preserve_storage_targets=True)
+    old_kind, target_kind = _compute_kind(current), _compute_kind(desired)
+    same_kind = old_kind is not None and old_kind == target_kind
+    if old_kind and target_kind and not same_kind:
+        _set_deployment_blocks(
+            merged["operation_config"],
+            _new_deployment(target_kind, _flow_profile(strategy.namespace), strategy.namespace),
+        )
+    _validate_batch_deployment(context, merged, preserve_deployment=same_kind)
+    return merged
+
+
+def _ensure_create_deployment(strategy, spec):
+    """老的待创建整图可能缺计算配置，写入前按目标类型补齐。"""
+    kind = _compute_kind(spec)
+    if kind:
+        operation = spec["operation_config"]
+        key, _ = _FLOW_DEPLOYMENT[kind]
+        if not _has_deployment_cluster(operation.get(key)):
+            _set_deployment_blocks(
+                operation, _new_deployment(kind, _flow_profile(strategy.namespace), strategy.namespace)
+            )
 
 
 def _same_flow_spec(before, after):
@@ -363,6 +453,7 @@ def apply_rule_flow(context, strategy, spec):
                     message="Bound Flow is missing; recreation requires an explicit new flow"
                 )
             validate_graph(spec["nodes"])
+            _ensure_create_deployment(strategy, spec)
             _validate_batch_deployment(context, spec)
             _validate_flow_inputs(context, spec)
             _save_operation_binding(context, strategy, {"requested_action": "start"})
@@ -391,8 +482,7 @@ def apply_rule_flow(context, strategy, spec):
         raise BKBaseResourceMappingError(message="Flow配置失败，请按原配置启动恢复后再发布改图")
     desired = _aligned_graph(current["spec"], spec)
     _validate_flow_inputs(context, desired)
-    merged = _merged_spec(current["spec"], desired, preserve_storage_targets=True)
-    _validate_batch_deployment(context, merged)
+    merged = _merge_controller_spec(context, strategy, current["spec"], desired)
     _validate_flow_inputs(context, merged)
     if phase != "Ok":
         # 未收敛的正式配置只观察，保留待发布整图供后续Ok后推进。
@@ -429,8 +519,7 @@ def apply_rule_flow(context, strategy, spec):
             return latest
         desired = _aligned_graph(current["spec"], desired)
         _validate_flow_inputs(context, desired)
-        merged = _merged_spec(current["spec"], desired, preserve_storage_targets=True)
-        _validate_batch_deployment(context, merged)
+        merged = _merge_controller_spec(context, strategy, current["spec"], desired)
         _validate_flow_inputs(context, merged)
         metadata = deepcopy(current["metadata"])
         metadata.setdefault("annotations", {})["task_stopped"] = "false"
@@ -794,21 +883,22 @@ def _preserve_batch_windows(previous, windows):
     return result
 
 
-def _validate_batch_deployment(context, spec):
-    """校验离线集群和存储输出，将原生null节点覆盖归一为空对象。"""
+def _validate_batch_deployment(context, spec, *, preserve_deployment=False):
+    """校验离线存储输出，新部署需要集群并将空节点覆盖归一为空对象。"""
     batch_nodes = [node for node in spec["nodes"] if node.get("kind") == "BatchSqlNode"]
     if not batch_nodes:
         return
-    config = spec.get("operation_config", {}).get("batch_sql_deploy_config")
-    if (
-        not isinstance(config, dict)
-        or not isinstance(config.get("cluster"), str)
-        or not config["cluster"].strip()
-        or (config.get("node_deploy_configs") is not None and not isinstance(config["node_deploy_configs"], dict))
-    ):
-        raise BKBaseResourceMappingError(message="V4 batch deployment requires cluster and node_deploy_configs")
-    if config.get("node_deploy_configs") is None:
-        config["node_deploy_configs"] = {}
+    if not preserve_deployment:
+        config = spec.get("operation_config", {}).get("batch_sql_deploy_config")
+        if not _has_deployment_cluster(config) or (
+            config.get("node_deploy_configs") is not None and not isinstance(config["node_deploy_configs"], dict)
+        ):
+            raise BKBaseResourceMappingError(
+                message="V4 batch deployment requires cluster and valid node_deploy_configs. "
+                "Configure BKAPP_BKBASE_V4_BATCH_CLUSTER or check the namespace deployment configuration."
+            )
+        if config.get("node_deploy_configs") is None:
+            config["node_deploy_configs"] = {}
     kinds = {
         "EsStorageNode": "ElasticSearch",
         "DorisStorageNode": "Doris",
@@ -914,13 +1004,16 @@ def _validate_flow_inputs(context, spec, *, audit_sources=None):
         refs[logical_id] = ref
 
 
-def _controller_flow_nodes(context, strategy):
-    """同一次正式观察用于输入与存量节点；仅创建候选允许已证不存在。"""
+def _controller_flow_spec(context, strategy):
+    """同一次正式观察用于输入、节点和部署配置；仅创建候选允许已证不存在。"""
     ref = (strategy.backend_data or {}).get("bkbase_v4", {}).get("flow")
     if not ref:
-        return []
+        return {}
     resource = flow_operation.read_controller_flow(context, strategy)
-    return [] if resource is None else read_flow_nodes(context, ref, resource=resource)
+    if resource is None:
+        return {}
+    nodes = read_flow_nodes(context, ref, resource=resource)
+    return {**resource["spec"], "nodes": nodes}
 
 
 def _input_result_table_refs(strategy, context, rt_ids, *, existing_nodes=None):
@@ -941,7 +1034,7 @@ def _input_result_table_refs(strategy, context, rt_ids, *, existing_nodes=None):
                 candidates.append((logical_id, binding["result_table"]))
     flow_ref = (strategy.backend_data or {}).get("bkbase_v4", {}).get("flow")
     if flow_ref:
-        nodes = _controller_flow_nodes(context, strategy) if existing_nodes is None else existing_nodes
+        nodes = _controller_flow_spec(context, strategy).get("nodes", []) if existing_nodes is None else existing_nodes
         for node in nodes:
             if node.get("kind") in ("StreamSourceNode", "StreamStaticSource", "BatchStaticSource", "BatchSourceNode"):
                 candidates.append((None, node.get("data")))
@@ -969,16 +1062,10 @@ def build_controller_spec(controller, *, context=None):
     """复用业务节点构造和SQL，仅在Service转换V4协议。"""
     strategy = controller.strategy
     context = context or get_bkbase_context()
-    profile = GlobalMetaConfig.get(
-        config_key=BKBASE_V4_FLOW_CONFIG,
-        config_level=ConfigLevelChoices.NAMESPACE.value,
-        instance_key=strategy.namespace,
-        default={},
-    )
-    if not isinstance(profile, dict):
-        raise BKBaseResourceMappingError(message="Invalid V4 Flow deployment configuration")
+    profile = _flow_profile(strategy.namespace)
     rt_ids = list(controller.rt_ids)
-    existing_nodes = _controller_flow_nodes(context, strategy)
+    existing = _controller_flow_spec(context, strategy)
+    existing_nodes = existing.get("nodes", [])
     input_refs = _input_result_table_refs(strategy, context, rt_ids, existing_nodes=existing_nodes)
     metadata = metadata_service.get_result_tables(rt_ids, related=["fields", "storages"], context=context)
     sources = {}
@@ -1037,6 +1124,16 @@ def build_controller_spec(controller, *, context=None):
         if len(existing_batch) > 1:
             raise BKBaseResourceMappingError(message="Ambiguous existing batch output")
         sql_node = _batch_node(controller, old_sql, profile, existing=existing_batch[0] if existing_batch else None)
+    operation = profile.get("operation_config")
+    operation = deepcopy(operation) if isinstance(operation, dict) else {}
+    same_kind = _compute_kind(existing) == sql_node["kind"]
+    blocks = (
+        _deployment_blocks(existing.get("operation_config") or {})
+        if same_kind
+        else _new_deployment(sql_node["kind"], profile, strategy.namespace)
+    )
+    _set_deployment_blocks(operation, blocks)
+    operation["start_position"] = BKBASE_FLOW_CONSUMING_MODE
     storages = []
     for cls in controller.storage_nodes:
         config = cls(namespace=strategy.namespace).build_node_config(
@@ -1046,12 +1143,6 @@ def build_controller_spec(controller, *, context=None):
             storages.append(
                 _storage_node(context, strategy, config, profile, existing_nodes=existing_nodes, output_rt_id=output)
             )
-    if not isinstance(profile.get("operation_config"), dict):
-        raise BKBaseResourceMappingError(message="V4 Flow deployment resources must be explicitly configured")
-    operation = deepcopy(profile["operation_config"])
-    operation["start_position"] = BKBASE_FLOW_CONSUMING_MODE
-    if sql_node["kind"] == "BatchSqlNode":
-        operation.setdefault("stream_sql_deploy_config", None)
     spec = build_rule_flow(
         strategy,
         rt_metadata=metadata,
@@ -1065,7 +1156,7 @@ def build_controller_spec(controller, *, context=None):
         },
     )
     if sql_node["kind"] == "BatchSqlNode":
-        _validate_batch_deployment(context, spec)
+        _validate_batch_deployment(context, spec, preserve_deployment=same_kind)
     _save_operation_binding(context, strategy, {"output_name": output_name, "output_rt_id": output})
     return spec
 

@@ -1,13 +1,12 @@
-# Worktree 初始化
+# Worktree 检查与资料接入
 
-Git checkout 提供分支上的文件。建树成功后，人和 Agent 客户端都在新 worktree 执行下面的检查。客户端有 setup 入口时可调用相同的命令。
+建树先看[项目指引](../../../../AGENTS.md#新建-worktree)。人和 Agent 都可以在新 worktree 可选运行以下只读检查。
 
-1. **确认 checkout。** 核对仓库、分支或基线 SHA，以及本任务涉及的根和端内 `AGENTS.md`。团队指引从当前 checkout 读取。
-2. **接入本地材料。** 对明确需要的 `src/backend/debug/` 专题运行下文的 `apply` 和 `check`。个人后端工作区约定可维护在长期保留 checkout 的 `src/backend/debug/local-project/AGENTS.md`。将 `src/backend/debug/local-project` 加入本机白名单后，各 worktree 读取同一份 Git 忽略的文件。已有工作区使用整目录链接时，先核对它指向可信来源，再直接从该目录读取材料。旧分支若缺少个人指引入口，建树后显式读取该文件。
-3. **检查任务技能。** 复用已核实的来源，从实际启动目录核对所用客户端能否发现所需技能。缺少时按 [onboarding](../../skills/bk-audit-onboarding/references/workspace.md) 使用 `npx skills` 选配。
-4. **检查运行环境。** 涉及后端运行或有状态测试时，按[后端 Worktree 隔离](../../../../src/backend/docs/testing.md#worktree-隔离)准备并核对资源。只读和文档任务可以在指引、材料和所需技能就绪后开始。
+    python3 agent/shared/tools/worktree-bootstrap/bootstrap.py check
 
-下面的初始化工具负责第 2 步，链接后端 `src/backend/debug/` 下明确批准的专题。一次性配置可供手工调用、客户端 setup 或仓库级 `post-checkout` hook 复用。
+它核对根和后端的项目指引及已登记的资料链接，并报告根、后端、前端 `.agents/skills` 下发现的技能文件位置，以及本地后端环境路径的状态。技能可见范围以实际客户端为准。依赖和隔离是否符合要求按[后端测试指南](../../../../src/backend/docs/testing.md#worktree-隔离)验收。
+
+如果团队或个人已有明确要跨树共用的资料，可选用下面的白名单和 `apply` 接入。个人工作区约定可写在长期保留 checkout 的 `src/backend/debug/local-project/AGENTS.md`，并按需登记其目录。
 
 ## 边界与设计
 
@@ -15,8 +14,8 @@ Git checkout 提供分支上的文件。建树成功后，人和 Agent 客户端
 - 源码随 Git；本机配置、程序快照和 hook 存在仓库的 Git 公共目录，不提交个人路径，不改全局配置。
 - hook 执行已审阅程序的**安装快照**，不执行新分支携带的代码，旧分支没有该脚本也可初始化。
 - 根/后端 AGENTS.md 必须来自当前 checkout 且被跟踪；缺失只报告，不复制主分支的指引。
-- 不链接整份 .agents，不执行技能安装；只提示技能目录可达性，**不声称已验证客户端发现或版本**。技能准备仍遵循 [onboarding](../../skills/bk-audit-onboarding/references/workspace.md)。
-- 不准备认证、运行配置、虚拟环境、数据库、Redis、队列或后台服务。
+- 技能准备见 [onboarding](../../skills/bk-audit-onboarding/references/workspace.md)。工具仅报告技能文件，客户端发现和版本需另行核对。
+- 运行环境只报告本地路径状态。配置内容、认证、依赖及测试资源由实际环境准备步骤核对。
 - 专题中的文件会被共同读写；软链接不是只读权限。只选允许共同修改的资料，敏感材料和运行输出不要放入白名单。修改/删除链接内的内容会影响来源。
 
 ## 一次性配置
@@ -48,7 +47,7 @@ Git checkout 提供分支上的文件。建树成功后，人和 Agent 客户端
     python3 "$COMMON/worktree-bootstrap/bootstrap.py" check
     python3 "$COMMON/worktree-bootstrap/bootstrap.py" apply
 
-check 只读，未配置白名单时检查 checkout 指引并提示技能目录可达性；apply 需要已配置的白名单并补齐缺失链接。异常均返回 1。
+check 只读，无白名单时仍检查当前 checkout。apply 要求已有白名单，用于补齐缺失的资料链接。指引缺失、白名单损坏或资料链接冲突返回 1。技能和运行环境路径仅作提示。
 也可从含源码的 checkout 调用 python3 "$TOOL" --worktree /path/to/tree check。
 
 - 缺失链接：check 报告；apply 创建必要父目录和链接。

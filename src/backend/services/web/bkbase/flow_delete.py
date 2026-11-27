@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from bk_resource import api
 
+from api.bk_base_v4.default import flow_spec_for_write
 from services.web.bkbase import flow
 from services.web.bkbase import flow_operation as operations
 from services.web.bkbase.common import get_bkbase_context, resource_params
@@ -277,7 +278,8 @@ def declare(strategy):
         try:
             result = api.bk_base_v4.flow_update(**params, metadata=metadata, spec=spec, status=None)
             _validate(result, ref)
-            if result["metadata"].get("annotations", {}).get("task_stopped") != "true" or result["spec"] != spec:
+            task_stopped = result["metadata"].get("annotations", {}).get("task_stopped")
+            if task_stopped != "true" or flow_spec_for_write(result["spec"]) != flow_spec_for_write(spec):
                 raise BKBaseResourceMappingError(message="停止声明响应与本次完整请求不一致")
         except Exception:
             _receipt(strategy, operation_id, outcome="unknown", writer_token=writer_token)

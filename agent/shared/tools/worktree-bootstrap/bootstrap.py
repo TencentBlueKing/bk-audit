@@ -107,7 +107,7 @@ def check_or_apply(root, common, apply):
     policy = state_dir(common) / "config.json"
     if not apply and not os.path.lexists(policy):
         source, shares = None, []
-        print("INFO no material sharing policy; checking checkout instructions only")
+        print("INFO no material sharing policy; skipping shared topic checks")
     else:
         source, shares = load_config(common)
     failures = 0
@@ -149,12 +149,22 @@ def check_or_apply(root, common, apply):
         except (ValueError, OSError, RuntimeError) as error:
             print("CONFLICT:", error)
             failures += 1
-    skills = root / "src/backend/.agents/skills"
-    if skills.is_dir():
-        print("INFO skills directory reachable; client discovery/version NOT verified")
-    else:
-        print("INFO skills not installed here; use project onboarding if needed")
-    print("INFO no credentials, environment, services or test resources prepared")
+    found_skills = False
+    for location in (".agents/skills", "src/backend/.agents/skills", "src/frontend/.agents/skills"):
+        if any(p.is_file() and os.access(p, os.R_OK) for p in (root / location).glob("*/SKILL.md")):
+            print("INFO skill files found:", location)
+            found_skills = True
+    if not found_skills:
+        print("INFO no project skill files found in root, backend or frontend .agents/skills")
+    print("INFO client discovery and versions were not checked")
+    for location in ("src/backend/.env", "src/backend/config/local_settings.py", "src/backend/.venv"):
+        path = root / location
+        status = "missing"
+        if path.is_symlink():
+            status = "symlink" if path.exists() else "broken symlink"
+        elif path.exists():
+            status = "present"
+        print(f"INFO backend path: {location} ({status})")
     return 1 if failures else 0
 
 

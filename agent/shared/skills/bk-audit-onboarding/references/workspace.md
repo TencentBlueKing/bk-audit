@@ -22,7 +22,7 @@ npx skills add ./agent/shared/skills/bk-audit-onboarding --agent codex
 - 根目录 `.agents/README.md` 若已有扩展来源登记，可直接复用；也可从 `npx skills list`、仓库根或相关端的 `skills-lock.json` 核对安装来源。从根启动但能力装在端内时，检查相关端的锁文件；锁文件中的相对来源按其所在目录解析。本地来源可读时直接查阅所需流程，并核对选中的安装副本。内部来源未知时，先询问内部 onboarding 或维护源。
 - 补充来源按各自 onboarding 选择所需能力。内部流程及地址留在内部来源，公开 checkout 无内部源仍可独立使用。
 - 新 worktree 取得当前基线的指引，核对本次所需技能是否可见、来源是否适用；缺少时再通过 `npx skills` 按所选范围准备。复用已确认的来源信息即可，不共享整份 `.agents`、认证或运行配置。Codex 从根启动不会自动发现端内安装的技能；跨端共用技能可安装到产品根，端内技能从对应目录使用，根会话则沿端内指引按需读取。
-- 从产品 checkout 打开 `agent/shared/tools/worktree-bootstrap/README.md`，执行通用的建树后检查。自动化入口和手工创建都使用同一套检查；按任务接入本地资料和个人补充，需要后端运行时再核对独立环境。
+- 新 worktree 按根 `AGENTS.md` 的建树指引处理，可用 `agent/shared/tools/worktree-bootstrap/README.md` 中的工具检查本地文件或接入已登记的专题。运行配置按端内指引准备。
 - 项目级安装与本地来源登记保持 Git 忽略；安装前核对当前规则覆盖实际输出及 `skills-lock.json`。业务测试资源按所属端工程规则另行隔离。
 
 ## 验收

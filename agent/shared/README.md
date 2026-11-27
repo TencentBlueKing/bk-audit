@@ -12,7 +12,7 @@
 
 ## 工具与运行环境
 
-新 worktree 按 [worktree 初始化规范](tools/worktree-bootstrap/README.md)准备本次任务所需资源。可用现有工具接入明确指定的本地材料，技能发现和运行配置分别验收。
+新 worktree 按 [项目建树指引](../../AGENTS.md#新建-worktree)准备。需要检查本地文件或接入已登记的资料时，可用[工作树检查工具](tools/worktree-bootstrap/README.md)。
 
 Git、前后端工程工具、提交校验器和技能维护工具 skills CLI 的准备依据见 [工具清单](skills/bk-audit-onboarding/references/capabilities.md#工具与运行环境)。实际版本、命令及 hook 以当前 checkout 的工程源为准，不在此维护第二套规则。
 

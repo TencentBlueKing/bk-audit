@@ -255,6 +255,7 @@ class TableCapabilitiesTests(SimpleTestCase):
             caps["11_log"] = self.parse(self.binding("HdfsBinding", False))
             self.assertEqual(checker.link_table_support_source_types(link), [NodeType.BATCH])
 
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
     def test_real_flow_builder_uses_confirmed_source_kind_and_keeps_user_date_sql(self):
         sql = "SELECT * FROM 11_input WHERE thedate = 20261109 AND dtEventTimeStamp >= 42"
         cases = [

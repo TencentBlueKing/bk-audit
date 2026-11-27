@@ -33,8 +33,8 @@ Python 相关操作使用当前项目的 `.venv`，包括启动服务、管理�
 
 ## Worktree 与本地材料
 
-- 新建 worktree 后按[初始化规范](../../agent/shared/tools/worktree-bootstrap/README.md)检查本任务所需的本地资源。如果存在 `debug/local-project/AGENTS.md`，一并读取其中的个人工作区约定。
-- 开始有状态验证前，核对本 worktree 实际加载的配置。`config/local_settings.py` 使用独立文件。
+- 建树时按[项目指引](../../AGENTS.md#新建-worktree)准备本地资源。个人工作区约定可维护在 Git 忽略的 `debug/local-project/AGENTS.md`，存在时一并读取。
+- 按[测试指南](docs/testing.md#worktree-隔离)准备当前分支的依赖和独立运行配置。开始有状态验证前，核对本 worktree 实际加载的配置。
 - 测试库名、Celery 测试队列前缀和 Redis DB 按 worktree 隔离。Redis key prefix 仅作额外隔离，具体要求见[测试指南](docs/testing.md#worktree-隔离)。
 - 项目指引从当前 checkout 取得。复用本地环境资源前核对适用范围，清理时确认资源归属。
 - 方案、临时材料和验证证据放在 Git 忽略的 `debug/` 专题目录。本地配置、认证、真实业务数据及个人资源信息保留在本地，提交前核对差异与忽略状态。

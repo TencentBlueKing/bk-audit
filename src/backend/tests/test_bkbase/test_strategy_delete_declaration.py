@@ -109,6 +109,24 @@ class StrategyDeleteDeclarationTests(FlowFixture, TransactionTestCase):
         self.assertIsNone(payload["status"])
         self.assertFalse(any("/mcp/" in url for _, url, _ in self.calls))
 
+    def test_delete_accepts_stop_receipt_with_null_inactive_deployment_omitted_by_get(self):
+        self.remote["spec"]["nodes"].append({"name": "sql", "kind": "StreamNode", "inputs": ["source"]})
+        self.remote["spec"]["operation_config"]["stream_sql_deploy_config"] = {
+            "cluster": "published_stream",
+            "deploy_mode": "k8s-operator",
+            "deploy_config": None,
+        }
+        expected = deepcopy(self.remote["spec"])
+        expected["operation_config"]["batch_sql_deploy_config"] = None
+
+        self.delete_successfully()
+
+        self.assertEqual(len(self.writes()), 1)
+        self.assertEqual(self.writes()[0][2]["json"]["spec"], expected)
+        self.assertIs(self.deletion()["accepted"], True)
+        self.assertFalse(self.deletion()["outcome_unknown"])
+        self.assertTrue(self.current().is_deleted)
+
     def test_failed_cr_is_not_a_stop_declaration_prohibition(self):
         self.remote["status"]["phase"] = "Failed"
         self.delete_successfully()

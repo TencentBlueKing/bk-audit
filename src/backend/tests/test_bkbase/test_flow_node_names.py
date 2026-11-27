@@ -18,6 +18,7 @@ class FlowNodeNameTests(SimpleTestCase):
             mock.patch.object(requests.Session, "request", side_effect=AssertionError("real HTTP forbidden"))
         )
 
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="synthetic_stream")
     def test_long_multi_input_names_match_controller_map_sql_inputs_and_storage_link(self):
         ids = ["1_" + "same_long_input_" * 5 + suffix for suffix in ("a", "b")]
         strategy = SimpleNamespace(
