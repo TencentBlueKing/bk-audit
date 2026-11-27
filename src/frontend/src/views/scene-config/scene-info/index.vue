@@ -367,7 +367,8 @@
   // 关联系统表格数据（通过新接口获取有权限的系统列表，再分批获取详情）
   const systemDetailList = ref<Array<Record<string, any>>>([]);
   const systemDetailLoading = ref(false);
-  const systemTotal = ref(0);
+  // 分页总数按实际展示的系统条数（详情请求失败的系统会被丢弃）
+  const systemTotal = computed(() => systemDetailList.value.length);
   const systemAllLoaded = ref(false);
 
   const mapSystemDetail = (detail: any) => ({
@@ -393,14 +394,12 @@
     systemDetailLoading.value = true;
     systemAllLoaded.value = false;
     systemDetailList.value = [];
-    systemTotal.value = 0;
     try {
       const systems = await SceneManageService.fetchScenePermissionSystems(sceneId.value);
       if (token !== detailFetchToken) return;
       if (!systems?.length) {
         return;
       }
-      systemTotal.value = systems.length;
       for (let i = 0; i < systems.length; i += DETAIL_BATCH_SIZE) {
         if (token !== detailFetchToken) return;
         const batch = systems.slice(i, i + DETAIL_BATCH_SIZE);
@@ -416,7 +415,6 @@
     } catch {
       if (token !== detailFetchToken) return;
       systemDetailList.value = [];
-      systemTotal.value = 0;
     } finally {
       if (token === detailFetchToken) {
         systemDetailLoading.value = false;
@@ -716,7 +714,6 @@
     abortDetailFetches();
     sceneId.value = newSceneId;
     systemDetailList.value = [];
-    systemTotal.value = 0;
     systemAllLoaded.value = false;
     dataTableDetailList.value = [];
     dataTableAllLoaded.value = false;

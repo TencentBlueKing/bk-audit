@@ -178,5 +178,7 @@
   height: 100%;
   padding: 0 var(--bk-theme-space-12);
   box-sizing: border-box;
+  font-size: inherit;
+  color: inherit;
 }
 </style>

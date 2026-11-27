@@ -130,7 +130,7 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
     {
       title: t('处理状态'),
       colKey: 'status',
-      width: 110,
+      width: 150,
       cell: (_h: any, { row }: { row: RiskManageModel }) => {
         const BkTag = resolveComponent('bk-tag');
         const BkButton = resolveComponent('bk-button');
@@ -138,13 +138,22 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
         const config = statusToMap[row.status] || {};
         const name = resolveRiskStatusName(row.status, riskStatusCommon.value) || '--';
 
-        const tagNode = h(BkTag as any, { theme: config.tag }, () => [
-          h('p', { style: 'display: flex; align-items: center;' }, [
+        const tagNode = h(BkTag as any, {
+          theme: config.tag,
+          style: 'max-width: 100%; min-width: 0;',
+        }, () => [
+          h('p', { style: 'display: flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden;' }, [
             h(AuditIcon as any, {
+              class: config.icon === 'loading' ? 'rotate-loading' : '',
               type: config.icon,
-              style: `margin-right: 6px; color: ${config.color || ''}`,
+              style: `flex-shrink: 0; margin-right: 6px; color: ${config.color || ''}`,
             }),
-            h('span', name),
+            h(Tooltips, {
+              class: 'status-name',
+              data: name,
+              maxWidth: 240,
+              style: 'min-width: 0; overflow: hidden;',
+            }),
           ]),
         ]);
 

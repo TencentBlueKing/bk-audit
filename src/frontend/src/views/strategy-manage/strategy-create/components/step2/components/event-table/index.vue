@@ -72,7 +72,7 @@
         v-else
         class="table-section">
         <div class="group-cell">
-          <span>{{ groupMap[key] }}</span>
+          <span v-bk-tooltips="{ content: groupMap[key], disabled: !groupMap[key] }">{{ groupMap[key] }}</span>
         </div>
         <div class="rows-container">
           <table-row
