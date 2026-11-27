@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping as _Mapping
 from contextlib import suppress
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import singledispatch
 from typing import Any, Dict, List, Optional, Tuple, Type
@@ -346,6 +346,9 @@ def validate_tool_variables_with_risk(
                         expected = {collection_to_tuple(v) for v in _datetime_value_candidates(risk_value)}
                     elif risk_value is not None and risk_value != "" and risk_value != []:
                         expected = {collection_to_tuple(risk_value)}
+                # 事件记录与快照均无该字段值时按不匹配处理（正常拒绝），
+                # 避免 expected=None 在后续遍历中抛 TypeError（接口 500 而非 403）
+                expected = expected or set()
                 value_to_match = collection_to_tuple(value)
                 single_value = (
                     value_to_match[0] if (len(value_to_match) == 1 and isinstance(value_to_match, tuple)) else None
@@ -449,7 +452,13 @@ def _get_risk_field_value(risk, field_name: str, nested: bool = False) -> Any:
     """
     snapshot = risk.event_data if isinstance(risk.event_data, dict) else {}
     if nested:
-        return (snapshot.get("event_data") or {}).get(field_name)
+        # 真实存储为单层：Risk.event_data 直接保存事件扩展字段（建单时 gen_risk_create_params
+        # 原样写入 event.get("event_data")，风险详情亦按 row.event_data[field] 取值）；
+        # 兼容含 "event_data" 嵌套键的双层构造（历史数据/存量测试）
+        inner = snapshot.get("event_data")
+        if isinstance(inner, dict) and field_name in inner:
+            return inner[field_name]
+        return snapshot.get(field_name)
     special_getters = {
         "risk_tags": lambda: risk.get_tag_names(),
         "strategy_name": lambda: risk.strategy.strategy_name if risk.strategy_id else None,
@@ -472,15 +481,21 @@ def _datetime_value_candidates(value: datetime) -> set:
     （均为同一时刻的不同表示，不构成校验放宽）。
     字符串表示需转本地时区：USE_TZ=True 下模型字段为 UTC aware datetime，
     而前端序列化输出为本地时区（Asia/Shanghai），直接格式化会差 8 小时。
+    最后发现时间（event_end_time）另需对齐详情序列化的取整规则：
+    存在微秒时向上取整到下一秒（RiskInfoSerializer.get_event_end_time）。
     """
     from django.utils import timezone as dj_timezone
 
     timestamp = value.timestamp()
     local_value = dj_timezone.localtime(value) if dj_timezone.is_aware(value) else value
+    ceil_value = local_value
+    if local_value.microsecond > 0:
+        ceil_value = local_value.replace(microsecond=0) + timedelta(seconds=1)
     return {
         str(int(timestamp * 1000)),
         str(int(timestamp)),
         local_value.strftime("%Y-%m-%d %H:%M:%S"),
+        ceil_value.strftime("%Y-%m-%d %H:%M:%S"),
         local_value.isoformat(),
     }
 
