@@ -73,6 +73,7 @@ def deployment_env(version="v4"):
     BKBASE_API_VERSION="v4",
     BKBASE_V4_TENANT="tenant_a",
     BKBASE_V4_NAMESPACE="audit",
+    BKBASE_V4_STREAM_CLUSTER="StreamCluster/audit/primary",
     ASSET_RT_STORAGE_CLUSTER="hdfs",
     BKAPP_ENABLE_ITSM_V4=False,
 )
@@ -86,6 +87,55 @@ class StrictDeployPreflightTests(SimpleTestCase):
 
     def test_check_only_does_not_read_db_or_call_platform(self):
         call_command("init_system", strict=True, check_only=True)
+
+    def test_first_install_requires_refs_in_declaration_before_db(self):
+        for kind, cluster_id in (("es", "es"), ("doris", "doris"), ("hdfs", "asset-hdfs")):
+            with self.subTest(kind=kind), override_settings(
+                ASSET_RT_STORAGE_CLUSTER="asset-hdfs" if kind == "hdfs" else "hdfs"
+            ):
+                config = json.loads(self.env["BKAPP_INIT_BKBASE_V4_CONFIG"])
+                config["default"]["storage_refs"].pop(kind, None)
+                os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"] = json.dumps(config)
+                with self.assertRaisesRegex(CommandError, rf"space=default, field=storage_refs\.{kind}\.{cluster_id}"):
+                    call_command("init_system", "--strict", "--check-only", "--first-install")
+                # 常规预检不查库，允许后续阶段复用原绑定。
+                call_command("init_system", strict=True, check_only=True)
+
+    def test_first_install_reuses_strategy_hdfs_ref(self):
+        call_command("init_system", "--strict", "--check-only", "--first-install")
+
+    def test_first_install_accepts_independent_asset_hdfs_ref(self):
+        config = json.loads(self.env["BKAPP_INIT_BKBASE_V4_CONFIG"])
+        config["default"]["storage_refs"]["hdfs"] = {
+            "asset-hdfs": {"kind": "Hdfs", "tenant": "tenant_a", "namespace": "clusters", "name": "asset-hdfs"}
+        }
+        os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"] = json.dumps(config)
+        with override_settings(ASSET_RT_STORAGE_CLUSTER="asset-hdfs"):
+            call_command("init_system", "--strict", "--check-only", "--first-install")
+
+    def test_first_install_uses_stream_environment_without_flow_profile(self):
+        config = json.loads(self.env["BKAPP_INIT_BKBASE_V4_CONFIG"])
+        del config["default"]["flow_config"]
+        os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"] = json.dumps(config)
+        call_command("init_system", "--strict", "--check-only", "--first-install")
+
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="")
+    def test_first_install_requires_stream_cluster_before_db(self):
+        with self.assertRaisesRegex(CommandError, "BKAPP_BKBASE_V4_STREAM_CLUSTER"):
+            call_command("init_system", "--strict", "--check-only", "--first-install")
+
+    @override_settings(BKBASE_V4_STREAM_CLUSTER="")
+    def test_first_install_allows_declared_legacy_stream_cluster(self):
+        config = json.loads(self.env["BKAPP_INIT_BKBASE_V4_CONFIG"])
+        config["default"]["flow_config"]["operation_config"]["stream_sql_deploy_config"] = {
+            "cluster": "StreamCluster/audit/legacy"
+        }
+        os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"] = json.dumps(config)
+        call_command("init_system", "--strict", "--check-only", "--first-install")
+
+    def test_first_install_flag_cannot_run_initialization_phase(self):
+        with self.assertRaisesRegex(CommandError, "--first-install requires --strict --check-only"):
+            call_command("init_system", "--strict", "--phase", "bootstrap", "--first-install")
 
     def test_strict_rejects_missing_kafka_or_hdfs_before_write(self):
         for version in ("v3", "v4"):
@@ -246,6 +296,23 @@ class DeployStorageImportTests(TestCase):
             self.apply()
         self.assertIsNone(self.read("default_queue_storage_cluster"))
         self.assertEqual(self.read("bkbase_v4_storage_clusters"), changed)
+
+    def test_redeploy_reuses_refs_already_registered(self):
+        self.apply()
+        previous = deepcopy(self.read("bkbase_v4_storage_clusters"))
+        config = json.loads(os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"])
+        del config["default"]["storage_refs"]
+        os.environ["BKAPP_INIT_BKBASE_V4_CONFIG"] = json.dumps(config)
+        self.apply()
+        self.assertEqual(self.read("bkbase_v4_storage_clusters"), previous)
+
+    def test_redeploy_without_flow_profile_preserves_registered_configuration(self):
+        self.apply()
+        legacy = {"operation_config": {"stream_sql_deploy_config": {"cluster": "StreamCluster/audit/legacy"}}}
+        GlobalMetaConfig.set("bkbase_v4_flow_config", legacy, config_level="namespace", instance_key="default")
+        os.environ.pop("BKAPP_INIT_BKBASE_V4_CONFIG")
+        self.apply()
+        self.assertEqual(self.read("bkbase_v4_flow_config"), legacy)
 
     def test_asset_hdfs_reuses_strategy_ref_when_same_id(self):
         self.apply()

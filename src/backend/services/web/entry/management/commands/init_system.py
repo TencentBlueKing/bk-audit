@@ -29,16 +29,21 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--strict", action="store_true", help="按部署声明初始化，失败不放行")
         parser.add_argument("--check-only", action="store_true", help="只校验配置，不读数据库或调用平台")
+        parser.add_argument("--first-install", action="store_true", help="无已有记录时，预检明确要求首装资源")
         parser.add_argument("--phase", choices=("bootstrap", "finalize"), help="严格初始化阶段")
 
     def handle(self, **kwargs):
         try:
+            if kwargs["first_install"] and (not kwargs["strict"] or not kwargs["check_only"] or kwargs["phase"]):
+                raise CommandError("--first-install requires --strict --check-only without --phase")
             if kwargs["check_only"] or kwargs["phase"]:
                 if not kwargs["strict"]:
                     raise CommandError("--check-only/--phase requires --strict")
             if kwargs["strict"]:
                 deployment = validate_deployment()
                 if kwargs["check_only"]:
+                    if kwargs["first_install"]:
+                        deployment.check_first_install()
                     self.stdout.write("[InitSystem] 部署声明检查通过，尚未验证平台可用性")
                     return
                 if not kwargs["phase"]:

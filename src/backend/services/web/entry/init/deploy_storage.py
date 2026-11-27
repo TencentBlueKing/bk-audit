@@ -20,6 +20,7 @@ from services.web.bkbase.constants import (
     BKBaseVersion,
 )
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
+from services.web.bkbase.flow import _new_deployment
 from services.web.databus.collector.snapshot.system.provision import _create_config
 from services.web.databus.constants import (
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
@@ -174,8 +175,8 @@ class DeployStorage:
             config = self.v4_config.get(space, {})
             if not isinstance(config, dict) or set(config) - {"storage_refs", "flow_config"}:
                 raise invalid(V4_ENV_KEY, space, "fields")
-            flow = config.get("flow_config")
-            if not isinstance(flow, dict) or not isinstance(flow.get("operation_config"), dict):
+            flow = config.get("flow_config", {})
+            if not isinstance(flow, dict) or not isinstance(flow.get("operation_config", {}), dict):
                 raise invalid(V4_ENV_KEY, space, "flow_config.operation_config")
             refs = config.get("storage_refs", {})
             if not isinstance(refs, dict) or set(refs) - REF_KINDS.keys():
@@ -198,6 +199,44 @@ class DeployStorage:
                         resource_params(context, ref, kind=REF_KINDS[storage_type])
                     except BKBaseResourceMappingError:
                         raise invalid(V4_ENV_KEY, space, f"storage_refs.{storage_type}.{cluster_id}") from None
+
+    def _declared_refs(self, space):
+        """合并专用声明与策略写端；同一集群无需重复填写正式 Ref。"""
+        declared = deepcopy(self.v4_config.get(space, {}).get("storage_refs", {}))
+        for entry_space, kind, cluster_id, ref in self.entries:
+            if entry_space == space and ref is not None:
+                refs = declared.setdefault(kind, {})
+                if cluster_id in refs and refs[cluster_id] != ref:
+                    raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}")
+                refs[cluster_id] = ref
+        return declared
+
+    def _check_required_refs(self, space, mapping):
+        required = [
+            ("es", self.es[space]["pre_defined_extra_config"]["bkbase_cluster_id"]),
+            ("doris", self.doris[space]["pre_defined_extra_config"]["bkbase_cluster_id"]),
+            ("hdfs", settings.ASSET_RT_STORAGE_CLUSTER),
+        ]
+        required.extend((kind, cluster_id) for entry_space, kind, cluster_id, _ in self.entries if entry_space == space)
+        context = get_bkbase_context()
+        for kind, cluster_id in required:
+            refs = mapping.get(kind, {})
+            ref = refs.get(cluster_id) if isinstance(refs, dict) else None
+            if not isinstance(ref, dict):
+                raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}")
+            try:
+                resource_params(context, ref, kind=REF_KINDS[kind])
+            except BKBaseResourceMappingError:
+                raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}") from None
+
+    def check_first_install(self):
+        """空库前校验正式存储 Ref 和内置实时 Flow 的集群，不查数据库或平台。"""
+        if self.v4:
+            for space in sorted(self.spaces):
+                self._check_required_refs(space, self._declared_refs(space))
+            space = settings.DEFAULT_NAMESPACE
+            # 复用运行时的选择规则；内置策略不需要离线集群。
+            _new_deployment("StreamNode", self.v4_config.get(space, {}).get("flow_config", {}), space)
 
     @staticmethod
     def _put(key, value, space=None):
@@ -236,14 +275,7 @@ class DeployStorage:
                 mapping = deepcopy(row.config_value)
                 if not isinstance(mapping, dict):
                     raise invalid(V4_ENV_KEY, space, "storage_refs")
-                declared = deepcopy(self.v4_config[space].get("storage_refs", {}))
-                for entry_space, kind, cluster_id, ref in self.entries:
-                    if entry_space == space and ref is not None:
-                        refs = declared.setdefault(kind, {})
-                        if cluster_id in refs and refs[cluster_id] != ref:
-                            raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}")
-                        refs[cluster_id] = ref
-                for kind, refs in declared.items():
+                for kind, refs in self._declared_refs(space).items():
                     saved = mapping.setdefault(kind, {})
                     if not isinstance(saved, dict):
                         raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}")
@@ -256,26 +288,11 @@ class DeployStorage:
                                 raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}")
                         else:
                             saved[cluster_id] = ref
-                required = {
-                    "es": [es_extra["bkbase_cluster_id"]],
-                    "doris": [doris_extra["bkbase_cluster_id"]],
-                    "hdfs": [settings.ASSET_RT_STORAGE_CLUSTER],
-                }
-                for entry_space, kind, cluster_id, _ in self.entries:
-                    if entry_space == space:
-                        required.setdefault(kind, []).append(cluster_id)
-                for kind, ids in required.items():
-                    for cluster_id in ids:
-                        ref = mapping.get(kind, {}).get(cluster_id)
-                        if not isinstance(ref, dict):
-                            raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}")
-                        try:
-                            resource_params(get_bkbase_context(), ref, kind=REF_KINDS[kind])
-                        except BKBaseResourceMappingError:
-                            raise invalid(V4_ENV_KEY, space, f"storage_refs.{kind}.{cluster_id}") from None
+                self._check_required_refs(space, mapping)
                 row.config_value = mapping
                 row.save(update_fields=["config_value"])
-                self._put(BKBASE_V4_FLOW_CONFIG, self.v4_config[space]["flow_config"], space)
+                if profile := self.v4_config.get(space, {}).get("flow_config"):
+                    self._put(BKBASE_V4_FLOW_CONFIG, profile, space)
                 self._put(DEFAULT_STORAGE_CONFIG_KEY, es_extra["cluster_id"], space)
                 self._put(DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY, doris_extra, space)
             if self.v4:
