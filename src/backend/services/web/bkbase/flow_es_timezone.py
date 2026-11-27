@@ -8,6 +8,7 @@ from copy import deepcopy
 
 from bk_resource import api
 
+from api.bk_base_v4.default import flow_spec_for_write
 from services.web.bkbase import flow, flow_operation
 from services.web.bkbase.common import resource_lock, resource_params
 from services.web.bkbase.constants import (
@@ -210,7 +211,7 @@ def apply_plan(context, plan, *, before_write):
                             (result.get("metadata") or {}).get(key) != params[key]
                             for key in ("tenant", "namespace", "name")
                         )
-                        or result.get("spec") != fresh["after_spec"]
+                        or flow_spec_for_write(result.get("spec")) != flow_spec_for_write(fresh["after_spec"])
                         or (result.get("metadata") or {}).get("annotations", {}).get("task_stopped") != "true"
                     ):
                         raise ValueError("Timezone migration response is not the exact stopped target")

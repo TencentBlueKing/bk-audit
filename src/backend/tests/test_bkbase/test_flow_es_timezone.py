@@ -13,6 +13,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
+from api.bk_base_v4.default import BkBaseV4Resource, FlowUpdate
 from services.web.bkbase import flow, flow_es_timezone, flow_operation
 from services.web.bkbase.exceptions import BKBaseResourceMappingError
 from services.web.databus.management.commands import (
@@ -280,6 +281,40 @@ class FlowTimezoneCommandTests(TransactionTestCase):
         )
         self.strategy.refresh_from_db()
         self.assertEqual(self.strategy.backend_data, local)
+        self.assertEqual(self.strategy.status, StrategyStatusChoices.DISABLED)
+
+    def test_apply_releases_write_guard_when_sdk_receipt_includes_null_inactive_deployment(self):
+        self.remote["spec"]["operation_config"]["stream_sql_deploy_config"] = {
+            "cluster": "published_stream",
+            "deploy_mode": "k8s-operator",
+            "deploy_config": None,
+        }
+        expected = deepcopy(self.remote["spec"])
+        expected["operation_config"]["batch_sql_deploy_config"] = None
+        expected["nodes"][2]["write_alias"]["TimeBased"]["timezone"] = 0
+
+        def transport(method, url, **kwargs):
+            self.assertEqual(method, "PUT")
+            payload = kwargs["json"]
+            self.assertEqual(payload["spec"], expected)
+            receipt = self.update(**payload)
+            response = requests.Response()
+            response.status_code = 200
+            response.url = url
+            response._content = json.dumps({"result": True, "code": "00", "data": receipt}).encode()
+            return response
+
+        self.command()
+        self.put.side_effect = FlowUpdate().request
+        with mock.patch.object(BkBaseV4Resource, "build_header", return_value={}), mock.patch.object(
+            requests.Session, "request", side_effect=transport
+        ):
+            events = self.command(apply=True)
+
+        self.put.assert_called_once()
+        self.assertEqual(events[-1]["event"], "accepted")
+        self.strategy.refresh_from_db()
+        self.assertNotIn("flow_write", flow_operation.binding(self.strategy))
         self.assertEqual(self.strategy.status, StrategyStatusChoices.DISABLED)
 
     def test_zero_and_fixed_are_idempotent_without_any_remote_write(self):
