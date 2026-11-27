@@ -568,7 +568,7 @@
   const normalizeScope = (input: MatchScope): MatchScope => ({
     groups: (input.groups || []).map(group => ({
       ...group,
-      conditions: (group.conditions || []).map(normalizeCondition),
+      conditions: (group.conditions || []).map(condition => normalizeCondition(condition)),
     })),
   });
 
