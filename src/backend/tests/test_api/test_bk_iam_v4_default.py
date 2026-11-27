@@ -269,7 +269,7 @@ class TestIAMV4RoleResources(SimpleTestCase):
         kwargs = resource.session.request.call_args.kwargs
         self.assertEqual(kwargs["json"][0]["resources"], [{"type": "notice_group", "id": "notice-1"}])
 
-    @mock.patch("api.bk_iam_v4.default.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
+    @mock.patch("core.tenant.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
     def test_add_authorization_uses_default_operator_header(self):
         resource = AddAuthorizationResource()
 
@@ -353,7 +353,7 @@ class TestIAMV4RoleResources(SimpleTestCase):
         with self.assertRaises(ValidateException):
             resource.request({"system_id": "bk-audit", "role_id": "scene_admin"})
 
-    @mock.patch("api.bk_iam_v4.default.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
+    @mock.patch("core.tenant.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
     def test_revoke_authorization_uses_default_operator_header(self):
         resource = RevokeAuthorizationResource()
 
@@ -433,7 +433,7 @@ class TestIAMV4RoleResources(SimpleTestCase):
         self.assertEqual(kwargs["headers"]["X-Bkiam-Operator"], "operator_user")
         self.assertNotIn("operator", kwargs["json"])
 
-    @mock.patch("api.bk_iam_v4.default.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
+    @mock.patch("core.tenant.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
     def test_list_authorization_subject_uses_default_operator_header(self):
         resource = ListAuthorizationSubjectResource()
 

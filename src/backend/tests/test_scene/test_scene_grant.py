@@ -8,14 +8,22 @@
 - 申请状态更新
 - 申请列表查询逻辑
 """
+import json
+from contextlib import ExitStack
 from unittest import mock
 
+from django.test import override_settings
 from django.utils import timezone
 
+from api.bk_iam_v4.default import (
+    AddAuthorizationResource,
+    ListAuthorizationSubjectResource,
+)
 from services.web.scene.constants import (
     ApplicationStatus,
     GrantStatus,
     ITSMV4TicketStatus,
+    SceneRole,
 )
 from services.web.scene.models import Scene, ScenePermissionApplication
 from services.web.scene.permission import (
@@ -355,3 +363,136 @@ class TestListNoPermissionScenes(TestCase):
         result = ScenePermissionApplication.objects.filter(applicant="test_user")
         self.assertEqual(result.count(), 1)
         self.assertEqual(result.first().applicant, "test_user")
+
+
+# ==================== 审批后后台授权（无 Web request）回归 ====================
+
+
+def _iam_v4_response(data):
+    response = mock.MagicMock()
+    response.json.return_value = {"data": data, "request_id": "request-id"}
+    response.raise_for_status.return_value = None
+    response.request.url = "http://bkiam.test"
+    return response
+
+
+class TestApprovedGrantWithoutWebRequest(TestCase):
+    """审批回调与 Celery 轮询没有 Web request，IAM V4 角色管理接口须以应用身份出站。"""
+
+    MOCK_ADMIN = "bk_admin_t"
+    MULTI_TENANT_SETTINGS = dict(
+        BKPAAS_MULTI_TENANT_MODE=True,
+        BK_TENANT_ID="tencent",
+        BK_IAM_SYSTEM_ID="bk-audit",
+        IAM_V4_AUTHORIZATION_EXPIRED_DAYS=365,
+        BK_RESOURCE={
+            "PLATFORM_AUTH_ENABLED": True,
+            "PLATFORM_AUTH_ACCESS_USERNAME": "",
+            "PLATFORM_AUTH_ACCESS_TOKEN": "",
+        },
+    )
+
+    def _enter_app_identity(self, stack):
+        """无登录用户 + 固定管理员解析结果，确保全程不触真实网关。"""
+        stack.enter_context(mock.patch("core.tenant.get_admin_username", return_value=self.MOCK_ADMIN))
+        stack.enter_context(mock.patch("core.bk_api_base.get_admin_username", return_value=self.MOCK_ADMIN))
+        stack.enter_context(mock.patch("blueapps.utils.request_provider.get_local_request", return_value=None))
+
+    @override_settings(**MULTI_TENANT_SETTINGS)
+    def test_role_management_resources_use_app_identity_without_web_request(self):
+        """成员查询与角色授权都不再要求登录用户，operator 默认取应用身份。"""
+        with ExitStack() as stack:
+            self._enter_app_identity(stack)
+
+            list_resource = ListAuthorizationSubjectResource()
+            list_transport = mock.Mock(return_value=_iam_v4_response({"count": 0, "results": []}))
+            list_resource.session.request = list_transport
+            list_resource.request(
+                {
+                    "system_id": "bk-audit",
+                    "role_id": "scene_user",
+                    "related_resource_type_id": "scene",
+                    "resource": {"type": "scene", "id": "1"},
+                    "page": 1,
+                    "page_size": 100,
+                }
+            )
+
+            add_resource = AddAuthorizationResource()
+            add_transport = mock.Mock(return_value=_iam_v4_response(None))
+            add_resource.session.request = add_transport
+            add_resource.request(
+                {
+                    "system_id": "bk-audit",
+                    "authorizations": [
+                        {
+                            "role_id": "scene_user",
+                            "subject": {"type": "user", "id": "applicant_user"},
+                            "related_resource_type_id": "scene",
+                            "resources": [{"type": "scene", "id": "1"}],
+                            "expired_at": 4102444800,
+                        }
+                    ],
+                }
+            )
+
+        for sent_headers in (list_transport.call_args.kwargs["headers"], add_transport.call_args.kwargs["headers"]):
+            auth = json.loads(sent_headers["x-bkapi-authorization"])
+            self.assertEqual(auth["bk_username"], self.MOCK_ADMIN)
+            self.assertNotIn("access_token", auth)
+            self.assertEqual(sent_headers["X-Bkiam-Operator"], self.MOCK_ADMIN)
+            self.assertEqual(sent_headers["X-Bk-Tenant-Id"], "tencent")
+
+        body = add_transport.call_args.kwargs["json"]
+        self.assertEqual(body[0]["subject"], {"type": "user", "id": "applicant_user"})
+        self.assertNotIn("operator", body[0])
+
+    @override_settings(**MULTI_TENANT_SETTINGS)
+    def test_approval_grant_completes_without_web_request(self):
+        """审批通过后授权成功：申请人仍是被授权人，operator 与出站身份均为应用态。"""
+        application = mock.Mock()
+        application.id = 1
+        application.applicant = "applicant_user"
+        application.role = SceneRole.USER
+        application.scene.scene_id = "1"
+        application.status = ApplicationStatus.PENDING
+        application.grant_status = None
+        application.grant_error = ""
+        application.grant_method = ""
+        application.retry_count = 0
+        application.finished_at = None
+
+        parsed = {
+            "status": ITSMV4TicketStatus.FINISHED,
+            "approve_result": True,
+            "is_terminal": True,
+        }
+
+        with ExitStack() as stack:
+            self._enter_app_identity(stack)
+            stack.enter_context(
+                mock.patch("services.web.scene.permission.IAMGroupManager.is_v4_backend", return_value=True)
+            )
+            stack.enter_context(
+                mock.patch("services.web.scene.permission.IAMGroupManager.get_scene_role_members", return_value=[])
+            )
+            stack.enter_context(mock.patch("services.web.scene.permission.IAMGroupManager.refresh_scene_members"))
+            stack.enter_context(mock.patch("apps.permission.handlers.service.is_iam_v4_backend", return_value=True))
+            # api.* 资源经 __call__ 出站，session 是实例级的；在传输层兜底保证不触真实网关
+            transport = stack.enter_context(
+                mock.patch("requests.sessions.Session.request", return_value=_iam_v4_response(None))
+            )
+
+            apply_ticket_result(application, parsed)
+
+        self.assertEqual(application.status, ApplicationStatus.APPROVED)
+        self.assertEqual(application.grant_status, GrantStatus.SUCCESS, application.grant_error)
+        self.assertEqual(application.grant_error, "")
+        self.assertEqual(application.retry_count, 0)
+        self.assertEqual(transport.call_count, 1)
+
+        sent = transport.call_args.kwargs
+        self.assertEqual(sent["headers"]["X-Bkiam-Operator"], self.MOCK_ADMIN)
+        auth = json.loads(sent["headers"]["x-bkapi-authorization"])
+        self.assertEqual(auth["bk_username"], self.MOCK_ADMIN)
+        self.assertEqual(sent["json"][0]["subject"], {"type": "user", "id": "applicant_user"})

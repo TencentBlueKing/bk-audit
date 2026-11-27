@@ -19,7 +19,6 @@ import abc
 import math
 
 from bk_resource.exceptions import APIRequestError
-from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
@@ -43,6 +42,7 @@ from api.constants import APIProvider
 from api.domains import BK_IAM_V4_API_URL
 from api.utils import get_endpoint
 from core.bk_api_base import AuditBkApiResource
+from core.tenant import get_platform_operator
 
 
 class IAMV4BaseResource(AuditBkApiResource, abc.ABC):
@@ -90,13 +90,19 @@ class IAMV4BaseResource(AuditBkApiResource, abc.ABC):
 
 
 class IAMV4OperatorResource(IAMV4BaseResource, abc.ABC):
+    """带 X-Bkiam-Operator 的角色管理接口（授权/撤销/成员查询）。
+
+    审批回调、Celery 轮询与成员同步等后台链路调用这些接口时没有 Web request，
+    因此多租户下固定使用应用态身份（当前租户管理员），不依赖登录用户；未显式
+    指定 operator 时，操作人同样取应用身份，避免沿用已清空的单租户平台账号。
+    """
+
     operator_field = "operator"
+    use_admin_username = True
 
     def build_header(self, validated_request_data: dict) -> dict:
         headers = super().build_header(validated_request_data)
-        headers["X-Bkiam-Operator"] = (
-            validated_request_data.get(self.operator_field) or bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
-        )
+        headers["X-Bkiam-Operator"] = validated_request_data.get(self.operator_field) or get_platform_operator()
         return headers
 
     def before_request(self, kwargs: dict) -> dict:

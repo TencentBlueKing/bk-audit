@@ -20,7 +20,6 @@ from contextlib import nullcontext
 from typing import Any, ContextManager, Optional, Union
 
 from bk_resource import api
-from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
@@ -31,6 +30,7 @@ from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.backends import is_iam_v4_backend
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.handlers.service import PermissionService
+from core.tenant import get_platform_operator
 
 # 场景管理用户组拥有的操作列表
 SCENE_MANAGER_GROUP_ACTIONS = [
@@ -98,7 +98,7 @@ class IAMGroupManager:
     @classmethod
     def get_scene_role_members(cls, role_id: str, scene_id: str) -> list:
         """Read scene members from IAM V4 role authorization relations."""
-        service = PermissionService(username=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME)
+        service = PermissionService(username=get_platform_operator())
         subjects = service.list_role_subjects(role_id=role_id, resource=ResourceEnum.SCENE.create_instance(scene_id))
         return [
             item.get("subject", {}).get("id", "")
@@ -111,7 +111,7 @@ class IAMGroupManager:
         cls, role_id: str, members: list, scene_id: str, operator: Optional[str] = None
     ) -> None:
         """Diff local target members against V4 role subjects and apply minimal grant/revoke calls."""
-        service = PermissionService(username=operator or bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME)
+        service = PermissionService(username=operator or get_platform_operator())
         resource = ResourceEnum.SCENE.create_instance(scene_id)
         current_members = set(cls.get_scene_role_members(role_id=role_id, scene_id=scene_id))
         target_members = set(members or [])

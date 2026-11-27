@@ -18,7 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 from typing import Optional, Union
 
-from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.utils import timezone
 from django.utils.translation import gettext
@@ -26,6 +25,7 @@ from django.utils.translation import gettext
 from apps.meta.handlers.iam_group import IAMGroupManager
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.handlers.service import PermissionService
+from core.tenant import get_platform_operator
 from services.web.common.monitor import ScenePermissionGrantFailedEvent
 from services.web.scene.constants import (
     SCENE_PERMISSION_GRANT_MAX_RETRY,
@@ -45,10 +45,10 @@ def grant_scene_role(scene: Scene, role: str, username: str, operator: Optional[
     :param scene: Scene 实例
     :param role: SceneRole.MANAGER / SceneRole.USER
     :param username: 被授权人
-    :param operator: 授权操作人（默认平台账号）
+    :param operator: 授权操作人（默认平台应用身份，多租户为当前租户管理员）
     :return: {"success": bool, "method": str, ...}
     """
-    operator = operator or bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+    operator = operator or get_platform_operator()
     result = _grant_scene_role_to_iam(scene, role, username, operator)
     if result.get("success"):
         try:
