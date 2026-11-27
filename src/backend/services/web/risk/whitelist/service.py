@@ -664,7 +664,11 @@ def apply_whitelist_result(rule: RiskWhitelist, ticket: dict) -> RiskWhitelist:
             current.refresh_from_db()
             refresh_whitelist_nodes(current, ticket)
             return current
-        _save_rule(current, ["status", "reject_reason", "updated_at", "updated_by"])
+        fields = ["status", "reject_reason", "updated_at", "updated_by"]
+        if status == WhitelistStatus.ACTIVE:
+            # 同意只写终态与时间，updated_by 保留上一次（申请人 / 建单人）
+            fields.remove("updated_by")
+        _save_rule(current, fields)
     current.refresh_from_db()
     refresh_whitelist_nodes(current, ticket)
     if current.status == WhitelistStatus.ACTIVE:
