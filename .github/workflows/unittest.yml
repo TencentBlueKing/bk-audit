@@ -2,7 +2,7 @@ name: Unittest
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
 
 on:
   pull_request:
@@ -17,8 +17,27 @@ on:
         default: 'main'
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tests: ${{ steps.detect.outputs.result }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Detect whether backend tests are needed
+        id: detect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { needsBackendTests } = require('./.github/scripts/backend-pre-commit.cjs');
+            return await needsBackendTests({ github, context });
+
   unittest:
     name: tests (${{ matrix.suite }})
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.backend_tests != 'false' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
