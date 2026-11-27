@@ -83,6 +83,7 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
+    EVENT_BASIC_FIELD_TYPE_MAP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
@@ -242,6 +243,9 @@ class RetrieveRisk(RiskMeta):
             many=False,
         )
         risk = data[0]
+        from services.web.risk.whitelist.service import sync_whitelist_nodes_for_risk
+
+        sync_whitelist_nodes_for_risk(risk_obj.risk_id)
         nodes = (
             TicketNode.objects.filter(risk_id=risk["risk_id"], is_test=False)
             .exclude(action=RiskExperienceRecord.__name__)
@@ -1037,9 +1041,23 @@ class UpdateRiskLabel(RiskMeta):
                 )
             else:
                 MisReport(risk_id=risk.risk_id, operator=get_request_username()).run(
-                    description=validated_request_data["description"],
+                    description=validated_request_data.get("description") or "",
                     revoke_process=validated_request_data["revoke_process"],
                 )
+        whitelist = validated_request_data.get("whitelist")
+        if whitelist and new_risk_label == RiskLabel.MISREPORT:
+            from services.web.risk.whitelist.service import submit_whitelist
+
+            submit_whitelist(
+                scene_id=risk.scene_id,
+                match_scope=whitelist["match_scope"],
+                whitelist_type=whitelist["whitelist_type"],
+                reason=whitelist["reason"],
+                duration_days=whitelist.get("duration_days"),
+                expire_at=whitelist.get("expire_at"),
+                risks=[risk],
+                username=get_request_username(),
+            )
         risk.refresh_from_db()
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
@@ -1705,25 +1723,27 @@ class ListEventFieldsByStrategy(RiskMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        from services.web.strategy_v2.serializers import merge_select_field_type
+
         strategy_ids = validated_request_data.get("strategy_ids")
         if strategy_ids:
             strategies = Strategy.objects.filter(strategy_id__in=strategy_ids)
         else:
             strategies = Strategy.objects.all()
 
-        extended = set()
+        extended_field_types: dict = {}
         for s in strategies:
-            for cfg in s.event_data_field_configs or []:
+            for cfg in merge_select_field_type(s, list(s.event_data_field_configs or [])):
                 field_name = cfg.get("field_name")
                 display_name = cfg.get("display_name") or field_name
-                if field_name:
-                    extended.add((field_name, display_name))
+                if not field_name:
+                    continue
+                key = (field_name, display_name)
+                if not extended_field_types.get(key):
+                    extended_field_types[key] = cfg.get("field_type")
 
         basic = [(field_name, str(label)) for field_name, label in EventBasicField.choices]
         basic_field_names = {field_name for field_name, _ in basic}
-        extended = [
-            (field_name, display_name) for field_name, display_name in extended if field_name not in basic_field_names
-        ]
 
         basic_results = [
             {
@@ -1731,12 +1751,19 @@ class ListEventFieldsByStrategy(RiskMeta):
                 "display_name": display_name,
                 "id": f"{display_name}:{field_name}",
                 "type": "basic_event_field",
+                "field_type": EVENT_BASIC_FIELD_TYPE_MAP.get(field_name),
             }
             for field_name, display_name in basic
         ]
         extended_results = [
-            {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
-            for field_name, display_name in extended
+            {
+                "field_name": field_name,
+                "display_name": display_name,
+                "id": f"{display_name}:{field_name}",
+                "field_type": field_type,
+            }
+            for (field_name, display_name), field_type in extended_field_types.items()
+            if field_name not in basic_field_names
         ]
         return basic_results + extended_results
 
@@ -2105,11 +2132,43 @@ class ConfirmAsMisReportResource(RiskMeta):
             raise ValidationError(PENDING_CONFIRM_REQUIRED)
 
         username = get_request_username(validated_request_data.get("_request"))
+        whitelist = validated_request_data.get("whitelist")
 
-        # 执行误报确认
-        from services.web.risk.handlers.ticket import ConfirmAsMisReport
+        # 加白与误报确认必须原子：加白校验（match_scope/类型/原因）在确认之前前置执行，
+        # 避免误报确认成功、加白却因匹配范围非法而失败，导致风险已标误报却未加白。
+        if whitelist:
+            from rest_framework.exceptions import ValidationError
 
-        ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
+            from services.web.risk.whitelist.constants import WhitelistType
+            from services.web.risk.whitelist.match import validate_match_scope
+
+            error = validate_match_scope(whitelist["match_scope"], whitelist["whitelist_type"])
+            if not error and whitelist["whitelist_type"] not in WhitelistType.values:
+                error = "不支持的加白类型"
+            if not error and not whitelist["reason"]:
+                error = "加白原因不能为空"
+            if error:
+                raise ValidationError(gettext(error))
+
+        with transaction.atomic():
+            # 执行误报确认
+            from services.web.risk.handlers.ticket import ConfirmAsMisReport
+
+            ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
+            if whitelist:
+                from services.web.risk.whitelist.service import submit_whitelist
+
+                risk.refresh_from_db()
+                submit_whitelist(
+                    scene_id=risk.scene_id,
+                    match_scope=whitelist["match_scope"],
+                    whitelist_type=whitelist["whitelist_type"],
+                    reason=whitelist["reason"],
+                    duration_days=whitelist.get("duration_days"),
+                    expire_at=whitelist.get("expire_at"),
+                    risks=[risk],
+                    username=username,
+                )
         return {"success": True}
 
 
@@ -2312,7 +2371,7 @@ def _complete_bulk(payloads: Sequence[dict], failed: List[Dict[str, str]], run_i
 
     payloads = list(payloads)
     if not payloads:
-        return {"success_count": 0, "failed": failed}
+        return {"success_count": 0, "failed": failed, "success_risk_ids": []}
 
     from blueapps.utils.local import request_local
     from blueapps.utils.request_provider import get_local_request
@@ -2335,9 +2394,10 @@ def _complete_bulk(payloads: Sequence[dict], failed: List[Dict[str, str]], run_i
     except Exception as exc:
         logger.exception("bulk_request failed")
         failed.extend({"risk_id": item.get("risk_id", ""), "reason": str(exc)} for item in payloads)
-        return {"success_count": 0, "failed": failed}
+        return {"success_count": 0, "failed": failed, "success_risk_ids": []}
 
     success_count = 0
+    success_risk_ids: List[str] = []
     for payload, result in zip(payloads, results or []):
         if isinstance(result, dict) and result.get("success") is False:
             failed.append(
@@ -2348,7 +2408,46 @@ def _complete_bulk(payloads: Sequence[dict], failed: List[Dict[str, str]], run_i
             )
             continue
         success_count += 1
-    return {"success_count": success_count, "failed": failed}
+        rid = payload.get("risk_id")
+        if rid is not None:
+            success_risk_ids.append(rid)
+    return {"success_count": success_count, "failed": failed, "success_risk_ids": success_risk_ids}
+
+
+def _apply_whitelist_after_misreport(
+    result: Dict[str, Any], whitelist: dict, risk_map: Dict[str, Risk], username: str
+) -> Dict[str, Any]:
+    """误报确认后顺带加白：按本次真实成功的 risk_id 提交白名单，并把每条加白结果并回批量响应。"""
+
+    from services.web.risk.whitelist.service import submit_whitelist
+
+    # 按本次真实成功的 risk_id 加白，不能用 risk_label=MISREPORT 反查：
+    # 批量中“原本已是误报”会被拒绝，反查会把它误当成功项加白。
+    done = [risk_map[rid] for rid in result.get("success_risk_ids") or [] if rid in risk_map]
+    result["whitelist_success_count"] = 0
+    if not done:
+        return result
+
+    submitted = submit_whitelist(
+        scene_id=done[0].scene_id,
+        match_scope=whitelist["match_scope"],
+        whitelist_type=whitelist["whitelist_type"],
+        reason=whitelist["reason"],
+        duration_days=whitelist.get("duration_days"),
+        expire_at=whitelist.get("expire_at"),
+        risks=done,
+        username=username,
+    )
+    if isinstance(submitted, dict):
+        succeeded = submitted.get("succeeded") or []
+        for item in submitted.get("failed") or []:
+            result["failed"].append(
+                {"risk_id": item.get("risk_id", ""), "reason": gettext("加白失败：") + str(item.get("error", ""))}
+            )
+    else:
+        succeeded = submitted or []
+    result["whitelist_success_count"] = len(succeeded)
+    return result
 
 
 def _risk_batch_actions(risk: Risk) -> Optional[Set[str]]:
@@ -2588,6 +2687,11 @@ class BatchConfirmAsMisReportResource(RiskMeta):
     def perform_request(self, validated_request_data):
         risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
         render = _description_renderer(validated_request_data.get("description", "") or "", risks)
+        whitelist = validated_request_data.get("whitelist")
+        if whitelist and len(risks) > 1:
+            from services.web.risk.whitelist.service import ensure_same_strategy_scene
+
+            ensure_same_strategy_scene(risks)
 
         def build(risk):
             if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
@@ -2595,7 +2699,10 @@ class BatchConfirmAsMisReportResource(RiskMeta):
             return {"risk_id": risk.risk_id, "description": render(risk)}
 
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
-        return _complete_bulk(payloads, failed, lambda item: ConfirmAsMisReportResource().perform_request(item))
+        result = _complete_bulk(payloads, failed, lambda item: ConfirmAsMisReportResource().perform_request(item))
+        if whitelist and result.get("success_count"):
+            return _apply_whitelist_after_misreport(result, whitelist, risk_map, get_request_username())
+        return result
 
 
 class BulkCustomTransRisk(RiskMeta):
@@ -2663,6 +2770,11 @@ class BulkMisreportResource(RiskMeta):
     def perform_request(self, validated_request_data):
         risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
         revoke_process = validated_request_data.get("revoke_process", True)
+        whitelist = validated_request_data.get("whitelist")
+        if whitelist and len(risks) > 1:
+            from services.web.risk.whitelist.service import ensure_same_strategy_scene
+
+            ensure_same_strategy_scene(risks)
         render = _description_renderer(validated_request_data.get("description", "") or "", risks)
 
         def build(risk):
@@ -2677,17 +2789,19 @@ class BulkMisreportResource(RiskMeta):
 
         def run_item(item):
             # 走单条入口，保留处理审计和风险原始数据；待确认仍由该入口转到确认误报。
-            UpdateRiskLabel().request(
-                {
-                    "risk_id": item["risk_id"],
-                    "risk_label": RiskLabel.MISREPORT,
-                    "description": item["description"],
-                    "revoke_process": item["revoke_process"],
-                }
-            )
+            payload = {
+                "risk_id": item["risk_id"],
+                "risk_label": RiskLabel.MISREPORT,
+                "description": item["description"],
+                "revoke_process": item["revoke_process"],
+            }
+            UpdateRiskLabel().request(payload)
 
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
-        return _complete_bulk(payloads, failed, run_item)
+        result = _complete_bulk(payloads, failed, run_item)
+        if whitelist and result.get("success_count"):
+            return _apply_whitelist_after_misreport(result, whitelist, risk_map, get_request_username())
+        return result
 
 
 class BulkUnmisreportResource(RiskMeta):

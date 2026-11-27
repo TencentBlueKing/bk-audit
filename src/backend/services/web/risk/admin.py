@@ -44,6 +44,7 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
 )
+from services.web.risk.whitelist.models import RiskWhitelist, RiskWhitelistHit
 from services.web.risk.widgets import WhereConditionWidget
 
 
@@ -406,3 +407,58 @@ class NL2RiskFilterLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(RiskWhitelist)
+class RiskWhitelistAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "scene",
+        "risk_id",
+        "whitelist_type",
+        "status",
+        "is_permanent",
+        "expire_at",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["whitelist_type", "status", "is_permanent", "scene"]
+    search_fields = ["risk_id", "reason", "itsm_sn", "itsm_ticket_id"]
+    raw_id_fields = ["scene"]
+    readonly_fields = [
+        "match_scope",
+        "callback_token",
+        "itsm_ticket_url",
+        "reject_reason",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at",
+    ]
+
+
+@admin.register(RiskWhitelistHit)
+class RiskWhitelistHitAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "whitelist",
+        "hit_at",
+        "action",
+        "risk_id",
+        "created_at",
+    ]
+    list_filter = ["action", "hit_at"]
+    search_fields = ["risk_id"]
+    raw_id_fields = ["whitelist"]
+    readonly_fields = [
+        "whitelist",
+        "hit_at",
+        "action",
+        "risk_id",
+        "match_snapshot",
+        "event_snapshot",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at",
+    ]
