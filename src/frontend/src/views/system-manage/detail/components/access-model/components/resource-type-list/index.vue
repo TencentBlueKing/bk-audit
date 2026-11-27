@@ -303,14 +303,18 @@
 
   const isShowJobPlan = ref(false);
   const addResourceRef = ref();
-  const controlsPermission = ref(false);
+  const manageGlobalSettingPermission = ref(false);
+  const aiopsFeatureEnabled = ref(false);
+  const controlsPermission = computed(() => (
+    manageGlobalSettingPermission.value && aiopsFeatureEnabled.value
+  ));
   const rowData = ref({
     resource_type_id: '',
   });
   const searchKey = ref<Array<SearchKey>>([]);
 
   const renderTableColumn = computed(() => {
-    if (!controlsPermission.value) {
+    if (!manageGlobalSettingPermission.value) {
       return baseTableColumn;
     }
     return [
@@ -321,7 +325,7 @@
         fixed: 'right',
         render: ({ data }: {data: SystemResourceTypeModel}) => <>
           <div style="display: flex">
-            <bk-button
+            {controlsPermission.value && <bk-button
               theme='primary'
               class='mr16'
               disabled={!props.canEditSystem}
@@ -332,12 +336,12 @@
               onClick={() => handleEdit(data)}
               text>
               {t('编辑')}
-            </bk-button>
+            </bk-button>}
             <TaskSwitch
               data={data}
               status={snapShotStatusList.value[data.resource_type_id]?.status}
               onChangeStatus={() => handleDataStatus()}/>
-            <bk-dropdown
+            {controlsPermission.value && <bk-dropdown
               trigger="click"
               style="margin-left: 8px">
               {{
@@ -376,7 +380,7 @@
                   </bk-dropdown-menu>
                 ),
               }}
-            </bk-dropdown>
+            </bk-dropdown>}
           </div>
         </>,
       },
@@ -477,16 +481,29 @@
     fetchSysetemResourceTypeList(search);
   };
 
-  /* 有相关权限才显示操作列
-    1. 拥有 manage_global_setting 权限
-    2. 拥有特性开关enabled为true
-  */
-  const checkPermission = async () => {
-    const { manage_global_setting: manageGlobalSetting = false } = await IamManageService.check({ action_ids: 'manage_global_setting' });
-    const { enabled = false } = await MetaManageService.fetchFeature({
-      feature_id: 'bkbase_aiops',
-    });
-    controlsPermission.value =  manageGlobalSetting && enabled;
+  // 快照任务开关只依赖 manage_global_setting；其他操作还需要 AIOps 特性。
+  const checkManageGlobalSettingPermission = async () => {
+    try {
+      const {
+        manage_global_setting: manageGlobalSetting = false,
+      } = await IamManageService.check({
+        action_ids: 'manage_global_setting',
+      });
+      manageGlobalSettingPermission.value = manageGlobalSetting;
+    } catch {
+      manageGlobalSettingPermission.value = false;
+    }
+  };
+
+  const checkAIOpsFeature = async () => {
+    try {
+      const { enabled = false } = await MetaManageService.fetchFeature({
+        feature_id: 'bkbase_aiops',
+      });
+      aiopsFeatureEnabled.value = enabled;
+    } catch {
+      aiopsFeatureEnabled.value = false;
+    }
   };
 
   const getSnapShotStatus = () => {
@@ -553,7 +570,8 @@
     immediate: true,
   });
   onMounted(() => {
-    checkPermission();
+    checkManageGlobalSettingPermission();
+    checkAIOpsFeature();
     initResourceTypeList();
   });
 
