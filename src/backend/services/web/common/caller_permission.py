@@ -335,9 +335,11 @@ def validate_tool_variables_with_risk(
                 else:
                     expected = event_record.get("event_data", {}).get(rule["target"])
                 # 风险详情入口的字段引用可指向风险元字段（如 risk_level），此类字段不在事件记录中，
-                # 事件记录取不到时从风险对象自身补取，对齐前端取数口径
+                # 事件记录取不到时从风险对象/风险快照补取，对齐前端取数口径
                 if not expected:
-                    risk_value = _get_risk_field_value(risk, rule["target"])
+                    risk_value = _get_risk_field_value(
+                        risk, rule["target"], nested=tft != StrategyFieldSourceEnum.BASIC.value
+                    )
                     if isinstance(risk_value, datetime):
                         # 时间字段：生成常见序列化表示（epoch 毫秒/秒、常规字符串、ISO8601），
                         # 兼容前端不同传值格式（均为同一时刻的不同表示，不构成校验放宽）
@@ -437,12 +439,17 @@ def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None)
     return uncheck_field, mapping, has_binding
 
 
-def _get_risk_field_value(risk, field_name: str) -> Any:
-    """从风险对象补取字段值（FIELD 引用指向风险元字段时的兜底取数）。
+def _get_risk_field_value(risk, field_name: str, nested: bool = False) -> Any:
+    """从风险对象/风险快照补取字段值（FIELD 引用事件记录取不到时的兜底取数）。
 
-    风险元字段（RiskMetaFields，共 17 项）中 15 项为 Risk 模型直接列，
-    risk_tags / strategy_name 需经关联取值。
+    - 顶层引用（nested=False）：风险元字段（RiskMetaFields 17 项，其中 risk_tags / strategy_name
+      需经关联取值）→ Risk 模型直接列 → 风险快照顶层（risk.event_data）
+    - 嵌套引用（nested=True）：风险快照的 event_data 键（与事件记录嵌套结构同构），
+      对齐前端从风险行数据 event_data 嵌套取值的口径
     """
+    snapshot = risk.event_data if isinstance(risk.event_data, dict) else {}
+    if nested:
+        return (snapshot.get("event_data") or {}).get(field_name)
     special_getters = {
         "risk_tags": lambda: risk.get_tag_names(),
         "strategy_name": lambda: risk.strategy.strategy_name if risk.strategy_id else None,
@@ -451,7 +458,10 @@ def _get_risk_field_value(risk, field_name: str) -> Any:
         with suppress(Exception):
             return special_getters[field_name]()
         return None
-    return getattr(risk, field_name, None)
+    direct = getattr(risk, field_name, None)
+    if direct is not None:
+        return direct
+    return snapshot.get(field_name)
 
 
 def _datetime_value_candidates(value: datetime) -> set:
@@ -460,13 +470,18 @@ def _datetime_value_candidates(value: datetime) -> set:
     RiskMetaFields 中时间字段声明的 time_format 为 epoch_millis；
     同时补充秒级时间戳、常规字符串、ISO8601 以兼容不同序列化口径
     （均为同一时刻的不同表示，不构成校验放宽）。
+    字符串表示需转本地时区：USE_TZ=True 下模型字段为 UTC aware datetime，
+    而前端序列化输出为本地时区（Asia/Shanghai），直接格式化会差 8 小时。
     """
+    from django.utils import timezone as dj_timezone
+
     timestamp = value.timestamp()
+    local_value = dj_timezone.localtime(value) if dj_timezone.is_aware(value) else value
     return {
         str(int(timestamp * 1000)),
         str(int(timestamp)),
-        value.strftime("%Y-%m-%d %H:%M:%S"),
-        value.isoformat(),
+        local_value.strftime("%Y-%m-%d %H:%M:%S"),
+        local_value.isoformat(),
     }
 
 
