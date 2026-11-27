@@ -758,17 +758,17 @@ LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
 # 共享 BKM 自定义 Metric 数据源访问令牌，必须与 LOG_EXPORT_STATUS_DATA_ID 配对使用。
 LOG_EXPORT_STATUS_ACCESS_TOKEN = get_secret("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
 
-# 审计数据全链路监控
-# 存储侧只看最近 N 天的 thedate 分区；窗口内无记录即「没有近期水位」
+# 审计数据全链路监控 3.1 期：BK Log -> Doris 水位
+# 存储侧只看最近 N 个 thedate 分区日；窗口内无记录即「没有近期水位」
 LOG_FLOW_STORAGE_LOOKBACK_DAYS = int(os.getenv("BKAPP_LOG_FLOW_STORAGE_LOOKBACK_DAYS", 7))
-# 单次 query_sync 的 HTTP 预算（秒）
-# QuerySyncResource 默认 TIMEOUT 为 300s，不显式约束时一次卡住的 HDFS 查询会吃满整轮任务
-LOG_FLOW_STORAGE_QUERY_TIMEOUT = int(os.getenv("BKAPP_LOG_FLOW_STORAGE_QUERY_TIMEOUT", 30))
+# 单次 Doris query_sync 的 HTTP 预算（秒）。QuerySyncResource 默认 TIMEOUT 为 300s，
+# 首轮取 25s；线上 HDFS 查询实测 33.338s，已超预算，HDFS 后续单独评估。
+LOG_FLOW_STORAGE_QUERY_TIMEOUT = int(os.getenv("BKAPP_LOG_FLOW_STORAGE_QUERY_TIMEOUT", 25))
 # 一轮指标分块上报大小，避免单次 BKM payload 过大
 LOG_FLOW_METRIC_CHUNK_SIZE = int(os.getenv("BKAPP_LOG_FLOW_METRIC_CHUNK_SIZE", 500))
-# 单轮耗时上限（秒）
+# 单轮耗时上限（秒）：0.75 × 600s 采样周期
 LOG_FLOW_TIME_LIMIT = int(os.getenv("BKAPP_LOG_FLOW_TIME_LIMIT", 450))
-# 任务防重入锁 TTL（秒）
+# 任务防重入锁 TTL（秒）：与 time_limit 对齐，且小于 600s 采样周期
 LOG_FLOW_LOCK_TIMEOUT = int(os.getenv("BKAPP_LOG_FLOW_LOCK_TIMEOUT", 450))
 
 # Asset Observability（资产可观测性）
@@ -830,17 +830,6 @@ BKAPP_IEGSEC_HELPER = os.getenv("BKAPP_IEGSEC_HELPER", "")
 
 # 审计中心场景的iwiki链接
 BKAPP_SCENE_IWIKI_URL = os.getenv("BKAPP_SCENE_IWIKI_URL", "")
-
-# 存储侧只看最近 N 天的 thedate 分区，窗口内无记录即「没有近期水位」
-LOG_FLOW_STORAGE_LOOKBACK_DAYS = 3
-# 单次 query_sync 的 HTTP 预算（秒）
-LOG_FLOW_STORAGE_QUERY_TIMEOUT = 30
-# 一轮指标分块上报大小，避免单次 BKM payload 过大
-LOG_FLOW_METRIC_CHUNK_SIZE = 500
-# 单轮耗时上限（秒）
-LOG_FLOW_TIME_LIMIT = 450
-# 任务防重入锁 TTL（秒）
-LOG_FLOW_LOCK_TIMEOUT = 450
 
 """
 以下为框架代码 请勿修改

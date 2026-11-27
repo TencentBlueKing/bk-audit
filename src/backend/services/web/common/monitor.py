@@ -164,31 +164,35 @@ class BkSecConfigSyncFailedEvent(Event):
 
 
 class LogCollectFlowMetric(Metric):
-    """审计日志接入链路（BK Log -> Doris/HDFS）水位与可信度指标。
+    """审计日志接入链路（BK Log -> Doris）水位与可信度指标。
 
-    两例记录（不可合并）：
-    - 源端记录：``age`` 只出现在这里，避免被多存储维度重复计数；
-    - 存储记录：每个 ``storage_type`` 各一条，携带 ``lag``。
+    两类记录（不可合并）：
+    - 源端记录：每个合格采集项 1 条，包含 ``source_*``；``age`` 只出现在这里，
+      避免将来多存储时按存储数重复计数；
+    - 存储记录：首轮每个采集项 1 条 Doris 记录，携带 ``storage_*`` 与 ``lag``，
+      ``storage_type`` 维度保留，后续扩展存储不改任务结构。
     """
 
-    documentation = "审计日志接入链路水位、延迟、源端停滞与查询可信度"
+    documentation = "审计日志接入链路水位、Doris 延迟、源端停滞与查询可信度"
 
     metric_fields = {
-        "log_collect_source_receive_time": MetricField(documentation="源端最新 origin.time（日志平台上报时间）", unit="s"),
-        "log_collect_source_age_seconds": MetricField(documentation="源端停滞秒数 = now - origin.time", unit="s"),
-        "log_collect_source_query_ok": MetricField(documentation="本轮源端 tail 是否查到：1 查到（含成功但无日志），0 失败", unit="count"),
+        "log_collect_source_receive_time": MetricField(
+            documentation="源端最大有效 origin.time（BK Log 已收日志的上报时间，Unix 秒）", unit="s"
+        ),
+        "log_collect_source_age_seconds": MetricField(documentation="源端停滞秒数 = 当前时间 - 源端水位", unit="s"),
+        "log_collect_source_query_ok": MetricField(documentation="本轮源端 tail 查询结果：1 成功（含成功但无有效水位），0 失败", unit="count"),
         "log_collect_storage_receive_time": MetricField(
-            documentation="存储侧 max(bk_receive_time)（清洗后写入结果表的上报时间）", unit="s"
+            documentation="Doris max(bk_receive_time)（采集插件结果表的上报时间，Unix 秒）", unit="s"
         ),
-        "log_collect_storage_query_ok": MetricField(documentation="本轮该存储查询是否成功：1 成功，0 失败", unit="count"),
-        "log_collect_storage_has_watermark": MetricField(documentation="近 N 天 thedate 窗口内是否有水位：1 有，0 无", unit="count"),
-        "log_collect_lag_seconds": MetricField(
-            documentation="延迟秒数 = origin.time - max(bk_receive_time)，可为负（原样上报）", unit="s"
+        "log_collect_storage_query_ok": MetricField(documentation="本轮 Doris 查询结果：1 成功（含成功但无水位），0 失败", unit="count"),
+        "log_collect_storage_has_watermark": MetricField(
+            documentation="最近 7 个 thedate 分区日内是否有水位：1 有，0 无", unit="count"
         ),
-        "log_collect_lag_source_receive_time": MetricField(documentation="算出该延迟所用的源端 origin.time，用于事后校验口径", unit="s"),
+        "log_collect_lag_seconds": MetricField(documentation="Doris 延迟 = 源端水位 - Doris 水位；两侧均有水位才算，负值原样上报", unit="s"),
+        "log_collect_lag_source_receive_time": MetricField(documentation="算出该延迟所用的源端水位，用于事后校验口径", unit="s"),
         "log_collect_check_heartbeat": MetricField(documentation="一轮采样结束的心跳样本，固定为 1；缺失代表任务未运行", unit="count"),
         "log_collect_check_duration_seconds": MetricField(documentation="本轮任务总耗时", unit="s"),
-        "log_collect_collector_total": MetricField(documentation="本轮纳入采样的合格采集项数量", unit="count"),
+        "log_collect_collector_total": MetricField(documentation="本轮纳入采样的合格采集项数量（log + otlp_log）", unit="count"),
         "log_collect_collector_failed": MetricField(documentation="本轮采样抛异常被跳过的采集项数量", unit="count"),
     }
 
@@ -196,6 +200,6 @@ class LogCollectFlowMetric(Metric):
         "system_id": MetricDimension(documentation="审计系统 ID，来自 CollectorConfig.system_id"),
         "collector_config_id": MetricDimension(documentation="BK Log 采集项 ID，定位到具体采集项"),
         "bk_data_id": MetricDimension(documentation="BkBase RawData 入口 ID，未接入时为空字符串"),
-        "storage_type": MetricDimension(documentation="存储类型：doris 或 hdfs；源端记录不带该维度"),
+        "storage_type": MetricDimension(documentation="存储类型：首轮固定 doris；源端记录不带该维度"),
         "stage": MetricDimension(documentation="上报阶段：round 为整轮心跳，其余为空"),
     }

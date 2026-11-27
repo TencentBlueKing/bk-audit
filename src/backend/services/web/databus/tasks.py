@@ -57,6 +57,7 @@ from services.web.common.monitor import (
 )
 from services.web.databus.collector.check.handlers import ReportCheckHandler
 from services.web.databus.collector.check.log_flow_sampler import (
+    SAMPLE_CUSTOM_TYPES,
     STORAGE_TYPES,
     sample_source,
     sample_storage,
@@ -84,7 +85,6 @@ from services.web.databus.constants import (
     PULL_HANDLER_PRE_CHECK_TIMEOUT,
     AssetSyncAnomalyReason,
     CheckErrorType,
-    CustomTypeEnum,
     EtlConfigEnum,
     JoinDataType,
     PluginSceneChoices,
@@ -946,17 +946,19 @@ def poll_bkbase_v4_clean_operations():
 
 
 # =============================================================================
-# BK Log -> Doris/HDFS 水位监控
+# BK Log -> Doris 水位监控
 #
 # 口径：只上报指标，不判定断流、不写阈值、不落库、不发事件。
-#   - 源端记录（每采集项 1 组）：source_query_ok / source_receive_time / source_age_seconds
-#   - 存储记录（每采集项 × 每 storage_type 1 组）：storage_query_ok / storage_has_watermark /
-#     storage_receive_time / lag_seconds / lag_source_receive_time
+#   - 采样对象：未删除 + 已接入 BK Log + log/otlp_log 日志采集项
+#   - 源端记录（每采集项 1 条）：source_query_ok / source_receive_time / source_age_seconds
+#   - 存储记录（每采集项 × 每 storage_type 1 条，首轮仅 doris）：
+#     storage_query_ok / storage_has_watermark / storage_receive_time /
+#     lag_seconds / lag_source_receive_time
 #   - 轮次记录（每轮 1 条）：heartbeat / duration_seconds / collector_total / collector_failed
 # 监控平台策略：
-#   - lag 大 + age 小 → 存储没跟上
-#   - age 大 + lag 小 → 数据源停滞
-#   - query_ok 连续 0 → 观测中断（不是数据断流）
+#   - lag 大 + age 小 → 源端仍前进、Doris 没跟上
+#   - age 大 → BK Log 自身停滞；不再重复判定 Doris 停滞
+#   - query_ok=0 / has_watermark=0 → 接口异常 / 缺水位，单独观测
 # =============================================================================
 
 
@@ -986,8 +988,13 @@ def _build_flow_records(
     }
     if storage["receive_time"] is not None:
         metrics["log_collect_storage_receive_time"] = storage["receive_time"]
-    # 只有两侧都有水位才算得出延迟；算不出就不报（缺值不补 0）
-    if storage["receive_time"] is not None and source["receive_time"] is not None:
+    # 至少两侧均查询成功且有可用水位才计算延迟；算不出就不报（缺值不补 0）
+    if (
+        source["query_ok"] == 1
+        and storage["query_ok"] == 1
+        and source["receive_time"] is not None
+        and storage["receive_time"] is not None
+    ):
         metrics["log_collect_lag_seconds"] = source["receive_time"] - storage["receive_time"]
         metrics["log_collect_lag_source_receive_time"] = source["receive_time"]
     return [{"target": str(collector.collector_config_id), "metrics": metrics, "dimension": dimension}]
@@ -1007,15 +1014,14 @@ def _report_flow_metrics(records: List[Dict[str, Any]]) -> None:
 @periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.LOG_FLOW_TIME_LIMIT)
 @lock(lock_name="celery:collector_log_flow_check", timeout=settings.LOG_FLOW_LOCK_TIMEOUT)
 def collector_log_flow_check():
-    """链路一：BK Log -> Doris/HDFS 水位监控（纯指标上报）"""
+    """链路一 3.1 期：BK Log -> Doris 水位监控（纯指标上报）"""
     started_at = time.time()
+    # SoftDeleteModelManager 自动过滤 is_deleted=False；覆盖 log 与 otlp_log
     collectors = list(
         CollectorConfig.objects.filter(
             source_platform=SourcePlatformChoices.BKLOG.value,
-            custom_type=CustomTypeEnum.LOG.value,
+            custom_type__in=SAMPLE_CUSTOM_TYPES,
         )
-        .exclude(bkbase_table_id__isnull=True)
-        .exclude(bkbase_table_id="")
     )
 
     records: List[Dict[str, Any]] = []
@@ -1028,35 +1034,25 @@ def collector_log_flow_check():
             failed += 1
             continue
 
-        source_dimension = _build_flow_dimension(collector)
+        # 源端记录：查询成功但无有效水位时，只保留 query_ok=1，时间/停滞指标留空。
+        source_metrics: Dict[str, int] = {"log_collect_source_query_ok": source["query_ok"]}
+        if source["receive_time"] is not None:
+            source_metrics["log_collect_source_receive_time"] = source["receive_time"]
+        if source["age_seconds"] is not None:
+            source_metrics["log_collect_source_age_seconds"] = source["age_seconds"]
         records.append(
             {
                 "target": str(collector.collector_config_id),
-                "metrics": {"log_collect_source_query_ok": source["query_ok"]},
-                "dimension": source_dimension,
+                "metrics": source_metrics,
+                "dimension": _build_flow_dimension(collector),
             }
         )
-        if source["receive_time"] is not None:
-            records.append(
-                {
-                    "target": str(collector.collector_config_id),
-                    "metrics": {"log_collect_source_receive_time": source["receive_time"]},
-                    "dimension": source_dimension,
-                }
-            )
-        if source["age_seconds"] is not None:
-            records.append(
-                {
-                    "target": str(collector.collector_config_id),
-                    "metrics": {"log_collect_source_age_seconds": source["age_seconds"]},
-                    "dimension": source_dimension,
-                }
-            )
 
+        # 首轮 STORAGE_TYPES 只有 doris；HDFS 查询/容量问题后续排查后再加入。
         for storage_type in STORAGE_TYPES:
             try:
                 storage = sample_storage(collector, storage_type)
-            except Exception:  # NOCC:broad-except(单存储失败只影响自己)
+            except Exception:  # NOCC:broad-except(单采集项失败不能中断整轮)
                 logger.exception(
                     "[CollectorLogFlowCheck] storage failed, collector=%s, storage=%s",
                     collector.collector_config_id,

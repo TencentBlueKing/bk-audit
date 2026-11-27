@@ -26,10 +26,15 @@ from blueapps.utils.logger import logger
 from django.conf import settings
 
 from api.bk_base.constants import StorageType
-from services.web.databus.models import CollectorConfig
+from services.web.databus.constants import CustomTypeEnum
+from services.web.databus.models import CollectorConfig, CollectorPlugin
 
-# 存储类型：Doris 面向检索，HDFS 面向离线 flow
-STORAGE_TYPES = (StorageType.DORIS.value, StorageType.HDFS.value)
+# 采样对象：普通采集器 + API Push；BKBase 直连待确认上报时间口径后再纳入。
+SAMPLE_CUSTOM_TYPES = (CustomTypeEnum.LOG.value, CustomTypeEnum.OTLP_LOG.value)
+
+# 首轮只落 Doris；storage_type 维度仍保留，后续扩展存储不改任务结构。
+# 线上 HDFS 查询实测 33.338s，超过首轮 25s 请求预算，查询/容量/字段对齐后续排查。
+STORAGE_TYPES = (StorageType.DORIS.value,)
 
 # 结果表 ID 白名单：只允许库名/标识符字符，防止把脏数据拼进 SQL
 _TABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)?$")
@@ -55,15 +60,25 @@ def _now_seconds() -> int:
     return int(time.time())
 
 
-def build_storage_sql(collector: CollectorConfig, now: Optional[datetime.datetime] = None) -> Optional[str]:
-    """拼存储侧水位 SQL；结果表 ID 非法时返回 None（由调用方置 query_ok=0）。
+def get_result_table_id(collector: CollectorConfig) -> Optional[str]:
+    """由采集项自身的 ``collector_plugin_id`` 找插件结果表；缺失即无法查存储。"""
+    plugin = CollectorPlugin.objects.filter(collector_plugin_id=collector.collector_plugin_id).first()
+    return plugin.result_table_id if plugin else None
+
+
+def build_storage_sql(
+    collector: CollectorConfig,
+    table_id: Optional[str],
+    now: Optional[datetime.datetime] = None,
+) -> Optional[str]:
+    """拼 Doris 水位 SQL；结果表 ID 非法时返回 None（由调用方置 query_ok=0）。
 
     ``thedate`` 用 Python 算出的整型字面量：Doris 与 Hive 的日期函数格式符不同
     （``%Y%m%d`` vs ``yyyyMMdd``），传字面量可彻底规避方言差异。
-    必须带 ``collector_config_id`` 过滤：多个采集项可能写同一张结果表，
+    必须带 ``collector_config_id`` 过滤：多个采集项可能写同一张插件结果表，
     否则整表最新会掩盖单采集项异常。
     """
-    table_id = (collector.bkbase_table_id or "").strip()
+    table_id = (table_id or "").strip()
     if not table_id or not _TABLE_ID_PATTERN.match(table_id):
         return None
     today = now or datetime.datetime.now()
@@ -76,9 +91,11 @@ def build_storage_sql(collector: CollectorConfig, now: Optional[datetime.datetim
 
 
 def sample_source(collector: CollectorConfig) -> Dict[str, Any]:
-    """源端：BK Log tail，取 ``origin.time``。
+    """源端：BK Log tail，取所有有效 ``origin.time`` 的 max。
 
     返回 ``{"query_ok": 0|1, "receive_time": int|None, "age_seconds": int|None}``。
+    ``query_ok`` 只表示查询结果：接口成功但无有效水位时保留 1，不补 0。
+    正文事件时间 ``start_time`` 及其派生的 ``time`` / ``dtEventTimeStamp`` 不参与计算。
     """
     collector_config_id = collector.collector_config_id
     try:
@@ -95,33 +112,40 @@ def sample_source(collector: CollectorConfig) -> Dict[str, Any]:
     origin_times: List[int] = [
         seconds
         for seconds in (_to_seconds((item.get("origin") or {}).get("time")) for item in tails if isinstance(item, dict))
-        if seconds
+        # 有效 = 非空、可解析为数且 > 0；排除事件时间字段。
+        if seconds is not None and seconds > 0
     ]
     if not origin_times:
-        # 拿到了日志却解析不出上报时间：本侧数据不可信，按不可信上报
+        # 查询成功但拿不到可用上报时间：保留成功状态，缺失水位/停滞留空。
         logger.warning(
-            "[LogFlowSourceNoOriginTime] CollectorConfigID => %s; TailLogSample => %s",
+            "[LogFlowSourceNoValidOriginTime] CollectorConfigID => %s; TailLogSample => %s",
             collector_config_id,
             tails[:1],
         )
-        return {"query_ok": 0, "receive_time": None, "age_seconds": None}
+        return {"query_ok": 1, "receive_time": None, "age_seconds": None}
 
     receive_time = max(origin_times)
     return {"query_ok": 1, "receive_time": receive_time, "age_seconds": _now_seconds() - receive_time}
 
 
 def sample_storage(collector: CollectorConfig, storage_type: str) -> Dict[str, Any]:
-    """存储端：Doris / HDFS 各查一次 ``max(bk_receive_time)``。
+    """存储端：首轮只查 Doris 的 ``max(bk_receive_time)``。
 
     返回 ``{"query_ok": 0|1, "has_watermark": 0|1, "receive_time": int|None}``。
-    两侧互不影响：任一侧异常只影响自己的返回。
+    ``query_ok`` 只表示查询结果：查询成功但无水位时保留 1，缺失水位/延迟留空。
     """
-    sql = build_storage_sql(collector)
+    if storage_type not in STORAGE_TYPES:
+        logger.warning("[LogFlowStorageUnsupported] StorageType => %s", storage_type)
+        return {"query_ok": 0, "has_watermark": 0, "receive_time": None}
+
+    table_id = get_result_table_id(collector)
+    sql = build_storage_sql(collector, table_id)
     if sql is None:
         logger.warning(
-            "[LogFlowStorageInvalidTable] CollectorConfigID => %s; BkBaseTableID => %s",
+            "[LogFlowStorageInvalidTable] CollectorConfigID => %s; CollectorPluginID => %s; TableID => %s",
             collector.collector_config_id,
-            collector.bkbase_table_id,
+            collector.collector_plugin_id,
+            table_id,
         )
         return {"query_ok": 0, "has_watermark": 0, "receive_time": None}
 
@@ -131,7 +155,7 @@ def sample_storage(collector: CollectorConfig, storage_type: str) -> Dict[str, A
             prefer_storage=storage_type,
             request_timeout=settings.LOG_FLOW_STORAGE_QUERY_TIMEOUT,
         )
-    except Exception:  # NOCC:broad-except(单存储失败不能中断整轮)
+    except Exception:  # NOCC:broad-except(单采集项失败不能中断整轮)
         logger.exception(
             "[LogFlowStorageFailed] CollectorConfigID => %s; StorageType => %s",
             collector.collector_config_id,
@@ -143,6 +167,6 @@ def sample_storage(collector: CollectorConfig, storage_type: str) -> Dict[str, A
     rows = (resp or {}).get("list") or []
     receive_time = _to_seconds(rows[0].get("m")) if rows and isinstance(rows[0], dict) else None
     if receive_time is None:
-        # 查询成功但窗口内无水位：不编延迟
+        # 查询成功但窗口内无水位：保留成功状态，不编延迟。
         return {"query_ok": 1, "has_watermark": 0, "receive_time": None}
     return {"query_ok": 1, "has_watermark": 1, "receive_time": receive_time}
