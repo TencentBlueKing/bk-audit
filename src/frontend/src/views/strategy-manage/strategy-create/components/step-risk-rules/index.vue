@@ -1532,7 +1532,7 @@
           line-height: var(--bk-theme-line-height-sm);
           color: var(--bk-theme-text-default);
 
-          &.is-required::before {
+          &.is-required::after {
             display: inline-block;
             width: 8px;
             color: var(--bk-theme-color-danger-2);
@@ -1585,6 +1585,17 @@
           max-height: 60px;
           overflow: auto;
           resize: none;
+          font-size: var(--bk-theme-font-size-sm);
+        }
+
+        /* 同表单 placeholder 统一 12，避免 select / textarea / 自定义占位字号不一致 */
+        :deep(.bk-input .bk-input--text::placeholder),
+        :deep(.bk-textarea > textarea::placeholder),
+        :deep(.bk-select .bk-input--text::placeholder),
+        :deep(.bk-select .angle-up::placeholder),
+        :deep(input::placeholder),
+        :deep(textarea::placeholder) {
+          font-size: var(--bk-theme-font-size-sm);
         }
 
         :deep(.rule-text-count .bk-input-word-limit),
@@ -1740,6 +1751,8 @@
           position: absolute;
           top: 50%;
           left: 8px;
+          font-size: var(--bk-theme-font-size-sm);
+          line-height: var(--bk-theme-line-height-sm);
           color: var(--bk-theme-border-strong);
           white-space: nowrap;
           pointer-events: none;

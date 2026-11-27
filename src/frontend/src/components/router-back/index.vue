@@ -58,7 +58,12 @@
 </script>
 <style lang="postcss">
   .audit-router-back {
-    display: inline-block;padding-right: var(--bk-theme-space-8);color: var(--bk-theme-color-brand-2);
+    display: inline-flex;
+    padding-right: var(--bk-theme-space-8);
+    color: var(--bk-theme-color-brand-2);
     cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 </style>

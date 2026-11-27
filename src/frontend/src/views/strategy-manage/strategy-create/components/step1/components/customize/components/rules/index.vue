@@ -255,15 +255,21 @@
 
     .condition {
       position: absolute;
-      top: calc(50% - 14px);
+      top: 50%;
       left: -38px;
+      display: flex;
       width: 28px;
       height: 28px;
-      line-height: 28px;color: var(--bk-theme-color-warn-2);
+      color: var(--bk-theme-color-warn-2);
       text-align: center;
       cursor: pointer;
-      background: var(--bk-theme-surface-default);border: 1px solid var(--bk-theme-color-warn-2);
+      background: var(--bk-theme-surface-default);
+      border: 1px solid var(--bk-theme-color-warn-2);
       border-radius: var(--bk-theme-tag-radius);
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
+      transform: translateY(-50%);
     }
 
     .rule-item {

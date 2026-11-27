@@ -306,19 +306,28 @@
     }
   }
 
+  /* 与其他页统一：保留 margin-top；仅在 32px 标题行内垂直居中（返回图标 + 文案） */
   .page-title {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     display: flex;
+    box-sizing: border-box;
+    flex-shrink: 0;
     height: var(--bk-theme-page-title-height);
     padding: 0 var(--bk-theme-space-24);
     margin-top: var(--bk-theme-space-16);
     font-size: var(--bk-theme-page-title-size);
     font-weight: var(--bk-theme-page-title-weight);
-    line-height: var(--bk-theme-line-height-xl);
+    line-height: 1;
     color: var(--bk-theme-page-title-color);
     background: transparent;
     align-items: center;
+  }
+
+  .page-title > * {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
   }
 
   .audit-navigation-header {

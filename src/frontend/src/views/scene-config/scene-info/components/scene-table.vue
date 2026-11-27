@@ -75,14 +75,14 @@
       row-key="id"
       :stripe="stripe"
       :style="{ '--row-height': rowHeight + 'px' }" />
-    <!-- 分页器 -->
+    <!-- 分页器：空搜也保留，避免高度骤变导致滚动条跳动 -->
     <div
-      v-if="showPagination && filteredData.length > 0"
+      v-if="showPaginationBar"
       class="scene-table-pagination">
       <bk-pagination
         v-model="currentPage"
         align="left"
-        :count="total !== undefined ? total : filteredData.length"
+        :count="paginationCount"
         :layout="['total', 'limit', 'list']"
         :limit="currentLimit"
         :limit-list="limitList"
@@ -202,7 +202,7 @@
     currentPage.value = 1;
   });
 
-  // 搜索条件变化时重置页码
+  // 搜索条件变化时重置页码；高度变化由 scroll-faker ResizeObserver 重算假滚动条
   watch(searchKeyword, (val) => {
     currentPage.value = 1;
     emit('search-change', val);
@@ -253,6 +253,19 @@
     const start = (currentPage.value - 1) * currentLimit.value;
     return filteredData.value.slice(start, start + currentLimit.value);
   });
+
+  // 有搜索条件时用过滤后条数；否则优先用外部 total（分批加载）
+  const hasActiveSearch = computed(() => (searchKeyword.value?.length || 0) > 0);
+  const paginationCount = computed(() => {
+    if (hasActiveSearch.value) {
+      return filteredData.value.length;
+    }
+    return props.total !== undefined ? props.total : filteredData.value.length;
+  });
+  // 空搜也保留分页，避免高度骤变导致滚动条跳动
+  const showPaginationBar = computed(() => (
+    props.showPagination && (filteredData.value.length > 0 || hasActiveSearch.value)
+  ));
 
   const handlePageChange = (page: number) => {
     currentPage.value = page;

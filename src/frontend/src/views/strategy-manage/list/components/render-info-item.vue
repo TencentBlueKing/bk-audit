@@ -54,10 +54,11 @@
     display: flex;
 
     .info-label {
-      min-width: 80px;
+      min-width: 96px;
       color: var(--bk-theme-text-weak);
       text-align: right;
-      flex: 0 0 80px;
+      white-space: nowrap;
+      flex: 0 0 auto;
     }
 
     .info-value {

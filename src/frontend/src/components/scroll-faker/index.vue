@@ -62,6 +62,7 @@
 <script lang="ts">
   import _ from 'lodash';
   import {
+    onBeforeUnmount,
     onMounted,
     ref,
   } from 'vue';
@@ -115,8 +116,31 @@
     mouseleave: handleHorizontalMouseleave,
   } = useHorizotal();
 
+  // 内容高度变化后校正 scrollTop，避免自定义滑块滞后（空表搜索后常见）
+  const clampContentScroll = () => {
+    const el = scrollContent.value as HTMLElement | undefined;
+    if (!el) return;
+    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    if (el.scrollTop > maxScrollTop) {
+      el.scrollTop = maxScrollTop;
+    }
+    if (verticalScroll.value) {
+      const maxBar = Math.max(0, verticalScroll.value.scrollHeight - verticalScroll.value.clientHeight);
+      if (verticalScroll.value.scrollTop > maxBar) {
+        verticalScroll.value.scrollTop = maxBar;
+      } else {
+        verticalScroll.value.scrollTop = el.scrollTop;
+      }
+    }
+  };
+
+  const refreshScroller = () => {
+    initState();
+    clampContentScroll();
+  };
+
   // 初始化滚动状态
-  const handleCalcScroller = _.throttle(initState, 100);
+  const handleCalcScroller = _.throttle(refreshScroller, 100);
   // 内容区滚动
   const handleContentScroll = _.throttle((event) => {
     const {
@@ -151,8 +175,26 @@
     }
   }, 30);
 
+  let contentResizeObserver: ResizeObserver | undefined;
+
   onMounted(() => {
     handleCalcScroller();
+    // 内容尺寸变化时重算假滚动条，避免只能靠 mouseenter 才贴底
+    if (typeof ResizeObserver !== 'undefined' && scrollContent.value) {
+      contentResizeObserver = new ResizeObserver(() => {
+        handleCalcScroller();
+      });
+      contentResizeObserver.observe(scrollContent.value);
+      const firstChild = scrollContent.value.firstElementChild;
+      if (firstChild) {
+        contentResizeObserver.observe(firstChild);
+      }
+    }
+  });
+
+  onBeforeUnmount(() => {
+    contentResizeObserver?.disconnect();
+    contentResizeObserver = undefined;
   });
 
   const getScroll = () => {
@@ -173,6 +215,7 @@
   defineExpose({
     getScroll,
     scrollTo,
+    refresh: refreshScroller,
     boxState,
   });
 </script>

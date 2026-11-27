@@ -228,7 +228,7 @@
     font-size: 12px;
     color: var(--bk-theme-text-default);
 
-    &.is-required::before {
+    &.is-required::after {
       display: inline-block;
       width: 8px;
       color: var(--bk-theme-color-danger-2);

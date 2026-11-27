@@ -512,28 +512,43 @@
 <style scoped lang="postcss">
 .node {
   display: flex;
+  min-height: 32px;
+  align-items: center;
+  box-sizing: border-box;
 
   .field {
     display: flex;
     width: 100%;
+    min-height: 32px;
     justify-content: space-between;
+    align-items: center;
     padding-right: var(--bk-theme-space-12);
+    box-sizing: border-box;
 
     .field-left {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+
       .field-type-span {
         font-size: 12px;
+        line-height: 20px;
         color: var(--bk-theme-text-default);
         text-align: center;
       }
     }
 
     .field-right {
-      margin-top: var(--bk-theme-space-4);
+      display: inline-flex;
       margin-left: var(--bk-theme-space-12);
+      align-items: center;
+      flex-shrink: 0;
     }
 
     .field-type-span {
-      font-size: 12px;color: var(--bk-theme-color-success-2);
+      font-size: 12px;
+      line-height: 20px;
+      color: var(--bk-theme-color-success-2);
       text-align: center;
     }
   }
@@ -579,12 +594,15 @@
 }
 
 .subscript {
-  display: inline-block;
+  display: inline-flex;
   width: 10px;
-  height: 28px;
-  padding-bottom: var(--bk-theme-space-2);
+  height: 16px;
   margin-right: var(--bk-theme-space-4);
-  margin-left: var(--bk-theme-space-4);background-color: var(--bk-theme-fill-selected);
+  margin-left: var(--bk-theme-space-4);
+  background-color: var(--bk-theme-fill-selected);
   border-radius: var(--bk-theme-tag-radius);
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
 }
 </style>

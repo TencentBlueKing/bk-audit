@@ -762,9 +762,12 @@
 
         .field-pop-select-item {
           display: flex;
+          min-height: 32px;
           padding: 0 var(--bk-theme-space-12);
           line-height: 32px;
           justify-content: space-between;
+          align-items: center;
+          box-sizing: border-box;
           cursor: pointer;
 
           &:hover {
@@ -903,13 +906,17 @@
           height: 42px;
           border: none;
 
+          /* 预留透明边框，hover/focus 只改颜色，避免 1px 边框增宽导致抖动 */
           .bk-input--text {
+            border: 1px solid transparent;
+            box-sizing: border-box;
+
             &:hover {
-              border: 1px solid var(--bk-theme-color-brand-4);
+              border-color: var(--bk-theme-color-brand-4);
             }
 
             &:focus {
-              border: 1px solid var(--bk-theme-color-brand-2);
+              border-color: var(--bk-theme-color-brand-2);
             }
           }
         }
