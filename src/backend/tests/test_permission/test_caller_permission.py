@@ -677,9 +677,8 @@ class TestDrillSourceValidation(TestCase):
         risk = Risk.objects.create(
             raw_event_id="e_drill",
             strategy=strategy,
-            event_data={},
             scene_id=scene.scene_id,
-            **{"event_time": timezone.now(), **(risk_kwargs or {})},
+            **{"event_time": timezone.now(), "event_data": {}, **(risk_kwargs or {})},
         )
         StrategyTool.objects.create(
             strategy=strategy,
@@ -912,3 +911,64 @@ class TestDrillSourceValidation(TestCase):
             "current_object_id": self.TOOL_UID,
         }
         self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_time_field_reference_local_time_string(self, _):
+        """FIELD 引用时间字段：前端传本地时区字符串（USE_TZ=True 下与 UTC 表示差 8 小时）应放行"""
+        from django.utils import timezone
+
+        event_time = timezone.now()
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "event_time",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "ets",
+                                "target_value_type": "field",
+                                "target_field_type": "basic",
+                                "target_value": "event_time",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"event_time": event_time},
+        )
+        # 模拟前端序列化口径：本地时区（Asia/Shanghai）常规字符串
+        local_time_str = timezone.localtime(event_time).strftime("%Y-%m-%d %H:%M:%S")
+        data = self._build_request(risk, "event_time", [{"raw_name": "ets", "value": local_time_str}])
+        self.assertTrue(should_skip_permission_from(data, username="u1"))
+
+    @mock.patch("services.web.risk.permissions.RiskViewPermission.has_risk_permission", return_value=True)
+    def test_field_ref_nested_event_data_from_risk_snapshot(self, _):
+        """FIELD 嵌套引用（event_data 字段）：事件记录缺失时从风险快照 event_data 键兜底"""
+        _, risk = self._create_drill_env(
+            strategy_configs={
+                "risk_meta_field_config": [
+                    self._field_config(
+                        "client_ip",
+                        self.TOOL_UID,
+                        [
+                            {
+                                "source_field": "ip",
+                                "target_value_type": "field",
+                                # target_field_type 不传（非 basic）→ 嵌套引用
+                                "target_value": "client_ip",
+                            }
+                        ],
+                    )
+                ]
+            },
+            risk_kwargs={"event_data": {"client_ip": "outer-mock", "event_data": {"client_ip": "inner-mock"}}},
+        )
+        # list_event 返回的事件不含该嵌套字段 → 触发风险快照兜底
+        mocked_event = {"operator": "someone", "event_time": "2026-11-26 10:00:00", "event_data": {"other": "x"}}
+        with mock.patch(
+            "services.web.common.caller_permission.resource.risk.list_event",
+            return_value={"page": 1, "num_pages": 1, "total": 1, "results": [mocked_event]},
+        ):
+            data = self._build_request(risk, "client_ip", [{"raw_name": "ip", "value": "inner-mock"}])
+            self.assertTrue(should_skip_permission_from(data, username="u1"))
