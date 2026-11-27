@@ -29,7 +29,10 @@ from iam.resource.provider import ListResult
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from apps.permission.provider.base import IAMResourceProvider
+from apps.permission.provider.base import (
+    IAMResourceProvider,
+    build_fetch_instance_list_result,
+)
 from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import ManualEvent, Risk, TicketNode, TicketPermission
@@ -255,7 +258,7 @@ class RiskResourceProvider(IAMResourceProvider):
             }
             for item in queryset
         ]
-        return ListResult(results=results, count=base_qs.count())
+        return build_fetch_instance_list_result(results, base_qs, **options)
 
 
 class ManualEventResourceProvider(IAMResourceProvider):
@@ -345,7 +348,7 @@ class ManualEventResourceProvider(IAMResourceProvider):
             }
             for item in queryset
         ]
-        return ListResult(results=results, count=base_qs.count())
+        return build_fetch_instance_list_result(results, base_qs, **options)
 
 
 class TicketPermissionResourceProvider(IAMResourceProvider):
@@ -431,7 +434,7 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
             }
             for item in page_queryset
         ]
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
 
 class TicketNodeResourceProvider(IAMResourceProvider):
@@ -501,4 +504,4 @@ class TicketNodeResourceProvider(IAMResourceProvider):
             }
             for item in queryset
         ]
-        return ListResult(results=results, count=base_qs.count())
+        return build_fetch_instance_list_result(results, base_qs, **options)

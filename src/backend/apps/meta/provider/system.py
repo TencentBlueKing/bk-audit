@@ -23,7 +23,10 @@ from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
 
 from apps.meta.models import System
-from apps.permission.provider.base import BaseResourceProvider
+from apps.permission.provider.base import (
+    BaseResourceProvider,
+    build_fetch_instance_list_result,
+)
 from apps.permission.serializers import SystemListSerializer
 from core.serializers import get_serializer_fields
 
@@ -115,7 +118,7 @@ class SystemBaseProvider(BaseResourceProvider):
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
     def fetch_resource_type_schema(self, **options):
         data = get_serializer_fields(SystemListSerializer)

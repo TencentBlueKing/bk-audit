@@ -24,7 +24,10 @@ from iam.resource.provider import ListResult, SchemaResult
 
 from apps.meta.models import Action, ResourceType, SensitiveObject
 from apps.meta.serializers import SensitiveObjSerializer
-from apps.permission.provider.base import BaseResourceProvider
+from apps.permission.provider.base import (
+    BaseResourceProvider,
+    build_fetch_instance_list_result,
+)
 from core.serializers import get_serializer_fields
 
 
@@ -117,7 +120,7 @@ class SensitiveObjBaseProvider(BaseResourceProvider):
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
     def fetch_resource_type_schema(self, **options):
         data = get_serializer_fields(SensitiveObjSerializer)

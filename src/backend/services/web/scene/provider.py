@@ -23,7 +23,10 @@ from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
 
-from apps.permission.provider.base import IAMResourceProvider
+from apps.permission.provider.base import (
+    IAMResourceProvider,
+    build_fetch_instance_list_result,
+)
 from core.serializers import get_serializer_fields
 from services.web.scene.serializers import SceneSimpleListSerializer
 
@@ -110,7 +113,7 @@ class SceneResourceProvider(IAMResourceProvider):
                     "data": data,
                 }
             )
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
     def fetch_resource_type_schema(self, **options):
         data = get_serializer_fields(SceneSimpleListSerializer)
