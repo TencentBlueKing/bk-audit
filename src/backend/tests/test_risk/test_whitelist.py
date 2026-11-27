@@ -474,10 +474,9 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         apply_result.assert_not_called()
 
     @patch("services.web.risk.whitelist.service.operate_itsm")
-    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
     @patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False)
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_scene_manager_without_iam_stays_pending(self, is_admin, has_manage, is_platform, operate):
+    def test_scene_manager_without_iam_stays_pending(self, is_admin, has_manage, operate):
         from services.web.risk.whitelist.service import _pass_if_admin
 
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
@@ -486,19 +485,20 @@ class WhitelistTicketCreateTests(SimpleTestCase):
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.operate_itsm")
-    @patch("services.web.risk.whitelist.service.can_access_whitelist", return_value=True)
-    def test_platform_admin_passes_immediately(self, can_manage, operate, apply_result):
+    @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=True)
+    @patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False)
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
+    def test_platform_admin_without_manage_scene_stays_pending(
+        self, is_admin, has_manage, is_platform, operate, apply_result
+    ):
         from services.web.risk.whitelist.service import _pass_if_admin
 
-        # 平台管理员（非场景 managers）经 can_access_whitelist 放行后，与场景管理员一样创建即生效
-        operate.return_value = {"success": True, "message": "操作成功"}
+        # 平台管理员（非场景 managers、无该场景 IAM MANAGE_SCENE）不再创建即生效：
+        # 自动通过只认场景管理员 / 场景管理权，平台管理员建单走 ITSM 正常审批。
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "root")
-        operate.assert_called_once_with(rule, "approve", "root")
-        apply_result.assert_called_once_with(
-            rule,
-            {"id": "ticket-1", "status": ITSMV4TicketStatus.FINISHED, "approve_result": True},
-        )
+        operate.assert_not_called()
+        apply_result.assert_not_called()
 
     def test_batch_requires_same_strategy_and_scene(self):
         risks = [

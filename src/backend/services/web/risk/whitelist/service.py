@@ -821,9 +821,9 @@ def submitted_at_of(rule: RiskWhitelist) -> str:
 
 
 def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
-    """场景管理员或平台管理员创建后直接写成生效中。先尝试审批工单；回调若已写入终态则保持。"""
+    """场景管理员创建后直接写成生效中。先尝试审批工单；回调若已写入终态则保持。"""
 
-    if not can_access_whitelist(username, rule.scene_id):
+    if not (is_scene_admin(username, rule.scene_id) or _has_manage_scene(username, rule.scene_id)):
         return
     try:
         payload = operate_itsm(rule, "approve", username)
