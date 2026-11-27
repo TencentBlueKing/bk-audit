@@ -30,6 +30,11 @@ from rest_framework import serializers
 from core.serializers import get_serializer_fields
 
 
+def build_fetch_instance_list_result(results, queryset, *, count_total=True, **options):
+    """Return the full total for sync, or the sample size for a callback precheck."""
+    return ListResult(results=results, count=queryset.count() if count_total else len(results))
+
+
 class BaseResourceProvider(ResourceProvider, metaclass=abc.ABCMeta):
     def list_attr(self, **options):
         """

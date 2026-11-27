@@ -25,7 +25,10 @@ from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from apps.permission.provider.base import IAMResourceProvider
+from apps.permission.provider.base import (
+    IAMResourceProvider,
+    build_fetch_instance_list_result,
+)
 from core.serializers import get_serializer_fields
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
@@ -203,7 +206,7 @@ class StrategyBaseProvider(IAMResourceProvider):
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
     def fetch_resource_type_schema(self, **options):
         # 需要在反向拉取的 Schema 中包含只读字段（如主键 strategy_id）
@@ -365,7 +368,7 @@ class LinkTableProvider(IAMResourceProvider):
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
-        return ListResult(results=results, count=queryset.count())
+        return build_fetch_instance_list_result(results, queryset, **options)
 
     def fetch_resource_type_schema(self, **options):
         data = get_serializer_fields(LinkTableInfoSerializer)
@@ -472,38 +475,22 @@ class StrategyTagResourceProvider(IAMResourceProvider):
             updated_at__gt=start_time, updated_at__lte=end_time
         ).order_by("-id")
 
-        live_count = queryset.count()
-        trash_count = trash_queryset.count()
-        total_count = live_count + trash_count
-
-        slice_from = page.slice_from
-        slice_to = page.slice_to
-
-        results_payload = []
-
-        if slice_from < live_count:
-            # 优先消费仍存在的实例，保证排序与原 QuerySet 保持一致
-            live_slice_end = min(slice_to, live_count)
-            live_slice = list(queryset[slice_from:live_slice_end])
-            snapshot = self.resource_provider_serializer(live_slice, many=True).data
-            results_payload.extend(zip(live_slice, snapshot))
-
-        if slice_to > live_count:
-            # 若分页范围超过现存实例数量，则继续从墓碑数据中取补足分页窗口
-            trash_start = max(0, slice_from - live_count)
-            trash_end = slice_to - live_count
+        if options.get("count_total", True):
+            # 正常同步优先分页读取现存实例，剩余窗口再从墓碑数据补足。
+            live_count = queryset.count()
+            total_count = live_count + trash_queryset.count()
+            live_slice = list(queryset[page.slice_from : min(page.slice_to, live_count)])
+            trash_start = max(0, page.slice_from - live_count)
+            trash_end = max(0, page.slice_to - live_count)
             trash_slice = list(trash_queryset[trash_start:trash_end])
-            for item in trash_slice:
-                results_payload.append(
-                    (
-                        item,
-                        {
-                            "id": item.original_id,
-                            "strategy_id": 0,
-                            "tag_id": 0,
-                        },
-                    )
-                )
+        else:
+            live_slice = list(queryset[:1])
+            trash_slice = [] if live_slice else list(trash_queryset[:1])
+            total_count = len(live_slice) + len(trash_slice)
+
+        snapshot = self.resource_provider_serializer(live_slice, many=True).data
+        results_payload = list(zip(live_slice, snapshot))
+        results_payload.extend((item, {"id": item.original_id, "strategy_id": 0, "tag_id": 0}) for item in trash_slice)
 
         results = []
         for item, data in results_payload:

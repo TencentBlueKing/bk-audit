@@ -18,15 +18,18 @@ to the current version of the project delivered to anyone in the future.
 
 from unittest import mock
 from unittest.mock import Mock
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import ProhibitNullCharactersValidator
+from django.test import SimpleTestCase, override_settings
 
 from api.bk_log.serializers import GetCollectorTailLogResponseSerializer
 from apps.exceptions import JoinDataPreCheckFailed, SnapshotPreparingException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from services.web.databus.collector.resources import ToggleJoinDataResource
 from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
@@ -85,6 +88,50 @@ from tests.test_databus.collector.constants import (
     ErrorSessionMock,
     SessionMock,
 )
+
+
+@override_settings(
+    BK_IAM_SYSTEM_ID="bk-audit",
+    BK_IAM_RESOURCE_API_HOST="https://audit.example.test",
+    BK_BACKEND_URL="https://audit.example.test",
+)
+class TestJoinDataPrecheck(SimpleTestCase):
+    def test_probe_is_only_sent_to_the_audit_callback_and_errors_block_enable(self):
+        for system_id, url, status, result, expected_probe in (
+            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 200, True, "1"),
+            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 200, False, "1"),
+            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 503, True, "1"),
+            ("bk-audit", "https://external.example.test/api/v1/iam/resources/", 200, True, None),
+            ("bk-audit", "https://audit.example.test/other/callback/", 200, True, None),
+            ("external", "https://audit.example.test/api/v1/iam/resources/", 200, True, None),
+        ):
+            with self.subTest(system_id=system_id, url=url, status=status, result=result):
+                target = urlsplit(url)
+                system = System(
+                    system_id=system_id, callback_url=f"{target.scheme}://{target.netloc}", auth_token="test-token"
+                )
+                resource_type = ResourceType(resource_type_id="ticket_node", path=target.path)
+                with (
+                    mock.patch.object(System.objects, "get", return_value=system),
+                    mock.patch.object(ResourceType.objects, "get", return_value=resource_type),
+                    mock.patch("services.web.databus.collector.resources.requests.session") as session,
+                ):
+                    post = session.return_value.post
+                    post.return_value.status_code = status
+                    post.return_value.json.return_value = {"result": result, "data": {"results": []}}
+                    pre_check = ToggleJoinDataResource().pre_check
+                    if status == 200 and result:
+                        pre_check(system_id, "ticket_node", JoinDataType.ASSET)
+                    else:
+                        with self.assertRaises(JoinDataPreCheckFailed):
+                            pre_check(system_id, "ticket_node", JoinDataType.ASSET)
+
+                request = post.call_args.kwargs
+                self.assertEqual(post.call_args.args, (url,))
+                self.assertEqual(request["headers"].get("X-Bk-Audit-Resource-Precheck"), expected_probe)
+                self.assertEqual(request["headers"]["Authorization"], system.base64_token)
+                self.assertEqual(request["json"]["method"], "fetch_instance_list")
+                self.assertEqual(request["json"]["page"], {"offset": 0, "limit": 1})
 
 
 class CollectorTest(TestCase):
