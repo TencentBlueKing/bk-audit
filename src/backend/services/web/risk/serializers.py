@@ -2670,10 +2670,15 @@ class BulkActionFailedItemSerializer(serializers.Serializer):
 
 
 class BulkActionRespSerializer(serializers.Serializer):
-    """批量操作统一返回：成功数 + 失败明细"""
+    """批量操作统一返回：成功数 + 失败明细
+
+    误报确认顺带加白时额外返回 ``whitelist_success_count``（加白成功数），
+    加白失败的条目复用 ``failed`` 展示（reason 带“加白失败：”前缀）。
+    """
 
     success_count = serializers.IntegerField(label=gettext_lazy("成功数量"), default=0)
     failed = BulkActionFailedItemSerializer(label=gettext_lazy("失败明细"), many=True, required=False, default=list)
+    whitelist_success_count = serializers.IntegerField(label=gettext_lazy("加白成功数量"), required=False, default=0)
 
 
 class BatchActionAvailabilitySerializer(serializers.Serializer):

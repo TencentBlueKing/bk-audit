@@ -453,17 +453,25 @@ class WhitelistTicketCreateTests(SimpleTestCase):
     @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_handle_failure_still_writes_active(self, is_admin, operate, ticket_detail, apply_result):
+    def test_admin_handle_failure_keeps_pending(self, is_admin, operate, ticket_detail, apply_result):
         from services.web.risk.whitelist.service import _pass_if_admin
 
         operate.side_effect = Exception("操作未找到")
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
         ticket_detail.assert_not_called()
-        apply_result.assert_called_once_with(
-            rule,
-            {"id": "ticket-1", "status": ITSMV4TicketStatus.FINISHED, "approve_result": True},
-        )
+        apply_result.assert_not_called()
+
+    @patch("services.web.risk.whitelist.service.apply_whitelist_result")
+    @patch("services.web.risk.whitelist.service.operate_itsm")
+    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
+    def test_admin_handle_success_false_keeps_pending(self, is_admin, operate, apply_result):
+        from services.web.risk.whitelist.service import _pass_if_admin
+
+        operate.return_value = {"success": False, "message": "操作失败"}
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
+        _pass_if_admin(rule, "alice")
+        apply_result.assert_not_called()
 
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_platform_admin", return_value=False)
@@ -1290,10 +1298,10 @@ class WhitelistListQueryTests(SimpleTestCase):
             saved["update_fields"] = set(update_fields or [])
 
         rule.save = save
-        # 回调没有登录用户：把 updated_by 一并写回，避免基类将更新人保存成空
+        # 回调没有登录用户：排除 updated_by，UPDATE 不含该列，保住 DB 原值
         with patch("services.web.risk.whitelist.service.get_request_username", return_value=""):
             _save_rule(rule, ["status"])
-        self.assertIn("updated_by", saved["update_fields"])
+        self.assertNotIn("updated_by", saved["update_fields"])
 
     def test_expire_whitelists_keeps_original_updated_by(self):
         from services.web.risk.whitelist.service import expire_whitelists
@@ -1579,6 +1587,17 @@ class WhitelistContainsFieldsEnumTests(SimpleTestCase):
 
 
 class WhitelistDetailTests(SimpleTestCase):
+    def setUp(self):
+        super().setUp()
+        # 详情接口新增 can_access_whitelist + get_request_username 归属校验，统一 mock 放行
+        for attr in (
+            "services.web.risk.resources.whitelist.get_request_username",
+            "services.web.risk.resources.whitelist.can_access_whitelist",
+        ):
+            p = patch(attr, return_value=True if "can_access" in attr else "alice")
+            p.start()
+            self.addCleanup(p.stop)
+
     @staticmethod
     def _detail_rule(**kwargs):
         base = dict(
@@ -1645,18 +1664,37 @@ class WhitelistDetailTests(SimpleTestCase):
         )
 
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
-    def test_detail_filters_pending_rejected_scene(self, objects):
-        # 服务端硬编码只取待审批 / 已驳回，并按 scene_id 兜一层越权，与入参 ids 求交
+    def test_detail_filters_pending_rejected(self, objects):
+        # 服务端硬编码只取待审批 / 已驳回，与入参 ids 求交
         from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
 
         objects.filter.return_value = self._qs([])
         RetrieveRiskWhitelist().perform_request({"id": [1, 2, 3], "scene_id": 3})
         called = objects.filter.call_args.kwargs
-        self.assertEqual(called["scene_id"], 3)
         self.assertEqual(called["pk__in"], [1, 2, 3])
         self.assertEqual(set(called["status__in"]), {WhitelistStatus.PENDING, WhitelistStatus.REJECTED})
+        # 不再按请求 scene_id 过滤，改由 can_access_whitelist 逐条校验规则归属
+        self.assertNotIn("scene_id", called)
         # 并发外呼前按创建时间倒序定序，executor.map 据此保序返回
         objects.filter.return_value.order_by.assert_called_once_with("-created_at")
+
+    @patch("services.web.risk.resources.whitelist.can_access_whitelist")
+    @patch("services.web.risk.resources.whitelist.get_request_username", return_value="alice")
+    @patch("services.web.risk.resources.whitelist._load_ticket_detail", return_value={})
+    @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
+    def test_detail_denies_rule_outside_user_scene(self, objects, load_detail, _user, can_access):
+        # 规则实际 scene_id 不在用户权限范围时，不返回该条详情
+        from services.web.risk.resources.whitelist import RetrieveRiskWhitelist
+
+        own_rule = self._detail_rule(id=1, scene_id=3)
+        other_rule = self._detail_rule(id=2, scene_id=99)
+        objects.filter.return_value = self._qs([own_rule, other_rule])
+        can_access.side_effect = lambda username, scene_id: scene_id == 3
+
+        result = RetrieveRiskWhitelist().perform_request({"id": [1, 2], "scene_id": 3})
+
+        self.assertEqual([item["id"] for item in result], ["1"])
+        self.assertEqual(load_detail.call_count, 1)
 
     @patch("services.web.risk.resources.whitelist._load_ticket_detail")
     @patch("services.web.risk.resources.whitelist.RiskWhitelist.objects")
@@ -1773,6 +1811,68 @@ class WhitelistApproveCloseTests(SimpleTestCase):
             _close_source_risk(SimpleNamespace(id=7, risk_id="", updated_by="alice", created_by="alice"))
         close_cls.assert_not_called()
 
+    @patch("services.web.risk.models.Risk.objects")
+    @patch("services.web.risk.handlers.ticket.CloseRisk")
+    def test_renew_approve_on_closed_risk_does_not_reclose(self, close_cls, objects):
+        """续期通过时来源风险仍是首次加白关掉的 CLOSED，续期只延长有效期，不应重关风险单。"""
+
+        from services.web.risk.constants import RiskStatus
+        from services.web.risk.whitelist.service import _close_source_risk
+
+        objects.filter.return_value.first.return_value = SimpleNamespace(risk_id="risk-1", status=RiskStatus.CLOSED)
+        _close_source_risk(SimpleNamespace(id=7, risk_id="risk-1", updated_by="alice", created_by="bob"))
+        close_cls.assert_not_called()
+
+
+class BatchWhitelistResultTests(SimpleTestCase):
+    """误报顺带加白：把每条加白结果并回批量响应，并对缺失风险保持健壮。"""
+
+    @staticmethod
+    def _risk(rid):
+        return SimpleNamespace(risk_id=rid, scene_id=1, strategy_id=9, raw_event_id=f"{rid}-e")
+
+    @staticmethod
+    def _whitelist():
+        return {"match_scope": {}, "whitelist_type": "x", "reason": "r"}
+
+    @patch("services.web.risk.whitelist.service.submit_whitelist")
+    def test_missing_risk_is_skipped_without_error(self, submit):
+        from services.web.risk.resources.risk import _apply_whitelist_after_misreport
+
+        # r2 在确认与加白之间被删，risk_map 里没有：应跳过而非抛 DoesNotExist。
+        result = {"success_count": 2, "failed": [], "success_risk_ids": ["r1", "r2"]}
+        risk_map = {"r1": self._risk("r1")}
+        submit.return_value = [SimpleNamespace(id=1)]
+        out = _apply_whitelist_after_misreport(result, self._whitelist(), risk_map, "alice")
+        self.assertEqual(out["whitelist_success_count"], 1)
+        self.assertEqual(out["failed"], [])
+        self.assertEqual([r.risk_id for r in submit.call_args.kwargs["risks"]], ["r1"])
+
+    @patch("services.web.risk.whitelist.service.submit_whitelist")
+    def test_partial_whitelist_failure_is_reported(self, submit):
+        from services.web.risk.resources.risk import _apply_whitelist_after_misreport
+
+        result = {"success_count": 2, "failed": [], "success_risk_ids": ["r1", "r2"]}
+        risk_map = {"r1": self._risk("r1"), "r2": self._risk("r2")}
+        submit.return_value = {
+            "succeeded": [SimpleNamespace(id=1)],
+            "failed": [{"risk_id": "r2", "error": "ITSM 建单失败"}],
+        }
+        out = _apply_whitelist_after_misreport(result, self._whitelist(), risk_map, "alice")
+        self.assertEqual(out["whitelist_success_count"], 1)
+        self.assertEqual([item["risk_id"] for item in out["failed"]], ["r2"])
+        self.assertTrue(out["failed"][0]["reason"].startswith("加白失败："))
+        self.assertIn("ITSM 建单失败", out["failed"][0]["reason"])
+
+    @patch("services.web.risk.whitelist.service.submit_whitelist")
+    def test_no_successful_risk_skips_submit(self, submit):
+        from services.web.risk.resources.risk import _apply_whitelist_after_misreport
+
+        result = {"success_count": 0, "failed": [{"risk_id": "r1", "reason": "拒绝"}], "success_risk_ids": []}
+        out = _apply_whitelist_after_misreport(result, {"match_scope": {}}, {}, "alice")
+        submit.assert_not_called()
+        self.assertEqual(out["whitelist_success_count"], 0)
+
 
 class WhitelistReviewTests(SimpleTestCase):
     def test_scene_admin_is_scene_manager(self):
@@ -1799,14 +1899,28 @@ class WhitelistReviewTests(SimpleTestCase):
             "services.web.risk.whitelist.service.get_request_username", return_value="alice"
         ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=True):
             self.assertEqual(_whitelist_approvers(3), ["alice"])
-        # 当前用户不在 managers 且无 MANAGE_SCENE → 不加
+        # 当前用户不在 managers、无 MANAGE_SCENE 且非平台管理员 → 不加
         with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
             "services.web.risk.whitelist.service.get_request_username", return_value="bob"
-        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False):
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False), patch(
+            "services.web.risk.whitelist.service.is_platform_admin", return_value=False
+        ):
             self.assertEqual(_whitelist_approvers(3), ["alice"])
         # 无请求上下文（get_request_username 为空）→ 不加
         with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
             "services.web.risk.whitelist.service.get_request_username", return_value=""
+        ):
+            self.assertEqual(_whitelist_approvers(3), ["alice"])
+
+    def test_whitelist_approvers_excludes_platform_admin_without_manage_scene(self):
+        from services.web.risk.whitelist.service import _whitelist_approvers
+
+        # 平台管理员但对该场景无 MANAGE_SCENE → 不列进建单 approver。
+        # 平台管理员点通过立即生效走 can_access_whitelist / review_whitelist，不依赖 approver。
+        with patch("services.web.risk.whitelist.service._scene_admin_usernames", return_value=["alice"]), patch(
+            "services.web.risk.whitelist.service.get_request_username", return_value="root"
+        ), patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False), patch(
+            "services.web.risk.whitelist.service.is_platform_admin", return_value=True
         ):
             self.assertEqual(_whitelist_approvers(3), ["alice"])
 

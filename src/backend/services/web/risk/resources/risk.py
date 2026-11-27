@@ -2390,6 +2390,42 @@ def _complete_bulk(payloads: Sequence[dict], failed: List[Dict[str, str]], run_i
     return {"success_count": success_count, "failed": failed, "success_risk_ids": success_risk_ids}
 
 
+def _apply_whitelist_after_misreport(
+    result: Dict[str, Any], whitelist: dict, risk_map: Dict[str, Risk], username: str
+) -> Dict[str, Any]:
+    """误报确认后顺带加白：按本次真实成功的 risk_id 提交白名单，并把每条加白结果并回批量响应。"""
+
+    from services.web.risk.whitelist.service import submit_whitelist
+
+    # 按本次真实成功的 risk_id 加白，不能用 risk_label=MISREPORT 反查：
+    # 批量中“原本已是误报”会被拒绝，反查会把它误当成功项加白。
+    done = [risk_map[rid] for rid in result.get("success_risk_ids") or [] if rid in risk_map]
+    result["whitelist_success_count"] = 0
+    if not done:
+        return result
+
+    submitted = submit_whitelist(
+        scene_id=done[0].scene_id,
+        match_scope=whitelist["match_scope"],
+        whitelist_type=whitelist["whitelist_type"],
+        reason=whitelist["reason"],
+        duration_days=whitelist.get("duration_days"),
+        expire_at=whitelist.get("expire_at"),
+        risks=done,
+        username=username,
+    )
+    if isinstance(submitted, dict):
+        succeeded = submitted.get("succeeded") or []
+        for item in submitted.get("failed") or []:
+            result["failed"].append(
+                {"risk_id": item.get("risk_id", ""), "reason": gettext("加白失败：") + str(item.get("error", ""))}
+            )
+    else:
+        succeeded = submitted or []
+    result["whitelist_success_count"] = len(succeeded)
+    return result
+
+
 def _risk_batch_actions(risk: Risk) -> Optional[Set[str]]:
     """返回该风险可执行的批量动作。None 表示自动处理审批中或套餐处理中，整批不可处理。"""
 
@@ -2631,22 +2667,7 @@ class BatchConfirmAsMisReportResource(RiskMeta):
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
         result = _complete_bulk(payloads, failed, lambda item: ConfirmAsMisReportResource().perform_request(item))
         if whitelist and result.get("success_count"):
-            from services.web.risk.whitelist.service import submit_whitelist
-
-            # 按本次真实成功的 risk_id 加白，不能用 risk_label=MISREPORT 反查：
-            # 批量中“原本已是误报”会被 MisReport.pre_check 拒绝，反查会把它误当成功项加白。
-            done = [Risk.objects.get(risk_id=rid) for rid in result.get("success_risk_ids") or []]
-            if done:
-                submit_whitelist(
-                    scene_id=done[0].scene_id,
-                    match_scope=whitelist["match_scope"],
-                    whitelist_type=whitelist["whitelist_type"],
-                    reason=whitelist["reason"],
-                    duration_days=whitelist.get("duration_days"),
-                    expire_at=whitelist.get("expire_at"),
-                    risks=done,
-                    username=get_request_username(),
-                )
+            return _apply_whitelist_after_misreport(result, whitelist, risk_map, get_request_username())
         return result
 
 
@@ -2745,22 +2766,7 @@ class BulkMisreportResource(RiskMeta):
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
         result = _complete_bulk(payloads, failed, run_item)
         if whitelist and result.get("success_count"):
-            from services.web.risk.whitelist.service import submit_whitelist
-
-            # 按本次真实成功的 risk_id 加白，不能用 risk_label=MISREPORT 反查：
-            # 批量中“原本已是误报”会被拒绝，反查会把它误当成功项加白。
-            done = [Risk.objects.get(risk_id=rid) for rid in result.get("success_risk_ids") or []]
-            if done:
-                submit_whitelist(
-                    scene_id=done[0].scene_id,
-                    match_scope=whitelist["match_scope"],
-                    whitelist_type=whitelist["whitelist_type"],
-                    reason=whitelist["reason"],
-                    duration_days=whitelist.get("duration_days"),
-                    expire_at=whitelist.get("expire_at"),
-                    risks=done,
-                    username=get_request_username(),
-                )
+            return _apply_whitelist_after_misreport(result, whitelist, risk_map, get_request_username())
         return result
 
 

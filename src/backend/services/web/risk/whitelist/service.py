@@ -357,7 +357,11 @@ def _raw_ticket_status(ticket: dict) -> str:
 
 
 def _is_approved(ticket: dict) -> bool:
-    """和场景权限一样，直接用工单里的 approve_result，缺省当未通过。"""
+    """和场景权限一样，直接用工单里的 approve_result，缺省当未通过。
+
+    缺省口径与 ``services.web.scene.permission.parse_itsm_ticket`` 一致：``approve_result``
+    缺省 ``False``，全仓统一“缺结果即未通过”，避免白名单与场景申请两套判断。
+    """
 
     return bool((ticket or {}).get("approve_result", False))
 
@@ -366,6 +370,7 @@ def map_whitelist_status(ticket: dict) -> tuple:
     """ITSMV4TicketStatus 映射到白名单状态。和场景申请的 ApplicationStatus 同一层。
 
     finished 且通过 → 生效中；finished 未通过或 termination → 已驳回；running 或没有结果 → 待审批。
+    finished 缺 ``approve_result`` 按未通过落已驳回，与 ``parse_itsm_ticket`` 同一缺省口径。
     """
 
     status = _raw_ticket_status(ticket)
@@ -731,6 +736,7 @@ def _whitelist_approvers(scene_id) -> list:
 
     当前用户已在 managers 中则不重复加；不在 managers 但有该场景 MANAGE_SCENE 实例权限
     （能进来建单的场景管理员）时补进去，保证本人可作为审批人。
+    平台管理员能否放行看 can_access_whitelist / review_whitelist，不列进建单 approver。
     """
 
     approvers = _scene_admin_usernames(scene_id)
@@ -820,9 +826,17 @@ def _pass_if_admin(rule: RiskWhitelist, username: str) -> None:
     if not can_access_whitelist(username, rule.scene_id):
         return
     try:
-        operate_itsm(rule, "approve", username)
+        payload = operate_itsm(rule, "approve", username)
     except Exception:
         logger.exception("[RiskWhitelist] admin approve failed, id=%s", rule.id)
+        return
+    if not (isinstance(payload, dict) and payload.get("success") is True):
+        logger.warning(
+            "[RiskWhitelist] admin approve returned non-success, id=%s payload=%s",
+            rule.id,
+            payload,
+        )
+        return
     if hasattr(rule, "refresh_from_db"):
         rule.refresh_from_db()
     if getattr(rule, "status", WhitelistStatus.PENDING) != WhitelistStatus.PENDING:
@@ -864,7 +878,7 @@ def _save_rule(rule: RiskWhitelist, fields) -> None:
 
     fields = set(fields)
     if not get_request_username():
-        fields.add("updated_by")
+        fields.discard("updated_by")
     rule.save(update_fields=list(fields))
 
 
