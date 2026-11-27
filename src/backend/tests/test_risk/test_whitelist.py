@@ -433,55 +433,44 @@ class WhitelistTicketCreateTests(SimpleTestCase):
         self.assertEqual(form_data["match_scope"], "a = 1 AND b = 2")
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
-    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_handle_success_writes_active(self, is_admin, operate, ticket_detail, apply_result):
+    def test_admin_create_activates_locally_without_handle(self, is_admin, operate, apply_result):
+        # 创建路径不再 ticket_handle(approve)：本地权限判定过就直接生效，
+        # 避免"未找到可用的任务"、工单尚未流转到 approve 节点等误报。
         from services.web.risk.whitelist.service import _pass_if_admin
 
-        operate.return_value = {"success": True, "message": "操作成功"}
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
-        operate.assert_called_once_with(rule, "approve", "alice")
-        ticket_detail.assert_not_called()
+        operate.assert_not_called()
         apply_result.assert_called_once_with(
             rule,
             {"id": "ticket-1", "status": ITSMV4TicketStatus.FINISHED, "approve_result": True},
         )
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
-    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
     @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_handle_failure_keeps_pending(self, is_admin, operate, ticket_detail, apply_result):
+    def test_admin_create_skips_when_already_terminal(self, is_admin, operate, apply_result):
+        # 回调抢先落终态后，_pass_if_admin 不再重复写。
         from services.web.risk.whitelist.service import _pass_if_admin
 
-        operate.side_effect = Exception("操作未找到")
-        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
+        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.REJECTED)
         _pass_if_admin(rule, "alice")
-        ticket_detail.assert_not_called()
+        operate.assert_not_called()
         apply_result.assert_not_called()
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.operate_itsm")
-    @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=True)
-    def test_admin_handle_success_false_keeps_pending(self, is_admin, operate, apply_result):
-        from services.web.risk.whitelist.service import _pass_if_admin
-
-        operate.return_value = {"success": False, "message": "操作失败"}
-        rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
-        _pass_if_admin(rule, "alice")
-        apply_result.assert_not_called()
-
-    @patch("services.web.risk.whitelist.service.operate_itsm")
     @patch("services.web.risk.whitelist.service._has_manage_scene", return_value=False)
     @patch("services.web.risk.whitelist.service.is_scene_admin", return_value=False)
-    def test_scene_manager_without_iam_stays_pending(self, is_admin, has_manage, operate):
+    def test_scene_manager_without_iam_stays_pending(self, is_admin, has_manage, operate, apply_result):
         from services.web.risk.whitelist.service import _pass_if_admin
 
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "alice")
         operate.assert_not_called()
+        apply_result.assert_not_called()
 
     @patch("services.web.risk.whitelist.service.apply_whitelist_result")
     @patch("services.web.risk.whitelist.service.operate_itsm")
@@ -491,10 +480,10 @@ class WhitelistTicketCreateTests(SimpleTestCase):
     def test_platform_admin_without_manage_scene_stays_pending(
         self, is_admin, has_manage, is_platform, operate, apply_result
     ):
-        from services.web.risk.whitelist.service import _pass_if_admin
-
         # 平台管理员（非场景 managers、无该场景 IAM MANAGE_SCENE）不再创建即生效：
         # 自动通过只认场景管理员 / 场景管理权，平台管理员建单走 ITSM 正常审批。
+        from services.web.risk.whitelist.service import _pass_if_admin
+
         rule = SimpleNamespace(id=1, scene_id=3, itsm_ticket_id="ticket-1", status=WhitelistStatus.PENDING)
         _pass_if_admin(rule, "root")
         operate.assert_not_called()
@@ -760,7 +749,7 @@ class _Rule:
         self.updated_at = None
         self.created_at = None
 
-    def save(self, update_fields=None, update_record=True):
+    def save(self, update_fields=None):
         return None
 
     def refresh_from_db(self):
@@ -928,33 +917,6 @@ class WhitelistFlowTests(SimpleTestCase):
         close_risk.assert_called_once()
         ticket_detail.assert_not_called()
 
-    @patch("services.web.risk.whitelist.service.api.bk_itsm_v4.ticket_detail")
-    @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
-    @patch("services.web.risk.whitelist.service._close_source_risk")
-    @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
-    def test_callback_keeps_creator_as_updated_by(self, close_risk, refresh_nodes, ticket_detail):
-        # 回调无登录用户：终态落库不得把 updated_by 写成空，应保留建单人（基类自动记录已关闭）
-        rule = _Rule(
-            status=WhitelistStatus.PENDING,
-            callback_token="token",
-            risk_id="",
-            updated_by="alice",
-            created_by="alice",
-        )
-        rule.itsm_ticket_id = "ticket-1"
-        manager = _WhitelistManager()
-        manager.rules.append(rule)
-        with patch.object(RiskWhitelist, "objects", manager):
-            result = RiskWhitelistCallback().perform_request(
-                {
-                    "callback_token": "token",
-                    "ticket": {"id": "ticket-1", "status": "FINISHED", "approve_result": True},
-                }
-            )
-        self.assertTrue(result["result"])
-        self.assertEqual(rule.status, WhitelistStatus.ACTIVE)
-        self.assertEqual(rule.updated_by, "alice")
-
     @patch("services.web.risk.whitelist.service.refresh_whitelist_nodes")
     @patch("services.web.risk.whitelist.service._close_source_risk")
     @patch("services.web.risk.whitelist.service.transaction.atomic", _noop_atomic)
@@ -1110,7 +1072,7 @@ class WhitelistRenewTests(SimpleTestCase):
             callback_token="old-token",
         )
 
-        def save(update_fields=None, update_record=True):
+        def save(update_fields=None):
             saved["fields"] = list(update_fields or [])
 
         rule.itsm_ticket_id = "ticket-old"
@@ -1315,21 +1277,20 @@ class WhitelistListQueryTests(SimpleTestCase):
         ascending = order_whitelist_queryset(_Query(), ["expire_at"])
         self.assertEqual(ascending.fields, ("expire_is_permanent", "expire_at"))
 
-    def test_save_rule_disables_auto_record_and_passes_fields(self):
+    def test_callback_save_keeps_updated_by(self):
         from services.web.risk.whitelist.service import _save_rule
 
-        rule = SimpleNamespace(updated_by="alice", created_by="alice", updated_at=None)
+        rule = SimpleNamespace(updated_by="", created_by="alice", updated_at=None)
         saved = {}
 
-        def save(update_fields=None, update_record=True):
+        def save(update_fields=None):
             saved["update_fields"] = set(update_fields or [])
-            saved["update_record"] = update_record
 
         rule.save = save
-        # 关闭基类自动记录：无登录用户也不会把 updated_by 写成空，fields 原样透传给 save
-        _save_rule(rule, ["status", "updated_at", "updated_by"])
-        self.assertFalse(saved["update_record"])
-        self.assertEqual(saved["update_fields"], {"status", "updated_at", "updated_by"})
+        # 回调没有登录用户：排除 updated_by，UPDATE 不含该列，保住 DB 原值
+        with patch("services.web.risk.whitelist.service.get_request_username", return_value=""):
+            _save_rule(rule, ["status"])
+        self.assertNotIn("updated_by", saved["update_fields"])
 
     def test_expire_whitelists_keeps_original_updated_by(self):
         from services.web.risk.whitelist.service import expire_whitelists
