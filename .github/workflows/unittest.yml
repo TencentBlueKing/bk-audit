@@ -35,7 +35,7 @@ jobs:
             return await needsBackendTests({ github, context });
 
   unittest:
-    name: tests (${{ matrix.suite }})
+    name: run backend tests (${{ matrix.suite }})
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.backend_tests != 'false' }}
     runs-on: ubuntu-latest
@@ -174,3 +174,30 @@ jobs:
           name: special-worker-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: src/backend/special-logs/
           if-no-files-found: ignore
+
+  test_status:
+    # Keep both check names even when the service-backed matrix is skipped.
+    name: tests (${{ matrix.suite }})
+    needs: [changes, unittest]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [regular, special]
+    steps:
+      - name: Report backend test status
+        env:
+          DETECTION_RESULT: ${{ needs.changes.result }}
+          BACKEND_TESTS: ${{ needs.changes.outputs.backend_tests }}
+          UNITTEST_RESULT: ${{ needs.unittest.result }}
+        run: |
+          if [[ "$DETECTION_RESULT" == success && "$BACKEND_TESTS" == false && "$UNITTEST_RESULT" == skipped ]]; then
+            echo 'Backend tests skipped because only frontend files changed.' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$DETECTION_RESULT" == success && "$UNITTEST_RESULT" == success ]]; then
+            echo 'Both backend test suites passed.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Backend test checks did not succeed (detection=$DETECTION_RESULT, tests=$UNITTEST_RESULT)."
+            exit 1
+          fi
