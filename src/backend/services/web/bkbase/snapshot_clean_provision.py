@@ -10,6 +10,7 @@ from bk_resource.exceptions import APIRequestError, ValidateException
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db import transaction
 
+from api.bk_base_v4.default import CleanCreateRejected
 from apps.exceptions import CoreException
 from apps.meta.models import ResourceType, System
 from core.exceptions import LockError
@@ -182,13 +183,12 @@ def _wait(snapshot, operation, verify=None):
     _transition(snapshot, operation, patch, verify=verify, terminal=message)
 
 
-def _submit(snapshot, context, operation, ref, verify, report_config):
+def _submit(snapshot, context, operation, ref, verify, spec):
     if snapshot.bkbase_v4_resources.get("clean"):
         raise BKBaseResourceMappingError(message="New Snapshot already has another Clean binding")
     params = resource_params(context, ref, kind="Clean")
     if get_resource_or_none(api.bk_base_v4.clean_get, **params) is not None:
         raise BKBaseResourceMappingError(message="Clean exists without this Snapshot provision intent")
-    spec = _build_spec(snapshot, report_config)
     step = {
         "ref": ref,
         "input_digest": verify[2],
@@ -204,16 +204,22 @@ def _submit(snapshot, context, operation, ref, verify, report_config):
         result = api.bk_base_v4.clean_create(
             tenant=params["tenant"], namespace=params["namespace"], metadata=params, spec=spec, status=None
         )
+    except CleanCreateRejected as error:
+        rejected = {**step, "accepted": False, "rejection": error.rejection}
+        _transition(
+            snapshot,
+            claimed,
+            {"stage": "clean_failed", "clean_step": rejected},
+            verify=verify,
+            terminal=str(error),
+        )
+        return
     except (APIRequestError, ValidateException):
         # 此处已持久化认领；重入只读取该 Ref。
         return
-    if not isinstance(result.get("metadata"), dict) or any(
-        result["metadata"].get(key) != ref[key] for key in ("tenant", "namespace", "name")
-    ):
+    if not clean.clean_create_receipt_matches(ref, result):
         return
     status = result.get("status")
-    if status is not None and not isinstance(status, dict):
-        return
     receipt = {**step, "accepted": True, "history_id": (status or {}).get("history_id")}
     _transition(snapshot, claimed, {"clean_step": receipt}, verify=verify)
 
@@ -452,6 +458,9 @@ def retry(snapshot, request_data, pull_handler, pre_check):
         raise BKBaseResourceMappingError(message="Initial Snapshot retry requires the unchanged failed operation")
     if operation.get("handoff_ready"):
         return snapshot_restore.prepare(snapshot, request_data, pull_handler, pre_check, initial_start=True)
+    rejection = (operation.get("clean_step") or {}).get("rejection")
+    if rejection:
+        raise BKBaseResourceMappingError(message=str(CleanCreateRejected(**rejection)))
     context, params = get_bkbase_context(), pull_handler.config
     expected = _input_digest(snapshot, params, context)
     if operation.get("clean_step", {}).get("input_digest") != expected:
@@ -496,22 +505,25 @@ def advance(snapshot, params):
                 expected = _input_digest(snapshot, params, context)
                 verify = (params, context, expected)
                 step = operation.get("clean_step")
-                ref = clean.owner_clean_ref(context, snapshot)
-                if step is not None and (
-                    not isinstance(step, dict) or step.get("ref") != ref or step.get("input_digest") != expected
-                ):
-                    raise BKBaseResourceMappingError(message="Snapshot Clean claim does not match current inputs")
+                if step is not None:
+                    if not isinstance(step, dict) or step.get("input_digest") != expected:
+                        raise BKBaseResourceMappingError(message="Snapshot Clean claim does not match current inputs")
+                    ref = source._replay_ref(context, step.get("ref"), "Clean")
+                    if ref["namespace"] != context["namespace"] or binding.get("clean") not in (None, ref):
+                        raise BKBaseResourceMappingError(message="Snapshot Clean claim does not match its binding")
                 current_source = _verify_source(snapshot, params, context, operation)
                 if current_source is None:
                     _wait(snapshot, operation, verify)
                 elif binding.get("clean_ready"):
                     _advance_storages(snapshot, params, context, operation, verify)
-                else:
+                elif step is not None:
                     with resource_lock(context, ref):
-                        if step:
-                            _observe(snapshot, context, operation, ref, verify)
-                        else:
-                            _submit(snapshot, context, operation, ref, verify, current_source["spec"]["report_config"])
+                        _observe(snapshot, context, operation, ref, verify)
+                else:
+                    spec = _build_spec(snapshot, current_source["spec"]["report_config"])
+                    ref = clean.new_owner_clean_ref(context, spec["result_table_id"])
+                    with resource_lock(context, ref):
+                        _submit(snapshot, context, operation, ref, verify, spec)
             except (APIRequestError, ValidateException):
                 _wait(snapshot, operation, verify)
             except (CoreException, ImproperlyConfigured, ObjectDoesNotExist, KeyError, TypeError, ValueError) as error:

@@ -4,6 +4,7 @@
 平台及个人鉴权复用BkApiResource既有机制。
 """
 import abc
+import re
 from contextvars import ContextVar
 from time import monotonic
 
@@ -46,7 +47,8 @@ from api.bk_base_v4.serializers import (
     UserTablesRequestSerializer,
 )
 from api.domains import BK_BASE_API_URL
-from core.redacted_log import RedactedRequestLogMixin
+from core.redacted_log import RedactedRequestLogMixin, redact_free_text
+from core.sensitive import scrub
 
 READ_DEADLINE = ContextVar("bkbase_v4_read_deadline", default=None)
 READ_MAX_TIMEOUT = 30.0
@@ -481,11 +483,46 @@ class CleanList(CleanGet):
     ResponseSerializer = PayloadResponseSerializer
 
 
+class CleanCreateRejected(APIRequestError):
+    """已收到确定的 Clean 创建业务拒绝，只保留可展示的诊断。"""
+
+    def __init__(self, *, code, detail):
+        self.rejection = {"code": code, "detail": detail}
+        super().__init__(module_name="bkbase_v4", result={"code": code, "message": f"BKBase Clean [{code}]: {detail}"})
+
+
 class CleanCreate(CleanGet):
     action = "/v4/tenants/{tenant}/namespaces/{namespace}/cleans/"
     method = "POST"
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
+    _REJECTIONS = {"1500102": "参数错误", "1500105": "请求路径与资源不匹配", "1500113": "JSON 处理失败"}
+
+    def parse_response(self, response):
+        """仅把文档明确拒绝写入的业务码与不确定结果区分开。"""
+        try:
+            return super().parse_response(response)
+        except APIRequestError as error:
+            body = error.data
+            code = str(body.get("code"))
+            if response.status_code != 200 or body.get("result") is not False or code not in self._REJECTIONS:
+                raise
+            messages = body.get("messages")
+            details = messages.get("details") if isinstance(messages, dict) else None
+            detail = self._REJECTIONS[code]
+            if isinstance(details, list):
+                for item in details:
+                    if not isinstance(item, dict) or item.get("key") != "error_detail":
+                        continue
+                    value = item.get("value")
+                    if isinstance(value, str) and value.strip():
+                        safe = redact_free_text(scrub(" ".join(value.split())))
+                        if safe.isprintable() and not re.search(
+                            r"""\b(?:authorization|cookie|(?:bk[_-]?)?ticket)["']?\s*[:=]""", safe, re.I
+                        ):
+                            detail = safe[:512]
+                        break
+            raise CleanCreateRejected(code=code, detail=detail) from None
 
 
 class CleanUpdate(CleanGet):
