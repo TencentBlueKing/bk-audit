@@ -19,7 +19,9 @@ to the current version of the project delivered to anyone in the future.
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
+from api.bk_base_v4.default import CleanCreateRejected
 from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase.constants import BKBaseVersion
 from services.web.databus.constants import (
     PLUGIN_CONDITION_SEPARATOR_OPTION,
     CollectorParamConditionMatchType,
@@ -119,6 +121,24 @@ class PluginListResponseSerializer(serializers.ModelSerializer):
     def get_bkbase_table_id(self, obj):
         """返回当前版本已就绪的结果表ID，旧字段只读。"""
         return bkbase_clean.result_table_id(obj)
+
+    def to_representation(self, instance):
+        result = super().to_representation(instance)
+        if bkbase_clean.get_bkbase_version() != BKBaseVersion.V4:
+            return result
+        binding = instance.bkbase_v4_resources
+        rejection = binding.get("clean_create_rejection") if isinstance(binding, dict) else None
+        if isinstance(rejection, dict):
+            code, detail = rejection.get("code"), rejection.get("detail")
+            if (
+                isinstance(code, str)
+                and code in CleanCreateRejected.REASONS
+                and isinstance(detail, str)
+                and 0 < len(detail) <= 512
+                and detail.isprintable()
+            ):
+                result["initialization_error"] = {"code": code, "detail": detail}
+        return result
 
     class Meta:
         model = CollectorPlugin
