@@ -78,6 +78,8 @@ class EtlClean(metaclass=abc.ABCMeta):
         etl_params: dict,
         fields: List[dict],
         namespace: str,
+        *,
+        retry_rejected_create: bool = False,
     ) -> None:
         # 校验字段类型是否匹配
         self.check_field_type(fields)
@@ -91,7 +93,9 @@ class EtlClean(metaclass=abc.ABCMeta):
                 if bkbase_clean.owner_clean_ref(context, instance) != ref:
                     raise BKBaseResourceMappingError(message="Collector Clean binding changed under lock")
                 self._check_restore_write(instance)
-                self._save_clean(instance, etl_params, fields, locked_ref=ref)
+                self._save_clean(
+                    instance, etl_params, fields, locked_ref=ref, retry_rejected_create=retry_rejected_create
+                )
             return
 
         # 新建的采集需要自动关联
@@ -125,7 +129,7 @@ class EtlClean(metaclass=abc.ABCMeta):
             ):
                 raise SnapshotPreparingException()
 
-    def _save_clean(self, instance, etl_params, fields, *, locked_ref=None):
+    def _save_clean(self, instance, etl_params, fields, *, locked_ref=None, retry_rejected_create=False):
         """生成规则并保存本次编辑的本地配置。"""
         instance_fields = copy.deepcopy(fields)
 
@@ -138,7 +142,8 @@ class EtlClean(metaclass=abc.ABCMeta):
         if locked_ref is None:
             bkbase_clean.configure_clean(instance, bkbase_params, rt_owner=False)
         else:
-            bkbase_clean.configure_clean(instance, bkbase_params, rt_owner=False, _locked_clean_ref=locked_ref)
+            retry = bkbase_clean.rejected_collector_create_retry(instance) if retry_rejected_create else {}
+            bkbase_clean.configure_clean(instance, bkbase_params, rt_owner=False, _locked_clean_ref=locked_ref, **retry)
 
         instance.fields = instance_fields
         instance.etl_config = self.etl_config

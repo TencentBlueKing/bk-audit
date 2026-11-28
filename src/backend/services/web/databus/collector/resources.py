@@ -496,16 +496,20 @@ class CollectorEtlResource(CollectorMeta, ModelResource):
     action = "retrieve"
     model = CollectorConfig
     RequestSerializer = CreateCollectorEtlRequestSerializer
+    bind_request = True
 
     def perform_request(self, validated_request_data):
         # 创建更新清洗规则
         collector_config_id = validated_request_data["collector_config_id"]
         etl_storage: EtlClean = EtlClean.get_instance(validated_request_data["etl_config"])
+        request = validated_request_data.get("_request")
+        retry = {"retry_rejected_create": True} if getattr(request, "_collector_etl_user_save", False) is True else {}
         etl_storage.update_or_create(
             collector_config_id=collector_config_id,
             etl_params=validated_request_data["etl_params"],
             fields=validated_request_data["fields"],
             namespace=validated_request_data["namespace"],
+            **retry,
         )
 
 
