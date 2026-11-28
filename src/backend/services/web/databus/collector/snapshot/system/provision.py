@@ -13,6 +13,7 @@ from bk_resource import api
 from django.conf import settings
 from django.db import transaction
 
+from api.bk_base_v4.default import CleanCreateRejected
 from services.web.bkbase import clean, metadata, source, storage
 from services.web.bkbase.common import (
     get_resource_or_none,
@@ -91,6 +92,7 @@ def _planned_pull_report(kind, params, operation, redis):
 def _new_record(kind, context, redis):
     operation_id = uuid.uuid4().hex
     name = f"audit_iam_{kind}_{operation_id}"
+    logical_id = f"{settings.DEFAULT_BK_BIZ_ID}_{name}"
     refs = {
         key: {
             "kind": resource_kind,
@@ -101,14 +103,14 @@ def _new_record(kind, context, redis):
         for key, resource_kind, suffix in (
             ("connection", "DataConn", "_conn"),
             ("data_source", "DataSource", "_source"),
-            ("clean", "Clean", "_clean"),
             ("storage", "DataStorage", "_redis"),
         )
     }
+    refs["clean"] = clean.new_owner_clean_ref(context, logical_id)
     operation = {
         "operation_id": operation_id,
         "name": name,
-        "logical_id": f"{settings.DEFAULT_BK_BIZ_ID}_{name}",
+        "logical_id": logical_id,
         "revision": int(time.time() * 1000),
         "redis": redis,
         "refs": refs,
@@ -162,6 +164,8 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
     operation = record["creation"]
     ref = operation["refs"][key]
     step = operation["steps"].get(key)
+    if step and step.get("rejection"):
+        raise CleanCreateRejected(**step["rejection"])
     params = resource_params(context, ref, kind=ref["kind"])
     current = get_resource_or_none(getter, **params)
     digest = source._replay_digest(desired)
@@ -172,9 +176,19 @@ def _ensure_resource(kind, context, record, key, desired, getter, creator, expec
         operation["steps"][key] = {"target_digest": digest}
         record = _save(kind, context, record, {**record, "creation": operation})
         metadata_value = {**params, "annotations": {OWNER_ANNOTATION: operation["operation_id"]}}
-        creator(
-            tenant=context["tenant"], namespace=context["namespace"], metadata=metadata_value, spec=desired, status=None
-        )
+        try:
+            creator(
+                tenant=context["tenant"],
+                namespace=context["namespace"],
+                metadata=metadata_value,
+                spec=desired,
+                status=None,
+            )
+        except CleanCreateRejected as error:
+            rejected = deepcopy(operation)
+            rejected["steps"][key]["rejection"] = error.rejection
+            _save(kind, context, record, {**record, "creation": rejected})
+            raise
         return None, record
     if step.get("target_digest") != digest:
         raise BKBaseResourceMappingError(message=f"IAM V4 {ref['kind']} creation inputs changed")
@@ -282,6 +296,14 @@ def _advance(kind, context, record, redis):
     clean_spec.update(
         config_revision=operation["revision"], deploy_revision=operation["revision"], desired_status="Running"
     )
+    if "clean" not in operation["steps"] and not record.get("clean"):
+        clean_ref = clean.new_owner_clean_ref(context, clean_spec["result_table_id"])
+        old_ref = operation["refs"]["clean"]
+        if old_ref != clean_ref:
+            if get_resource_or_none(sdk.clean_get, **resource_params(context, old_ref, kind="Clean")) is not None:
+                raise BKBaseResourceMappingError(message="IAM V4 planned Clean exists without this creation claim")
+            operation = {**operation, "refs": {**operation["refs"], "clean": clean_ref}}
+            record = _save(kind, context, record, {**record, "creation": operation})
     cleaner, record = _ensure_resource(
         kind, context, record, "clean", clean_spec, sdk.clean_get, sdk.clean_create, TaskState.RUNNING
     )

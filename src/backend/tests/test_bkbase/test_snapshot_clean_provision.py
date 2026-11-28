@@ -12,7 +12,10 @@ from api.bk_base_v4.default import BkBaseV4Resource
 from apps.meta.models import ResourceType, System
 from services.web.bkbase import clean, source
 from services.web.databus import tasks
-from services.web.databus.collector.resources import ToggleJoinDataResource
+from services.web.databus.collector.resources import (
+    SnapshotStatusResource,
+    ToggleJoinDataResource,
+)
 from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
 )
@@ -44,6 +47,7 @@ class SnapshotCleanProvisionFixture:
         self.on_get_clean = None
         self.timeout_clean = False
         self.persist_lost_clean = False
+        self.clean_error = None
         self.enterContext(mock.patch.object(BkBaseV4Resource, "build_header", return_value={}))
         self.enterContext(mock.patch("requests.sessions.Session.request", side_effect=self.transport))
         self.enterContext(mock.patch.object(ToggleJoinDataResource, "pre_check"))
@@ -109,7 +113,8 @@ class SnapshotCleanProvisionFixture:
                     if self.persist_lost_clean:
                         self.resources[name] = value
                     raise requests.Timeout("synthetic lost Clean receipt")
-            self.resources[name] = value
+            if kind != "Clean" or self.clean_error is None:
+                self.resources[name] = value
         elif method == "GET":
             if self.on_get_clean and "/cleans/" in url:
                 self.on_get_clean()
@@ -128,7 +133,12 @@ class SnapshotCleanProvisionFixture:
         response.status_code = status
         response.url = url
         response.request = requests.Request(method, url).prepare()
-        response._content = json.dumps({"result": status == 200, "code": "00", "data": value}).encode()
+        body = (
+            self.clean_error
+            if method == "POST" and endpoint == "cleans" and self.clean_error is not None
+            else {"result": status == 200, "code": "00", "data": value}
+        )
+        response._content = json.dumps(body).encode()
         return response
 
     def snapshot(self):
@@ -269,6 +279,7 @@ class SnapshotCleanProvisionTests(SnapshotCleanProvisionFixture, TransactionTest
         spec = post["spec"]
         self.assertEqual(spec["raw_data_id"], 71)
         self.assertEqual(spec["result_table_source"], "new")
+        self.assertEqual(post["metadata"]["name"], f"c_{spec['result_table_id']}")
         self.assertEqual(spec["desired_status"], "Running")
         self.assertEqual(spec["config_revision"], spec["deploy_revision"])
         self.assertTrue(spec["rules"])
@@ -297,13 +308,87 @@ class SnapshotCleanProvisionTests(SnapshotCleanProvisionFixture, TransactionTest
         self.start(join_data_type="basic")
         self.timeout_clean = True
         tasks.start_snapshot.run()
-        self.assertEqual(len(self.clean_posts()), 1)
+        (post,) = self.clean_posts()
+        self.assertEqual(post["metadata"]["name"], f"c_{post['spec']['result_table_id']}")
         self.timeout_clean = False
         tasks.start_snapshot.run()
         tasks.start_snapshot.run()
         self.assertEqual(len(self.clean_posts()), 1)
         self.assertIsNone(self.snapshot().bkbase_v4_resources["source_provision"]["clean_step"]["accepted"])
         self.assert_no_storage_or_source_update()
+
+    def test_explicit_clean_rejection_is_visible_in_snapshot_status_without_reposting(self):
+        self.start()
+        reason = "err=新建结果表的 Clean 资源名必须是 c_47_scene"
+        self.clean_error = {
+            "result": False,
+            "code": "1500102",
+            "message": "参数错误",
+            "data": {"unrelated": "must not be exposed"},
+            "messages": {"details": [{"key": "error_detail", "value": reason + "; token=synthetic_secret"}]},
+        }
+        tasks.start_snapshot.run()
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot.status, SnapshotRunningStatus.FAILED)
+        self.assertIn("[1500102]", snapshot.status_msg)
+        self.assertIn(reason, snapshot.status_msg)
+        self.assertNotIn("synthetic_secret", snapshot.status_msg)
+        self.assertNotIn("must not be exposed", snapshot.status_msg)
+        step = snapshot.bkbase_v4_resources["source_provision"]["clean_step"]
+        self.assertIs(step["accepted"], False)
+        result = SnapshotStatusResource().request(
+            {"system_id": self.system.system_id, "resource_type_ids": self.resource_type.resource_type_id}
+        )
+        self.assertEqual(result[self.resource_type.resource_type_id]["status_msg"], snapshot.status_msg)
+        tasks.start_snapshot.run()
+        self.assertEqual(len(self.clean_posts()), 1)
+        self.assert_no_storage_or_source_update()
+
+    def test_unrecognized_clean_error_keeps_the_original_claim_unknown(self):
+        self.start()
+        self.clean_error = {
+            "result": False,
+            "code": "1500111",
+            "message": "持久化失败",
+            "data": None,
+            "messages": {"details": [{"key": "error_detail", "value": "synthetic ambiguous persistence"}]},
+        }
+        tasks.start_snapshot.run()
+        self.clean_error = None
+        tasks.start_snapshot.run()
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot.status, SnapshotRunningStatus.PREPARING)
+        self.assertIsNone(snapshot.bkbase_v4_resources["source_provision"]["clean_step"]["accepted"])
+        self.assertEqual(len(self.clean_posts()), 1)
+
+    def test_confirmed_rejection_without_details_still_stops_waiting(self):
+        self.start(join_data_type="basic")
+        self.clean_error = {"result": False, "code": 1500105, "message": "untrusted raw text", "data": None}
+        tasks.start_snapshot.run()
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot.status, SnapshotRunningStatus.FAILED)
+        self.assertIn("[1500105]", snapshot.status_msg)
+        self.assertIn("请求路径与资源不匹配", snapshot.status_msg)
+        self.assertNotIn("untrusted raw text", snapshot.status_msg)
+        self.assert_no_storage_or_source_update()
+
+    def test_legacy_clean_claim_keeps_its_original_ref(self):
+        self.start()
+        self.timeout_clean = self.persist_lost_clean = True
+        tasks.start_snapshot.run()
+        (post,) = self.clean_posts()
+        old_name = "c_Snapshot_legacy_fixture"
+        remote = self.resources.pop(post["metadata"]["name"])
+        remote["metadata"]["name"] = old_name
+        remote["status"]["phase"] = "Ok"
+        remote["spec"]["current_status"] = "Running"
+        self.resources[old_name] = remote
+        snapshot = self.snapshot()
+        snapshot.bkbase_v4_resources["source_provision"]["clean_step"]["ref"]["name"] = old_name
+        snapshot.save(update_fields=["bkbase_v4_resources"])
+        tasks.start_snapshot.run()
+        self.assertEqual(self.snapshot().bkbase_v4_resources["clean"]["name"], old_name)
+        self.assertEqual(len(self.clean_posts()), 1)
 
     def test_lost_receipt_can_be_confirmed_by_exact_new_running_clean_get(self):
         self.start(join_data_type="basic")

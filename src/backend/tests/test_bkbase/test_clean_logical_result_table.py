@@ -102,6 +102,7 @@ class CleanLogicalResultTableTests(SimpleTestCase):
         )
         self.calls = []
         self.created = None
+        self.clean_create_response = None
         self.enterContext(mock.patch.object(BkBaseV4Resource, "build_header", return_value={}))
         self.enterContext(mock.patch("requests.sessions.Session.request", side_effect=self.transport))
         self.enterContext(mock.patch.object(clean, "resource_lock"))
@@ -139,7 +140,11 @@ class CleanLogicalResultTableTests(SimpleTestCase):
         status_code = 200
         if "/cleans/" in url and method == "POST":
             self.created = deepcopy(kwargs["json"]["spec"])
-            payload = {"spec": self.created, "status": {"phase": "Pending"}}
+            payload = {
+                "metadata": deepcopy(kwargs["json"]["metadata"]),
+                "spec": self.created,
+                "status": {"phase": "Pending"},
+            }
         elif "/cleans/owner_clean/" in url:
             if not self.owner_found:
                 status_code = 404
@@ -170,7 +175,10 @@ class CleanLogicalResultTableTests(SimpleTestCase):
         response.status_code = status_code
         response.url = url
         response.request = requests.Request(method, url).prepare()
-        response._content = json.dumps({"result": status_code == 200, "code": "00", "data": payload}).encode()
+        body = {"result": status_code == 200, "code": "00", "data": payload}
+        if "/cleans/" in url and method == "POST" and self.clean_create_response is not None:
+            body = self.clean_create_response
+        response._content = json.dumps(body).encode()
         return response
 
     def test_owner_can_declare_logical_id_without_inventing_a_result_table_ref(self):
@@ -179,8 +187,89 @@ class CleanLogicalResultTableTests(SimpleTestCase):
         with mock.patch.object(clean, "get_resource_or_none", return_value=None):
             clean.configure_clean(self.owner, self.params, rt_owner=True)
         self.assertEqual(self.created["result_table_id"], self.logical_id)
+        self.assertEqual(self.owner.bkbase_v4_resources["clean"]["name"], f"c_{self.logical_id}")
         self.assertEqual(self.owner.bkbase_v4_resources["result_table_id"], self.logical_id)
         self.assertNotIn("result_table", self.owner.bkbase_v4_resources)
+
+    def test_old_unknown_owner_claim_does_not_post_under_a_new_or_old_name(self):
+        self.owner.bkbase_v4_resources["clean_pending_create"] = True
+        self.owner_found = False
+        with self.assertRaises(BKBaseResourceMappingError):
+            clean.configure_clean(self.owner, self.params, rt_owner=True)
+        self.assertEqual(self.owner.bkbase_v4_resources["clean"], self.clean_ref)
+        self.assertIs(self.owner.bkbase_v4_resources["clean_pending_create"], True)
+        self.assertFalse(any(method == "POST" for method, _, _ in self.calls))
+
+    def test_plugin_create_rejected_without_details_blocks_and_keeps_gateway_code(self):
+        self.owner.bkbase_v4_resources.pop("clean")
+        self.owner.bkbase_v4_resources.pop("result_table_id")
+        self.clean_create_response = {"result": False, "code": "1500113", "data": None}
+
+        clean.configure_plugin(self.handler)
+        clean.configure_plugin(self.handler)
+
+        binding = self.owner.bkbase_v4_resources
+        self.assertTrue(binding["blocked"])
+        self.assertTrue(binding["clean_pending_create"])
+        self.assertEqual(binding["clean_create_rejection"]["code"], "1500113")
+        self.assertIn("[1500113]", binding["message"])
+        self.assertEqual(sum(method == "POST" for method, _, _ in self.calls), 1)
+
+    def test_plugin_explicit_save_can_retry_definite_rejection_once_at_same_ref(self):
+        for retry_failed in (False, True):
+            with self.subTest(retry_failed=retry_failed):
+                self.calls.clear()
+                self.owner.bkbase_v4_resources.pop("clean", None)
+                self.owner.bkbase_v4_resources.pop("result_table_id", None)
+                self.owner.bkbase_v4_resources.pop(clean.PLUGIN_RETRY_STEPS, None)
+                self.clean_create_response = {"result": False, "code": "1500113", "data": None}
+                clean.configure_plugin(self.handler)
+                claimed = deepcopy(self.owner.bkbase_v4_resources["clean"])
+                clean.reset_plugin_operation(self.owner, retry_failed=retry_failed)
+                self.clean_create_response = None
+
+                with mock.patch.object(clean, "get_resource_or_none", return_value=self.remote_clean):
+                    clean.configure_plugin(self.handler)
+                self.assertIn("clean_create_rejection", self.owner.bkbase_v4_resources)
+                self.assertEqual(sum(method == "POST" for method, _, _ in self.calls), 1)
+
+                clean.configure_plugin(self.handler)
+
+                binding = self.owner.bkbase_v4_resources
+                self.assertEqual(binding["clean"], claimed)
+                self.assertNotIn("clean_create_rejection", binding)
+                self.assertNotIn("clean_pending_create", binding)
+                self.assertEqual(binding[clean.PLUGIN_RETRY_STEPS], ["main", "replica"])
+                writes = [payload["metadata"]["name"] for method, _, payload in self.calls if method == "POST"]
+                self.assertEqual(writes, [claimed["name"], claimed["name"]])
+
+    def test_plugin_retry_with_malformed_receipt_does_not_reuse_consumed_qualification(self):
+        self.owner.bkbase_v4_resources.pop("clean")
+        self.owner.bkbase_v4_resources.pop("result_table_id")
+        self.clean_create_response = {"result": False, "code": "1500102", "data": None}
+        clean.configure_plugin(self.handler)
+        clean.reset_plugin_operation(self.owner, retry_failed=True)
+        self.clean_create_response = {"result": True, "code": "00", "data": {"status": {"phase": "Pending"}}}
+
+        clean.configure_plugin(self.handler)
+        clean.configure_plugin(self.handler)
+
+        binding = self.owner.bkbase_v4_resources
+        self.assertTrue(binding["clean_pending_create"])
+        self.assertNotIn("clean_create_rejection", binding)
+        self.assertNotIn("clean", binding[clean.PLUGIN_RETRY_STEPS])
+        self.assertEqual(sum(method == "POST" for method, _, _ in self.calls), 2)
+
+    def test_malformed_clean_success_cannot_clear_claim_or_cause_another_post(self):
+        self.owner.bkbase_v4_resources.pop("clean")
+        self.owner.bkbase_v4_resources.pop("result_table_id")
+        self.clean_create_response = {"result": True, "code": "00", "data": {"status": {"phase": "Pending"}}}
+        for _ in range(2):
+            with self.assertRaises(BKBaseResourceMappingError):
+                clean.configure_clean(self.owner, self.params, rt_owner=True)
+        self.assertTrue(self.owner.bkbase_v4_resources["clean_pending_create"])
+        self.assertNotIn("clean_create_rejection", self.owner.bkbase_v4_resources)
+        self.assertEqual(sum(method == "POST" for method, _, _ in self.calls), 1)
 
     def test_known_owner_clean_and_distinct_table_ref_can_be_reused_by_collector(self):
         self.owner.bkbase_v4_resources["result_table"] = self.rt_ref
@@ -256,6 +345,10 @@ class CleanLogicalResultTableTests(SimpleTestCase):
         self.assertEqual(self.owner.bkbase_v4_resources["source_raw_data_id"], 91)
         self.assertEqual(self.created["result_table_id"], self.logical_id)
         self.assertEqual(self.created["result_table_source"], "existing")
+        self.assertEqual(
+            self.collector.bkbase_v4_resources["clean"]["name"],
+            clean.stable_name("c", self.collector.__class__.__name__, self.collector.pk),
+        )
 
     def test_missing_ref_is_resolved_and_persisted_before_actual_storage_consumer(self):
         info = {
