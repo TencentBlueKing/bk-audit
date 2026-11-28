@@ -58,6 +58,49 @@ class FakeResourceProvider(ResourceProvider):
 
 
 class TestBkAuditResourceApiDispatcher(SimpleTestCase):
+    def test_fetch_precheck_preserves_sdk_pagination_and_protocol(self):
+        for protocol, request_page in (("v3", {"offset": 2, "limit": 2}), ("v4", {"page": 2, "page_size": 2})):
+            with self.subTest(protocol=protocol), override_settings(IAM_PERMISSION_BACKEND=protocol):
+                iam_client = mock.Mock()
+                iam_client.is_basic_auth_allowed.return_value = True
+                provider = FakeResourceProvider()
+                provider.fetch_instance_list = mock.Mock(return_value=ListResult(results=[], count=0))
+                dispatcher = BkAuditResourceApiDispatcher(iam_client, "bk-audit")
+                dispatcher.register("scene", provider)
+                request = RequestFactory().post(
+                    "/api/v1/iam/resources/",
+                    data={
+                        "type": "scene",
+                        "method": "fetch_instance_list",
+                        "filter": {"start_time": 7, "end_time": 9},
+                        "page": request_page,
+                    },
+                    content_type="application/json",
+                    HTTP_X_BK_AUDIT_RESOURCE_PRECHECK="1",
+                    HTTP_AUTHORIZATION="basic-token",
+                    HTTP_X_REQUEST_ID="request-id",
+                    HTTP_BLUEKING_LANGUAGE="en",
+                )
+
+                response = dispatcher._dispatch(request)
+
+                iam_client.is_basic_auth_allowed.assert_called_once_with("bk-audit", "basic-token")
+                provider.fetch_instance_list.assert_called_once()
+                filters, page = provider.fetch_instance_list.call_args.args
+                self.assertEqual((filters.start_time, filters.end_time), (7, 9))
+                self.assertEqual((page.offset, page.limit), (2, 2))
+                self.assertEqual(
+                    provider.fetch_instance_list.call_args.kwargs, {"count_total": False, "language": "en"}
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["X-Request-Id"], "request-id")
+                envelope = json.loads(response.content)
+                self.assertEqual(envelope["data"], {"results": [], "count": 0})
+                if protocol == "v3":
+                    self.assertTrue(envelope["result"])
+                else:
+                    self.assertEqual(set(envelope), {"data"})
+
     def test_dispatch_v3_backend_accepts_resource_type_id_with_v3_envelope(self):
         iam_client = mock.MagicMock()
         iam_client.is_basic_auth_allowed.return_value = True
@@ -79,12 +122,14 @@ class TestBkAuditResourceApiDispatcher(SimpleTestCase):
             content_type="application/json",
             HTTP_AUTHORIZATION="basic-token",
             HTTP_X_REQUEST_ID="request-id",
+            HTTP_X_BK_AUDIT_RESOURCE_PRECHECK="1",
         )
 
         response = dispatcher._dispatch(request)
 
         self.assertEqual(response.status_code, 200)
         provider.list_instance.assert_called_once()
+        self.assertEqual(provider.list_instance.call_args.kwargs, {"language": "zh-cn"})
         data = json.loads(response.content)
         self.assertEqual(data["code"], 0)
         self.assertTrue(data["result"])

@@ -51,7 +51,7 @@ class TestTicketNodeResourceProvider:
                 "type": "ticket_node",
                 "method": "fetch_instance_list",
                 "filter": {"start_time": (now - 60) * 1000, "end_time": (now + 1) * 1000},
-                "page": {"offset": 0, "limit": 10 if probe else 1},
+                "page": {"offset": 0, "limit": 1},
             },
             content_type="application/json",
             HTTP_AUTHORIZATION="basic-token",
