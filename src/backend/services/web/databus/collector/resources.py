@@ -36,7 +36,6 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
@@ -559,20 +558,10 @@ class ToggleJoinDataResource(CollectorMeta):
         callback_url = pull_handler.url
         web = requests.session()
         try:
-            headers = {"Authorization": pull_handler.authorization}
-            if system_id == settings.BK_IAM_SYSTEM_ID:
-                callback_path = reverse("iam_resource_callback")
-                audit_hosts = (
-                    settings.BK_IAM_RESOURCE_API_HOST,
-                    settings.BK_BACKEND_URL,
-                    get_saas_url(settings.APP_CODE, module_name="api"),
-                )
-                if any(callback_url == f"{host.rstrip('/')}{callback_path}" for host in audit_hosts if host):
-                    headers[RESOURCE_PRECHECK_HEADER] = "1"
             resp = web.post(
                 callback_url,
                 json=body,
-                headers=headers,
+                headers={"Authorization": pull_handler.authorization, RESOURCE_PRECHECK_HEADER: "1"},
                 timeout=PULL_HANDLER_PRE_CHECK_TIMEOUT,
             )
             content = resp.json()
