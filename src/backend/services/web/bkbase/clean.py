@@ -652,6 +652,22 @@ def _check_clean_create(binding, existing, *, require_existing, retry_existing):
             raise BKBaseResourceMappingError(message="Previous Clean creation is still unconfirmed")
 
 
+def rejected_collector_create_retry(collector: CollectorConfig):
+    """锁内仅为同一采集项已被明确拒绝的首次创建提供重发资格。"""
+    binding = collector.bkbase_v4_resources or {}
+    rejection = binding.get("clean_create_rejection")
+    code = rejection.get("code") if isinstance(rejection, dict) else None
+    if (
+        binding.get("clean")
+        and binding.get("clean_role") == CleanRole.EXISTING
+        and binding.get("clean_pending_create") is True
+        and isinstance(code, str)
+        and code in CleanCreateRejected.REASONS
+    ):
+        return {"_retry_existing": lambda existing: existing is None}
+    return {}
+
+
 def ensure_clean(
     context,
     owner,
