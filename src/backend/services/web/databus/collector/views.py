@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from functools import wraps
+
 from bk_resource import api, resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from django.utils.translation import gettext
@@ -30,6 +32,17 @@ from apps.permission.handlers.drf import (
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from services.web.databus.models import CollectorConfig
+
+
+def _mark_collector_etl_save(view):
+    """仅在通过权限检查的保存路由上标记请求，不把标记写进任务参数。"""
+
+    @wraps(view)
+    def save(self, request, *args, **kwargs):
+        request._collector_etl_user_save = request.user.is_authenticated
+        return view(self, request, *args, **kwargs)
+
+    return save
 
 
 class CollectorsViewSet(ResourceViewSet):
@@ -123,6 +136,7 @@ class CollectorsViewSet(ResourceViewSet):
             resource.databus.collector.collector_etl,
             endpoint="collector_etl",
             pk_field="collector_config_id",
+            decorators=[_mark_collector_etl_save],
         ),
         ResourceRoute(
             "GET", api.bk_log.get_subscript_task_status, endpoint="task_status", pk_field="collector_config_id"
