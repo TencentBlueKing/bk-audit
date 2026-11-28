@@ -10,7 +10,7 @@ from bk_resource.exceptions import APIRequestError
 from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from api.bk_base_v4.default import BkBaseV4Resource
+from api.bk_base_v4.default import BkBaseV4Resource, CleanCreate
 from apps.meta.utils.fields import STANDARD_FIELDS
 from services.web.bkbase import clean
 from services.web.bkbase.constants import CleanRole, TaskState
@@ -190,6 +190,44 @@ class CleanLogicalResultTableTests(SimpleTestCase):
         self.assertEqual(self.owner.bkbase_v4_resources["clean"]["name"], f"c_{self.logical_id}")
         self.assertEqual(self.owner.bkbase_v4_resources["result_table_id"], self.logical_id)
         self.assertNotIn("result_table", self.owner.bkbase_v4_resources)
+
+    def test_clean_create_unexpected_upstream_error_shape_preserves_original_error(self):
+        for status, payload in (
+            (200, None),
+            (400, {"result": False, "code": "1500102"}),
+        ):
+            with self.subTest(status=status, payload=payload):
+                error = APIRequestError(result="upstream")
+                error.data = payload
+                response = requests.Response()
+                response.status_code = status
+                with mock.patch.object(BkBaseV4Resource, "parse_response", side_effect=error):
+                    with self.assertRaises(APIRequestError) as caught:
+                        CleanCreate().parse_response(response)
+                self.assertIs(caught.exception, error)
+
+    def test_plugin_list_initialization_error_only_projects_documented_v4_rejections(self):
+        plugin = CollectorPlugin(
+            namespace="audit",
+            collector_plugin_id=91,
+            collector_plugin_name="plugin",
+            collector_plugin_name_en="plugin",
+            bkdata_biz_id=47,
+            table_id=91,
+            index_set_id=91,
+        )
+        self.assertNotIn("initialization_error", PluginListResponseSerializer(plugin).data)
+        plugin.bkbase_v4_resources = {
+            "clean_create_rejection": {"code": "1500105", "detail": "路径错误", "unexpected": "private"},
+        }
+        self.assertEqual(
+            PluginListResponseSerializer(plugin).data["initialization_error"],
+            {"code": "1500105", "detail": "路径错误"},
+        )
+        with override_settings(BKBASE_API_VERSION="v3"):
+            self.assertNotIn("initialization_error", PluginListResponseSerializer(plugin).data)
+        plugin.bkbase_v4_resources["clean_create_rejection"]["code"] = "1500111"
+        self.assertNotIn("initialization_error", PluginListResponseSerializer(plugin).data)
 
     def test_old_unknown_owner_claim_does_not_post_under_a_new_or_old_name(self):
         self.owner.bkbase_v4_resources["clean_pending_create"] = True

@@ -486,6 +486,8 @@ class CleanList(CleanGet):
 class CleanCreateRejected(APIRequestError):
     """已收到确定的 Clean 创建业务拒绝，只保留可展示的诊断。"""
 
+    REASONS = {"1500102": "参数错误", "1500105": "请求路径与资源不匹配", "1500113": "JSON 处理失败"}
+
     def __init__(self, *, code, detail):
         self.rejection = {"code": code, "detail": detail}
         super().__init__(module_name="bkbase_v4", result={"code": code, "message": f"BKBase Clean [{code}]: {detail}"})
@@ -496,7 +498,6 @@ class CleanCreate(CleanGet):
     method = "POST"
     url_keys = ["tenant", "namespace"]
     RequestSerializer = ResourceWriteRequestSerializer
-    _REJECTIONS = {"1500102": "参数错误", "1500105": "请求路径与资源不匹配", "1500113": "JSON 处理失败"}
 
     def parse_response(self, response):
         """仅把文档明确拒绝写入的业务码与不确定结果区分开。"""
@@ -504,12 +505,14 @@ class CleanCreate(CleanGet):
             return super().parse_response(response)
         except APIRequestError as error:
             body = error.data
+            if response.status_code != 200 or not isinstance(body, dict):
+                raise
             code = str(body.get("code"))
-            if response.status_code != 200 or body.get("result") is not False or code not in self._REJECTIONS:
+            if body.get("result") is not False or code not in CleanCreateRejected.REASONS:
                 raise
             messages = body.get("messages")
             details = messages.get("details") if isinstance(messages, dict) else None
-            detail = self._REJECTIONS[code]
+            detail = CleanCreateRejected.REASONS[code]
             if isinstance(details, list):
                 for item in details:
                     if not isinstance(item, dict) or item.get("key") != "error_detail":
