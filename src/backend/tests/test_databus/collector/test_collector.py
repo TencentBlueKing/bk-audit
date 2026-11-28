@@ -96,14 +96,14 @@ from tests.test_databus.collector.constants import (
     BK_BACKEND_URL="https://audit.example.test",
 )
 class TestJoinDataPrecheck(SimpleTestCase):
-    def test_probe_is_only_sent_to_the_audit_callback_and_errors_block_enable(self):
-        for system_id, url, status, result, expected_probe in (
-            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 200, True, "1"),
-            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 200, False, "1"),
-            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 503, True, "1"),
-            ("bk-audit", "https://external.example.test/api/v1/iam/resources/", 200, True, None),
-            ("bk-audit", "https://audit.example.test/other/callback/", 200, True, None),
-            ("external", "https://audit.example.test/api/v1/iam/resources/", 200, True, None),
+    def test_all_callbacks_receive_the_same_precheck_and_errors_block_enable(self):
+        for system_id, url, status, result in (
+            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 200, True),
+            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 200, False),
+            ("bk-audit", "https://audit.example.test/api/v1/iam/resources/", 503, True),
+            ("bk-audit", "https://external.example.test/api/v1/iam/resources/", 200, None),
+            ("bk-audit", "https://audit.example.test/other/callback/", 200, True),
+            ("external", "https://audit.example.test/api/v1/iam/resources/", 200, True),
         ):
             with self.subTest(system_id=system_id, url=url, status=status, result=result):
                 target = urlsplit(url)
@@ -118,9 +118,12 @@ class TestJoinDataPrecheck(SimpleTestCase):
                 ):
                     post = session.return_value.post
                     post.return_value.status_code = status
-                    post.return_value.json.return_value = {"result": result, "data": {"results": []}}
+                    response = {"data": {"results": []}}
+                    if result is not None:
+                        response["result"] = result
+                    post.return_value.json.return_value = response
                     pre_check = ToggleJoinDataResource().pre_check
-                    if status == 200 and result:
+                    if status == 200 and result is not False:
                         pre_check(system_id, "ticket_node", JoinDataType.ASSET)
                     else:
                         with self.assertRaises(JoinDataPreCheckFailed):
@@ -128,9 +131,15 @@ class TestJoinDataPrecheck(SimpleTestCase):
 
                 request = post.call_args.kwargs
                 self.assertEqual(post.call_args.args, (url,))
-                self.assertEqual(request["headers"].get("X-Bk-Audit-Resource-Precheck"), expected_probe)
-                self.assertEqual(request["headers"]["Authorization"], system.base64_token)
+                self.assertEqual(
+                    request["headers"],
+                    {"Authorization": system.base64_token, "X-Bk-Audit-Resource-Precheck": "1"},
+                )
+                self.assertEqual(request["timeout"], 30)
+                self.assertEqual(request["json"]["type"], "ticket_node")
                 self.assertEqual(request["json"]["method"], "fetch_instance_list")
+                self.assertEqual(request["json"]["filter"]["start_time"], 0)
+                self.assertGreater(request["json"]["filter"]["end_time"], 0)
                 self.assertEqual(request["json"]["page"], {"offset": 0, "limit": 1})
 
 

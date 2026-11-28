@@ -164,6 +164,9 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
             return self._fail_response(404, "unsupported method: {}".format(method), request_id, protocol)
 
         logger.info("resource request(%s) with filter: %s, page: %s", request_id, data.get("filter"), data.get("page"))
+        request._bk_audit_fetch_precheck = (
+            method == "fetch_instance_list" and request.headers.get(RESOURCE_PRECHECK_HEADER) == "1"
+        )
         try:
             response = processor(request, data, request_id)
         except InvalidPageException as e:
@@ -183,20 +186,12 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
         )
         return response
 
-    def _dispatch_fetch_instance_list(self, request, data, request_id):
-        if request.headers.get(RESOURCE_PRECHECK_HEADER) != "1":
-            return super()._dispatch_fetch_instance_list(request, data, request_id)
-
-        # 资产启用只需要验证回调取数是否成功。鉴权已由 _dispatch 完成。
-        options = self._get_options(request)
-        filter_obj = get_filter_obj(data.get("filter"), ["start_time", "end_time", "expression"])
-        page_obj = get_page_obj({"offset": 0, "limit": 1})
-        provider = self._provider[data["type"]]
-        pre_process = getattr(provider, "pre_fetch_instance_list", None)
-        if callable(pre_process):
-            pre_process(filter_obj, page_obj, **options)
-        result = provider.fetch_instance_list(filter_obj, page_obj, count_total=False, **options)
-        return success_response(result.to_dict(), request_id)
+    def _get_options(self, request):
+        """将当前取数预检的可选计数提示交给 provider。"""
+        options = super()._get_options(request)
+        if getattr(request, "_bk_audit_fetch_precheck", False):
+            options["count_total"] = False
+        return options
 
     def _dispatch_list_instance(self, request, data, request_id):
         if data.pop("_use_v4_keyword_search", False):
