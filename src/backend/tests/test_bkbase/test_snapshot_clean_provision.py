@@ -9,6 +9,7 @@ from django.db import connection
 from django.test import TransactionTestCase, override_settings
 
 from api.bk_base_v4.default import BkBaseV4Resource
+from apps.exceptions import SnapshotPreparingException
 from apps.meta.models import ResourceType, System
 from services.web.bkbase import clean, source
 from services.web.databus import tasks
@@ -146,8 +147,8 @@ class SnapshotCleanProvisionFixture:
             system_id=self.system.system_id, resource_type_id=self.resource_type.resource_type_id
         )
 
-    def prepare(self, *, join_data_type="asset"):
-        response = ToggleJoinDataResource().request(
+    def enable(self, *, join_data_type="asset"):
+        return ToggleJoinDataResource().request(
             {
                 "system_id": self.system.system_id,
                 "resource_type_id": self.resource_type.resource_type_id,
@@ -156,6 +157,9 @@ class SnapshotCleanProvisionFixture:
                 "storage_type": ["redis"] if join_data_type == "basic" else ["hdfs", "doris"],
             }
         )
+
+    def prepare(self, *, join_data_type="asset"):
+        response = self.enable(join_data_type=join_data_type)
         self.assertEqual(response["status"], SnapshotRunningStatus.PREPARING)
         for _ in range(2):
             tasks.start_snapshot.run()
@@ -371,6 +375,87 @@ class SnapshotCleanProvisionTests(SnapshotCleanProvisionFixture, TransactionTest
         self.assertIn("请求路径与资源不匹配", snapshot.status_msg)
         self.assertNotIn("untrusted raw text", snapshot.status_msg)
         self.assert_no_storage_or_source_update()
+
+    def test_enable_retries_confirmed_clean_rejection_once_on_the_same_ref(self):
+        self.start()
+        self.clean_error = {"result": False, "code": "1500105", "data": None}
+        tasks.start_snapshot.run()
+        (original,) = self.clean_posts()
+        self.clean_error = None
+        requests_before_enable = list(self.requests)
+
+        response = self.enable()
+
+        self.assertEqual(response["status"], SnapshotRunningStatus.PREPARING)
+        self.assertEqual(self.requests, requests_before_enable)
+        self.assertEqual(self.clean_posts(), [original])
+        with self.assertRaises(SnapshotPreparingException):
+            self.enable()
+        tasks.start_snapshot.run()
+        self.assertEqual(self.clean_posts(), [original, original])
+        step = self.snapshot().bkbase_v4_resources["source_provision"]["clean_step"]
+        self.assertIs(step["accepted"], True)
+        self.assertNotIn("rejection", step)
+        self.assertNotIn("retry_allowed", step)
+        tasks.start_snapshot.run()
+        self.assertEqual(len(self.clean_posts()), 2)
+
+    def test_enable_cannot_repost_or_adopt_an_existing_rejected_clean_ref(self):
+        self.start()
+        self.clean_error = {"result": False, "code": "1500105", "data": None}
+        tasks.start_snapshot.run()
+        (original,) = self.clean_posts()
+        name = original["metadata"]["name"]
+        self.resources[name] = self.remote(original["metadata"], "Clean", original["spec"])
+
+        self.enable()
+        tasks.start_snapshot.run()
+
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot.status, SnapshotRunningStatus.FAILED)
+        self.assertIn("Clean exists", snapshot.status_msg)
+        self.assertFalse(snapshot.bkbase_v4_resources["source_provision"]["clean_step"]["accepted"])
+        self.assertNotIn("clean", snapshot.bkbase_v4_resources)
+        self.assertEqual(self.clean_posts(), [original])
+
+    def test_retry_timeout_consumes_the_intent_and_only_observes(self):
+        self.start()
+        self.clean_error = {"result": False, "code": "1500105", "data": None}
+        tasks.start_snapshot.run()
+        (original,) = self.clean_posts()
+        self.clean_error = None
+        self.timeout_clean = True
+
+        self.enable()
+        tasks.start_snapshot.run()
+        tasks.start_snapshot.run()
+
+        step = self.snapshot().bkbase_v4_resources["source_provision"]["clean_step"]
+        self.assertIsNone(step["accepted"])
+        self.assertNotIn("retry_allowed", step)
+        self.assertNotIn("rejection", step)
+        self.assertEqual(self.clean_posts(), [original, original])
+
+    def test_enable_observes_old_unknown_clean_without_reposting(self):
+        self.start()
+        self.timeout_clean = True
+        tasks.start_snapshot.run()
+        with mock.patch("services.web.bkbase.snapshot_clean_provision.BKBASE_V4_MAX_POLLS", 1):
+            tasks.start_snapshot.run()
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot.bkbase_v4_resources["source_provision"]["stage"], "clean_unknown")
+        step = snapshot.bkbase_v4_resources["source_provision"]["clean_step"]
+        step["ref"]["name"] = "c_legacy_unknown"
+        snapshot.save(update_fields=["bkbase_v4_resources"])
+        self.timeout_clean = False
+
+        self.enable()
+        tasks.start_snapshot.run()
+
+        operation = self.snapshot().bkbase_v4_resources["source_provision"]
+        self.assertIsNone(operation["clean_step"]["accepted"])
+        self.assertEqual(operation["clean_step"]["ref"]["name"], "c_legacy_unknown")
+        self.assertEqual(len(self.clean_posts()), 1)
 
     def test_legacy_clean_claim_keeps_its_original_ref(self):
         self.start()

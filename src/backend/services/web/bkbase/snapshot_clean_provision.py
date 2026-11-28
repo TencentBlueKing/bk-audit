@@ -441,8 +441,26 @@ def _advance_storages(snapshot, params, context, operation, verify):
         snapshot_restore.prepare_initial(snapshot, params)
 
 
+def _rejected_clean_spec(step):
+    """限定明确创建拒绝的重试使用原声明。"""
+    rejection = step.get("rejection")
+    code = rejection.get("code") if isinstance(rejection, dict) else None
+    spec = step.get("target_spec")
+    if (
+        step.get("accepted") is not False
+        or not isinstance(code, str)
+        or code not in CleanCreateRejected.REASONS
+        or not isinstance(spec, dict)
+        or spec.get("result_table_source") != "new"
+        or sorted(spec) != step.get("target_keys")
+        or source._replay_digest(spec) != step.get("target_digest")
+    ):
+        raise BKBaseResourceMappingError(message="Initial Snapshot retry requires a verified Clean create rejection")
+    return spec
+
+
 def retry(snapshot, request_data, pull_handler, pre_check):
-    """显式继续未完成首次启动；未知写只观察，已确认 Failed 存储才可重试 PUT。"""
+    """按原代次显式继续首次启动；结果未知时继续观察原 Ref。"""
     binding = snapshot.bkbase_v4_resources or {}
     operation = binding.get("source_provision") or {}
     if (
@@ -458,12 +476,10 @@ def retry(snapshot, request_data, pull_handler, pre_check):
         raise BKBaseResourceMappingError(message="Initial Snapshot retry requires the unchanged failed operation")
     if operation.get("handoff_ready"):
         return snapshot_restore.prepare(snapshot, request_data, pull_handler, pre_check, initial_start=True)
-    rejection = (operation.get("clean_step") or {}).get("rejection")
-    if rejection:
-        raise BKBaseResourceMappingError(message=str(CleanCreateRejected(**rejection)))
+    step = operation.get("clean_step") or {}
     context, params = get_bkbase_context(), pull_handler.config
     expected = _input_digest(snapshot, params, context)
-    if operation.get("clean_step", {}).get("input_digest") != expected:
+    if step.get("input_digest") != expected:
         raise BKBaseResourceMappingError(message="Initial Snapshot retry inputs changed")
     pre_check()
     steps = {
@@ -475,6 +491,11 @@ def retry(snapshot, request_data, pull_handler, pre_check):
         "clean_poll_count": 0,
         "storage_steps": steps,
     }
+    if step.get("rejection") is not None or step.get("accepted") is False:
+        if operation.get("stage") != "clean_failed" or not operation.get("operation_id") or binding.get("clean"):
+            raise BKBaseResourceMappingError(message="Initial Snapshot retry requires a failed unbound Clean")
+        _rejected_clean_spec(step)
+        patch["clean_step"] = {**step, "retry_allowed": True}
     if not _transition(snapshot, operation, patch, verify=(params, context, expected), retry=True):
         raise BKBaseResourceMappingError(message="Initial Snapshot retry was superseded")
     snapshot.refresh_from_db()
@@ -518,7 +539,10 @@ def advance(snapshot, params):
                     _advance_storages(snapshot, params, context, operation, verify)
                 elif step is not None:
                     with resource_lock(context, ref):
-                        _observe(snapshot, context, operation, ref, verify)
+                        if step.get("retry_allowed") is True:
+                            _submit(snapshot, context, operation, ref, verify, _rejected_clean_spec(step))
+                        else:
+                            _observe(snapshot, context, operation, ref, verify)
                 else:
                     spec = _build_spec(snapshot, current_source["spec"]["report_config"])
                     ref = clean.new_owner_clean_ref(context, spec["result_table_id"])
