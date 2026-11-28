@@ -16,11 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import re
 
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_or_create_local_request_id
 
-from core.sensitive import redact_secrets
+from core.sensitive import REDACTED, redact_secrets
 
 
 class RedactedRequestLogMixin:
@@ -70,3 +71,15 @@ class RedactedRequestLogMixin:
             getattr(err, "code", None) or getattr(err, "ERROR_CODE", "") or "",
             json.dumps(redact_secrets(request_data), ensure_ascii=False, default=str),
         )
+
+
+# 自由文本凭据形态：password=xxx / "password": "xxx" / token: xxx 等（BKSEC 1578945 SDK 残余平替）
+FREE_TEXT_SECRET_PATTERN = re.compile(
+    r"(?i)[\"']?(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credential)[\"']?\s*[=:]\s*"
+    r"(\"[^\"]*\"|'[^']*'|[^\s,;&，；\)）】>]+)"
+)
+
+
+def redact_free_text(text: str) -> str:
+    """自由文本凭据打码：匹配 key=value / key: value / "key": "value" 形态的疑似凭据片段"""
+    return FREE_TEXT_SECRET_PATTERN.sub(lambda m: "{}={}".format(m.group(1), REDACTED), text)
