@@ -18,6 +18,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 
+from api.bk_base_v4.default import CleanCreateRejected
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from core.exceptions import LockError
@@ -304,14 +305,35 @@ def delete_source_clean(context, collector):
         return {**operation_result(current, ref, "delete"), "task_state": None}
 
 
+def new_owner_clean_ref(context, logical_id):
+    """声明新建结果表的 Clean，名称按 BKBase V4 逻辑结果表 ID 原样拼接。"""
+    return {
+        "kind": "Clean",
+        "tenant": context["tenant"],
+        "namespace": context["namespace"],
+        "name": f"c_{_logical_table_id(logical_id)}",
+    }
+
+
 def owner_clean_ref(context, owner):
-    """使用已声明的 Clean 引用，首次创建使用稳定的归属名称。"""
+    """返回已有 Ref，或为接入已有结果表的采集项生成稳定名称。"""
     return (owner.bkbase_v4_resources or {}).get("clean") or {
         "kind": "Clean",
         "tenant": context["tenant"],
         "namespace": context["namespace"],
         "name": stable_name("c", owner.__class__.__name__, owner.pk),
     }
+
+
+def clean_create_receipt_matches(ref, result):
+    """回执需标识同一认领；允许网关暂时省略状态。"""
+    metadata = result.get("metadata") if isinstance(result, dict) else None
+    return (
+        isinstance(metadata, dict)
+        and result.get("kind", "Clean") == "Clean"
+        and all(metadata.get(key) == ref[key] for key in ("tenant", "namespace", "name"))
+        and (result.get("status") is None or isinstance(result["status"], dict))
+    )
 
 
 def _preserve_collector_join(owner, current, desired):
@@ -590,6 +612,46 @@ def _preserve_bound_json_decoders(current, desired, legacy_json_decoders):
         rule["operator"]["error_strategy"] = "null"
 
 
+def _create_clean(owner, params, spec, pending, *, publish):
+    """先持久化首次创建意图，未确认的回执保留同一认领。"""
+    update_owner_binding(owner, {**pending, "clean_pending_create": True}, remove=["clean_create_rejection"])
+    revision = int(time.time() * 1000)
+    spec.update(
+        config_revision=revision,
+        deploy_revision=revision if publish else 0,
+        desired_status=CleanState.RUNNING if publish else CleanState.STOPPED,
+    )
+    try:
+        result = api.bk_base_v4.clean_create(
+            tenant=params["tenant"], namespace=params["namespace"], metadata=params, spec=spec, status=None
+        )
+    except CleanCreateRejected as error:
+        update_owner_binding(owner, {"clean_create_rejection": error.rejection})
+        raise
+    if not clean_create_receipt_matches(pending["clean"], result):
+        raise BKBaseResourceMappingError(message="Clean creation receipt does not confirm the claimed resource")
+    return result
+
+
+def _check_clean_create(binding, existing, *, require_existing, retry_existing):
+    """只让明确拒绝且持有单次重试资格的同一认领重新发送。"""
+    rejection = binding.get("clean_create_rejection")
+    if rejection:
+        if (
+            existing is not None
+            or require_existing
+            or not binding.get("clean_pending_create")
+            or retry_existing is None
+            or not retry_existing(None)
+        ):
+            raise CleanCreateRejected(**rejection)
+    elif existing is None:
+        if require_existing:
+            raise BKBaseResourceMappingError(message="The established V4 Clean is missing; cannot recreate it")
+        if binding.get("clean_pending_create") or (retry_existing is not None and not retry_existing(None)):
+            raise BKBaseResourceMappingError(message="Previous Clean creation is still unconfirmed")
+
+
 def ensure_clean(
     context,
     owner,
@@ -604,16 +666,18 @@ def ensure_clean(
 ):
     """稳定引用下声明/更新Clean，首次失败后的重试先核实远端。"""
     binding = deepcopy(owner.bkbase_v4_resources or {})
-    ref = owner_clean_ref(context, owner)
-    params = resource_params(context, ref, kind="Clean")
-    if _locked_clean_ref is not None and _locked_clean_ref != ref:
-        raise BKBaseResourceMappingError(message="Collector Clean binding changed under lock")
     spec = deepcopy(rules)
     data_ref = source._replay_ref(context, spec.get("data_id"), "DataId")
     raw_id = source._replay_raw_id(spec.get("raw_data_id"))
     logical_id = _logical_table_id(spec.get("result_table_id"))
     source_role = spec.get("result_table_source", "new")
     role = CleanRole.OWNER if source_role == "new" else CleanRole.EXISTING
+    ref = binding.get("clean")
+    if not ref:
+        ref = new_owner_clean_ref(context, logical_id) if role == CleanRole.OWNER else owner_clean_ref(context, owner)
+    params = resource_params(context, ref, kind="Clean")
+    if _locked_clean_ref is not None and _locked_clean_ref != ref:
+        raise BKBaseResourceMappingError(message="Collector Clean binding changed under lock")
     if binding.get("clean_role") not in (None, role):
         raise BKBaseResourceMappingError(message="Clean ownership cannot be changed")
     if binding.get("result_table_id") not in (None, logical_id):
@@ -630,12 +694,31 @@ def ensure_clean(
         pending["result_table"] = rt_ref
     retried = False
     with resource_lock(context, ref) if _locked_clean_ref is None else nullcontext():
+        if isinstance(owner, (CollectorPlugin, CollectorConfig)):
+            owner.refresh_from_db(fields=["bkbase_v4_resources"])
+            # 两个任务可能在锁外加载同一采集项，写前以持久绑定为准。
+            current = owner.bkbase_v4_resources or {}
+            keys = (
+                "clean",
+                "clean_role",
+                "clean_pending_create",
+                "clean_create_rejection",
+                "data_id",
+                "source_raw_data_id",
+                "result_table_id",
+                "result_table",
+            )
+            if any(current.get(key) != binding.get(key) for key in keys):
+                raise BKBaseResourceMappingError(message="Clean binding changed while waiting for its resource lock")
+        if binding.get("clean_create_rejection") and _retry_existing is None:
+            raise CleanCreateRejected(**binding["clean_create_rejection"])
         old = get_resource_or_none(api.bk_base_v4.clean_get, **params)
-        if old is None and _require_existing:
-            raise BKBaseResourceMappingError(message="The established V4 Clean is missing; cannot recreate it")
-        if old is None and _retry_existing is not None and not _retry_existing(None):
-            raise BKBaseResourceMappingError(message="Previous Clean creation is still unconfirmed")
-        if old is not None:
+        _check_clean_create(binding, old, require_existing=_require_existing, retry_existing=_retry_existing)
+        if old is None:
+            result = _create_clean(owner, params, spec, pending, publish=publish)
+        else:
+            if role == CleanRole.OWNER and not binding.get("clean"):
+                raise BKBaseResourceMappingError(message="Owner Clean exists without this creation claim")
             actual = _existing_clean_table_id(
                 context, ref, old, raw_id=raw_id, data_ref=data_ref, source_role=source_role
             )
@@ -653,25 +736,8 @@ def ensure_clean(
                 and binding.get("result_table") == rt_ref
             ):
                 _preserve_bound_json_decoders(old["spec"], spec, _legacy_json_decoders)
-        if old is None:
-            pending["clean_pending_create"] = True
-        # 仅真正创建才标记结果待确认；已建立资源的更新失败不能降为创建重试。
-        update_owner_binding(owner, pending)
-        if old is None:
-            revision = int(time.time() * 1000)
-            spec.update(
-                config_revision=revision,
-                deploy_revision=revision if publish else 0,
-                desired_status=CleanState.RUNNING if publish else CleanState.STOPPED,
-            )
-            result = api.bk_base_v4.clean_create(
-                tenant=params["tenant"],
-                namespace=params["namespace"],
-                metadata={k: ref[k] for k in ("tenant", "namespace", "name")},
-                spec=spec,
-                status=None,
-            )
-        else:
+            # 已建立资源的更新失败不能降为创建重试。
+            update_owner_binding(owner, pending)
             desired = deepcopy(old["spec"])
             desired.update(spec)
             changed = any(
@@ -993,7 +1059,7 @@ def _retry_plugin_resource(plugin, step):
         return {}
 
     def claim(resource):
-        remaining = plugin.bkbase_v4_resources[PLUGIN_RETRY_STEPS]
+        remaining = plugin.bkbase_v4_resources.get(PLUGIN_RETRY_STEPS, [])
         if step not in remaining:
             return False
         update_owner_binding(plugin, {PLUGIN_RETRY_STEPS: [name for name in remaining if name != step]})
@@ -1093,10 +1159,15 @@ def reset_plugin_operation(plugin, *, retry_failed=None):
         binding = plugin.bkbase_v4_resources or {}
         patch = {"poll_count": 0, "blocked": False}
         remove = []
-        if retry_failed is False:
+        if retry_failed is False and not binding.get("clean_create_rejection"):
             patch["ready"] = False
             remove.append(PLUGIN_RETRY_STEPS)
-        elif binding.get("blocked") is True or (retry_failed is True and PLUGIN_RETRY_STEPS not in binding):
+        elif (
+            retry_failed is False
+            or binding.get("blocked") is True
+            or (retry_failed is True and PLUGIN_RETRY_STEPS not in binding)
+        ):
+            # 修正首次创建失败的配置时，Clean 受理后仍需初始化主副入库。
             patch.update({"ready": False, PLUGIN_RETRY_STEPS: ["clean", "main", "replica"]})
         if MIGRATION_BINDING_KEY in binding:
             # 仅现有显式task id入口调用reset；后续Beat可继续这次已授权的异步维护。
@@ -1107,9 +1178,10 @@ def reset_plugin_operation(plugin, *, retry_failed=None):
 def record_plugin_failure(plugin, error, *, poll_count=None):
     """记录预期业务失败，保留未决写证据并使旧就绪状态失效。"""
     count = poll_count if poll_count is not None else (plugin.bkbase_v4_resources or {}).get("poll_count", 0) + 1
-    blocked = count >= BKBASE_V4_MAX_POLLS
+    rejected = isinstance(error, CleanCreateRejected)
+    blocked = rejected or count >= BKBASE_V4_MAX_POLLS
     message = str(error)
-    if blocked:
+    if blocked and not rejected:
         message = "Clean/storage initialization timed out: " + message
     update_owner_binding(
         plugin,

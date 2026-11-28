@@ -276,6 +276,7 @@ class SystemSnapshotCreationTests(SimpleTestCase):
                 clean = self.posts[before + 2][1]["spec"]
                 self.assertEqual(clean["result_table_id"], logical_id)
                 self.assertEqual(clean["result_table_source"], "new")
+                self.assertEqual(self.posts[before + 2][1]["metadata"]["name"], f"c_{logical_id}")
                 self.assertEqual(
                     self.posts[before + 3][1]["spec"]["tableInfo"]["source"]["name"],
                     "actual-cr-" + self.posts[before + 2][1]["metadata"]["name"],
@@ -308,6 +309,41 @@ class SystemSnapshotCreationTests(SimpleTestCase):
         self.assertEqual(source_value["spec"]["report_config"]["data_path"], ".data.results")
         self.assertEqual(len([r for r in clean_value["spec"]["rules"] if r["operator"]["type"] == "json_de"]), 1)
         self.assertEqual([kind for kind, _ in self.posts], ["DataConn", "DataSource", "Clean", "DataStorage"])
+
+    def test_existing_iam_clean_claim_is_observed_at_its_original_ref(self):
+        kind = "action"
+        for expected in ("DataConn", "DataSource", "Clean"):
+            self.assertEqual(provision.ensure_system_snapshot(kind), expected)
+            self._settle()
+
+        config_key = bindings.SYSTEM_SNAPSHOT_KEYS[kind][0]
+        record = self.rows[config_key].config_value["bkbase_v4"]["default"]["audit"]
+        clean_ref = record["creation"]["refs"]["clean"]
+        value = self.resources.pop(("Clean", clean_ref["name"]))
+        old_name = f"{record['creation']['name']}_clean"
+        clean_ref["name"] = old_name
+        value["metadata"]["name"] = old_name
+        self.resources[("Clean", old_name)] = value
+
+        self._complete(kind)
+
+        final = self.rows[config_key].config_value["bkbase_v4"]["default"]["audit"]
+        self.assertEqual(final["clean"]["name"], old_name)
+        self.assertEqual([key for key, _ in self.posts].count("Clean"), 1)
+
+    def test_legacy_iam_plan_without_clean_claim_can_use_canonical_name(self):
+        kind = "action"
+        context = bindings._system_context()
+        record = provision._new_record(kind, context, provision._create_config(kind, context))
+        operation = record["creation"]
+        operation["refs"]["clean"]["name"] = f"{operation['name']}_clean"
+        config_key = bindings.SYSTEM_SNAPSHOT_KEYS[kind][0]
+        self.rows[config_key] = mock.Mock(config_value={"bkbase_v4": {"default": {"audit": record}}})
+
+        self._complete(kind)
+
+        [payload] = [payload for resource_kind, payload in self.posts if resource_kind == "Clean"]
+        self.assertEqual(payload["metadata"]["name"], f"c_{operation['logical_id']}")
 
     def test_unknown_post_is_only_observed_and_never_repeated(self):
         create = self._creator("DataConn")
